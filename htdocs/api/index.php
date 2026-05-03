@@ -46,6 +46,10 @@ try {
         handleEinheiten($method, $tail);
         exit;
     }
+    if ($head === 'pace') {
+        handlePace($method, $tail);
+        exit;
+    }
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden', 'path' => $path]);
@@ -252,6 +256,89 @@ function handleEinheiten(string $method, string $sub): void
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Einheiten-Endpoint nicht gefunden']);
+}
+
+// ============================================================
+// GET pace/me?modus=pb|12m  →  Bestzeiten je Referenzdistanz
+// Quelle: ergebnisse + veranstaltungen + disziplin_mapping
+//   - resultat_num gilt als Zeit in Sekunden
+//   - dm.distanz ist die Strecke in Metern
+// ============================================================
+function handlePace(string $method, string $sub): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+
+    if ($sub !== 'me' || $method !== 'GET') {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'fehler' => 'Pace-Endpoint nicht gefunden']);
+        return;
+    }
+
+    $athletId = isset($user['athlet_id']) ? (int)$user['athlet_id'] : 0;
+    if ($athletId <= 0) {
+        echo json_encode(['ok' => true, 'modus' => 'pb', 'distanzen' => new stdClass(), 'hinweis' => 'Kein Athletenprofil verknüpft']);
+        return;
+    }
+
+    $modus = $_GET['modus'] ?? 'pb';
+    if (!in_array($modus, ['pb', '12m'], true)) $modus = 'pb';
+
+    // Referenzdistanzen: Pace-Referenz im Segment → Distanz in Metern (Toleranz ±25m)
+    $refs = [
+        '5km'  => 5000.0,
+        '10km' => 10000.0,
+        'HM'   => 21097.5,
+        'M'    => 42195.0,
+    ];
+
+    $datumFilter = '';
+    $params = [];
+    if ($modus === '12m') {
+        $datumFilter = ' AND v.datum >= (CURDATE() - INTERVAL 12 MONTH)';
+    }
+
+    $out = [];
+    foreach ($refs as $key => $dist) {
+        $tol = 25.0;
+        $row = DB::fetchOne(
+            "SELECT e.resultat, e.resultat_num, e.disziplin, v.datum, v.name AS wettkampf, v.ort
+               FROM ergebnisse e
+               JOIN veranstaltungen v ON v.id = e.veranstaltung_id
+               JOIN disziplin_mapping dm ON dm.id = e.disziplin_mapping_id
+              WHERE e.athlet_id = ?
+                AND e.geloescht_am IS NULL
+                AND v.geloescht_am IS NULL
+                AND dm.distanz BETWEEN ? AND ?
+                AND e.resultat_num IS NOT NULL
+                AND e.resultat_num > 0
+                {$datumFilter}
+           ORDER BY e.resultat_num ASC
+              LIMIT 1",
+            [$athletId, $dist - $tol, $dist + $tol]
+        );
+        if ($row) {
+            $out[$key] = [
+                'distanz_m'    => (int)round($dist),
+                'sekunden'     => (float)$row['resultat_num'],
+                'resultat'     => $row['resultat'],
+                'datum'        => $row['datum'],
+                'wettkampf'    => $row['wettkampf'],
+                'ort'          => $row['ort'],
+            ];
+        }
+    }
+
+    echo json_encode([
+        'ok'        => true,
+        'modus'     => $modus,
+        'athlet_id' => $athletId,
+        'distanzen' => (object)$out,
+    ]);
 }
 
 // ============================================================

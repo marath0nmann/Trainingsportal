@@ -1,5 +1,11 @@
 # Changelog
 
+## v4
+- Pace-Anreicherung für eingeloggte Athleten: Bestzeit aus dem Statistikportal (`ergebnisse` × `disziplin_mapping`) → Pace + Splitzeit pro Segment
+- Backend-Endpunkt `GET pace/me?modus=pb|12m` (Bestzeiten je Referenzdistanz: 5 km, 10 km, HM, M)
+- Modus-Umschalter im Detail-Modal: Persönliche Bestzeit / Letzte 12 Monate (Auswahl pro Browser persistiert)
+- Aufgabe entfällt: keine eigene `training_bestzeiten`-Tabelle nötig (geteilte DB mit Statistikportal)
+
 ## v3
 - Betreuer-Editor (Modal): Datum/Uhrzeit/Typ/Titel/Treffpunkt/Bemerkung/Sichtbarkeit/Status, Segment-Tabelle mit Wdh/Distanz/Pause/Pause-Typ/Pace-Referenz, Speichern/Löschen
 - Kurzschrift-Parser (JS): erkennt Lang- (`8 x 600 m (100TP)`) und Kurzform (`6 * 4(1)`), Slash-Listen für Pyramiden/Treppen, BP/TP/GP-Pause-Typen

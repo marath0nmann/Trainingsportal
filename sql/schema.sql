@@ -51,3 +51,7 @@ CREATE TABLE IF NOT EXISTS training_segmente (
   CONSTRAINT fk_segm_einheit FOREIGN KEY (einheit_id)
       REFERENCES training_einheiten(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Bestzeiten werden nicht eigenständig gepflegt: das Trainingsportal
+-- liest sie direkt aus den `ergebnisse`-/`athleten`-Tabellen des
+-- Statistikportals (gemeinsame DB).

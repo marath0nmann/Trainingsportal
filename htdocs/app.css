@@ -1719,3 +1719,33 @@ tr:hover td { background: var(--surf2); }
   .ed-seg-num  { width: 50px; }
   .ed-seg-dist { width: 70px; }
 }
+
+/* ============================================================
+   Trainingsportal – Pace-Anzeige im Detail-Modal
+   ============================================================ */
+.pace-header {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; margin-bottom: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surf2));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  border-radius: 6px; font-size: 12px;
+}
+.pace-label { font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; font-size: 10px; }
+.pace-mode-sel {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; padding: 3px 6px; font-size: 12px; font-family: inherit;
+}
+.pace-mode-sel:focus { outline: none; border-color: var(--accent); }
+.pace-hint { color: var(--text2); font-style: italic; }
+
+.seg-pace-info {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 1px; min-width: 90px;
+}
+.seg-split {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 18px; line-height: 1;
+  color: var(--accent); letter-spacing: .3px;
+}
+.seg-split-unit { font-size: 10px; font-weight: 600; color: var(--text2); margin-left: 4px; letter-spacing: 0; }
+.seg-pace-pace { font-size: 11px; font-weight: 600; color: var(--text2); }

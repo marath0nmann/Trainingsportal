@@ -262,20 +262,50 @@ async function zeigeEinheit(id) {
     const e = data.einheit;
     const seg = data.segmente || [];
     state._lastEinheit = { einheit: e, segmente: seg };
+
+    // Pace nur laden, wenn eingeloggt und Segmente mit pace_referenz vorhanden
+    let paceData = null;
+    const hatPaceRef = seg.some(s => s.pace_referenz);
+    if (state.user && hatPaceRef) {
+      paceData = await PACE.load();
+    }
     const datum = new Date(e.datum + 'T00:00:00');
     const wochentag = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][datum.getDay()];
     const datStr = `${wochentag}, ${datum.getDate()}. ${MONATSNAMEN[datum.getMonth()]} ${datum.getFullYear()}`;
 
+    const paceModus = state.user ? PACE.getModus() : null;
+    const paceHeader = (state.user && hatPaceRef) ? `
+      <div class="pace-header">
+        <span class="pace-label">Persönliche Pace:</span>
+        <select class="pace-mode-sel" onchange="PACE.setModus(this.value); zeigeEinheit(${id})">
+          <option value="pb"${paceModus==='pb'?' selected':''}>Bestzeit (alle Zeiten)</option>
+          <option value="12m"${paceModus==='12m'?' selected':''}>Letzte 12 Monate</option>
+        </select>
+        ${paceData ? '' : '<span class="pace-hint">– keine Bestzeit gefunden –</span>'}
+      </div>` : '';
+
     const segHtml = seg.length ? `
       <div class="modal-row modal-row-block">
         <span class="modal-label">Segmente</span>
+        ${paceHeader}
         <div class="seg-list">
-          ${seg.map((s, i) => `
-            <div class="seg-item">
-              <div class="seg-num">${i + 1}</div>
-              <div class="seg-main">${escapeHtml(PARSER.formatSegment(s))}</div>
-              ${s.pace_referenz ? `<div class="seg-pace">${escapeHtml(s.pace_referenz)}</div>` : ''}
-            </div>`).join('')}
+          ${seg.map((s, i) => {
+            const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
+            const splitSek = paceData ? PACE.splitzeit(s, paceData) : null;
+            const totalSek = (splitSek != null) ? splitSek * (s.wiederholungen || 1) : null;
+            const paceBox = (sekProKm != null) ? `
+              <div class="seg-pace-info">
+                <div class="seg-split">${PACE.formatTime(splitSek)}<span class="seg-split-unit">/Wdh</span></div>
+                <div class="seg-pace-pace">${PACE.formatPace(sekProKm)}</div>
+              </div>` : '';
+            return `
+              <div class="seg-item">
+                <div class="seg-num">${i + 1}</div>
+                <div class="seg-main">${escapeHtml(PARSER.formatSegment(s))}</div>
+                ${s.pace_referenz ? `<div class="seg-pace">${escapeHtml(s.pace_referenz)}</div>` : ''}
+                ${paceBox}
+              </div>`;
+          }).join('')}
         </div>
       </div>` : '';
 
