@@ -1,5 +1,11 @@
 # Changelog
 
+## v8
+- Optik aus Statistikportal: Frontend lädt `farbe_primary/-2/-3`, `farbe_accent/-2`, `logo_datei`, `verein_kuerzel` etc. aus der gemeinsamen `einstellungen`-Tabelle (`GET config`) und mappt sie auf CSS-Variablen, Logo und Theme-Color
+- Header bekommt einen Verlauf von Akzent → Primär plus farbige Stripe (`--primary-dark` aus Primary abgeleitet); im OS-Dark-Mode wird der Header nicht mehr schwarz
+- Cell-Overflow gefixt: lange Titel sprengen die Zelle nicht mehr (`min-width:0` + `overflow:hidden` auf der Grid-Zelle)
+- Feiertage/Ferien als Abo-Liste konfigurierbar: neuer `einstellungen`-Schlüssel `training_feiertage_ics_urls` (JSON-Array von URLs oder `{url,label,farbe}`-Objekten); `GET feiertage?von=&bis=` lädt + parst + cached (6 h) und das Frontend rendert sie als kleine Marker je Tag
+
 ## v7
 - Bugfix: API-Aufrufe mit Query-String (`einheiten?von=…&bis=…`, `pace/me?modus=…`) wurden in PHP als Teil von `$_GET['p']` mitkonsumiert → 404 „Endpoint nicht gefunden". Frontend trennt Pfad und Query jetzt sauber.
 

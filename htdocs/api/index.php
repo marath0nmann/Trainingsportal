@@ -58,6 +58,14 @@ try {
         handleFit($method, $tail);
         exit;
     }
+    if ($head === 'config') {
+        handleConfig();
+        exit;
+    }
+    if ($head === 'feiertage') {
+        handleFeiertage($method, $tail);
+        exit;
+    }
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden', 'path' => $path]);
@@ -347,6 +355,181 @@ function handlePace(string $method, string $sub): void
         'athlet_id' => $athletId,
         'distanzen' => (object)$out,
     ]);
+}
+
+// ============================================================
+// GET config  →  Optik + Vereinsdaten + Feiertage-URLs
+//   wird beim App-Start vom Frontend gelesen und auf CSS-Variablen
+//   abgebildet, damit das Trainingsportal optisch zum Statistik-/
+//   Login-Portal passt (geteilte einstellungen-Tabelle).
+// ============================================================
+function handleConfig(): void {
+    $keys = [
+        'farbe_primary', 'farbe_primary2', 'farbe_primary3',
+        'farbe_accent',  'farbe_accent2',
+        'logo_datei', 'logo_url',
+        'verein_name', 'verein_kuerzel',
+        'app_untertitel',
+        'training_feiertage_ics_urls',
+    ];
+    $cfg = [];
+    foreach ($keys as $k) {
+        $cfg[$k] = Settings::get($k, '');
+    }
+    // Feiertage-Liste als Array zurückgeben
+    $urls = [];
+    if ($cfg['training_feiertage_ics_urls'] !== '') {
+        $j = json_decode($cfg['training_feiertage_ics_urls'], true);
+        if (is_array($j)) {
+            foreach ($j as $entry) {
+                if (is_string($entry)) {
+                    $urls[] = ['url' => $entry, 'label' => '', 'farbe' => ''];
+                } elseif (is_array($entry) && !empty($entry['url'])) {
+                    $urls[] = [
+                        'url'    => (string)$entry['url'],
+                        'label'  => (string)($entry['label']  ?? ''),
+                        'farbe'  => (string)($entry['farbe']  ?? ''),
+                    ];
+                }
+            }
+        }
+    }
+    $cfg['feiertage'] = $urls;
+    unset($cfg['training_feiertage_ics_urls']);
+
+    echo json_encode(['ok' => true, 'config' => $cfg]);
+}
+
+// ============================================================
+// GET feiertage?von=YYYY-MM-DD&bis=YYYY-MM-DD
+//   Lädt die in `training_feiertage_ics_urls` konfigurierten ICS-
+//   Feeds, parst die VEVENTs und gibt die im Zeitraum liegenden
+//   Termine zurück. Inhalte werden 6 h serverseitig gecacht.
+// ============================================================
+function handleFeiertage(string $method, string $sub): void {
+    if ($method !== 'GET') { http_response_code(405); echo json_encode(['ok'=>false,'fehler'=>'Methode nicht erlaubt']); return; }
+    $von = $_GET['von'] ?? '';
+    $bis = $_GET['bis'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $von) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $bis)) {
+        http_response_code(400); echo json_encode(['ok'=>false,'fehler'=>'Parameter von/bis erforderlich']);
+        return;
+    }
+
+    $raw = Settings::get('training_feiertage_ics_urls', '');
+    $entries = [];
+    if ($raw !== '') {
+        $j = json_decode($raw, true);
+        if (is_array($j)) {
+            foreach ($j as $e) {
+                if (is_string($e)) {
+                    $entries[] = ['url' => $e, 'label' => '', 'farbe' => ''];
+                } elseif (is_array($e) && !empty($e['url'])) {
+                    $entries[] = [
+                        'url'   => (string)$e['url'],
+                        'label' => (string)($e['label'] ?? ''),
+                        'farbe' => (string)($e['farbe'] ?? ''),
+                    ];
+                }
+            }
+        }
+    }
+
+    $events = [];
+    foreach ($entries as $entry) {
+        $body = ladeIcsCached($entry['url'], 6 * 3600);
+        if (!$body) continue;
+        foreach (parseIcsEvents($body, $von, $bis) as $ev) {
+            $events[] = [
+                'datum'        => $ev['datum'],
+                'datum_bis'    => $ev['datum_bis'],
+                'titel'        => $ev['titel'],
+                'kategorie'    => $entry['label'] ?: 'Feiertag',
+                'farbe'        => $entry['farbe'] ?: '',
+            ];
+        }
+    }
+
+    echo json_encode(['ok' => true, 'feiertage' => $events]);
+}
+
+function ladeIcsCached(string $url, int $ttl): ?string {
+    if (!preg_match('#^https?://#i', $url)) return null;
+    $cacheDir = __DIR__ . '/../uploads/feiertage_cache';
+    if (!is_dir($cacheDir)) @mkdir($cacheDir, 0775, true);
+    $f = $cacheDir . '/' . sha1($url) . '.ics';
+    if (is_file($f) && (time() - filemtime($f) < $ttl)) {
+        return file_get_contents($f);
+    }
+    $ctx = stream_context_create([
+        'http' => ['timeout' => 8, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
+        'https' => ['timeout' => 8, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
+    ]);
+    $body = @file_get_contents($url, false, $ctx);
+    if ($body === false) {
+        // Fallback: alten Cache nehmen, falls vorhanden
+        if (is_file($f)) return file_get_contents($f);
+        return null;
+    }
+    @file_put_contents($f, $body);
+    return $body;
+}
+
+function parseIcsEvents(string $body, string $von, string $bis): array {
+    // Line-Unfolding (RFC 5545)
+    $body = preg_replace("/\r?\n[ \t]/", '', $body);
+    $lines = preg_split("/\r?\n/", $body);
+    $events = [];
+    $cur = null;
+    foreach ($lines as $line) {
+        if ($line === 'BEGIN:VEVENT') { $cur = []; continue; }
+        if ($line === 'END:VEVENT') {
+            if ($cur && !empty($cur['DTSTART']) && !empty($cur['SUMMARY'])) {
+                $start = parseIcsDate($cur['DTSTART']);
+                $end   = !empty($cur['DTEND']) ? parseIcsDate($cur['DTEND']) : $start;
+                if ($start && $start <= $bis && $end >= $von) {
+                    // bei DTEND: für all-day events ist DTEND exklusiv → einen Tag zurück
+                    $endInkl = $end;
+                    if (!empty($cur['DTEND_VALUE_DATE'])) {
+                        $endInkl = date('Y-m-d', strtotime($end . ' -1 day'));
+                    }
+                    $events[] = [
+                        'datum'      => $start,
+                        'datum_bis'  => $endInkl,
+                        'titel'      => icsUnesc($cur['SUMMARY']),
+                    ];
+                }
+            }
+            $cur = null;
+            continue;
+        }
+        if ($cur === null) continue;
+        if (preg_match('/^([A-Z][A-Z0-9-]*)(;[^:]*)?:(.*)$/s', $line, $m)) {
+            $key  = $m[1];
+            $params = $m[2];
+            $val  = $m[3];
+            if ($key === 'DTSTART' || $key === 'DTEND') {
+                $cur[$key] = $val;
+                if (strpos($params, 'VALUE=DATE') !== false) {
+                    $cur[$key . '_VALUE_DATE'] = true;
+                }
+            } elseif ($key === 'SUMMARY') {
+                $cur['SUMMARY'] = $val;
+            }
+        }
+    }
+    return $events;
+}
+
+function parseIcsDate(string $s): ?string {
+    // Form: YYYYMMDD oder YYYYMMDDTHHMMSS(Z)?
+    if (preg_match('/^(\d{4})(\d{2})(\d{2})/', $s, $m)) {
+        return $m[1] . '-' . $m[2] . '-' . $m[3];
+    }
+    return null;
+}
+
+function icsUnesc(string $s): string {
+    return strtr($s, ['\\,' => ',', '\\;' => ';', '\\n' => "\n", '\\\\' => '\\']);
 }
 
 // ============================================================

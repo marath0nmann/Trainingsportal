@@ -16,6 +16,9 @@ window.addEventListener('DOMContentLoaded', init);
 window.addEventListener('hashchange', renderPage);
 
 async function init() {
+  // Optik aus Statistikportal-Einstellungen ziehen (Farben, Logo, Verein)
+  await CONFIG.load();
+
   // Auth-Check, aber ohne Force-Redirect (öffentlicher Zugang erlaubt)
   try {
     const r = await apiGet('auth/me', { silent: true });
@@ -185,10 +188,14 @@ async function renderKalender(main, monthArg) {
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
     </div>`;
 
-  let einheiten = [];
+  let einheiten = [], feiertage = [];
   try {
-    const data = await apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true });
-    einheiten = data.einheiten || [];
+    const [d1, d2] = await Promise.all([
+      apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }),
+      apiGet(`feiertage?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }).catch(() => ({ feiertage: [] })),
+    ]);
+    einheiten = d1.einheiten || [];
+    feiertage = d2.feiertage || [];
   } catch (e) {
     document.getElementById('kal-grid').innerHTML =
       `<div class="kal-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
@@ -199,6 +206,17 @@ async function renderKalender(main, monthArg) {
   const byDate = {};
   einheiten.forEach(e => {
     (byDate[e.datum] = byDate[e.datum] || []).push(e);
+  });
+
+  // Feiertage über Datum spreizen (mehrtägige Ferien)
+  const feiertageByDate = {};
+  feiertage.forEach(f => {
+    const start = new Date(f.datum + 'T00:00:00');
+    const end   = new Date((f.datum_bis || f.datum) + 'T00:00:00');
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const k = ymd(d);
+      (feiertageByDate[k] = feiertageByDate[k] || []).push(f);
+    }
   });
 
   // Grid bauen (Wochenzeilen)
@@ -214,12 +232,20 @@ async function renderKalender(main, monthArg) {
       const isToday = k === todayKey;
       const items = byDate[k] || [];
 
+      const ferien = feiertageByDate[k] || [];
+
       const dayCls = [
         'kal-cell',
         inMonth ? 'in-month' : 'out-month',
         isToday ? 'is-today' : '',
         (cursor.getDay() === 0 || cursor.getDay() === 6) ? 'weekend' : '',
+        ferien.length ? 'is-feiertag' : '',
       ].filter(Boolean).join(' ');
+
+      const ferienHtml = ferien.map(f => {
+        const farbeStyle = f.farbe ? ` style="background:${escapeHtml(f.farbe)};color:#fff"` : '';
+        return `<div class="kal-feiertag" title="${escapeHtml(f.titel)}"${farbeStyle}>${escapeHtml(f.titel)}</div>`;
+      }).join('');
 
       const itemsHtml = items.map(e => {
         const cls = `kal-item kal-typ-${e.typ}` + (e.status === 'abgesagt' ? ' is-cancelled' : '');
@@ -236,6 +262,7 @@ async function renderKalender(main, monthArg) {
             <span class="kal-day-num">${cursor.getDate()}</span>
             ${addBtn}
           </div>
+          ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
           <div class="kal-cell-items">${itemsHtml}</div>
         </div>`);
       cursor.setDate(cursor.getDate() + 1);
