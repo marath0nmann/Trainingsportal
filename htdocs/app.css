@@ -1749,3 +1749,36 @@ tr:hover td { background: var(--surf2); }
 }
 .seg-split-unit { font-size: 10px; font-weight: 600; color: var(--text2); margin-left: 4px; letter-spacing: 0; }
 .seg-pace-pace { font-size: 11px; font-weight: 600; color: var(--text2); }
+
+/* ============================================================
+   Trainingsportal – ICS-Abo-Modal
+   ============================================================ */
+.ics-section {
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.ics-section:last-child { border-bottom: none; }
+.ics-section h4 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px; font-weight: 700; letter-spacing: .5px;
+  margin: 0 0 4px; color: var(--text);
+}
+.ics-hint { font-size: 12px; color: var(--text2); margin: 0 0 10px; }
+.ics-url {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.ics-url input {
+  flex: 1; min-width: 200px;
+  background: var(--surf2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 6px 8px; font-size: 12px;
+  font-family: ui-monospace, monospace; color: var(--text);
+}
+.ics-url input:focus { outline: none; border-color: var(--accent); }
+.ics-actions {
+  display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;
+}
+.ics-warn {
+  margin-top: 10px; font-size: 11px; color: var(--text2);
+  background: color-mix(in srgb, #c08010 15%, var(--surf2));
+  padding: 8px 10px; border-radius: 5px;
+  border-left: 3px solid #c08010;
+}

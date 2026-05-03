@@ -177,6 +177,7 @@ async function renderKalender(main, monthArg) {
           <button class="btn btn-ghost" onclick="navigateKalender('${ymd(next).slice(0,7)}')" aria-label="Nächster Monat">›</button>
         </div>
         <div class="kal-nav-right">
+          <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
           <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
           ${state.user ? `<button class="btn btn-primary" onclick="EDITOR.open({})">+ Neue Einheit</button>` : ''}
         </div>

@@ -50,6 +50,10 @@ try {
         handlePace($method, $tail);
         exit;
     }
+    if ($head === 'ics') {
+        handleIcs($method, $tail);
+        exit;
+    }
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden', 'path' => $path]);
@@ -338,6 +342,321 @@ function handlePace(string $method, string $sub): void
         'modus'     => $modus,
         'athlet_id' => $athletId,
         'distanzen' => (object)$out,
+    ]);
+}
+
+// ============================================================
+// ICS-Export
+//   GET  ics/public.ics           → öffentlicher Trainingsplan
+//   GET  ics/me.ics?token=…       → persönlich, mit Pace-Vorgaben
+//   GET  ics/me/token             → aktuellen Token zurückgeben (auth)
+//   POST ics/me/token             → neuen Token erzeugen (auth)
+//   DEL  ics/me/token             → Token widerrufen (auth)
+// ============================================================
+function handleIcs(string $method, string $sub): void
+{
+    // Token-Verwaltung (JSON-Antworten)
+    if ($sub === 'me/token') {
+        $user = Auth::check();
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+            return;
+        }
+        if ($method === 'GET') {
+            $tok = ladeIcsToken((int)$user['id']);
+            echo json_encode(['ok' => true, 'token' => $tok]);
+            return;
+        }
+        if ($method === 'POST') {
+            $tok = bin2hex(random_bytes(16));
+            speichereIcsToken((int)$user['id'], $tok);
+            echo json_encode(['ok' => true, 'token' => $tok]);
+            return;
+        }
+        if ($method === 'DELETE') {
+            speichereIcsToken((int)$user['id'], null);
+            echo json_encode(['ok' => true]);
+            return;
+        }
+        http_response_code(405);
+        echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+        return;
+    }
+
+    // Kalender-Downloads (text/calendar)
+    if ($method !== 'GET') {
+        http_response_code(405);
+        echo 'Method not allowed';
+        return;
+    }
+
+    if ($sub === 'public.ics' || $sub === 'public') {
+        sendeIcs(buildIcsPublic(), 'training-public.ics');
+        return;
+    }
+
+    if ($sub === 'me.ics' || $sub === 'me') {
+        $token = $_GET['token'] ?? '';
+        if (!$token || !preg_match('/^[a-f0-9]{32}$/', $token)) {
+            http_response_code(400);
+            echo 'Token fehlt oder ungültig';
+            return;
+        }
+        $userId = findeBenutzerByToken($token);
+        if (!$userId) {
+            http_response_code(403);
+            echo 'Token unbekannt';
+            return;
+        }
+        sendeIcs(buildIcsForUser($userId), 'training-me.ics');
+        return;
+    }
+
+    http_response_code(404);
+    echo 'ICS-Endpoint nicht gefunden';
+}
+
+function ladeIcsToken(int $userId): ?string {
+    $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    if (!$row || !$row['prefs']) return null;
+    $prefs = json_decode((string)$row['prefs'], true);
+    return is_array($prefs) ? ($prefs['training_ics_token'] ?? null) : null;
+}
+
+function speichereIcsToken(int $userId, ?string $token): void {
+    $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    if (!is_array($prefs)) $prefs = [];
+    if ($token === null) unset($prefs['training_ics_token']);
+    else $prefs['training_ics_token'] = $token;
+    DB::query('UPDATE ' . DB::tbl('benutzer') . ' SET prefs = ? WHERE id = ?', [json_encode($prefs, JSON_UNESCAPED_UNICODE), $userId]);
+}
+
+function findeBenutzerByToken(string $token): ?int {
+    $row = DB::fetchOne(
+        "SELECT id FROM " . DB::tbl('benutzer') . "
+          WHERE JSON_EXTRACT(prefs, '$.training_ics_token') = ?
+            AND aktiv = 1 LIMIT 1",
+        [$token]
+    );
+    return $row ? (int)$row['id'] : null;
+}
+
+function sendeIcs(string $body, string $filename): void {
+    header('Content-Type: text/calendar; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Cache-Control: max-age=600, public');
+    echo $body;
+}
+
+function buildIcsPublic(): string {
+    $rows = DB::fetchAll(
+        'SELECT * FROM ' . DB::tbl('training_einheiten') . "
+          WHERE sichtbarkeit = 'oeffentlich'
+            AND datum >= (CURDATE() - INTERVAL 60 DAY)
+            AND datum <= (CURDATE() + INTERVAL 365 DAY)
+       ORDER BY datum, uhrzeit"
+    );
+    $events = [];
+    foreach ($rows as $e) {
+        $events[] = bauVevent($e, []);
+    }
+    return wickleIcs($events, 'TuS Oedt – Trainingsplan');
+}
+
+function buildIcsForUser(int $userId): string {
+    $user = DB::fetchOne('SELECT id, athlet_id FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    if (!$user) return wickleIcs([], 'TuS Oedt – Trainingsplan');
+
+    // Persönliche Bestzeiten je Referenzdistanz (modus=pb)
+    $paceRefs = ['5km' => 5000.0, '10km' => 10000.0, 'HM' => 21097.5, 'M' => 42195.0];
+    $bestzeiten = [];
+    if (!empty($user['athlet_id'])) {
+        foreach ($paceRefs as $key => $dist) {
+            $row = DB::fetchOne(
+                "SELECT MIN(e.resultat_num) AS sek
+                   FROM ergebnisse e
+                   JOIN veranstaltungen v ON v.id = e.veranstaltung_id
+                   JOIN disziplin_mapping dm ON dm.id = e.disziplin_mapping_id
+                  WHERE e.athlet_id = ?
+                    AND e.geloescht_am IS NULL
+                    AND v.geloescht_am IS NULL
+                    AND dm.distanz BETWEEN ? AND ?
+                    AND e.resultat_num IS NOT NULL
+                    AND e.resultat_num > 0",
+                [(int)$user['athlet_id'], $dist - 25, $dist + 25]
+            );
+            if ($row && $row['sek']) {
+                $bestzeiten[$key] = ['sek' => (float)$row['sek'], 'distanz_m' => $dist];
+            }
+        }
+    }
+
+    $rows = DB::fetchAll(
+        'SELECT * FROM ' . DB::tbl('training_einheiten') . "
+          WHERE datum >= (CURDATE() - INTERVAL 60 DAY)
+            AND datum <= (CURDATE() + INTERVAL 365 DAY)
+       ORDER BY datum, uhrzeit"
+    );
+
+    $events = [];
+    foreach ($rows as $e) {
+        $segs = DB::fetchAll(
+            'SELECT * FROM ' . DB::tbl('training_segmente') . ' WHERE einheit_id = ? ORDER BY reihenfolge, id',
+            [(int)$e['id']]
+        );
+        $events[] = bauVevent($e, $segs, $bestzeiten);
+    }
+    return wickleIcs($events, 'TuS Oedt – Mein Trainingsplan');
+}
+
+function bauVevent(array $e, array $segs, array $bestzeiten = []): string {
+    $uid = 'einheit-' . (int)$e['id'] . '@training.tus-oedt.de';
+    $stamp = gmdate('Ymd\\THis\\Z');
+    $datum = preg_replace('/-/', '', $e['datum']);
+    $hatZeit = !empty($e['uhrzeit']);
+
+    $lines = [];
+    $lines[] = 'BEGIN:VEVENT';
+    $lines[] = 'UID:' . $uid;
+    $lines[] = 'DTSTAMP:' . $stamp;
+    $lines[] = 'SEQUENCE:' . (int)strtotime($e['geaendert_am'] ?? $e['erstellt_am'] ?? 'now');
+
+    if ($hatZeit) {
+        $h = substr($e['uhrzeit'], 0, 2);
+        $mi = substr($e['uhrzeit'], 3, 2);
+        $startBer = $datum . 'T' . $h . $mi . '00';
+        $startTs  = mktime((int)$h, (int)$mi, 0, (int)substr($datum,4,2), (int)substr($datum,6,2), (int)substr($datum,0,4));
+        $endTs    = $startTs + 90 * 60; // 90 Min Default
+        $endBer   = date('Ymd\\THis', $endTs);
+        $lines[] = 'DTSTART;TZID=Europe/Berlin:' . $startBer;
+        $lines[] = 'DTEND;TZID=Europe/Berlin:'   . $endBer;
+    } else {
+        $lines[] = 'DTSTART;VALUE=DATE:' . $datum;
+        // All-Day Ende = nächster Tag
+        $endTs = strtotime($e['datum'] . ' +1 day');
+        $lines[] = 'DTEND;VALUE=DATE:' . date('Ymd', $endTs);
+    }
+
+    $lines[] = 'SUMMARY:' . icsEsc($e['titel']);
+    if (!empty($e['treffpunkt'])) {
+        $lines[] = 'LOCATION:' . icsEsc($e['treffpunkt']);
+    }
+    if (($e['status'] ?? '') === 'abgesagt') {
+        $lines[] = 'STATUS:CANCELLED';
+    }
+
+    // Beschreibung: Bemerkung + Segmente (mit Pace, falls Bestzeiten vorhanden)
+    $descLines = [];
+    if (!empty($e['bemerkung'])) {
+        $descLines[] = $e['bemerkung'];
+    }
+    if (!empty($segs)) {
+        $descLines[] = '';
+        $descLines[] = 'Segmente:';
+        foreach ($segs as $i => $s) {
+            $z = ($i + 1) . '. ' . formatSegmentText($s);
+            $bz = $bestzeiten[$s['pace_referenz']] ?? null;
+            if ($bz && $s['pace_referenz']) {
+                $sekProKm = $bz['sek'] / ($bz['distanz_m'] / 1000);
+                $splitSek = $sekProKm * ((int)$s['distanz_m'] / 1000);
+                $z .= ' → ' . formatTimeShort($splitSek) . ' / Wdh (' . formatPaceShort($sekProKm) . ')';
+            }
+            $descLines[] = $z;
+        }
+    }
+    $desc = implode("\n", $descLines);
+    if ($desc !== '') {
+        $lines[] = 'DESCRIPTION:' . icsEsc($desc);
+    }
+
+    $lines[] = 'END:VEVENT';
+    return implode("\r\n", array_map('icsFold', $lines));
+}
+
+function formatSegmentText(array $s): string {
+    $wdh = ((int)$s['wiederholungen'] > 1) ? ((int)$s['wiederholungen'] . ' x ') : '';
+    $dist = formatDistText((int)$s['distanz_m']);
+    $pause = '';
+    if (!empty($s['pause_m'])) {
+        $pLbl = ['TP' => 'TP', 'GP' => 'GP', 'BP' => 'BP'][$s['pause_typ'] ?? ''] ?? 'P';
+        $pause = ' (' . (int)$s['pause_m'] . ' ' . $pLbl . ')';
+    }
+    return $wdh . $dist . $pause;
+}
+function formatDistText(int $m): string {
+    if ($m >= 1000) {
+        $km = $m / 1000;
+        if ($km == (int)$km) return ((int)$km) . ' km';
+        return rtrim(rtrim(number_format($km, 2, ',', ''), '0'), ',') . ' km';
+    }
+    return $m . ' m';
+}
+function formatTimeShort(float $sek): string {
+    $sek = (int)round($sek);
+    $m = intdiv($sek, 60);
+    $s = $sek % 60;
+    return $m . ':' . str_pad((string)$s, 2, '0', STR_PAD_LEFT);
+}
+function formatPaceShort(float $sekProKm): string {
+    return formatTimeShort($sekProKm) . ' /km';
+}
+
+function icsEsc(string $s): string {
+    $s = str_replace(['\\', "\r\n", "\n", ',', ';'],
+                      ['\\\\',    '\\n',  '\\n', '\\,', '\\;'], $s);
+    return $s;
+}
+
+function icsFold(string $line): string {
+    // RFC 5545: Zeilen >75 Oktett müssen gefaltet werden (CRLF + Leerzeichen)
+    if (strlen($line) <= 75) return $line;
+    $out = '';
+    $first = true;
+    while (strlen($line) > 0) {
+        $chunk = substr($line, 0, $first ? 75 : 74);
+        $line  = substr($line, $first ? 75 : 74);
+        $out  .= ($first ? '' : "\r\n ") . $chunk;
+        $first = false;
+    }
+    return $out;
+}
+
+function wickleIcs(array $events, string $name): string {
+    $tz = vtimezoneEuropeBerlin();
+    $head = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//TuS Oedt//Trainingsportal//DE',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'X-WR-CALNAME:' . icsEsc($name),
+        'X-WR-TIMEZONE:Europe/Berlin',
+    ];
+    $foot = ['END:VCALENDAR'];
+    return implode("\r\n", array_merge($head, [$tz], $events, $foot)) . "\r\n";
+}
+
+function vtimezoneEuropeBerlin(): string {
+    return implode("\r\n", [
+        'BEGIN:VTIMEZONE',
+        'TZID:Europe/Berlin',
+        'BEGIN:STANDARD',
+        'DTSTART:19701025T030000',
+        'TZOFFSETFROM:+0200',
+        'TZOFFSETTO:+0100',
+        'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+        'TZNAME:CET',
+        'END:STANDARD',
+        'BEGIN:DAYLIGHT',
+        'DTSTART:19700329T020000',
+        'TZOFFSETFROM:+0100',
+        'TZOFFSETTO:+0200',
+        'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+        'TZNAME:CEST',
+        'END:DAYLIGHT',
+        'END:VTIMEZONE',
     ]);
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## v5
+- ICS-Export: `GET ics/public.ics` (öffentlicher Trainingsplan) und `GET ics/me.ics?token=…` (persönlich, mit Pace-Vorgaben pro Segment)
+- Persönlicher Token in `benutzer.prefs` JSON gespeichert; Endpoints `GET/POST/DELETE ics/me/token` zum Erzeugen/Rotieren/Widerrufen
+- „📅 Abonnieren"-Button in der Kalender-Toolbar mit Public + Persönlich-Link, Kopieren und webcal://-Direktöffnung
+- VTIMEZONE Europe/Berlin, RFC-5545-konformes Line-Folding, Cancelled-Status für abgesagte Einheiten
+
 ## v4
 - Pace-Anreicherung für eingeloggte Athleten: Bestzeit aus dem Statistikportal (`ergebnisse` × `disziplin_mapping`) → Pace + Splitzeit pro Segment
 - Backend-Endpunkt `GET pace/me?modus=pb|12m` (Bestzeiten je Referenzdistanz: 5 km, 10 km, HM, M)
