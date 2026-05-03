@@ -24,7 +24,13 @@ async function apiCall(method, path, body, opts) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
-  const r = await fetch(API_BASE + path, init);
+  // Pfad und Query trennen, damit ?p= sauber bleibt
+  // (sonst landet alles nach dem ersten ? im p-Wert)
+  const qIdx = path.indexOf('?');
+  const url = (qIdx === -1)
+    ? API_BASE + path
+    : API_BASE + path.slice(0, qIdx) + '&' + path.slice(qIdx + 1);
+  const r = await fetch(url, init);
   let data = null;
   try { data = await r.json(); } catch (e) { /* ignore */ }
 

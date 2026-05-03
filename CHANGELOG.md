@@ -1,5 +1,8 @@
 # Changelog
 
+## v7
+- Bugfix: API-Aufrufe mit Query-String (`einheiten?von=…&bis=…`, `pace/me?modus=…`) wurden in PHP als Teil von `$_GET['p']` mitkonsumiert → 404 „Endpoint nicht gefunden". Frontend trennt Pfad und Query jetzt sauber.
+
 ## v6
 - FIT-Workout-Export (Garmin Connect): `GET fit/einheit/{id}.fit` liefert eine binäre FIT-Workout-Datei für strukturierte Einheiten
 - Eigener FIT-Encoder in `includes/fit_workout.php` (Profile 21.40, Sport=Running, Distanz-basierte Schritte mit Repeat-Blöcken, RFC-konforme CRC)
