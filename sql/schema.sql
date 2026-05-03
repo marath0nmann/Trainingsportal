@@ -1,0 +1,23 @@
+-- ============================================================
+-- Trainingsportal – Datenbankschema (Skeleton)
+-- ============================================================
+-- Hinweis: Die Tabellen `benutzer`, `rollen`, `einstellungen`,
+-- `passkeys`, `login_versuche` etc. werden gemeinsam mit dem
+-- Statistik-/Login-Portal genutzt und sind dort bereits angelegt.
+--
+-- Trainingsportal-spezifische Tabellen folgen hier mit dem
+-- Präfix `training_*`, sobald die fachlichen Anforderungen
+-- definiert sind.
+-- ============================================================
+
+-- Beispiel-Platzhalter (auskommentiert):
+-- CREATE TABLE IF NOT EXISTS training_einheiten (
+--   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+--   datum         DATE NOT NULL,
+--   titel         VARCHAR(200) NOT NULL,
+--   beschreibung  TEXT,
+--   erstellt_von  INT UNSIGNED,
+--   erstellt_am   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   PRIMARY KEY (id),
+--   KEY idx_datum (datum)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#cc0000" id="meta-theme-color">
+<title>Trainingsportal</title>
+
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css?v=1">
+</head>
+<body>
+
+<!-- Login-Screen (Standalone-Fallback; bei aktivem Login-Portal wird redirected) -->
+<div id="login-screen" class="login-wrap" style="display:none">
+  <div class="login-card">
+    <img src="" class="login-logo" alt="Vereinslogo" onerror="this.style.display='none'">
+    <div class="login-title">Trainingsportal</div>
+    <div class="login-sub">Bitte anmelden</div>
+    <div class="login-err" id="login-err"></div>
+    <button class="btn-login" onclick="goToLoginPortal()">Zum Login-Portal</button>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app-screen" style="display:none">
+  <header>
+    <div class="header-top">
+      <div class="logo-wrap" onclick="navigate('dashboard')" style="cursor:pointer" title="Startseite">
+        <img src="" class="logo-img" alt="Vereinslogo" onerror="this.style.display='none'">
+        <div class="logo-text">
+          <div class="logo-main"><span>Trainingsportal</span> <span id="mobile-header-ver" style="opacity:.55;font-size:.72em;font-weight:400;letter-spacing:0">v1</span></div>
+          <div class="logo-sub"><span>Leichtathletik</span> <span id="header-version" style="opacity:.55;font-size:.85em">v1</span></div>
+        </div>
+      </div>
+      <nav id="main-nav"></nav>
+      <div id="mobile-page-title"></div>
+      <div class="header-right">
+        <button class="burger-btn" id="burger-btn" onclick="toggleBurgerMenu()" aria-label="Menü" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <div style="display:none;align-items:center;gap:8px" id="user-btn">
+          <div class="user-badge" onclick="navigate('konto')" title="Konto">
+            <div class="user-avatar" id="user-avatar">?</div>
+            <div>
+              <div class="user-name" id="user-name-disp">–</div>
+              <div class="user-rolle" id="user-rolle-disp">–</div>
+            </div>
+          </div>
+          <button class="btn-logout-header" onclick="logout()" title="Abmelden">&#x23FB;</button>
+        </div>
+      </div>
+    </div>
+    <div class="header-stripe"></div>
+  </header>
+  <main id="main-content"></main>
+  <footer id="app-footer"></footer>
+</div>
+
+<!-- Mobile Nav -->
+<div id="mobile-nav-overlay" onclick="closeBurgerMenu()"></div>
+<div id="mobile-nav-drawer" style="visibility:hidden">
+  <div class="mobile-nav-items" id="mobile-nav-items"></div>
+  <div class="mobile-nav-footer"></div>
+</div>
+
+<div id="modal-container"></div>
+<div id="notification-container"></div>
+
+<script src="js/01_api.js?v=1"></script>
+<script src="js/02_app.js?v=1"></script>
+</body>
+</html>
