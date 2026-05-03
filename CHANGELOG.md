@@ -1,5 +1,11 @@
 # Changelog
 
+## v6
+- FIT-Workout-Export (Garmin Connect): `GET fit/einheit/{id}.fit` liefert eine binäre FIT-Workout-Datei für strukturierte Einheiten
+- Eigener FIT-Encoder in `includes/fit_workout.php` (Profile 21.40, Sport=Running, Distanz-basierte Schritte mit Repeat-Blöcken, RFC-konforme CRC)
+- „⌚ FIT für Garmin"-Download-Button im Detail-Modal (sichtbar wenn Segmente vorhanden)
+- Bewusste Beschränkung: keine Pace-Targets im FIT (Pace folgt aus dem Workout-Namen / Beschreibung), Warmup/Cooldown nicht enthalten
+
 ## v5
 - ICS-Export: `GET ics/public.ics` (öffentlicher Trainingsplan) und `GET ics/me.ics?token=…` (persönlich, mit Pace-Vorgaben pro Segment)
 - Persönlicher Token in `benutzer.prefs` JSON gespeichert; Endpoints `GET/POST/DELETE ics/me/token` zum Erzeugen/Rotieren/Widerrufen

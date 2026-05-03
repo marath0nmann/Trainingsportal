@@ -54,6 +54,10 @@ try {
         handleIcs($method, $tail);
         exit;
     }
+    if ($head === 'fit') {
+        handleFit($method, $tail);
+        exit;
+    }
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden', 'path' => $path]);
@@ -343,6 +347,46 @@ function handlePace(string $method, string $sub): void
         'athlet_id' => $athletId,
         'distanzen' => (object)$out,
     ]);
+}
+
+// ============================================================
+// FIT-Export (Garmin Workout)
+//   GET fit/einheit/{id}.fit  → Binärdatei zum Import in Garmin Connect
+// ============================================================
+function handleFit(string $method, string $sub): void
+{
+    if ($method !== 'GET' || !preg_match('#^einheit/(\d+)(?:\.fit)?$#', $sub, $m)) {
+        http_response_code(404);
+        echo 'FIT-Endpoint nicht gefunden';
+        return;
+    }
+    $id = (int)$m[1];
+    $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_einheiten') . ' WHERE id = ?', [$id]);
+    if (!$row) { http_response_code(404); echo 'Einheit nicht gefunden'; return; }
+    if ($row['sichtbarkeit'] !== 'oeffentlich' && !Auth::check()) {
+        http_response_code(401); echo 'Nicht angemeldet'; return;
+    }
+
+    $segs = DB::fetchAll(
+        'SELECT * FROM ' . DB::tbl('training_segmente') . ' WHERE einheit_id = ? ORDER BY reihenfolge, id',
+        [$id]
+    );
+
+    require_once __DIR__ . '/../../includes/fit_workout.php';
+
+    // FIT-Workout-Name: max 15 ASCII-Zeichen
+    $name = $row['datum'] . ' ' . $row['titel'];
+    $name = preg_replace('/[^A-Za-z0-9 .\-_]/', '', $name);
+    $name = substr($name, 0, 15);
+
+    $fit = FitWorkout::encode($id, $name, $segs);
+    $filename = 'training-' . $row['datum'] . '-' . $id . '.fit';
+
+    header('Content-Type: application/vnd.ant.fit');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . strlen($fit));
+    header('Cache-Control: no-store');
+    echo $fit;
 }
 
 // ============================================================

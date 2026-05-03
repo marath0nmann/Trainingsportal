@@ -327,10 +327,10 @@ async function zeigeEinheit(id) {
             ${e.sichtbarkeit === 'intern' ? `<div class="modal-row"><span class="modal-label">Sichtbarkeit</span><span>Nur intern</span></div>` : ''}
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
             ${segHtml}
-            ${state.user ? `
-              <div class="modal-actions">
-                <button class="btn btn-ghost" onclick="EDITOR.open(state._lastEinheit)">Bearbeiten</button>
-              </div>` : ''}
+            <div class="modal-actions">
+              ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
+              ${state.user ? `<button class="btn btn-ghost" onclick="EDITOR.open(state._lastEinheit)">Bearbeiten</button>` : ''}
+            </div>
           </div>
         </div>
       </div>`;
