@@ -6,39 +6,49 @@
 //   apiPost('endpoint', { … })
 //   apiPut('endpoint/42', { … })
 //   apiDel('endpoint/7')
+//
+// Optionen-Objekt als letztes Argument:
+//   { silent: true }  → bei 401 NICHT zum Login-Portal weiterleiten
 // ============================================================
 
 const API_BASE = 'api/index.php?p=';
 
-async function apiCall(method, path, body) {
-  const opts = {
+async function apiCall(method, path, body, opts) {
+  const options = opts || {};
+  const init = {
     method,
     credentials: 'include',
     headers: { 'Accept': 'application/json' },
   };
   if (body !== undefined) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
+    init.headers['Content-Type'] = 'application/json';
+    init.body = JSON.stringify(body);
   }
-  const r = await fetch(API_BASE + path, opts);
+  const r = await fetch(API_BASE + path, init);
   let data = null;
   try { data = await r.json(); } catch (e) { /* ignore */ }
 
   if (r.status === 401) {
-    handleUnauthorized(data);
-    throw new Error('Nicht angemeldet');
+    if (!options.silent) handleUnauthorized(data);
+    const err = new Error('Nicht angemeldet');
+    err.status = 401;
+    err.data = data;
+    throw err;
   }
   if (!r.ok) {
     const msg = (data && data.fehler) || ('HTTP ' + r.status);
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = r.status;
+    err.data = data;
+    throw err;
   }
   return data;
 }
 
-const apiGet  = (path)        => apiCall('GET',    path);
-const apiPost = (path, body)  => apiCall('POST',   path, body || {});
-const apiPut  = (path, body)  => apiCall('PUT',    path, body || {});
-const apiDel  = (path)        => apiCall('DELETE', path);
+const apiGet  = (path, opts)        => apiCall('GET',    path, undefined, opts);
+const apiPost = (path, body, opts)  => apiCall('POST',   path, body || {}, opts);
+const apiPut  = (path, body, opts)  => apiCall('PUT',    path, body || {}, opts);
+const apiDel  = (path, opts)        => apiCall('DELETE', path, undefined, opts);
 
 function handleUnauthorized(data) {
   if (data && data.login_portal_aktiv && data.login_portal_url) {

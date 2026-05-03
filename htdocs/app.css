@@ -1407,3 +1407,154 @@ tr:hover td { background: var(--surf2); }
   /* HoF-Karte: volle Breite */
 
 }
+
+/* ============================================================
+   Trainingsportal – Monatskalender
+   ============================================================ */
+.kal-wrap { padding: 24px 28px 48px; max-width: 1320px; margin: 0 auto; }
+
+.kal-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.kal-nav { display: flex; align-items: center; gap: 12px; }
+.kal-nav-right { display: flex; align-items: center; gap: 8px; }
+.kal-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 28px; letter-spacing: .5px;
+  color: var(--text); margin: 0; min-width: 220px; text-align: center;
+}
+
+.kal-loading, .kal-error {
+  padding: 48px; text-align: center; color: var(--text2);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.kal-error { color: var(--primary); }
+
+.kal-grid {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.kal-head {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  background: var(--accent); color: var(--on-accent);
+}
+.kal-head-cell {
+  padding: 8px 10px; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px; text-align: center;
+}
+.kal-row {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  border-top: 1px solid var(--border);
+}
+.kal-cell {
+  min-height: 120px; padding: 6px 8px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--surface);
+}
+.kal-cell:last-child { border-right: none; }
+.kal-cell.out-month { background: var(--surf2); }
+.kal-cell.out-month .kal-day-num { color: var(--text2); opacity: .55; }
+.kal-cell.weekend { background: color-mix(in srgb, var(--accent) 3%, var(--surface)); }
+.kal-cell.is-today { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.kal-cell.is-today .kal-day-num {
+  background: var(--primary); color: var(--on-primary);
+  border-radius: 50%; width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.kal-cell-head { display: flex; justify-content: flex-end; }
+.kal-day-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 15px; color: var(--text);
+}
+.kal-cell-items { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+
+.kal-item {
+  font-size: 12px; line-height: 1.25;
+  padding: 4px 6px; border-radius: 5px; cursor: pointer;
+  background: var(--surf2); color: var(--text);
+  border-left: 3px solid var(--accent);
+  transition: background .1s, transform .1s;
+  display: flex; flex-direction: column; gap: 1px;
+  overflow: hidden;
+}
+.kal-item:hover { background: color-mix(in srgb, var(--accent) 10%, var(--surf2)); }
+.kal-item.is-cancelled { opacity: .55; text-decoration: line-through; }
+.kal-item-time { font-size: 10px; color: var(--text2); font-weight: 600; }
+.kal-item-title {
+  font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Typ-Farben (Border-Akzent) */
+.kal-item.kal-typ-intervall    { border-left-color: var(--primary); }
+.kal-item.kal-typ-dauerlauf    { border-left-color: var(--green, #1a8a3a); }
+.kal-item.kal-typ-funktionell  { border-left-color: #c08010; }
+.kal-item.kal-typ-runde        { border-left-color: var(--accent); }
+.kal-item.kal-typ-event        { border-left-color: #8845c0; }
+.kal-item.kal-typ-kein_training {
+  border-left-color: var(--border); opacity: .65; font-style: italic;
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 16px;
+}
+.modal-card {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); max-width: 520px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-head {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 18px 20px 12px; border-bottom: 1px solid var(--border);
+}
+.modal-eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--accent);
+}
+.modal-title {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
+  font-size: 22px; letter-spacing: .3px; color: var(--text); margin: 4px 0 2px;
+}
+.modal-sub { font-size: 13px; color: var(--text2); }
+.modal-body { padding: 14px 20px 20px; }
+.modal-row {
+  display: flex; gap: 12px; padding: 8px 0;
+  border-bottom: 1px solid var(--border); font-size: 14px;
+}
+.modal-row:last-child { border-bottom: none; }
+.modal-label {
+  flex: 0 0 110px; font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text2); padding-top: 2px;
+}
+
+.btn-login-header {
+  background: var(--btn-bg); color: var(--on-btn); border: none;
+  padding: 8px 16px; border-radius: 7px; font-weight: 600;
+  cursor: pointer; font-size: 13px;
+}
+.btn-login-header:hover { background: var(--btn-bg2); }
+
+.page-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 32px; letter-spacing: .5px;
+}
+
+/* Mobile: kompakter Kalender */
+@media (max-width: 720px) {
+  .kal-wrap { padding: 12px 8px 32px; }
+  .kal-title { font-size: 22px; min-width: 0; }
+  .kal-cell { min-height: 80px; padding: 3px 4px; }
+  .kal-head-cell { padding: 6px 4px; font-size: 10px; letter-spacing: .5px; }
+  .kal-day-num { font-size: 13px; }
+  .kal-item { font-size: 10px; padding: 2px 4px; }
+  .kal-item-time { display: none; }
+}
