@@ -39,7 +39,7 @@ fi
 echo "✓ COMMIT_EDITMSG → v${NEW_VER}"
 
 # ── CHANGELOG.md: Version in oberstem Eintrag aktualisieren ─────────────────
-sed -i.bak "s/^## v${CUR_VER}\b/## v${NEW_VER}/" "$REPO_DIR/CHANGELOG.md"
+sed -i.bak "s/^## v${CUR_VER}$/## v${NEW_VER}/" "$REPO_DIR/CHANGELOG.md"
 rm -f "$REPO_DIR/CHANGELOG.md.bak"
 echo "✓ CHANGELOG.md → v${NEW_VER}"
 

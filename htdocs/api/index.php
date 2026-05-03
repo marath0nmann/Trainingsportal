@@ -177,23 +177,32 @@ function handleEinheiten(string $method, string $sub): void
         $in = readJsonBody();
         $errs = validateEinheit($in);
         if ($errs) { http_response_code(400); echo json_encode(['ok'=>false,'fehler'=>$errs[0]]); return; }
-        DB::query(
-            'INSERT INTO ' . DB::tbl('training_einheiten') . '
-             (datum, uhrzeit, typ, titel, treffpunkt, bemerkung, sichtbarkeit, status, erstellt_von)
-             VALUES (?,?,?,?,?,?,?,?,?)',
-            [
-                $in['datum'],
-                $in['uhrzeit'] ?? null,
-                $in['typ'] ?? 'frei',
-                $in['titel'],
-                $in['treffpunkt'] ?? null,
-                $in['bemerkung'] ?? null,
-                $in['sichtbarkeit'] ?? 'oeffentlich',
-                $in['status'] ?? 'geplant',
-                (int)$user['id'],
-            ]
-        );
-        $id = (int)DB::lastInsertId();
+        $pdo = DB::get();
+        $pdo->beginTransaction();
+        try {
+            DB::query(
+                'INSERT INTO ' . DB::tbl('training_einheiten') . '
+                 (datum, uhrzeit, typ, titel, treffpunkt, bemerkung, sichtbarkeit, status, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [
+                    $in['datum'],
+                    $in['uhrzeit'] ?? null,
+                    $in['typ'] ?? 'frei',
+                    $in['titel'],
+                    $in['treffpunkt'] ?? null,
+                    $in['bemerkung'] ?? null,
+                    $in['sichtbarkeit'] ?? 'oeffentlich',
+                    $in['status'] ?? 'geplant',
+                    (int)$user['id'],
+                ]
+            );
+            $id = (int)DB::lastInsertId();
+            replaceSegmente($id, $in['segmente'] ?? []);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
         echo json_encode(['ok' => true, 'id' => $id]);
         return;
     }
@@ -203,22 +212,33 @@ function handleEinheiten(string $method, string $sub): void
         $in = readJsonBody();
         $errs = validateEinheit($in);
         if ($errs) { http_response_code(400); echo json_encode(['ok'=>false,'fehler'=>$errs[0]]); return; }
-        DB::query(
-            'UPDATE ' . DB::tbl('training_einheiten') . '
-                SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt=?, bemerkung=?, sichtbarkeit=?, status=?
-              WHERE id=?',
-            [
-                $in['datum'],
-                $in['uhrzeit'] ?? null,
-                $in['typ'] ?? 'frei',
-                $in['titel'],
-                $in['treffpunkt'] ?? null,
-                $in['bemerkung'] ?? null,
-                $in['sichtbarkeit'] ?? 'oeffentlich',
-                $in['status'] ?? 'geplant',
-                $id,
-            ]
-        );
+        $pdo = DB::get();
+        $pdo->beginTransaction();
+        try {
+            DB::query(
+                'UPDATE ' . DB::tbl('training_einheiten') . '
+                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt=?, bemerkung=?, sichtbarkeit=?, status=?
+                  WHERE id=?',
+                [
+                    $in['datum'],
+                    $in['uhrzeit'] ?? null,
+                    $in['typ'] ?? 'frei',
+                    $in['titel'],
+                    $in['treffpunkt'] ?? null,
+                    $in['bemerkung'] ?? null,
+                    $in['sichtbarkeit'] ?? 'oeffentlich',
+                    $in['status'] ?? 'geplant',
+                    $id,
+                ]
+            );
+            if (array_key_exists('segmente', $in)) {
+                replaceSegmente($id, $in['segmente'] ?? []);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
         echo json_encode(['ok' => true]);
         return;
     }
@@ -260,6 +280,39 @@ function mapSegment(array $r): array {
         'pace_referenz'  => $r['pace_referenz'],
         'notiz'          => $r['notiz'],
     ];
+}
+
+function replaceSegmente(int $einheitId, $segmente): void {
+    DB::query('DELETE FROM ' . DB::tbl('training_segmente') . ' WHERE einheit_id = ?', [$einheitId]);
+    if (!is_array($segmente)) return;
+    $i = 0;
+    foreach ($segmente as $s) {
+        if (!is_array($s)) continue;
+        $dist = isset($s['distanz_m']) ? (int)$s['distanz_m'] : 0;
+        if ($dist <= 0) continue;
+        $ptyp = $s['pause_typ'] ?? null;
+        if ($ptyp !== null) {
+            $ptyp = strtoupper((string)$ptyp);
+            if (!in_array($ptyp, ['TP','GP','BP','frei','FREI'], true)) $ptyp = null;
+            else if ($ptyp === 'FREI') $ptyp = 'frei';
+        }
+        DB::query(
+            'INSERT INTO ' . DB::tbl('training_segmente') . '
+             (einheit_id, reihenfolge, block_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
+             VALUES (?,?,?,?,?,?,?,?,?)',
+            [
+                $einheitId,
+                $i++,
+                isset($s['block_id']) && $s['block_id'] !== '' ? (int)$s['block_id'] : null,
+                isset($s['wiederholungen']) ? max(1, (int)$s['wiederholungen']) : 1,
+                $dist,
+                isset($s['pause_m']) && $s['pause_m'] !== '' ? (int)$s['pause_m'] : null,
+                $ptyp,
+                isset($s['pace_referenz']) && $s['pace_referenz'] !== '' ? substr((string)$s['pace_referenz'], 0, 40) : null,
+                isset($s['notiz']) && $s['notiz'] !== '' ? substr((string)$s['notiz'], 0, 200) : null,
+            ]
+        );
+    }
 }
 
 function readJsonBody(): array {

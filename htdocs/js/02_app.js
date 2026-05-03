@@ -178,6 +178,7 @@ async function renderKalender(main, monthArg) {
         </div>
         <div class="kal-nav-right">
           <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
+          ${state.user ? `<button class="btn btn-primary" onclick="EDITOR.open({})">+ Neue Einheit</button>` : ''}
         </div>
       </div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
@@ -225,10 +226,14 @@ async function renderKalender(main, monthArg) {
         return `<div class="${cls}" onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
       }).join('');
 
+      const addBtn = state.user
+        ? `<button class="kal-add-btn" title="Einheit hinzufügen" onclick="event.stopPropagation();EDITOR.open({datum:'${k}'})">+</button>`
+        : '';
       cells.push(`
         <div class="${dayCls}">
           <div class="kal-cell-head">
             <span class="kal-day-num">${cursor.getDate()}</span>
+            ${addBtn}
           </div>
           <div class="kal-cell-items">${itemsHtml}</div>
         </div>`);
@@ -256,9 +261,23 @@ async function zeigeEinheit(id) {
     const data = await apiGet(`einheiten/${id}`, { silent: true });
     const e = data.einheit;
     const seg = data.segmente || [];
+    state._lastEinheit = { einheit: e, segmente: seg };
     const datum = new Date(e.datum + 'T00:00:00');
     const wochentag = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][datum.getDay()];
     const datStr = `${wochentag}, ${datum.getDate()}. ${MONATSNAMEN[datum.getMonth()]} ${datum.getFullYear()}`;
+
+    const segHtml = seg.length ? `
+      <div class="modal-row modal-row-block">
+        <span class="modal-label">Segmente</span>
+        <div class="seg-list">
+          ${seg.map((s, i) => `
+            <div class="seg-item">
+              <div class="seg-num">${i + 1}</div>
+              <div class="seg-main">${escapeHtml(PARSER.formatSegment(s))}</div>
+              ${s.pace_referenz ? `<div class="seg-pace">${escapeHtml(s.pace_referenz)}</div>` : ''}
+            </div>`).join('')}
+        </div>
+      </div>` : '';
 
     cont.innerHTML = `
       <div class="modal-overlay" onclick="schliesseModal(event)">
@@ -274,8 +293,13 @@ async function zeigeEinheit(id) {
           <div class="modal-body">
             ${e.treffpunkt ? `<div class="modal-row"><span class="modal-label">Treffpunkt</span><span>${escapeHtml(e.treffpunkt)}</span></div>` : ''}
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
-            ${seg.length ? `<div class="modal-row"><span class="modal-label">Segmente</span><span>${seg.length} Segment(e) – Detailansicht folgt</span></div>` : ''}
+            ${e.sichtbarkeit === 'intern' ? `<div class="modal-row"><span class="modal-label">Sichtbarkeit</span><span>Nur intern</span></div>` : ''}
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
+            ${segHtml}
+            ${state.user ? `
+              <div class="modal-actions">
+                <button class="btn btn-ghost" onclick="EDITOR.open(state._lastEinheit)">Bearbeiten</button>
+              </div>` : ''}
           </div>
         </div>
       </div>`;
