@@ -1,93 +1,162 @@
 // ============================================================
-// Trainingsportal – Config-Loader
+// Trainingsportal – Config & Theming
 // ============================================================
-// Lädt beim App-Start die Vereins-Einstellungen aus
-// `einstellungen` (geteilte Tabelle mit Statistik-/Login-Portal)
-// und mappt sie auf CSS-Variablen, Logo und App-Namen.
+// Übernimmt 1:1 die Logik aus dem Statistikportal:
+//   - Farbberechnungen (_hexToRgb, _lighten, _darken, _luminance, _onColor)
+//   - applyConfig(cfg)         Setzt CSS-Variablen, Logo, Texte
+//   - _updateBodyThemeColor()  Adressleiste je nach Setting
+//
+// Damit erbt das Trainingsportal die identische Optik, ohne CSS
+// oder Theming-Code zu duplizieren.
 // ============================================================
 
+var appConfig = {};
+
+// ── Farbhelfer ─────────────────────────────────────────────
+function _hexToRgb(hex) {
+  hex = (hex || '').replace(/^#/, '');
+  if (hex.length === 3) hex = hex.split('').map(function(c){ return c+c; }).join('');
+  var n = parseInt(hex, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function _rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(function(v){
+    return Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0');
+  }).join('');
+}
+function _lighten(hex, factor) {
+  var c = _hexToRgb(hex);
+  return _rgbToHex(c.r+(255-c.r)*factor, c.g+(255-c.g)*factor, c.b+(255-c.b)*factor);
+}
+function _darken(hex, factor) {
+  var c = _hexToRgb(hex);
+  return _rgbToHex(c.r*(1-factor), c.g*(1-factor), c.b*(1-factor));
+}
+function _luminance(hex) {
+  var c = _hexToRgb(hex);
+  return [c.r, c.g, c.b].reduce(function(lum, v, i) {
+    var s = v / 255;
+    s = s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    return lum + s * [0.2126, 0.7152, 0.0722][i];
+  }, 0);
+}
+function _onColor(bgHex) {
+  var lum = _luminance(bgHex);
+  var contrastWhite = (1 + 0.05) / (lum + 0.05);
+  var contrastBlack = (lum + 0.05) / (0 + 0.05);
+  return contrastWhite >= contrastBlack ? '#ffffff' : '#111111';
+}
+
+function _updateBodyThemeColor() {
+  var pref = (window.appConfig && window.appConfig.adressleiste_farbe) || 'aus';
+  var metaTheme = document.getElementById('meta-theme-color');
+  if (pref === 'aus') {
+    document.body.style.removeProperty('background-color');
+    if (metaTheme) metaTheme.removeAttribute('content');
+    return;
+  }
+  var style = getComputedStyle(document.documentElement);
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+               (!document.documentElement.getAttribute('data-theme') &&
+                window.matchMedia('(prefers-color-scheme: dark)').matches);
+  var color;
+  if (pref === 'primary') {
+    color = isDark
+      ? style.getPropertyValue('--primary-dark').trim()
+      : style.getPropertyValue('--primary3').trim();
+  } else if (pref === 'accent') {
+    color = style.getPropertyValue('--accent').trim();
+  }
+  if (!color) return;
+  document.body.style.backgroundColor = color;
+  if (metaTheme) metaTheme.setAttribute('content', color);
+}
+
+// ── Hauptlogik ─────────────────────────────────────────────
+function applyConfig(cfg) {
+  appConfig = cfg || {};
+  window.appConfig = appConfig;
+
+  var root = document.documentElement;
+  var p  = cfg.farbe_primary || '#cc0000';
+  var a  = cfg.farbe_accent  || '#003087';
+  var p2 = _lighten(p, 0.12);
+  var p3 = _lighten(p, 0.28);
+  var a2 = _lighten(a, 0.18);
+  var pDark  = _darken(p, 0.35);
+  var pLight = _lighten(p, 0.45);
+  var aLight = _lighten(a, 0.45);
+  var aRgb = _hexToRgb(a);
+  var aRgbStr = aRgb ? aRgb.r + ',' + aRgb.g + ',' + aRgb.b : '0,48,135';
+
+  root.style.setProperty('--primary',      p);
+  root.style.setProperty('--primary2',     p2);
+  root.style.setProperty('--primary3',     p3);
+  root.style.setProperty('--primary-dark', pDark);
+  root.style.setProperty('--primary-light',pLight);
+  root.style.setProperty('--accent',       a);
+  root.style.setProperty('--accent2',      a2);
+  root.style.setProperty('--accent-light', aLight);
+  root.style.setProperty('--accent-rgb',   aRgbStr);
+  root.style.setProperty('--btn-bg',       a);
+  root.style.setProperty('--btn-bg2',      a2);
+  root.style.setProperty('--on-primary', _onColor(p));
+  root.style.setProperty('--on-accent',  _onColor(a));
+  root.style.setProperty('--on-btn',     _onColor(a));
+
+  _updateBodyThemeColor();
+
+  // ── Texte ──
+  var name      = cfg.verein_name    || 'Mein Verein e.V.';
+  var kuerzel   = cfg.verein_kuerzel || name;
+  var untertitel= cfg.app_untertitel || 'Trainingsportal';
+  var logoFile  = cfg.logo_datei || '';
+  var logoUrl   = logoFile
+    ? (logoFile.startsWith('http') ? logoFile : '/' + logoFile)
+    : '';
+
+  document.title = name + ' – Trainingsplan';
+
+  var elMain = document.querySelector('.logo-main span');
+  if (elMain) elMain.textContent = kuerzel;
+  var elSub  = document.querySelector('.logo-sub span:first-child');
+  if (elSub)  elSub.textContent  = 'Trainingsplan';
+
+  var elLT = document.querySelector('.login-title');
+  if (elLT) elLT.textContent = name;
+  var elLS = document.querySelector('.login-sub');
+  if (elLS) elLS.textContent = 'Trainingsplan · Bitte einloggen';
+
+  var elFoot = document.querySelector('.mobile-nav-footer');
+  if (elFoot) elFoot.textContent = 'Trainingsplan';
+
+  // Logos
+  document.querySelectorAll('.logo-img, .login-logo').forEach(function(img) {
+    if (logoUrl) {
+      img.src = logoUrl;
+      img.alt = name;
+      img.style.display = '';
+    } else {
+      img.src = '';
+      img.style.display = 'none';
+    }
+  });
+}
+
+// ── Loader: holt die Settings vom Backend ──────────────────
 const CONFIG = (() => {
-  let data = null;
-
+  let loaded = null;
   async function load() {
-    if (data) return data;
+    if (loaded) return loaded;
     try {
       const r = await apiGet('config', { silent: true });
-      data = r.config || {};
+      loaded = r.config || r.data || {};
+      applyConfig(loaded);
     } catch (e) {
-      data = {};
+      loaded = {};
     }
-    apply(data);
-    return data;
+    return loaded;
   }
-
-  function get(key) { return data ? data[key] : undefined; }
-
-  function apply(cfg) {
-    const root = document.documentElement;
-
-    if (cfg.farbe_primary)  root.style.setProperty('--primary',  cfg.farbe_primary);
-    if (cfg.farbe_primary2) root.style.setProperty('--primary2', cfg.farbe_primary2);
-    if (cfg.farbe_primary3) root.style.setProperty('--primary3', cfg.farbe_primary3);
-    if (cfg.farbe_accent)   root.style.setProperty('--accent',   cfg.farbe_accent);
-    if (cfg.farbe_accent2)  root.style.setProperty('--accent2',  cfg.farbe_accent2);
-
-    // --primary-dark wird vom CSS für Header-Gradient genutzt, ist aber
-    // nicht in einstellungen → aus farbe_primary abgeleitet (~25 % dunkler)
-    if (cfg.farbe_primary) {
-      const dk = darken(cfg.farbe_primary, 0.25);
-      root.style.setProperty('--primary-dark', dk);
-    }
-
-    // On-Color-Texte (weiß für dunkle Akzent-/Primary-Farben)
-    if (cfg.farbe_primary) {
-      root.style.setProperty('--on-primary', isLight(cfg.farbe_primary) ? '#1a2340' : '#ffffff');
-    }
-    if (cfg.farbe_accent) {
-      root.style.setProperty('--on-accent', isLight(cfg.farbe_accent) ? '#1a2340' : '#ffffff');
-      // Buttons nutzen den Akzent
-      root.style.setProperty('--btn-bg',  cfg.farbe_accent);
-      root.style.setProperty('--btn-bg2', cfg.farbe_accent2 || cfg.farbe_accent);
-    }
-
-    // Theme-Farbe für Browser/Safari
-    const meta = document.getElementById('meta-theme-color');
-    if (meta && cfg.farbe_primary) meta.setAttribute('content', cfg.farbe_primary);
-
-    // Logo
-    if (cfg.logo_datei || cfg.logo_url) {
-      const src = cfg.logo_url || cfg.logo_datei;
-      document.querySelectorAll('.logo-img, .login-logo').forEach(img => {
-        img.src = src;
-        img.style.display = '';
-      });
-    }
-
-    // Vereinsname → Untertitel im Logo-Block
-    if (cfg.verein_kuerzel) {
-      const sub = document.querySelector('.logo-sub > span:first-child');
-      if (sub) sub.textContent = cfg.verein_kuerzel;
-    }
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────
-  function hexToRgb(hex) {
-    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
-    return m ? [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)] : null;
-  }
-  function rgbToHex(r,g,b) {
-    return '#' + [r,g,b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2,'0')).join('');
-  }
-  function darken(hex, amount) {
-    const rgb = hexToRgb(hex); if (!rgb) return hex;
-    return rgbToHex(rgb[0]*(1-amount), rgb[1]*(1-amount), rgb[2]*(1-amount));
-  }
-  function isLight(hex) {
-    const rgb = hexToRgb(hex); if (!rgb) return false;
-    // Wahrgenommene Helligkeit (ITU-R BT.601)
-    const brightness = (rgb[0]*299 + rgb[1]*587 + rgb[2]*114) / 1000;
-    return brightness > 165;
-  }
-
+  function get(key) { return loaded ? loaded[key] : undefined; }
   return { load, get };
 })();

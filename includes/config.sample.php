@@ -24,3 +24,9 @@ define('SESSION_LIFETIME', 86400 * 30); // 30 Tage
 //   → login.tus-oedt.de, statistik.tus-oedt.de, training.tus-oedt.de
 // Leer = Standalone-Betrieb (Cookie nur für training.tus-oedt.de)
 define('COOKIE_DOMAIN', '.tus-oedt.de');
+
+// ── Statistikportal-Verzeichnis (auf dem Server) ─────────────
+// Pfad zum htdocs-Verzeichnis des Statistikportals.
+// Wird genutzt, um app.css und applyConfig 1:1 zu übernehmen.
+// Standard: ../../statistik.tus-oedt.de/htdocs/  (Schwester-Subdomain).
+define('STATISTIKPORTAL_PATH', __DIR__ . '/../../statistik.tus-oedt.de/htdocs/');

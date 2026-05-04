@@ -1,0 +1,469 @@
+/* ============================================================
+   Trainingsportal – Monatskalender
+   ============================================================ */
+.kal-wrap { padding: 24px 28px 48px; max-width: 1320px; margin: 0 auto; }
+
+.kal-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.kal-nav { display: flex; align-items: center; gap: 12px; }
+.kal-nav-right { display: flex; align-items: center; gap: 8px; }
+.kal-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 28px; letter-spacing: .5px;
+  color: var(--text); margin: 0; min-width: 220px; text-align: center;
+}
+
+.kal-loading, .kal-error {
+  padding: 48px; text-align: center; color: var(--text2);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.kal-error { color: var(--primary); }
+
+.kal-grid {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.kal-head {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  background: var(--accent); color: var(--on-accent);
+}
+.kal-head-cell {
+  padding: 8px 10px; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px; text-align: center;
+}
+.kal-row {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  border-top: 1px solid var(--border);
+}
+.kal-cell {
+  min-height: 120px; padding: 6px 8px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--surface);
+  /* Grid-Gotcha: ohne min-width:0 expandieren Zellen mit langem Content */
+  min-width: 0; overflow: hidden;
+}
+.kal-cell-items, .kal-cell-head, .kal-feiertag-list { min-width: 0; }
+.kal-item, .kal-feiertag { max-width: 100%; }
+.kal-cell:last-child { border-right: none; }
+.kal-cell.out-month { background: var(--surf2); }
+.kal-cell.out-month .kal-day-num { color: var(--text2); opacity: .55; }
+.kal-cell.weekend { background: color-mix(in srgb, var(--accent) 3%, var(--surface)); }
+.kal-cell.is-today { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.kal-cell.is-today .kal-day-num {
+  background: var(--primary); color: var(--on-primary);
+  border-radius: 50%; width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.kal-cell-head { display: flex; justify-content: flex-end; }
+.kal-day-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 15px; color: var(--text);
+}
+.kal-cell-items { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+
+.kal-item {
+  font-size: 12px; line-height: 1.25;
+  padding: 4px 6px; border-radius: 5px; cursor: pointer;
+  background: var(--surf2); color: var(--text);
+  border-left: 3px solid var(--accent);
+  transition: background .1s, transform .1s;
+  display: flex; flex-direction: column; gap: 1px;
+  overflow: hidden;
+}
+.kal-item:hover { background: color-mix(in srgb, var(--accent) 10%, var(--surf2)); }
+.kal-item.is-cancelled { opacity: .55; text-decoration: line-through; }
+.kal-item-time { font-size: 10px; color: var(--text2); font-weight: 600; }
+.kal-item-title {
+  font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Typ-Farben (Border-Akzent) */
+.kal-item.kal-typ-intervall    { border-left-color: var(--primary); }
+.kal-item.kal-typ-dauerlauf    { border-left-color: var(--green, #1a8a3a); }
+.kal-item.kal-typ-funktionell  { border-left-color: #c08010; }
+.kal-item.kal-typ-runde        { border-left-color: var(--accent); }
+.kal-item.kal-typ-event        { border-left-color: #8845c0; }
+.kal-item.kal-typ-kein_training {
+  border-left-color: var(--border); opacity: .65; font-style: italic;
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 16px;
+}
+.modal-card {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); max-width: 520px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-head {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 18px 20px 12px; border-bottom: 1px solid var(--border);
+}
+.modal-eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--accent);
+}
+.modal-title {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
+  font-size: 22px; letter-spacing: .3px; color: var(--text); margin: 4px 0 2px;
+}
+.modal-sub { font-size: 13px; color: var(--text2); }
+.modal-body { padding: 14px 20px 20px; }
+.modal-row {
+  display: flex; gap: 12px; padding: 8px 0;
+  border-bottom: 1px solid var(--border); font-size: 14px;
+}
+.modal-row:last-child { border-bottom: none; }
+.modal-label {
+  flex: 0 0 110px; font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text2); padding-top: 2px;
+}
+
+.btn-login-header {
+  background: var(--btn-bg); color: var(--on-btn); border: none;
+  padding: 8px 16px; border-radius: 7px; font-weight: 600;
+  cursor: pointer; font-size: 13px;
+}
+.btn-login-header:hover { background: var(--btn-bg2); }
+
+.page-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 32px; letter-spacing: .5px;
+}
+
+/* Mobile: kompakter Kalender */
+@media (max-width: 720px) {
+  .kal-wrap { padding: 12px 8px 32px; }
+  .kal-title { font-size: 22px; min-width: 0; }
+  .kal-cell { min-height: 80px; padding: 3px 4px; }
+  .kal-head-cell { padding: 6px 4px; font-size: 10px; letter-spacing: .5px; }
+  .kal-day-num { font-size: 13px; }
+  .kal-item { font-size: 10px; padding: 2px 4px; }
+  .kal-item-time { display: none; }
+}
+
+/* ============================================================
+   Trainingsportal – Editor & Segmente
+   ============================================================ */
+
+/* Cell-Add-Button */
+.kal-add-btn {
+  background: transparent; border: none; color: var(--text2);
+  width: 18px; height: 18px; padding: 0; line-height: 1;
+  font-size: 16px; cursor: pointer; opacity: 0; transition: opacity .1s;
+}
+.kal-cell:hover .kal-add-btn { opacity: 1; }
+.kal-add-btn:hover { color: var(--accent); }
+.kal-cell-head {
+  display: flex; justify-content: space-between; align-items: center;
+}
+
+/* Segmente-Liste im Detail-Modal */
+.modal-row-block { flex-direction: column; align-items: stretch; gap: 6px; }
+.modal-row-block .modal-label { padding-top: 0; }
+
+.seg-list { display: flex; flex-direction: column; gap: 6px; }
+.seg-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--surf2);
+}
+.seg-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent);
+  font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.seg-main { flex: 1; font-size: 14px; }
+.seg-pace {
+  font-size: 11px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 4px; padding: 2px 6px;
+}
+
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 8px;
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+
+/* ── Editor-Modal ── */
+.modal-card.modal-wide { max-width: 760px; }
+
+.ed-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 16px;
+  margin-bottom: 18px;
+}
+.ed-fg { display: flex; flex-direction: column; gap: 4px; }
+.ed-fg-wide { grid-column: 1 / -1; }
+.ed-fg label {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text2);
+}
+.ed-fg .ed-hint {
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+  font-size: 11px; color: var(--text2); opacity: .8;
+}
+.ed-fg input, .ed-fg select, .ed-fg textarea {
+  background: var(--surface); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: 7px; padding: 8px 10px;
+  font-size: 14px; font-family: inherit;
+}
+.ed-fg textarea { resize: vertical; }
+.ed-fg input:focus, .ed-fg select:focus, .ed-fg textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+
+.ed-segwrap {
+  border-top: 1px solid var(--border); padding-top: 16px; margin-top: 4px;
+}
+.ed-segheader {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.ed-segheader h3 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px; font-weight: 700; letter-spacing: .5px; margin: 0;
+}
+.ed-segactions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.ed-segleer {
+  padding: 18px; text-align: center; color: var(--text2);
+  background: var(--surf2); border: 1px dashed var(--border);
+  border-radius: 6px; font-size: 13px;
+}
+
+.ed-seg-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.ed-seg-table th {
+  text-align: left; padding: 4px 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text2);
+  border-bottom: 1.5px solid var(--border);
+}
+.ed-seg-table td {
+  padding: 4px; border-bottom: 1px solid var(--border);
+}
+.ed-seg-input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 5px 7px; font-size: 13px;
+  font-family: inherit;
+}
+.ed-seg-input:focus { outline: none; border-color: var(--accent); }
+.ed-seg-num  { width: 60px; }
+.ed-seg-dist { width: 90px; }
+
+.btn-icon {
+  background: transparent; border: none; color: var(--text2);
+  font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1;
+  border-radius: 4px;
+}
+.btn-icon:hover { background: var(--surf2); color: var(--primary); }
+
+.ed-seghint {
+  margin-top: 8px; font-size: 11px; color: var(--text2); font-style: italic;
+}
+
+.ed-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; margin-top: 18px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.ed-footer-right { display: flex; gap: 8px; }
+
+/* Buttons (falls noch nicht definiert in dieser Datei) */
+.btn {
+  padding: 8px 14px; border-radius: 7px; font-weight: 600; font-size: 13px;
+  cursor: pointer; font-family: inherit; border: 1.5px solid transparent;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.btn-primary {
+  background: var(--btn-bg); color: var(--on-btn); border-color: var(--btn-bg);
+}
+.btn-primary:hover { background: var(--btn-bg2); border-color: var(--btn-bg2); }
+
+/* Notifications */
+#notification-container {
+  position: fixed; top: 16px; right: 16px; z-index: 2000;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.notif {
+  padding: 10px 16px; border-radius: 7px; font-size: 13px; font-weight: 600;
+  box-shadow: var(--shadow); min-width: 220px;
+}
+.notif-ok   { background: var(--green); color: white; }
+.notif-warn { background: #c08010; color: white; }
+
+/* Mobile-Anpassung Editor */
+@media (max-width: 640px) {
+  .ed-grid { grid-template-columns: 1fr; }
+  .ed-seg-num  { width: 50px; }
+  .ed-seg-dist { width: 70px; }
+}
+
+/* ============================================================
+   Trainingsportal – Pace-Anzeige im Detail-Modal
+   ============================================================ */
+.pace-header {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; margin-bottom: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surf2));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  border-radius: 6px; font-size: 12px;
+}
+.pace-label { font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; font-size: 10px; }
+.pace-mode-sel {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; padding: 3px 6px; font-size: 12px; font-family: inherit;
+}
+.pace-mode-sel:focus { outline: none; border-color: var(--accent); }
+.pace-hint { color: var(--text2); font-style: italic; }
+
+.seg-pace-info {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 1px; min-width: 90px;
+}
+.seg-split {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 18px; line-height: 1;
+  color: var(--accent); letter-spacing: .3px;
+}
+.seg-split-unit { font-size: 10px; font-weight: 600; color: var(--text2); margin-left: 4px; letter-spacing: 0; }
+.seg-pace-pace { font-size: 11px; font-weight: 600; color: var(--text2); }
+
+/* ============================================================
+   Trainingsportal – ICS-Abo-Modal
+   ============================================================ */
+.ics-section {
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.ics-section:last-child { border-bottom: none; }
+.ics-section h4 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px; font-weight: 700; letter-spacing: .5px;
+  margin: 0 0 4px; color: var(--text);
+}
+.ics-hint { font-size: 12px; color: var(--text2); margin: 0 0 10px; }
+.ics-url {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.ics-url input {
+  flex: 1; min-width: 200px;
+  background: var(--surf2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 6px 8px; font-size: 12px;
+  font-family: ui-monospace, monospace; color: var(--text);
+}
+.ics-url input:focus { outline: none; border-color: var(--accent); }
+.ics-actions {
+  display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;
+}
+.ics-warn {
+  margin-top: 10px; font-size: 11px; color: var(--text2);
+  background: color-mix(in srgb, #c08010 15%, var(--surf2));
+  padding: 8px 10px; border-radius: 5px;
+  border-left: 3px solid #c08010;
+}
+
+/* ============================================================
+   Trainingsportal – Feiertage / Ferien
+   ============================================================ */
+.kal-feiertag-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }
+.kal-feiertag {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 5px; border-radius: 3px;
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+  border-left: 3px solid var(--primary);
+  text-transform: uppercase; letter-spacing: .3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
+}
+.kal-cell.is-feiertag {
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+
+/* ============================================================
+   Trainingsportal – Einstellungen-Seite
+   ============================================================ */
+.page-wrap {
+  max-width: 1000px; margin: 0 auto;
+  padding: 24px 28px 48px;
+}
+.page-sub {
+  color: var(--text2); font-size: 14px; margin: 4px 0 24px;
+}
+
+.settings-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow);
+}
+.settings-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.settings-card-head h2 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px; font-weight: 700; letter-spacing: .5px;
+  margin: 0; color: var(--text);
+}
+.settings-hint {
+  font-size: 12px; color: var(--text2); margin: 0 0 14px;
+}
+.settings-hint a { color: var(--accent); cursor: pointer; }
+
+.settings-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.settings-table th {
+  text-align: left; padding: 6px 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text2);
+  border-bottom: 1.5px solid var(--border);
+}
+.settings-table td {
+  padding: 6px 4px; border-bottom: 1px solid var(--border);
+}
+.settings-table .empty-row {
+  text-align: center; color: var(--text2); padding: 20px; font-style: italic;
+}
+.set-input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 6px 8px;
+  font-size: 13px; font-family: inherit;
+}
+.set-input:focus { outline: none; border-color: var(--accent); }
+.set-color { width: 48px; padding: 2px; height: 32px; cursor: pointer; }
+
+.settings-fg { display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
+.settings-fg label {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text2);
+}
+.settings-fg input {
+  background: var(--surface); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: 7px; padding: 8px 10px;
+  font-size: 14px; font-family: inherit;
+}
+.settings-fg input:focus { outline: none; border-color: var(--accent); }
+.settings-fg-hint { font-size: 11px; color: var(--text2); }
+
+.settings-actions {
+  display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;
+}

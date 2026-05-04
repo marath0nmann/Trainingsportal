@@ -460,22 +460,18 @@ function handleAdmin(string $method, string $sub): void {
 //   Login-Portal passt (geteilte einstellungen-Tabelle).
 // ============================================================
 function handleConfig(): void {
-    $keys = [
-        'farbe_primary', 'farbe_primary2', 'farbe_primary3',
-        'farbe_accent',  'farbe_accent2',
-        'logo_datei', 'logo_url',
-        'verein_name', 'verein_kuerzel',
-        'app_untertitel',
-        'training_feiertage_ics_urls',
-    ];
-    $cfg = [];
-    foreach ($keys as $k) {
-        $cfg[$k] = Settings::get($k, '');
+    // Komplette Settings (öffentlich, identisch zum Statistikportal-Endpoint
+    // `einstellungen`), damit das gemeinsame applyConfig() darauf läuft.
+    $cfg = Settings::all();
+    // Sensible Keys (Tokens) NICHT öffentlich ausspielen
+    foreach (['github_token', 'github_token_expires'] as $sec) {
+        unset($cfg[$sec]);
     }
-    // Feiertage-Liste als Array zurückgeben
+    // Feiertage-Liste vorparsen für den Kalender
     $urls = [];
-    if ($cfg['training_feiertage_ics_urls'] !== '') {
-        $j = json_decode($cfg['training_feiertage_ics_urls'], true);
+    $raw = $cfg['training_feiertage_ics_urls'] ?? '';
+    if ($raw !== '') {
+        $j = json_decode($raw, true);
         if (is_array($j)) {
             foreach ($j as $entry) {
                 if (is_string($entry)) {
@@ -491,7 +487,6 @@ function handleConfig(): void {
         }
     }
     $cfg['feiertage'] = $urls;
-    unset($cfg['training_feiertage_ics_urls']);
 
     echo json_encode(['ok' => true, 'config' => $cfg]);
 }

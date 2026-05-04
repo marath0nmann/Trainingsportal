@@ -1,5 +1,16 @@
 # Changelog
 
+## v12
+- 1:1-Optik mit Statistikportal: dessen `app.css` wird per neuem `shared.php?file=app.css` direkt aus dem Schwester-htdocs ausgeliefert (kein doppeltes Pflegen)
+- Trainingsportal-spezifische Styles in eigener `addons.css` (Kalender, Editor, Pace, ICS, Feiertage, Settings) – überlagert die Statistikportal-Basis
+- `applyConfig()` 1:1 aus dem Statistikportal übernommen: berechnet `--primary2/3`, `--primary-dark`, `--primary-light`, `--accent2`, `--accent-light`, `--accent-rgb`, `--on-*`, setzt Logo, Vereinsname und Adressleisten-Farbe wie drüben
+- Backend `GET config` liefert jetzt das vollständige Settings-Dictionary (sensible Tokens entfernt) – kompatibel mit der gemeinsamen `applyConfig`
+- Neue Konstante `STATISTIKPORTAL_PATH` in `config.sample.php` (Standard: `../../statistik.tus-oedt.de/htdocs/`)
+
+## v11
+- Fix: `Undefined constant TRAINING_SETTINGS_KEYS` (PHP `const` im Datei-Scope wird nicht hochgezogen wie Funktionen). Konstante in Funktion `trainingSettingsKeys()` umgewandelt
+- Fehler-Detail aus Backend wird jetzt im Frontend angezeigt
+
 ## v9
 - Einstellungen-Seite (`#einstellungen`) für Admins: Feiertage-/Ferien-Feeds (URL, Label, Farbe) komfortabel pflegen, plus Standard-Dauer pro Einheit
 - Backend: `GET/PUT admin/settings` (auth+admin-only), Whitelist erlaubter Keys, Cache-Invalidierung der ICS-Feeds nach Speichern
