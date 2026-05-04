@@ -57,7 +57,12 @@ function fillUserBadge() {
   if (rolleEl) rolleEl.textContent = u.rolle || '–';
   if (avatarEl) {
     const initial = (u.name || u.benutzername || '?').trim().charAt(0).toUpperCase();
-    avatarEl.textContent = initial;
+    if (u.avatar_pfad) {
+      // Avatar liegt im Statistikportal-htdocs; über shared.php ausliefern
+      avatarEl.innerHTML = `<img src="${assetUrl(u.avatar_pfad)}" alt="${escapeHtml(u.name || '')}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentNode.textContent='${initial}'">`;
+    } else {
+      avatarEl.textContent = initial;
+    }
   }
 
   // Admin-Link in der Hauptnavigation
@@ -103,13 +108,9 @@ function renderPage() {
     return;
   }
 
-  main.innerHTML = `
-    <div style="padding:32px;max-width:880px;margin:0 auto">
-      <h1 class="page-title">Seite nicht gefunden</h1>
-      <p style="color:var(--text2);margin-top:8px">
-        <a href="#kalender">Zurück zum Kalender</a>
-      </p>
-    </div>`;
+  // Unbekannte Route (z. B. #dashboard / #konto aus Statistikportal-Header)
+  // → still auf den Kalender umleiten, statt 404 anzuzeigen
+  location.replace('#kalender');
 }
 
 async function logout() {

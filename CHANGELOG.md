@@ -1,5 +1,12 @@
 # Changelog
 
+## v13
+- Fix: Header-Logo führte zu nicht existierendem `#dashboard` → jetzt `#kalender`
+- Fix: User-Badge führte zu nicht existierendem `#konto` → onclick entfernt
+- Fallback: unbekannte Routes (Alt-Links wie `#dashboard`/`#konto`) leiten still auf `#kalender` um, statt 404 zu zeigen
+- Fix: Vereinslogo wird über `shared.php?file=uploads/...` aus dem Statistikportal-htdocs ausgeliefert (vorher 404, weil Trainingsportal eigene `/uploads/` nicht hat)
+- Fix: Avatar im Header rendert jetzt das Bild aus `benutzer.avatar_pfad` (auch über `shared.php`); Fallback auf Initiale, wenn Bild fehlt
+
 ## v12
 - 1:1-Optik mit Statistikportal: dessen `app.css` wird per neuem `shared.php?file=app.css` direkt aus dem Schwester-htdocs ausgeliefert (kein doppeltes Pflegen)
 - Trainingsportal-spezifische Styles in eigener `addons.css` (Kalender, Editor, Pace, ICS, Feiertage, Settings) – überlagert die Statistikportal-Basis

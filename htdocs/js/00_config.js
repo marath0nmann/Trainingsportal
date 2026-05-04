@@ -111,8 +111,10 @@ function applyConfig(cfg) {
   var kuerzel   = cfg.verein_kuerzel || name;
   var untertitel= cfg.app_untertitel || 'Trainingsportal';
   var logoFile  = cfg.logo_datei || '';
+  // Logos und sonstige Uploads liegen im Statistikportal-htdocs.
+  // shared.php liefert sie unter unserer Domain aus.
   var logoUrl   = logoFile
-    ? (logoFile.startsWith('http') ? logoFile : '/' + logoFile)
+    ? (logoFile.startsWith('http') ? logoFile : 'shared.php?file=' + encodeURI(logoFile))
     : '';
 
   document.title = name + ' – Trainingsplan';
@@ -141,6 +143,13 @@ function applyConfig(cfg) {
       img.style.display = 'none';
     }
   });
+}
+
+// ── Asset-URL aus Statistikportal-uploads über shared.php ──
+function assetUrl(path) {
+  if (!path) return '';
+  if (/^https?:\/\//.test(path)) return path;
+  return 'shared.php?file=' + encodeURI(path);
 }
 
 // ── Loader: holt die Settings vom Backend ──────────────────
