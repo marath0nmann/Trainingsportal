@@ -369,20 +369,28 @@ function handlePace(string $method, string $sub): void
 // Geteilte Keys (farbe_*, logo_*, verein_*) werden im Statistik-/
 // Login-Portal verwaltet. Hier nur trainingsspezifische Keys.
 // ============================================================
-const TRAINING_SETTINGS_KEYS = [
-    'training_feiertage_ics_urls' => [
-        'label'    => 'Externe Feiertage-/Ferien-Kalender',
-        'gruppe'   => 'training',
-        'beschreibung' => 'JSON-Array, z. B. [{"url":"https://…","label":"Feiertage NRW","farbe":"#cc0000"}]',
-        'default'  => '[]',
-    ],
-    'training_default_dauer_min' => [
-        'label'    => 'Standard-Dauer pro Einheit (Minuten)',
-        'gruppe'   => 'training',
-        'beschreibung' => 'Wird im ICS-Export für DTEND benutzt, wenn Uhrzeit gesetzt ist',
-        'default'  => '90',
-    ],
-];
+/**
+ * Whitelist erlaubter Trainingsportal-Settings-Keys.
+ * Funktion statt `const`, weil `const` im Datei-Scope erst zur
+ * Ausführungszeit der Zeile definiert wird – das Routing oben
+ * im File würde sonst eine noch nicht existierende Konstante sehen.
+ */
+function trainingSettingsKeys(): array {
+    return [
+        'training_feiertage_ics_urls' => [
+            'label'    => 'Externe Feiertage-/Ferien-Kalender',
+            'gruppe'   => 'training',
+            'beschreibung' => 'JSON-Array, z. B. [{"url":"https://…","label":"Feiertage NRW","farbe":"#cc0000"}]',
+            'default'  => '[]',
+        ],
+        'training_default_dauer_min' => [
+            'label'    => 'Standard-Dauer pro Einheit (Minuten)',
+            'gruppe'   => 'training',
+            'beschreibung' => 'Wird im ICS-Export für DTEND benutzt, wenn Uhrzeit gesetzt ist',
+            'default'  => '90',
+        ],
+    ];
+}
 
 function handleAdmin(string $method, string $sub): void {
     $user = Auth::check();
@@ -405,7 +413,7 @@ function handleAdmin(string $method, string $sub): void {
 
     if ($method === 'GET') {
         $felder = [];
-        foreach (TRAINING_SETTINGS_KEYS as $key => $meta) {
+        foreach (trainingSettingsKeys() as $key => $meta) {
             $felder[] = [
                 'key'          => $key,
                 'label'        => $meta['label'],
@@ -426,7 +434,7 @@ function handleAdmin(string $method, string $sub): void {
             echo json_encode(['ok' => false, 'fehler' => 'Feld "werte" (Objekt) erforderlich']);
             return;
         }
-        $erlaubt = array_keys(TRAINING_SETTINGS_KEYS);
+        $erlaubt = array_keys(trainingSettingsKeys());
         foreach ($kvs as $k => $v) {
             if (!in_array($k, $erlaubt, true)) continue;
             if (!is_string($v) && !is_int($v)) continue;
