@@ -59,6 +59,14 @@ function fillUserBadge() {
     const initial = (u.name || u.benutzername || '?').trim().charAt(0).toUpperCase();
     avatarEl.textContent = initial;
   }
+
+  // Admin-Link in der Hauptnavigation
+  const nav = document.getElementById('main-nav');
+  if (nav && u.rolle === 'admin') {
+    nav.innerHTML = `
+      <button onclick="navigate('kalender')"${state.tab==='kalender'?' class="active"':''}>Kalender</button>
+      <button onclick="navigate('einstellungen')"${state.tab==='einstellungen'?' class="active"':''}>Einstellungen</button>`;
+  }
 }
 
 // ── Routing ─────────────────────────────────────────────────
@@ -83,9 +91,15 @@ function renderPage() {
   if (!main) return;
   const { page, args } = parseHash();
   state.tab = page || 'kalender';
+  // Aktiv-Markierung der Navigation aktualisieren
+  if (state.user) fillUserBadge();
 
   if (state.tab === 'kalender') {
     renderKalender(main, args && args[0]);
+    return;
+  }
+  if (state.tab === 'einstellungen') {
+    SETTINGS.render(main);
     return;
   }
 

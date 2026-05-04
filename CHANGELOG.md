@@ -1,5 +1,11 @@
 # Changelog
 
+## v9
+- Einstellungen-Seite (`#einstellungen`) für Admins: Feiertage-/Ferien-Feeds (URL, Label, Farbe) komfortabel pflegen, plus Standard-Dauer pro Einheit
+- Backend: `GET/PUT admin/settings` (auth+admin-only), Whitelist erlaubter Keys, Cache-Invalidierung der ICS-Feeds nach Speichern
+- Header zeigt für Admins eine Hauptnavigation mit „Kalender" / „Einstellungen"
+- „Beispiel"-Links setzen die NRW-Feiertage-/Schulferien-URLs als Vorschlag
+
 ## v8
 - Optik aus Statistikportal: Frontend lädt `farbe_primary/-2/-3`, `farbe_accent/-2`, `logo_datei`, `verein_kuerzel` etc. aus der gemeinsamen `einstellungen`-Tabelle (`GET config`) und mappt sie auf CSS-Variablen, Logo und Theme-Color
 - Header bekommt einen Verlauf von Akzent → Primär plus farbige Stripe (`--primary-dark` aus Primary abgeleitet); im OS-Dark-Mode wird der Header nicht mehr schwarz

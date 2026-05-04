@@ -66,6 +66,10 @@ try {
         handleFeiertage($method, $tail);
         exit;
     }
+    if ($head === 'admin') {
+        handleAdmin($method, $tail);
+        exit;
+    }
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden', 'path' => $path]);
@@ -355,6 +359,90 @@ function handlePace(string $method, string $sub): void
         'athlet_id' => $athletId,
         'distanzen' => (object)$out,
     ]);
+}
+
+// ============================================================
+// Admin-Settings (Trainingsportal-spezifische Keys)
+//   GET  admin/settings    → aktuelle Werte (auth+admin)
+//   PUT  admin/settings    → Batch-Save (auth+admin)
+//
+// Geteilte Keys (farbe_*, logo_*, verein_*) werden im Statistik-/
+// Login-Portal verwaltet. Hier nur trainingsspezifische Keys.
+// ============================================================
+const TRAINING_SETTINGS_KEYS = [
+    'training_feiertage_ics_urls' => [
+        'label'    => 'Externe Feiertage-/Ferien-Kalender',
+        'gruppe'   => 'training',
+        'beschreibung' => 'JSON-Array, z. B. [{"url":"https://…","label":"Feiertage NRW","farbe":"#cc0000"}]',
+        'default'  => '[]',
+    ],
+    'training_default_dauer_min' => [
+        'label'    => 'Standard-Dauer pro Einheit (Minuten)',
+        'gruppe'   => 'training',
+        'beschreibung' => 'Wird im ICS-Export für DTEND benutzt, wenn Uhrzeit gesetzt ist',
+        'default'  => '90',
+    ],
+];
+
+function handleAdmin(string $method, string $sub): void {
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    if (($user['rolle'] ?? '') !== 'admin') {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'fehler' => 'Nur Admins']);
+        return;
+    }
+
+    if ($sub !== 'settings') {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'fehler' => 'Admin-Endpoint nicht gefunden']);
+        return;
+    }
+
+    if ($method === 'GET') {
+        $felder = [];
+        foreach (TRAINING_SETTINGS_KEYS as $key => $meta) {
+            $felder[] = [
+                'key'          => $key,
+                'label'        => $meta['label'],
+                'gruppe'       => $meta['gruppe'],
+                'beschreibung' => $meta['beschreibung'],
+                'wert'         => Settings::get($key, $meta['default']),
+            ];
+        }
+        echo json_encode(['ok' => true, 'felder' => $felder]);
+        return;
+    }
+
+    if ($method === 'PUT') {
+        $in = readJsonBody();
+        $kvs = $in['werte'] ?? [];
+        if (!is_array($kvs)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "werte" (Objekt) erforderlich']);
+            return;
+        }
+        $erlaubt = array_keys(TRAINING_SETTINGS_KEYS);
+        foreach ($kvs as $k => $v) {
+            if (!in_array($k, $erlaubt, true)) continue;
+            if (!is_string($v) && !is_int($v)) continue;
+            Settings::set($k, (string)$v);
+        }
+        // Caches invalidieren (Feiertage neu laden)
+        $cacheDir = __DIR__ . '/../uploads/feiertage_cache';
+        if (is_dir($cacheDir)) {
+            foreach (glob($cacheDir . '/*.ics') as $f) @unlink($f);
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
 }
 
 // ============================================================
