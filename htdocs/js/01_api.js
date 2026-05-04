@@ -42,7 +42,8 @@ async function apiCall(method, path, body, opts) {
     throw err;
   }
   if (!r.ok) {
-    const msg = (data && data.fehler) || ('HTTP ' + r.status);
+    let msg = (data && data.fehler) || ('HTTP ' + r.status);
+    if (data && data.detail) msg += ' (' + data.detail + ')';
     const err = new Error(msg);
     err.status = r.status;
     err.data = data;
