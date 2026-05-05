@@ -1,43 +1,37 @@
 // ============================================================
 // Trainingsportal – Einstellungen-Seite (Admin)
 // ============================================================
-// Route: #einstellungen
-// Sichtbar nur, wenn user.rolle === 'admin'.
-// Bearbeitet trainingsportal-spezifische Keys (vor allem die
-// Feiertage-/Ferien-ICS-Liste). Geteilte Keys (Farben, Logo,
-// Vereinsname) werden weiterhin im Statistikportal-Admin gepflegt.
+// Verwendet 1:1 die Statistikportal-Optik:
+//   .panel / .panel-header / .panel-title / .settings-panel-body
+//   .settings-row / .settings-row-label / .settings-row-input
+//   .settings-input / .btn / .btn-primary / .btn-ghost / .btn-danger
 // ============================================================
 
 const SETTINGS = (() => {
 
   let felder = [];
-  let feiertage = []; // Editierbarer Liste-State
+  let feiertage = [];
 
   async function render(main) {
     if (!state.user || state.user.rolle !== 'admin') {
-      main.innerHTML = `
-        <div class="page-wrap">
-          <h1 class="page-title">Einstellungen</h1>
-          <div class="empty">Diese Seite ist nur für Admins zugänglich.</div>
-        </div>`;
+      main.innerHTML = '<div style="max-width:680px;margin:24px auto;padding:0 16px">' +
+        '<div class="panel"><div class="panel-header"><div class="panel-title">Einstellungen</div></div>' +
+        '<div class="settings-panel-body"><div class="empty">Diese Seite ist nur für Admins zugänglich.</div></div></div></div>';
       return;
     }
 
-    main.innerHTML = `
-      <div class="page-wrap">
-        <h1 class="page-title">Einstellungen</h1>
-        <p class="page-sub">Vereinsfarben, Logo und Vereinsname werden weiterhin im Statistikportal gepflegt – hier landen nur die Trainingsportal-spezifischen Optionen.</p>
-        <div id="settings-content" class="loading">Lade…</div>
-      </div>`;
+    main.innerHTML = '<div style="max-width:680px;margin:24px auto;padding:0 16px">' +
+      '<div class="loading"><div class="spinner"></div>Laden…</div></div>';
 
     try {
       const r = await apiGet('admin/settings', { silent: true });
       felder = r.felder || [];
       feiertage = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
-      rendereForm();
+      rendereForm(main);
     } catch (e) {
-      document.getElementById('settings-content').innerHTML =
-        `<div class="kal-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
+      main.innerHTML = '<div style="max-width:680px;margin:24px auto;padding:0 16px">' +
+        '<div class="panel"><div class="panel-header"><div class="panel-title">Einstellungen</div></div>' +
+        '<div class="settings-panel-body"><div class="empty">Fehler: ' + escapeHtml(e.message || '') + '</div></div></div></div>';
     }
   }
 
@@ -57,57 +51,104 @@ const SETTINGS = (() => {
     } catch (e) { return []; }
   }
 
-  function rendereForm() {
-    const c = document.getElementById('settings-content');
-    if (!c) return;
-
+  function rendereForm(main) {
     const dauerMin = getWert('training_default_dauer_min') || '90';
 
-    const rows = feiertage.length
-      ? feiertage.map((f, i) => `
-        <tr>
-          <td><input type="url" placeholder="https://…" value="${escapeHtml(f.url)}" data-i="${i}" data-f="url" class="set-input"></td>
-          <td><input type="text" placeholder="Feiertage NRW" value="${escapeHtml(f.label)}" data-i="${i}" data-f="label" class="set-input"></td>
-          <td><input type="color" value="${escapeHtml(f.farbe || '#cc0000')}" data-i="${i}" data-f="farbe" class="set-input set-color"></td>
-          <td><button class="btn-icon" title="Entfernen" onclick="SETTINGS.entfernen(${i})">×</button></td>
-        </tr>`).join('')
-      : `<tr><td colspan="4" class="empty-row">Keine Feeds. Klick „+ Hinzufügen".</td></tr>`;
+    main.innerHTML =
+      '<div style="max-width:680px;margin:24px auto;padding:0 16px;display:flex;flex-direction:column;gap:20px">' +
 
-    c.innerHTML = `
-      <section class="settings-card">
-        <header class="settings-card-head">
-          <h2>Feiertage / Ferien (ICS-Feeds)</h2>
-          <button class="btn btn-ghost" onclick="SETTINGS.hinzufuegen()">+ Hinzufügen</button>
-        </header>
-        <p class="settings-hint">
-          Pro Feed eine ICS-URL. Label und Farbe werden im Kalender als Marker angezeigt.
-          Vorschläge:
-          <a href="#" onclick="SETTINGS.beispiel('feiertage');return false;">Feiertage NRW</a>,
-          <a href="#" onclick="SETTINGS.beispiel('ferien');return false;">Schulferien NRW</a>.
-        </p>
-        <table class="settings-table">
-          <thead>
-            <tr><th>URL</th><th>Label</th><th>Farbe</th><th></th></tr>
-          </thead>
-          <tbody id="settings-feiertage">${rows}</tbody>
-        </table>
-      </section>
+      // ── Externe Kalender ──
+      '<div class="panel">' +
+        '<div class="panel-header">' +
+          '<div class="panel-title">📅 Externe Kalender (Feiertage / Ferien)</div>' +
+          '<button class="btn btn-primary btn-sm" onclick="SETTINGS.hinzufuegen()">+ Hinzufügen</button>' +
+        '</div>' +
+        '<div class="settings-panel-body">' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">ICS-Feeds</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
+                'Pro Feed eine ICS-URL. Label und Farbe werden im Kalender als Marker auf den jeweiligen Tagen angezeigt. ' +
+                'Vorschläge: ' +
+                '<a href="#" onclick="SETTINGS.beispiel(\'feiertage\');return false;" style="color:var(--accent)">Feiertage NRW</a>, ' +
+                '<a href="#" onclick="SETTINGS.beispiel(\'ferien\');return false;" style="color:var(--accent)">Schulferien NRW</a>.' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-row-input" style="width:100%">' +
+              '<div id="feiertage-liste"></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Diagnose</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">Prüft, ob die Feeds erreichbar sind und wie viele Events im aktuellen Monat liegen.</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<button class="btn btn-ghost btn-sm" onclick="SETTINGS.diagnose()">🔍 Feeds testen</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="diag-result" style="margin-top:8px"></div>' +
+        '</div>' +
+      '</div>' +
 
-      <section class="settings-card">
-        <header class="settings-card-head"><h2>Standardwerte</h2></header>
-        <div class="settings-fg">
-          <label for="set-dauer">Standard-Dauer einer Einheit (Minuten)</label>
-          <input type="number" id="set-dauer" min="15" max="600" step="15" value="${escapeHtml(dauerMin)}">
-          <span class="settings-fg-hint">Wird im ICS-Export für DTEND verwendet, wenn eine Uhrzeit gesetzt ist.</span>
-        </div>
-      </section>
+      // ── Standardwerte ──
+      '<div class="panel">' +
+        '<div class="panel-header"><div class="panel-title">⚙️ Standardwerte</div></div>' +
+        '<div class="settings-panel-body">' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Standard-Dauer einer Einheit</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">In Minuten. Wird im ICS-Export für DTEND verwendet, wenn eine Uhrzeit gesetzt ist.</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<input type="number" id="set-dauer" min="15" max="600" step="15" value="' + escapeHtml(dauerMin) + '" class="settings-input" style="width:120px">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
 
-      <div class="settings-actions">
-        <button class="btn btn-primary" onclick="SETTINGS.speichern()">Speichern</button>
-      </div>`;
+      // ── Hinweis zu geteilten Settings ──
+      '<div class="panel">' +
+        '<div class="panel-header"><div class="panel-title">ℹ️ Optik &amp; Verein</div></div>' +
+        '<div class="settings-panel-body">' +
+          '<div style="font-size:13px;color:var(--text2);line-height:1.5">' +
+            'Vereinsname, Vereinslogo, Farben, Wartungsmodus etc. werden im ' +
+            '<strong>Statistikportal</strong> gepflegt – beide Portale teilen sich die Tabelle <code>einstellungen</code>. ' +
+            'Änderungen dort schlagen automatisch hier durch.' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
 
-    c.querySelectorAll('.set-input').forEach(el => {
-      el.addEventListener('input', onFeldChange);
+      // ── Aktionsleiste ──
+      '<div style="display:flex;justify-content:flex-end;gap:8px">' +
+        '<button class="btn btn-primary" onclick="SETTINGS.speichern()">💾 Speichern</button>' +
+      '</div>' +
+
+      '</div>';
+
+    rendereFeiertage();
+  }
+
+  function rendereFeiertage() {
+    const wrap = document.getElementById('feiertage-liste');
+    if (!wrap) return;
+    if (!feiertage.length) {
+      wrap.innerHTML = '<div style="padding:14px;border:1px dashed var(--border);border-radius:6px;color:var(--text2);font-size:13px;text-align:center">' +
+        'Keine Feeds konfiguriert. Klick „+ Hinzufügen".' +
+      '</div>';
+      return;
+    }
+    wrap.innerHTML = feiertage.map((f, i) =>
+      '<div class="feiertag-row" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">' +
+        '<input type="url" placeholder="https://..." value="' + escapeHtml(f.url) + '" data-i="' + i + '" data-f="url" class="settings-input feiertag-input" style="flex:2;min-width:200px">' +
+        '<input type="text" placeholder="Label" value="' + escapeHtml(f.label) + '" data-i="' + i + '" data-f="label" class="settings-input feiertag-input" style="flex:1;min-width:120px">' +
+        '<input type="color" value="' + escapeHtml(f.farbe || '#cc0000') + '" data-i="' + i + '" data-f="farbe" class="feiertag-input" style="width:42px;height:36px;border:none;background:none;cursor:pointer;padding:0">' +
+        '<button class="btn" style="padding:4px 10px;font-size:16px;line-height:1" onclick="SETTINGS.entfernen(' + i + ')" title="Entfernen">×</button>' +
+      '</div>'
+    ).join('');
+
+    wrap.querySelectorAll('.feiertag-input').forEach(el => {
+      el.addEventListener('input',  onFeldChange);
       el.addEventListener('change', onFeldChange);
     });
   }
@@ -122,13 +163,12 @@ const SETTINGS = (() => {
 
   function hinzufuegen() {
     feiertage.push({ url: '', label: '', farbe: '#cc0000' });
-    rendereForm();
+    rendereFeiertage();
   }
   function entfernen(i) {
     feiertage.splice(i, 1);
-    rendereForm();
+    rendereFeiertage();
   }
-
   function beispiel(typ) {
     const m = {
       feiertage: { url: 'https://www.schulferien.org/iCal/Ferien/Feiertag/ICalKalender_Schulferien_Feiertage_in_Nordrhein-Westfalen.ics', label: 'Feiertage NRW', farbe: '#cc0000' },
@@ -136,11 +176,10 @@ const SETTINGS = (() => {
     };
     if (!m[typ]) return;
     feiertage.push(m[typ]);
-    rendereForm();
+    rendereFeiertage();
   }
 
   async function speichern() {
-    // Leere URLs verwerfen
     const liste = feiertage
       .map(f => ({ url: (f.url || '').trim(), label: (f.label || '').trim(), farbe: (f.farbe || '').trim() }))
       .filter(f => f.url !== '');
@@ -154,10 +193,41 @@ const SETTINGS = (() => {
     try {
       await apiPut('admin/settings', payload);
       benachrichtigen('Gespeichert.', 'ok');
-      // Config neu laden, damit Änderungen sofort greifen
       await CONFIG.load();
     } catch (e) {
       benachrichtigen('Fehler: ' + e.message, 'err');
+    }
+  }
+
+  async function diagnose() {
+    const out = document.getElementById('diag-result');
+    out.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:13px">⏳ Prüfe Feeds…</div>';
+    try {
+      const r = await apiGet('admin/feiertage_test', { silent: true });
+      const quellen = (r && r.quellen) || [];
+      if (!quellen.length) {
+        out.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:13px">Keine Feeds konfiguriert. Erst speichern, dann testen.</div>';
+        return;
+      }
+      out.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+        '<thead><tr style="border-bottom:2px solid var(--border)">' +
+          '<th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">URL</th>' +
+          '<th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Status</th>' +
+          '<th style="text-align:right;padding:6px 8px;color:var(--text2);font-weight:600">Events</th>' +
+        '</tr></thead><tbody>' +
+        quellen.map(q => {
+          const farbe = q.ok ? 'var(--green,#1a8a3a)' : 'var(--primary)';
+          const icon  = q.ok ? '✅' : '❌';
+          const detail = q.fehler ? ' <span style="color:var(--text2);font-size:11px">(' + escapeHtml(q.fehler) + ')</span>' : '';
+          return '<tr style="border-bottom:1px solid var(--border)">' +
+            '<td style="padding:6px 8px;font-family:monospace;font-size:11px;word-break:break-all">' + escapeHtml(q.url) + '</td>' +
+            '<td style="padding:6px 8px;color:' + farbe + ';font-weight:600">' + icon + ' ' + escapeHtml(q.status) + detail + '</td>' +
+            '<td style="padding:6px 8px;text-align:right">' + (q.events_im_zeitraum ?? '–') + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table>';
+    } catch (e) {
+      out.innerHTML = '<div style="padding:10px;color:var(--primary);font-size:13px">Fehler: ' + escapeHtml(e.message) + '</div>';
     }
   }
 
@@ -166,11 +236,11 @@ const SETTINGS = (() => {
     if (!cont) { console.log(text); return; }
     const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
     const div = document.createElement('div');
-    div.className = `notif ${cls}`;
+    div.className = 'notif ' + cls;
     div.textContent = text;
     cont.appendChild(div);
     setTimeout(() => div.remove(), 3500);
   }
 
-  return { render, hinzufuegen, entfernen, beispiel, speichern };
+  return { render, hinzufuegen, entfernen, beispiel, speichern, diagnose };
 })();

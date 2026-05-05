@@ -1,5 +1,11 @@
 # Changelog
 
+## v14
+- Einstellungen-Seite verwendet jetzt 1:1 die Statistikportal-Optik (`.panel`, `.panel-header`, `.panel-title`, `.settings-row`, `.settings-input`); eigene CSS-Regeln in `addons.css` entfernt
+- Feiertage-Loader: cURL-Fallback (für Hostings mit `allow_url_fopen=Off`), erweiterte Fehlermeldungen
+- Neuer Diagnose-Endpoint `GET admin/feiertage_test` + „🔍 Feeds testen"-Button auf der Settings-Seite: prüft pro Feed Erreichbarkeit, Größe und Anzahl Events im Zeitfenster
+- Hinweis-Panel auf der Settings-Seite, dass Vereinsname/Logo/Farben im Statistikportal liegen
+
 ## v13
 - Fix: Header-Logo führte zu nicht existierendem `#dashboard` → jetzt `#kalender`
 - Fix: User-Badge führte zu nicht existierendem `#konto` → onclick entfernt

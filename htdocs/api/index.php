@@ -405,6 +405,42 @@ function handleAdmin(string $method, string $sub): void {
         return;
     }
 
+    // Diagnose-Endpoint: prüft alle konfigurierten Feiertage-Feeds
+    if ($sub === 'feiertage_test' && $method === 'GET') {
+        $raw = Settings::get('training_feiertage_ics_urls', '');
+        $entries = [];
+        if ($raw !== '') {
+            $j = json_decode($raw, true);
+            if (is_array($j)) {
+                foreach ($j as $e) {
+                    if (is_string($e)) $entries[] = ['url' => $e];
+                    elseif (is_array($e) && !empty($e['url'])) $entries[] = ['url' => (string)$e['url']];
+                }
+            }
+        }
+        $von = date('Y-m-d', strtotime('-7 days'));
+        $bis = date('Y-m-d', strtotime('+90 days'));
+        $quellen = [];
+        foreach ($entries as $entry) {
+            $fehler = null;
+            $body = ladeIcsCached($entry['url'], 0, $fehler); // ttl=0 → stets neu
+            if ($body === null) {
+                $quellen[] = ['url' => $entry['url'], 'ok' => false, 'status' => 'unerreichbar', 'fehler' => $fehler ?? 'unbekannt'];
+                continue;
+            }
+            $events = parseIcsEvents($body, $von, $bis);
+            $quellen[] = [
+                'url' => $entry['url'],
+                'ok'  => true,
+                'status' => 'OK (' . strlen($body) . ' B)',
+                'events_im_zeitraum' => count($events),
+                'fehler' => $fehler,
+            ];
+        }
+        echo json_encode(['ok' => true, 'quellen' => $quellen, 'zeitraum' => ['von' => $von, 'bis' => $bis]]);
+        return;
+    }
+
     if ($sub !== 'settings') {
         http_response_code(404);
         echo json_encode(['ok' => false, 'fehler' => 'Admin-Endpoint nicht gefunden']);
@@ -543,22 +579,50 @@ function handleFeiertage(string $method, string $sub): void {
     echo json_encode(['ok' => true, 'feiertage' => $events]);
 }
 
-function ladeIcsCached(string $url, int $ttl): ?string {
-    if (!preg_match('#^https?://#i', $url)) return null;
+function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string {
+    $fehler = null;
+    if (!preg_match('#^https?://#i', $url)) { $fehler = 'Keine HTTP(S)-URL'; return null; }
     $cacheDir = __DIR__ . '/../uploads/feiertage_cache';
     if (!is_dir($cacheDir)) @mkdir($cacheDir, 0775, true);
     $f = $cacheDir . '/' . sha1($url) . '.ics';
     if (is_file($f) && (time() - filemtime($f) < $ttl)) {
         return file_get_contents($f);
     }
-    $ctx = stream_context_create([
-        'http' => ['timeout' => 8, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
-        'https' => ['timeout' => 8, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
-    ]);
-    $body = @file_get_contents($url, false, $ctx);
+
+    $body = false;
+    // Bevorzugt cURL (auf shared hosting oft vorhanden, robuster als file_get_contents)
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_USERAGENT      => 'Trainingsportal-TuSOedt/1.0',
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $body = curl_exec($ch);
+        if ($body === false) $fehler = 'curl: ' . curl_error($ch);
+        else {
+            $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($http >= 400) { $fehler = 'HTTP ' . $http; $body = false; }
+        }
+        curl_close($ch);
+    }
+
+    // Fallback: file_get_contents (falls allow_url_fopen=On)
+    if ($body === false && ini_get('allow_url_fopen')) {
+        $ctx = stream_context_create([
+            'http'  => ['timeout' => 10, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
+            'https' => ['timeout' => 10, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
+        ]);
+        $body = @file_get_contents($url, false, $ctx);
+        if ($body === false && !$fehler) $fehler = 'file_get_contents fehlgeschlagen';
+    } elseif ($body === false && !$fehler) {
+        $fehler = $fehler ?: 'cURL nicht verfügbar und allow_url_fopen=Off';
+    }
+
     if ($body === false) {
-        // Fallback: alten Cache nehmen, falls vorhanden
-        if (is_file($f)) return file_get_contents($f);
+        if (is_file($f)) { $fehler = ($fehler ?: '') . ' – nutze alten Cache'; return file_get_contents($f); }
         return null;
     }
     @file_put_contents($f, $body);
