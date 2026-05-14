@@ -279,40 +279,46 @@ function handlePace(string $method, string $sub): void
         return;
     }
 
-    if ($sub !== 'me' || $method !== 'GET') {
-        http_response_code(404);
-        echo json_encode(['ok' => false, 'fehler' => 'Pace-Endpoint nicht gefunden']);
-        return;
-    }
-
     $athletId = isset($user['athlet_id']) ? (int)$user['athlet_id'] : 0;
-    if ($athletId <= 0) {
-        echo json_encode(['ok' => true, 'modus' => 'pb', 'distanzen' => new stdClass(), 'hinweis' => 'Kein Athletenprofil verknüpft']);
+
+    if ($sub === 'me' && $method === 'GET') {
+        if ($athletId <= 0) {
+            echo json_encode(['ok' => true, 'modus' => 'pb', 'distanzen' => new stdClass(), 'hinweis' => 'Kein Athletenprofil verknüpft']);
+            return;
+        }
+        $modus = $_GET['modus'] ?? 'pb';
+        if (!in_array($modus, ['pb', '12m'], true)) $modus = 'pb';
+        $out = fetchBestzeiten($athletId, $modus);
+        echo json_encode(['ok' => true, 'modus' => $modus, 'athlet_id' => $athletId, 'distanzen' => (object)$out]);
         return;
     }
 
-    $modus = $_GET['modus'] ?? 'pb';
-    if (!in_array($modus, ['pb', '12m'], true)) $modus = 'pb';
-
-    // Referenzdistanzen: Pace-Referenz im Segment → Distanz in Metern (Toleranz ±25m)
-    $refs = [
-        '5km'  => 5000.0,
-        '10km' => 10000.0,
-        'HM'   => 21097.5,
-        'M'    => 42195.0,
-    ];
-
-    $datumFilter = '';
-    $params = [];
-    if ($modus === '12m') {
-        $datumFilter = ' AND v.datum >= (CURDATE() - INTERVAL 12 MONTH)';
+    if ($sub === 'prefs') {
+        if ($method === 'GET') {
+            handlePacePrefsGet((int)$user['id'], $athletId);
+        } elseif ($method === 'PUT') {
+            handlePacePrefsSet((int)$user['id']);
+        } else {
+            http_response_code(405);
+            echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+        }
+        return;
     }
 
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Pace-Endpoint nicht gefunden']);
+}
+
+// Bestzeiten je Referenzdistanz aus dem Statistikportal holen
+function fetchBestzeiten(int $athletId, string $modus): array
+{
+    $refs = ['5km' => 5000.0, '10km' => 10000.0, 'HM' => 21097.5, 'M' => 42195.0];
+    $datumFilter = ($modus === '12m') ? ' AND v.datum >= (CURDATE() - INTERVAL 12 MONTH)' : '';
     $out = [];
     foreach ($refs as $key => $dist) {
         $tol = 25.0;
         $row = DB::fetchOne(
-            "SELECT e.resultat, e.resultat_num, e.disziplin, v.datum, v.name AS wettkampf, v.ort
+            "SELECT e.resultat, e.resultat_num, v.datum, v.name AS wettkampf, v.ort
                FROM ergebnisse e
                JOIN veranstaltungen v ON v.id = e.veranstaltung_id
                JOIN disziplin_mapping dm ON dm.id = e.disziplin_mapping_id
@@ -329,22 +335,89 @@ function handlePace(string $method, string $sub): void
         );
         if ($row) {
             $out[$key] = [
-                'distanz_m'    => (int)round($dist),
-                'sekunden'     => (float)$row['resultat_num'],
-                'resultat'     => $row['resultat'],
-                'datum'        => $row['datum'],
-                'wettkampf'    => $row['wettkampf'],
-                'ort'          => $row['ort'],
+                'distanz_m' => (int)round($dist),
+                'sekunden'  => (float)$row['resultat_num'],
+                'resultat'  => $row['resultat'],
+                'datum'     => $row['datum'],
+                'wettkampf' => $row['wettkampf'],
+                'ort'       => $row['ort'],
             ];
         }
     }
+    return $out;
+}
 
+// Pace-Präferenzen aus benutzer.prefs laden (mit Defaults)
+function ladePacePrefs(int $userId): array
+{
+    $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    if (!is_array($prefs)) $prefs = [];
+    $saved = is_array($prefs['training_pace_prefs'] ?? null) ? $prefs['training_pace_prefs'] : [];
+
+    $refs   = ['5km', '10km', 'HM', 'M'];
+    $result = [];
+    foreach ($refs as $ref) {
+        $p     = is_array($saved[$ref] ?? null) ? $saved[$ref] : [];
+        $modus = in_array($p['modus'] ?? '', ['pb', '12m', 'manual'], true) ? $p['modus'] : 'pb';
+        $result[$ref] = [
+            'modus'      => $modus,
+            'manual_sek' => (isset($p['manual_sek']) && is_numeric($p['manual_sek'])) ? (float)$p['manual_sek'] : null,
+        ];
+    }
+    return $result;
+}
+
+// Pace-Präferenzen in benutzer.prefs speichern
+function speicherePacePrefs(int $userId, array $prefs): void
+{
+    $row      = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $existing = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    if (!is_array($existing)) $existing = [];
+    $existing['training_pace_prefs'] = $prefs;
+    DB::query(
+        'UPDATE ' . DB::tbl('benutzer') . ' SET prefs = ? WHERE id = ?',
+        [json_encode($existing, JSON_UNESCAPED_UNICODE), $userId]
+    );
+}
+
+// GET pace/prefs → Prefs + verfügbare Bestzeiten
+function handlePacePrefsGet(int $userId, int $athletId): void
+{
+    $prefs     = ladePacePrefs($userId);
+    $distanzen = [];
+    if ($athletId > 0) {
+        $distanzen['pb']  = fetchBestzeiten($athletId, 'pb');
+        $distanzen['12m'] = fetchBestzeiten($athletId, '12m');
+    }
     echo json_encode([
-        'ok'        => true,
-        'modus'     => $modus,
-        'athlet_id' => $athletId,
-        'distanzen' => (object)$out,
+        'ok'         => true,
+        'prefs'      => $prefs,
+        'distanzen'  => $distanzen,
+        'hat_athlet' => $athletId > 0,
     ]);
+}
+
+// PUT pace/prefs → Prefs speichern
+function handlePacePrefsSet(int $userId): void
+{
+    $body = json_decode((string)file_get_contents('php://input'), true);
+    if (!is_array($body) || !isset($body['prefs']) || !is_array($body['prefs'])) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'fehler' => 'Ungültige Daten']);
+        return;
+    }
+    $refs      = ['5km', '10km', 'HM', 'M'];
+    $validated = [];
+    foreach ($refs as $ref) {
+        $p      = is_array($body['prefs'][$ref] ?? null) ? $body['prefs'][$ref] : [];
+        $modus  = in_array($p['modus'] ?? '', ['pb', '12m', 'manual'], true) ? $p['modus'] : 'pb';
+        $manSek = (isset($p['manual_sek']) && is_numeric($p['manual_sek']) && (float)$p['manual_sek'] > 0)
+            ? (float)$p['manual_sek'] : null;
+        $validated[$ref] = ['modus' => $modus, 'manual_sek' => $manSek];
+    }
+    speicherePacePrefs($userId, $validated);
+    echo json_encode(['ok' => true]);
 }
 
 // ============================================================

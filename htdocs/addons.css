@@ -514,3 +514,43 @@
   background: color-mix(in srgb, var(--primary) 4%, var(--surface));
 }
 
+/* ============================================================
+   Trainingsportal – Profil-Modal (Pace-Referenzen)
+   ============================================================ */
+.profil-section-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 17px; letter-spacing: .3px;
+  color: var(--text); margin: 0 0 6px;
+}
+.profil-hint-global {
+  font-size: 13px; color: var(--text2); margin: 0 0 16px; line-height: 1.5;
+}
+.profil-refs { display: flex; flex-direction: column; }
+.profil-ref-row {
+  display: flex; gap: 16px; padding: 14px 0;
+  border-bottom: 1px solid var(--border); align-items: flex-start;
+}
+.profil-ref-row:last-child { border-bottom: none; }
+.profil-ref-label {
+  flex: 0 0 115px; font-size: 13px; font-weight: 600;
+  color: var(--text); padding-top: 9px;
+}
+.profil-ref-controls {
+  flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0;
+}
+.profil-modus-sel { width: 100%; max-width: 400px; }
+.profil-manual-wrap {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.profil-manual-input { width: 130px !important; font-variant-numeric: tabular-nums; }
+.profil-hint {
+  font-size: 11px; color: var(--text2); font-style: italic;
+}
+
+/* Error-Notification (fehlte bisher) */
+.notif-err { background: var(--primary); color: white; }
+
+/* Avatar: Klick-Cursor */
+.user-avatar { transition: opacity .15s; }
+.user-avatar:hover { opacity: .8; }
+
