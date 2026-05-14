@@ -89,6 +89,12 @@ const BLOECKE = (() => {
     const istGlobal = b.sichtbarkeit === 'global';
     const kannBearbeiten = istTrainer()
       || (!istGlobal && state.user && b.erstellt_von === state.user.id);
+    const segCount = b.seg_count ?? null;
+    const segBadge = segCount !== null
+      ? (segCount > 0
+          ? `<span class="block-seg-badge">${segCount} Seg.</span>`
+          : `<span class="block-seg-badge block-seg-leer" title="Titel wird beim Öffnen automatisch geparst">∅ Segmente</span>`)
+      : '';
     return `
       <div class="block-card block-typ-${escapeHtml(b.typ)}">
         <div class="block-card-head">
@@ -96,6 +102,7 @@ const BLOECKE = (() => {
           ${istGlobal
             ? '<span class="block-sicht-badge block-sicht-global">Global</span>'
             : '<span class="block-sicht-badge block-sicht-privat">Privat</span>'}
+          ${segBadge}
         </div>
         <div class="block-titel">${escapeHtml(b.titel)}</div>
         ${b.treffpunkt ? `<div class="block-treffpunkt">📍 ${escapeHtml(b.treffpunkt)}</div>` : ''}
@@ -201,6 +208,11 @@ const BLOECKE = (() => {
   function openBlockEditor(block, segmente) {
     const istNeu = !block;
     editorSegmente = (segmente || []).map(s => ({ ...s }));
+    // Titel automatisch parsen wenn noch keine Segmente vorhanden
+    if (!editorSegmente.length && block && block.titel) {
+      const parsed = PARSER.parse(block.titel);
+      if (parsed.length) editorSegmente = parsed;
+    }
     const b = block || {
       id: null, titel: '', typ: 'intervall',
       treffpunkt: 'Sportplatz', bemerkung: '', sichtbarkeit: 'global',

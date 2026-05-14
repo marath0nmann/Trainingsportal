@@ -1173,13 +1173,17 @@ function handleBloecke(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
             return;
         }
+        $subSeg = "(SELECT COUNT(*) FROM " . DB::tbl('training_block_segmente') . " s WHERE s.block_id = b.id)";
         if ($istTrainer) {
-            $rows = DB::fetchAll('SELECT * FROM ' . DB::tbl('training_bloecke') . ' ORDER BY titel');
+            $rows = DB::fetchAll(
+                "SELECT b.*, $subSeg AS seg_count FROM " . DB::tbl('training_bloecke') . " b ORDER BY b.titel"
+            );
         } else {
             $rows = DB::fetchAll(
-                "SELECT * FROM " . DB::tbl('training_bloecke') . "
-                  WHERE sichtbarkeit = 'global' OR erstellt_von = ?
-                  ORDER BY sichtbarkeit, titel",
+                "SELECT b.*, $subSeg AS seg_count
+                   FROM " . DB::tbl('training_bloecke') . " b
+                  WHERE b.sichtbarkeit = 'global' OR b.erstellt_von = ?
+                  ORDER BY b.sichtbarkeit, b.titel",
                 [(int)$user['id']]
             );
         }
@@ -1437,6 +1441,7 @@ function mapBlock(array $r): array {
         'sichtbarkeit' => $r['sichtbarkeit'],
         'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
         'erstellt_am'  => $r['erstellt_am'],
+        'seg_count'    => isset($r['seg_count']) ? (int)$r['seg_count'] : null,
     ];
 }
 

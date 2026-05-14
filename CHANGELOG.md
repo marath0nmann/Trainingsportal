@@ -1,5 +1,11 @@
 # Changelog
 
+## v19
+- Trainingsblöcke: Titel wird beim Öffnen des Editors automatisch in Segmente geparst, wenn noch keine vorhanden sind
+- Block-Karten: zeigen Segmentanzahl-Badge (orange bei 0 Segmenten)
+- `GET bloecke` liefert jetzt `seg_count` pro Block
+- Einstellungen: neuer Button „Segmente parsen" – analysiert alle Blöcke ohne Segmente via Kurzschrift-Parser und speichert die Ergebnisse automatisch
+
 ## v18
 - Migration: `POST admin/migrate_einheiten_zu_bloecken` liest alle Kalendereinträge und legt pro eindeutigem Titel einen globalen Trainingsblock an (mit Segmenten, idempotent)
 - Migrationsbutton auf der Einstellungen-Seite (Admin)

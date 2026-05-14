@@ -122,6 +122,17 @@ const SETTINGS = (() => {
               '<button class="btn btn-primary btn-sm" onclick="SETTINGS.migrieren()">▶ Jetzt migrieren</button>' +
             '</div>' +
           '</div>' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Segmente aus Titeln parsen</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
+                'Analysiert alle Blöcke ohne Segmente, erkennt Kurzschrift im Titel (z. B. „12 x 400 m (100GP)") und speichert die Segmente automatisch. Blöcke mit vorhandenen Segmenten werden nicht verändert.' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<button class="btn btn-ghost btn-sm" onclick="SETTINGS.reparseSegmente()">🔍 Segmente parsen</button>' +
+            '</div>' +
+          '</div>' +
           '<div id="migr-result"></div>' +
         '</div>' +
       '</div>' +
@@ -259,6 +270,36 @@ const SETTINGS = (() => {
     div.textContent = text;
     cont.appendChild(div);
     setTimeout(() => div.remove(), 3500);
+  }
+
+  async function reparseSegmente() {
+    const out = document.getElementById('migr-result');
+    if (out) out.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:13px">⏳ Lade Blöcke…</div>';
+    try {
+      const data = await apiGet('bloecke', { silent: true });
+      const bloecke = (data.bloecke || []).filter(b => (b.seg_count ?? 0) === 0);
+      if (!bloecke.length) {
+        if (out) out.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:13px">Alle Blöcke haben bereits Segmente – nichts zu tun.</div>';
+        return;
+      }
+      if (out) out.innerHTML = `<div style="padding:10px;color:var(--text2);font-size:13px">⏳ Verarbeite ${bloecke.length} Blöcke ohne Segmente…</div>`;
+      let updated = 0, skipped = 0;
+      for (const b of bloecke) {
+        const segs = PARSER.parse(b.titel);
+        if (!segs.length) { skipped++; continue; }
+        await apiPut(`bloecke/${b.id}`, { ...b, segmente: segs });
+        updated++;
+      }
+      if (out) out.innerHTML =
+        '<div style="padding:10px;font-size:13px;color:var(--green,#1a8a3a);font-weight:600">' +
+        `✅ Fertig: ${updated} Blöcke mit Segmenten befüllt, ${skipped} Titel nicht erkannt.</div>`;
+      // Blöcke-Seite neu laden falls aktiv
+      if (typeof BLOECKE !== 'undefined' && document.getElementById('bloecke-list')) {
+        BLOECKE.render(document.getElementById('main-content'));
+      }
+    } catch (e) {
+      if (out) out.innerHTML = '<div style="padding:10px;color:var(--primary);font-size:13px">Fehler: ' + escapeHtml(e.message) + '</div>';
+    }
   }
 
   async function migrieren() {
