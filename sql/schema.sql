@@ -52,6 +52,43 @@ CREATE TABLE IF NOT EXISTS training_segmente (
       REFERENCES training_einheiten(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Wiederverwendbare Trainingsblöcke (datumsunabhängig) ──────
+-- Globale Blöcke werden von Trainern erstellt und dienen als Vorlage.
+-- Private Blöcke sind nur für den Ersteller sichtbar.
+CREATE TABLE IF NOT EXISTS training_bloecke (
+  id            INT UNSIGNED       NOT NULL AUTO_INCREMENT,
+  titel         VARCHAR(200)       NOT NULL,
+  typ           ENUM('intervall','dauerlauf','funktionell','runde','event','frei','kein_training')
+                                   NOT NULL DEFAULT 'intervall',
+  treffpunkt    VARCHAR(200)       NULL,
+  bemerkung     TEXT               NULL,
+  sichtbarkeit  ENUM('global','privat')
+                                   NOT NULL DEFAULT 'global',
+  erstellt_von  INT UNSIGNED       NULL,
+  erstellt_am   TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  geaendert_am  TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_sichtbarkeit (sichtbarkeit)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Segmente für Trainingsblöcke ──────────────────────────────
+CREATE TABLE IF NOT EXISTS training_block_segmente (
+  id              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+  block_id        INT UNSIGNED    NOT NULL,
+  reihenfolge     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  gruppen_id      SMALLINT UNSIGNED NULL,
+  wiederholungen  SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  distanz_m       INT UNSIGNED    NOT NULL,
+  pause_m         INT UNSIGNED    NULL,
+  pause_typ       ENUM('TP','GP','BP','frei') NULL,
+  pace_referenz   VARCHAR(40)     NULL COMMENT 'z.B. 10km, 5km, HM, M',
+  notiz           VARCHAR(200)    NULL,
+  PRIMARY KEY (id),
+  KEY idx_block (block_id, reihenfolge),
+  CONSTRAINT fk_bsegm_block FOREIGN KEY (block_id)
+      REFERENCES training_bloecke(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Bestzeiten werden nicht eigenständig gepflegt: das Trainingsportal
 -- liest sie direkt aus den `ergebnisse`-/`athleten`-Tabellen des
 -- Statistikportals (gemeinsame DB).
