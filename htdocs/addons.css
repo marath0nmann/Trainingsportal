@@ -466,6 +466,17 @@
 .block-treffpunkt { font-size: 12px; color: var(--text2); }
 .block-bemerkung  { font-size: 13px; color: var(--text); line-height: 1.4; }
 
+.block-seg-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  border-radius: 4px; padding: 2px 7px;
+  color: var(--text2);
+  background: color-mix(in srgb, var(--text2) 10%, transparent);
+}
+.block-seg-leer {
+  color: #c08010;
+  background: color-mix(in srgb, #c08010 12%, transparent);
+}
+
 .block-card-actions {
   display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;
 }
