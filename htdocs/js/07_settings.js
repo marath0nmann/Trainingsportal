@@ -74,7 +74,7 @@ const SETTINGS = (() => {
                 '<a href="#" onclick="SETTINGS.beispiel(\'ferien\');return false;" style="color:var(--accent)">Schulferien NRW</a>.' +
               '</div>' +
             '</div>' +
-            '<div class="settings-row-input" style="width:100%">' +
+            '<div class="settings-row-input">' +
               '<div id="feiertage-liste"></div>' +
             '</div>' +
           '</div>' +
