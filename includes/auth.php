@@ -387,6 +387,22 @@ class Auth {
         return ($_SESSION['user_rolle'] ?? '') === 'athlet';
     }
 
+    // Ist der User ein Trainer (oder Admin)?
+    public static function isTrainer(): bool {
+        return in_array($_SESSION['user_rolle'] ?? '', ['admin', 'trainer']);
+    }
+
+    // Mindest-Rolle: trainer (über Recht 'training_bloecke_verwalten')
+    public static function requireTrainer(): array {
+        $user = self::requireLogin();
+        if (!self::hasRecht('training_bloecke_verwalten')) {
+            http_response_code(403);
+            echo json_encode(['fehler' => 'Nur Trainer dürfen Trainingsblöcke verwalten.']);
+            exit;
+        }
+        return $user;
+    }
+
     // Prüft ein einzelnes Recht (aus rollen-Tabelle) – benötigt aktive Session
     public static function hasRecht(string $recht): bool {
         $rolle = $_SESSION['user_rolle'] ?? '';

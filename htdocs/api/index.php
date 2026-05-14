@@ -3,14 +3,20 @@
 // Trainingsportal – REST-API
 // ============================================================
 // Endpunkte:
-//   GET  ping                    → Healthcheck
-//   GET  auth/me                 → Session prüfen (gibt Login-Portal-URL bei 401 zurück)
-//   POST auth/logout             → Session beenden
-//   GET  einheiten?von=&bis=     → Liste (öffentlich = nur sichtbarkeit=oeffentlich)
-//   GET  einheiten/{id}          → Einzelne Einheit inkl. Segmente
-//   POST einheiten               → Neu (auth + Recht: training_bearbeiten)
-//   PUT  einheiten/{id}          → Update (auth + Recht)
-//   DEL  einheiten/{id}          → Löschen (auth + Recht)
+//   GET  ping                       → Healthcheck
+//   GET  auth/me                    → Session prüfen (gibt Login-Portal-URL bei 401)
+//   POST auth/logout                → Session beenden
+//   GET  einheiten?von=&bis=        → Liste (öffentlich = nur sichtbarkeit=oeffentlich)
+//   GET  einheiten/{id}             → Einzelne Einheit inkl. Segmente
+//   POST einheiten                  → Neu (auth + Recht: training_bearbeiten)
+//   PUT  einheiten/{id}             → Update (auth + Recht)
+//   DEL  einheiten/{id}             → Löschen (auth + Recht)
+//   GET  bloecke                    → Liste aller Blöcke (auth erforderlich)
+//   GET  bloecke/{id}               → Einzelner Block inkl. Segmente (auth)
+//   POST bloecke                    → Neu (Recht: training_bloecke_verwalten)
+//   PUT  bloecke/{id}               → Update (Trainer oder eigener privater Block)
+//   DEL  bloecke/{id}               → Löschen (Trainer oder eigener privater Block)
+//   POST bloecke/{id}/apply         → Block als Einheit auf den Kalender legen (auth)
 // ============================================================
 
 declare(strict_types=1);
@@ -64,6 +70,10 @@ try {
     }
     if ($head === 'feiertage') {
         handleFeiertage($method, $tail);
+        exit;
+    }
+    if ($head === 'bloecke') {
+        handleBloecke($method, $tail);
         exit;
     }
     if ($head === 'admin') {
@@ -189,13 +199,17 @@ function handleEinheiten(string $method, string $sub): void
         return;
     }
 
-    // Ab hier: Schreibzugriff → auth Pflicht
+    // Ab hier: Schreibzugriff → auth + Recht 'training_bearbeiten' Pflicht
     if (!$user) {
         http_response_code(401);
         echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
         return;
     }
-    // TODO: Recht 'training_bearbeiten' prüfen, sobald Rolle existiert
+    if (!Auth::hasRecht('training_bearbeiten')) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung. Nur Trainer und Editoren dürfen Trainingseinheiten anlegen.']);
+        return;
+    }
 
     if ($sub === '' && $method === 'POST') {
         $in = readJsonBody();
@@ -1040,6 +1054,343 @@ function vtimezoneEuropeBerlin(): string {
         'END:DAYLIGHT',
         'END:VTIMEZONE',
     ]);
+}
+
+// ============================================================
+// Trainingsblöcke (datumsunabhängige Templates)
+// ============================================================
+function handleBloecke(string $method, string $sub): void
+{
+    $user = Auth::check();
+    $istTrainer = $user && Auth::hasRecht('training_bloecke_verwalten');
+
+    // ── GET Liste ──
+    if ($sub === '' && $method === 'GET') {
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+            return;
+        }
+        if ($istTrainer) {
+            $rows = DB::fetchAll('SELECT * FROM ' . DB::tbl('training_bloecke') . ' ORDER BY titel');
+        } else {
+            $rows = DB::fetchAll(
+                "SELECT * FROM " . DB::tbl('training_bloecke') . "
+                  WHERE sichtbarkeit = 'global' OR erstellt_von = ?
+                  ORDER BY sichtbarkeit, titel",
+                [(int)$user['id']]
+            );
+        }
+        echo json_encode(['ok' => true, 'bloecke' => array_map('mapBlock', $rows)]);
+        return;
+    }
+
+    // ── GET einzeln ──
+    if ($sub !== '' && $method === 'GET' && preg_match('/^(\d+)$/', $sub, $m)) {
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+            return;
+        }
+        $id = (int)$m[1];
+        $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_bloecke') . ' WHERE id = ?', [$id]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Block nicht gefunden']);
+            return;
+        }
+        if ($row['sichtbarkeit'] === 'privat'
+            && (int)$row['erstellt_von'] !== (int)$user['id']
+            && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $segs = DB::fetchAll(
+            'SELECT * FROM ' . DB::tbl('training_block_segmente') . '
+              WHERE block_id = ? ORDER BY reihenfolge, id',
+            [$id]
+        );
+        echo json_encode([
+            'ok'       => true,
+            'block'    => mapBlock($row),
+            'segmente' => array_map('mapBlockSegment', $segs),
+        ]);
+        return;
+    }
+
+    // ── POST Block auf den Kalender anwenden ──
+    if (preg_match('/^(\d+)\/apply$/', $sub, $m) && $method === 'POST') {
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+            return;
+        }
+        $id = (int)$m[1];
+        $block = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_bloecke') . ' WHERE id = ?', [$id]);
+        if (!$block) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Block nicht gefunden']);
+            return;
+        }
+        if ($block['sichtbarkeit'] === 'privat'
+            && (int)$block['erstellt_von'] !== (int)$user['id']
+            && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $in = readJsonBody();
+        if (empty($in['datum']) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $in['datum'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "datum" (YYYY-MM-DD) erforderlich']);
+            return;
+        }
+        $segs = DB::fetchAll(
+            'SELECT * FROM ' . DB::tbl('training_block_segmente') . '
+              WHERE block_id = ? ORDER BY reihenfolge, id',
+            [$id]
+        );
+        $pdo = DB::get();
+        $pdo->beginTransaction();
+        try {
+            $defaultSicht = ($block['sichtbarkeit'] === 'global') ? 'oeffentlich' : 'intern';
+            DB::query(
+                'INSERT INTO ' . DB::tbl('training_einheiten') . '
+                 (datum, uhrzeit, typ, titel, treffpunkt, bemerkung, sichtbarkeit, status, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?,?,?)',
+                [
+                    $in['datum'],
+                    $in['uhrzeit'] ?? null,
+                    $block['typ'],
+                    $block['titel'],
+                    $in['treffpunkt'] ?? $block['treffpunkt'] ?? null,
+                    $block['bemerkung'] ?? null,
+                    $in['sichtbarkeit'] ?? $defaultSicht,
+                    'geplant',
+                    (int)$user['id'],
+                ]
+            );
+            $einheitId = (int)DB::lastInsertId();
+            $segArr = array_map(function ($s) {
+                return [
+                    'wiederholungen' => $s['wiederholungen'],
+                    'distanz_m'      => $s['distanz_m'],
+                    'pause_m'        => $s['pause_m'],
+                    'pause_typ'      => $s['pause_typ'],
+                    'pace_referenz'  => $s['pace_referenz'],
+                    'notiz'          => $s['notiz'],
+                    'block_id'       => $s['gruppen_id'],
+                ];
+            }, $segs);
+            replaceSegmente($einheitId, $segArr);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        echo json_encode(['ok' => true, 'einheit_id' => $einheitId]);
+        return;
+    }
+
+    // ── POST neuer Block ──
+    if ($sub === '' && $method === 'POST') {
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+            return;
+        }
+        $in = readJsonBody();
+        $sicht = $in['sichtbarkeit'] ?? 'global';
+        // Globale Blöcke nur für Trainer; private Blöcke für alle eingeloggten User
+        if ($sicht === 'global' && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Nur Trainer dürfen globale Blöcke erstellen.']);
+            return;
+        }
+        $errs = validateBlock($in);
+        if ($errs) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => $errs[0]]);
+            return;
+        }
+        $pdo = DB::get();
+        $pdo->beginTransaction();
+        try {
+            DB::query(
+                'INSERT INTO ' . DB::tbl('training_bloecke') . '
+                 (titel, typ, treffpunkt, bemerkung, sichtbarkeit, erstellt_von)
+                 VALUES (?,?,?,?,?,?)',
+                [
+                    $in['titel'],
+                    $in['typ'] ?? 'intervall',
+                    $in['treffpunkt'] ?? null,
+                    $in['bemerkung'] ?? null,
+                    $sicht,
+                    (int)$user['id'],
+                ]
+            );
+            $id = (int)DB::lastInsertId();
+            replaceBlockSegmente($id, $in['segmente'] ?? []);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        echo json_encode(['ok' => true, 'id' => $id]);
+        return;
+    }
+
+    // ── PUT Block bearbeiten ──
+    if ($sub !== '' && $method === 'PUT' && ctype_digit($sub)) {
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+            return;
+        }
+        $id = (int)$sub;
+        $block = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_bloecke') . ' WHERE id = ?', [$id]);
+        if (!$block) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Block nicht gefunden']);
+            return;
+        }
+        $isOwner = (int)$block['erstellt_von'] === (int)$user['id'];
+        if (!$istTrainer && !($isOwner && $block['sichtbarkeit'] === 'privat')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $in = readJsonBody();
+        $errs = validateBlock($in);
+        if ($errs) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => $errs[0]]);
+            return;
+        }
+        $pdo = DB::get();
+        $pdo->beginTransaction();
+        try {
+            DB::query(
+                'UPDATE ' . DB::tbl('training_bloecke') . '
+                    SET titel=?, typ=?, treffpunkt=?, bemerkung=?, sichtbarkeit=?
+                  WHERE id=?',
+                [
+                    $in['titel'],
+                    $in['typ'] ?? 'intervall',
+                    $in['treffpunkt'] ?? null,
+                    $in['bemerkung'] ?? null,
+                    $in['sichtbarkeit'] ?? $block['sichtbarkeit'],
+                    $id,
+                ]
+            );
+            if (array_key_exists('segmente', $in)) {
+                replaceBlockSegmente($id, $in['segmente'] ?? []);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── DELETE Block löschen ──
+    if ($sub !== '' && $method === 'DELETE' && ctype_digit($sub)) {
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+            return;
+        }
+        $id = (int)$sub;
+        $block = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_bloecke') . ' WHERE id = ?', [$id]);
+        if (!$block) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Block nicht gefunden']);
+            return;
+        }
+        $isOwner = (int)$block['erstellt_von'] === (int)$user['id'];
+        if (!$istTrainer && !($isOwner && $block['sichtbarkeit'] === 'privat')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        DB::query('DELETE FROM ' . DB::tbl('training_bloecke') . ' WHERE id = ?', [$id]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Blöcke-Endpoint nicht gefunden']);
+}
+
+function mapBlock(array $r): array {
+    return [
+        'id'           => (int)$r['id'],
+        'titel'        => $r['titel'],
+        'typ'          => $r['typ'],
+        'treffpunkt'   => $r['treffpunkt'],
+        'bemerkung'    => $r['bemerkung'],
+        'sichtbarkeit' => $r['sichtbarkeit'],
+        'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
+        'erstellt_am'  => $r['erstellt_am'],
+    ];
+}
+
+function mapBlockSegment(array $r): array {
+    return [
+        'id'             => (int)$r['id'],
+        'reihenfolge'    => (int)$r['reihenfolge'],
+        'gruppen_id'     => $r['gruppen_id'] !== null ? (int)$r['gruppen_id'] : null,
+        'wiederholungen' => (int)$r['wiederholungen'],
+        'distanz_m'      => (int)$r['distanz_m'],
+        'pause_m'        => $r['pause_m'] !== null ? (int)$r['pause_m'] : null,
+        'pause_typ'      => $r['pause_typ'],
+        'pace_referenz'  => $r['pace_referenz'],
+        'notiz'          => $r['notiz'],
+    ];
+}
+
+function replaceBlockSegmente(int $blockId, $segmente): void {
+    DB::query('DELETE FROM ' . DB::tbl('training_block_segmente') . ' WHERE block_id = ?', [$blockId]);
+    if (!is_array($segmente)) return;
+    $i = 0;
+    foreach ($segmente as $s) {
+        if (!is_array($s)) continue;
+        $dist = isset($s['distanz_m']) ? (int)$s['distanz_m'] : 0;
+        if ($dist <= 0) continue;
+        $ptyp = $s['pause_typ'] ?? null;
+        if ($ptyp !== null) {
+            $ptyp = strtoupper((string)$ptyp);
+            if (!in_array($ptyp, ['TP','GP','BP','frei','FREI'], true)) $ptyp = null;
+            else if ($ptyp === 'FREI') $ptyp = 'frei';
+        }
+        DB::query(
+            'INSERT INTO ' . DB::tbl('training_block_segmente') . '
+             (block_id, reihenfolge, gruppen_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
+             VALUES (?,?,?,?,?,?,?,?,?)',
+            [
+                $blockId,
+                $i++,
+                isset($s['gruppen_id']) && $s['gruppen_id'] !== '' ? (int)$s['gruppen_id'] : null,
+                isset($s['wiederholungen']) ? max(1, (int)$s['wiederholungen']) : 1,
+                $dist,
+                isset($s['pause_m']) && $s['pause_m'] !== '' ? (int)$s['pause_m'] : null,
+                $ptyp,
+                isset($s['pace_referenz']) && $s['pace_referenz'] !== '' ? substr((string)$s['pace_referenz'], 0, 40) : null,
+                isset($s['notiz']) && $s['notiz'] !== '' ? substr((string)$s['notiz'], 0, 200) : null,
+            ]
+        );
+    }
+}
+
+function validateBlock(array $in): array {
+    $errs = [];
+    if (empty($in['titel']) || !is_string($in['titel'])) {
+        $errs[] = 'Feld "titel" erforderlich';
+    }
+    return $errs;
 }
 
 // ============================================================

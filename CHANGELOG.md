@@ -1,5 +1,17 @@
 # Changelog
 
+## v15
+- Neue Rolle **Trainer**: eigener Eintrag in der `rollen`-Tabelle mit Rechten `training_bloecke_verwalten` + `training_bearbeiten`; `Auth::isTrainer()` / `requireTrainer()` in `auth.php`
+- **Trainingsblöcke** (`#bloecke`): datumsunabhängige Vorlagen für Trainingseinheiten
+  - DB: neue Tabellen `training_bloecke` und `training_block_segmente`
+  - API: `GET/POST/PUT/DELETE bloecke`, `POST bloecke/{id}/apply` (Block auf Kalender-Datum legen)
+  - Globale Blöcke erstellen/bearbeiten/löschen: nur Trainer und Admins
+  - Private Blöcke: jeder eingeloggte User
+  - Alle eingeloggten User können Blöcke per „Im Kalender planen" als konkrete Einheit eintragen
+- Navigation: Tab „Trainingsblöcke" für alle eingeloggten User; Einstellungen-Tab weiterhin nur für Admins
+- `POST/PUT/DELETE einheiten` prüft jetzt Recht `training_bearbeiten` (statt TODO-Kommentar)
+- Migration: `sql/migration_v15_trainer.sql` (idempotent, `INSERT IGNORE`)
+
 ## v14
 - Einstellungen-Seite verwendet jetzt 1:1 die Statistikportal-Optik (`.panel`, `.panel-header`, `.panel-title`, `.settings-row`, `.settings-input`); eigene CSS-Regeln in `addons.css` entfernt
 - Feiertage-Loader: cURL-Fallback (für Hostings mit `allow_url_fopen=Off`), erweiterte Fehlermeldungen

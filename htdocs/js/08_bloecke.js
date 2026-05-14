@@ -1,0 +1,404 @@
+// ============================================================
+// Trainingsportal – Trainingsblöcke
+// ============================================================
+// Seite: #bloecke
+//   - Alle eingeloggten User sehen globale + eigene private Blöcke
+//   - Trainer/Admin: Neuen Block anlegen, bearbeiten, löschen
+//   - Alle eingeloggten User: Block per „Im Kalender planen" anwenden
+
+const BLOECKE = (() => {
+
+  const TYP_OPTIONS = [
+    { value: 'intervall',     label: 'Intervall' },
+    { value: 'dauerlauf',     label: 'Dauerlauf' },
+    { value: 'funktionell',   label: 'Funktionelles Training' },
+    { value: 'runde',         label: 'Runde / Strecke' },
+    { value: 'event',         label: 'Event / Wettkampf' },
+    { value: 'frei',          label: 'Sonstiges' },
+    { value: 'kein_training', label: 'Kein Training' },
+  ];
+
+  const PAUSE_OPTIONS = [
+    { value: 'TP',   label: 'TP – Trabpause' },
+    { value: 'GP',   label: 'GP – Gehpause' },
+    { value: 'BP',   label: 'BP – Blockpause' },
+    { value: 'frei', label: '— frei —' },
+  ];
+
+  const TYP_LABEL = {
+    intervall:    'Intervall',
+    dauerlauf:    'Dauerlauf',
+    funktionell:  'Funkt. Tr.',
+    runde:        'Runde',
+    event:        'Event',
+    frei:         'Training',
+    kein_training:'Kein Training',
+  };
+
+  function istTrainer() {
+    return state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
+  }
+
+  // ── Hauptseite ────────────────────────────────────────────
+  async function render(main) {
+    main.innerHTML = `
+      <div class="bloecke-wrap">
+        <div class="bloecke-toolbar">
+          <h1 class="bloecke-title">Trainingsblöcke</h1>
+          <div class="bloecke-toolbar-right">
+            ${istTrainer() ? `<button class="btn btn-primary" onclick="BLOECKE.neuerBlock()">+ Neuer Block</button>` : ''}
+          </div>
+        </div>
+        <p class="bloecke-intro">
+          Trainingsblöcke sind datumsunabhängige Vorlagen. Per „Im Kalender planen" werden sie als konkrete Trainingseinheit auf ein Datum gelegt.
+        </p>
+        <div id="bloecke-list" class="bloecke-loading">Lade Blöcke…</div>
+      </div>`;
+    await ladeListe();
+  }
+
+  async function ladeListe() {
+    const container = document.getElementById('bloecke-list');
+    if (!container) return;
+    try {
+      const data = await apiGet('bloecke', { silent: true });
+      const bloecke = data.bloecke || [];
+      if (!bloecke.length) {
+        container.innerHTML = `<div class="bloecke-leer">Noch keine Trainingsblöcke vorhanden.${istTrainer() ? ' Erstelle den ersten Block mit „+ Neuer Block".' : ''}</div>`;
+        return;
+      }
+      const gruppen = { global: [], privat: [] };
+      bloecke.forEach(b => (gruppen[b.sichtbarkeit] || gruppen.global).push(b));
+
+      let html = '';
+      if (gruppen.global.length) {
+        html += `<h2 class="bloecke-gruppe-titel">Globale Blöcke</h2>
+                 <div class="bloecke-grid">${gruppen.global.map(renderBlockCard).join('')}</div>`;
+      }
+      if (gruppen.privat.length) {
+        html += `<h2 class="bloecke-gruppe-titel">Meine privaten Blöcke</h2>
+                 <div class="bloecke-grid">${gruppen.privat.map(renderBlockCard).join('')}</div>`;
+      }
+      container.innerHTML = html;
+    } catch (e) {
+      container.innerHTML = `<div class="bloecke-leer bloecke-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
+    }
+  }
+
+  function renderBlockCard(b) {
+    const istGlobal = b.sichtbarkeit === 'global';
+    const kannBearbeiten = istTrainer()
+      || (!istGlobal && state.user && b.erstellt_von === state.user.id);
+    return `
+      <div class="block-card block-typ-${escapeHtml(b.typ)}">
+        <div class="block-card-head">
+          <span class="block-typ-badge">${escapeHtml(TYP_LABEL[b.typ] || b.typ)}</span>
+          ${istGlobal
+            ? '<span class="block-sicht-badge block-sicht-global">Global</span>'
+            : '<span class="block-sicht-badge block-sicht-privat">Privat</span>'}
+        </div>
+        <div class="block-titel">${escapeHtml(b.titel)}</div>
+        ${b.treffpunkt ? `<div class="block-treffpunkt">📍 ${escapeHtml(b.treffpunkt)}</div>` : ''}
+        ${b.bemerkung  ? `<div class="block-bemerkung">${escapeHtml(b.bemerkung)}</div>`   : ''}
+        <div class="block-card-actions">
+          <button class="btn btn-primary btn-sm" onclick="BLOECKE.anwenden(${b.id})">Im Kalender planen</button>
+          ${kannBearbeiten ? `<button class="btn btn-ghost btn-sm" onclick="BLOECKE.bearbeiten(${b.id})">Bearbeiten</button>` : ''}
+        </div>
+      </div>`;
+  }
+
+  // ── Block auf Kalender anwenden ───────────────────────────
+  async function anwenden(blockId) {
+    let blockData;
+    try {
+      blockData = await apiGet(`bloecke/${blockId}`, { silent: true });
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+      return;
+    }
+    const b = blockData.block;
+    const heute = ymd(new Date());
+    const cont = document.getElementById('modal-container');
+
+    cont.innerHTML = `
+      <div class="modal-overlay" onclick="schliesseModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+          <div class="modal-head">
+            <div>
+              <div class="modal-eyebrow">Block anwenden</div>
+              <div class="modal-title">${escapeHtml(b.titel)}</div>
+            </div>
+            <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="ed-grid">
+              <div class="ed-fg">
+                <label>Datum *</label>
+                <input type="date" id="apply-datum" value="${heute}">
+              </div>
+              <div class="ed-fg">
+                <label>Uhrzeit</label>
+                <input type="time" id="apply-uhrzeit">
+              </div>
+              <div class="ed-fg">
+                <label>Treffpunkt</label>
+                <input type="text" id="apply-treffpunkt" value="${escapeHtml(b.treffpunkt || '')}">
+              </div>
+              <div class="ed-fg">
+                <label>Sichtbarkeit</label>
+                <select id="apply-sichtbarkeit">
+                  <option value="oeffentlich"${b.sichtbarkeit === 'global' ? ' selected' : ''}>Öffentlich</option>
+                  <option value="intern"${b.sichtbarkeit === 'privat' ? ' selected' : ''}>Intern</option>
+                </select>
+              </div>
+            </div>
+            <div class="ed-footer">
+              <span></span>
+              <div class="ed-footer-right">
+                <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+                <button class="btn btn-primary" onclick="BLOECKE.anwendenSpeichern(${b.id})">In Kalender eintragen</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  async function anwendenSpeichern(blockId) {
+    const datum = val('apply-datum');
+    if (!datum) { notify('Datum fehlt.', 'err'); return; }
+    const payload = {
+      datum,
+      uhrzeit:      val('apply-uhrzeit') || null,
+      treffpunkt:   val('apply-treffpunkt') || null,
+      sichtbarkeit: val('apply-sichtbarkeit'),
+    };
+    try {
+      await apiPost(`bloecke/${blockId}/apply`, payload);
+      schliesseModal();
+      notify('Training in den Kalender eingetragen.', 'ok');
+      const [y, m] = datum.split('-');
+      location.hash = `#kalender/${y}-${m}`;
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  // ── Block-Editor ──────────────────────────────────────────
+  let editorSegmente = [];
+
+  function neuerBlock() { openBlockEditor(null, []); }
+
+  async function bearbeiten(blockId) {
+    try {
+      const data = await apiGet(`bloecke/${blockId}`, { silent: true });
+      openBlockEditor(data.block, data.segmente || []);
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  function openBlockEditor(block, segmente) {
+    const istNeu = !block;
+    editorSegmente = (segmente || []).map(s => ({ ...s }));
+    const b = block || {
+      id: null, titel: '', typ: 'intervall',
+      treffpunkt: 'Sportplatz', bemerkung: '', sichtbarkeit: 'global',
+    };
+    const cont = document.getElementById('modal-container');
+
+    cont.innerHTML = `
+      <div class="modal-overlay" onclick="schliesseModal(event)">
+        <div class="modal-card modal-wide" onclick="event.stopPropagation()">
+          <div class="modal-head">
+            <div>
+              <div class="modal-eyebrow">${istNeu ? 'Neuer Trainingsblock' : 'Block bearbeiten'}</div>
+              <div class="modal-title">${istNeu ? 'Block erstellen' : escapeHtml(b.titel || '')}</div>
+            </div>
+            <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="ed-grid">
+              <div class="ed-fg">
+                <label>Typ</label>
+                <select id="be-typ">${TYP_OPTIONS.map(o => `<option value="${o.value}"${o.value === b.typ ? ' selected' : ''}>${o.label}</option>`).join('')}</select>
+              </div>
+              <div class="ed-fg">
+                <label>Sichtbarkeit</label>
+                <select id="be-sichtbarkeit">
+                  <option value="global"${b.sichtbarkeit === 'global' ? ' selected' : ''}>Global (für alle Trainer sichtbar)</option>
+                  <option value="privat"${b.sichtbarkeit === 'privat' ? ' selected' : ''}>Privat (nur ich)</option>
+                </select>
+              </div>
+              <div class="ed-fg ed-fg-wide">
+                <label>Titel / Kurzschrift <span class="ed-hint">(z. B. „12 x 400 m (100GP)")</span></label>
+                <input type="text" id="be-titel" value="${escapeHtml(b.titel || '')}" placeholder="z. B. 8 x 600 m (100TP)">
+              </div>
+              <div class="ed-fg">
+                <label>Treffpunkt</label>
+                <input type="text" id="be-treffpunkt" value="${escapeHtml(b.treffpunkt || '')}">
+              </div>
+              <div class="ed-fg ed-fg-wide">
+                <label>Bemerkung</label>
+                <textarea id="be-bemerkung" rows="2">${escapeHtml(b.bemerkung || '')}</textarea>
+              </div>
+            </div>
+
+            <div class="ed-segwrap">
+              <div class="ed-segheader">
+                <h3>Segmente</h3>
+                <div class="ed-segactions">
+                  <button class="btn btn-ghost" onclick="BLOECKE.parsenAusTitel()">Aus Titel parsen</button>
+                  <button class="btn btn-ghost" onclick="BLOECKE.segmentHinzufuegen()">+ Segment</button>
+                </div>
+              </div>
+              <div id="be-segmente-tabelle"></div>
+              <div class="ed-seghint">
+                Pause in Metern · TP/GP/BP = Trab-/Geh-/Blockpause · Pace-Referenz für persönliche Pace im Athleten-View
+              </div>
+            </div>
+
+            <div class="ed-footer">
+              ${!istNeu
+                ? `<button class="btn btn-danger" onclick="BLOECKE.loeschen(${b.id})">Löschen</button>`
+                : '<span></span>'}
+              <div class="ed-footer-right">
+                <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+                <button class="btn btn-primary" onclick="BLOECKE.speichern(${b.id || 'null'})">Speichern</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    rendereBlockSegmente();
+  }
+
+  function rendereBlockSegmente() {
+    const wrap = document.getElementById('be-segmente-tabelle');
+    if (!wrap) return;
+    if (!editorSegmente.length) {
+      wrap.innerHTML = `<div class="ed-segleer">Keine Segmente. Klick „Aus Titel parsen" oder „+ Segment".</div>`;
+      return;
+    }
+    const rows = editorSegmente.map((s, i) => `
+      <tr>
+        <td><input type="number" min="1" value="${s.wiederholungen ?? 1}" data-i="${i}" data-f="wiederholungen" class="be-seg-input ed-seg-num"></td>
+        <td><input type="number" min="50" step="50" value="${s.distanz_m ?? ''}" data-i="${i}" data-f="distanz_m" class="be-seg-input ed-seg-dist"></td>
+        <td><input type="number" min="0" step="50" value="${s.pause_m ?? ''}" data-i="${i}" data-f="pause_m" class="be-seg-input ed-seg-dist"></td>
+        <td>
+          <select data-i="${i}" data-f="pause_typ" class="be-seg-input">
+            ${PAUSE_OPTIONS.map(o => `<option value="${o.value}"${o.value === (s.pause_typ || 'TP') ? ' selected' : ''}>${o.label}</option>`).join('')}
+          </select>
+        </td>
+        <td>
+          <select data-i="${i}" data-f="pace_referenz" class="be-seg-input">
+            ${PARSER.PACE_OPTIONS.map(o => `<option value="${o.value}"${o.value === (s.pace_referenz || '') ? ' selected' : ''}>${o.label}</option>`).join('')}
+          </select>
+        </td>
+        <td><button class="btn-icon" title="Segment löschen" onclick="BLOECKE.segmentLoeschen(${i})">×</button></td>
+      </tr>`).join('');
+
+    wrap.innerHTML = `
+      <table class="ed-seg-table">
+        <thead>
+          <tr><th>Wdh</th><th>Distanz (m)</th><th>Pause (m)</th><th>Pause-Typ</th><th>Pace-Referenz</th><th></th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    wrap.querySelectorAll('.be-seg-input').forEach(el => {
+      el.addEventListener('change', onSegEdit);
+      el.addEventListener('input',  onSegEdit);
+    });
+  }
+
+  function onSegEdit(ev) {
+    const t = ev.target;
+    const i = parseInt(t.dataset.i, 10);
+    const f = t.dataset.f;
+    if (!editorSegmente[i]) return;
+    let v = t.value;
+    if (['wiederholungen', 'distanz_m', 'pause_m'].includes(f)) {
+      v = v === '' ? null : parseInt(v, 10);
+    }
+    if (f === 'pace_referenz' && v === '') v = null;
+    editorSegmente[i][f] = v;
+  }
+
+  function parsenAusTitel() {
+    const titel = val('be-titel');
+    const segs = PARSER.parse(titel);
+    if (!segs.length) { notify('Konnte keine Segmente aus dem Titel erkennen.', 'warn'); return; }
+    editorSegmente = segs;
+    rendereBlockSegmente();
+  }
+
+  function segmentHinzufuegen() {
+    editorSegmente.push({ wiederholungen: 1, distanz_m: 400, pause_m: 100, pause_typ: 'TP', pace_referenz: '5km', notiz: null });
+    rendereBlockSegmente();
+  }
+
+  function segmentLoeschen(i) {
+    editorSegmente.splice(i, 1);
+    rendereBlockSegmente();
+  }
+
+  async function speichern(blockId) {
+    const payload = {
+      titel:        val('be-titel'),
+      typ:          val('be-typ'),
+      treffpunkt:   val('be-treffpunkt') || null,
+      bemerkung:    val('be-bemerkung') || null,
+      sichtbarkeit: val('be-sichtbarkeit'),
+      segmente:     editorSegmente,
+    };
+    if (!payload.titel) { notify('Titel fehlt.', 'err'); return; }
+    try {
+      if (blockId) {
+        await apiPut(`bloecke/${blockId}`, payload);
+      } else {
+        await apiPost('bloecke', payload);
+      }
+      schliesseModal();
+      notify('Block gespeichert.', 'ok');
+      await ladeListe();
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function loeschen(blockId) {
+    if (!confirm('Diesen Block wirklich löschen?')) return;
+    try {
+      await apiDel(`bloecke/${blockId}`);
+      schliesseModal();
+      notify('Block gelöscht.', 'ok');
+      await ladeListe();
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  // ── Hilfsfunktionen ───────────────────────────────────────
+  function val(id) {
+    const el = document.getElementById(id);
+    return el ? (el.value || '').trim() : '';
+  }
+
+  function notify(text, art) {
+    const cont = document.getElementById('notification-container');
+    if (!cont) { console.log(text); return; }
+    const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
+    const div = document.createElement('div');
+    div.className = `notif ${cls}`;
+    div.textContent = text;
+    cont.appendChild(div);
+    setTimeout(() => div.remove(), 4000);
+  }
+
+  return {
+    render, neuerBlock, bearbeiten, anwenden, anwendenSpeichern,
+    parsenAusTitel, segmentHinzufuegen, segmentLoeschen, speichern, loeschen,
+  };
+})();

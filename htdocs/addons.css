@@ -378,6 +378,106 @@
 }
 
 /* ============================================================
+   Trainingsportal – Trainingsblöcke
+   ============================================================ */
+.bloecke-wrap { padding: 24px 28px 48px; max-width: 1200px; margin: 0 auto; }
+
+.bloecke-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.bloecke-toolbar-right { display: flex; gap: 8px; }
+.bloecke-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 28px; letter-spacing: .5px;
+  color: var(--text); margin: 0;
+}
+.bloecke-intro {
+  font-size: 13px; color: var(--text2); margin: 0 0 20px;
+}
+.bloecke-loading {
+  padding: 48px; text-align: center; color: var(--text2);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.bloecke-leer {
+  padding: 40px; text-align: center; color: var(--text2);
+  background: var(--surf2); border: 1px dashed var(--border); border-radius: var(--radius);
+  font-size: 14px;
+}
+.bloecke-error { color: var(--primary); }
+
+.bloecke-gruppe-titel {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 18px; letter-spacing: .5px;
+  color: var(--text2); margin: 24px 0 10px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+.bloecke-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* Block-Karte */
+.block-card {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px;
+  border-top: 4px solid var(--accent);
+  transition: box-shadow .15s, transform .1s;
+}
+.block-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+
+/* Typ-Akzentfarbe (oben) */
+.block-typ-intervall    { border-top-color: var(--primary); }
+.block-typ-dauerlauf    { border-top-color: var(--green, #1a8a3a); }
+.block-typ-funktionell  { border-top-color: #c08010; }
+.block-typ-runde        { border-top-color: var(--accent); }
+.block-typ-event        { border-top-color: #8845c0; }
+.block-typ-kein_training { border-top-color: var(--border); }
+
+.block-card-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.block-typ-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 4px; padding: 2px 7px;
+}
+.block-sicht-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; border-radius: 4px; padding: 2px 7px;
+}
+.block-sicht-global {
+  color: var(--green, #1a8a3a);
+  background: color-mix(in srgb, var(--green, #1a8a3a) 12%, transparent);
+}
+.block-sicht-privat {
+  color: var(--text2);
+  background: color-mix(in srgb, var(--text2) 10%, transparent);
+}
+
+.block-titel {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 18px; letter-spacing: .3px; color: var(--text);
+}
+.block-treffpunkt { font-size: 12px; color: var(--text2); }
+.block-bemerkung  { font-size: 13px; color: var(--text); line-height: 1.4; }
+
+.block-card-actions {
+  display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;
+}
+.btn.btn-sm { padding: 5px 11px; font-size: 12px; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .bloecke-wrap { padding: 12px 8px 32px; }
+  .bloecke-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
    Trainingsportal – Feiertage / Ferien
    ============================================================ */
 .kal-feiertag-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }

@@ -65,12 +65,15 @@ function fillUserBadge() {
     }
   }
 
-  // Admin-Link in der Hauptnavigation
+  // Hauptnavigation abhängig von der Rolle
   const nav = document.getElementById('main-nav');
-  if (nav && u.rolle === 'admin') {
+  if (nav && u) {
+    const isAdmin   = u.rolle === 'admin';
+    const isTrainer = isAdmin || u.rolle === 'trainer';
     nav.innerHTML = `
-      <button onclick="navigate('kalender')"${state.tab==='kalender'?' class="active"':''}>Kalender</button>
-      <button onclick="navigate('einstellungen')"${state.tab==='einstellungen'?' class="active"':''}>Einstellungen</button>`;
+      <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
+      <button onclick="navigate('bloecke')"${state.tab === 'bloecke' ? ' class="active"' : ''}>Trainingsblöcke</button>
+      ${isAdmin ? `<button onclick="navigate('einstellungen')"${state.tab === 'einstellungen' ? ' class="active"' : ''}>Einstellungen</button>` : ''}`;
   }
 }
 
@@ -101,6 +104,11 @@ function renderPage() {
 
   if (state.tab === 'kalender') {
     renderKalender(main, args && args[0]);
+    return;
+  }
+  if (state.tab === 'bloecke') {
+    if (!state.user) { location.replace('#kalender'); return; }
+    BLOECKE.render(main);
     return;
   }
   if (state.tab === 'einstellungen') {
