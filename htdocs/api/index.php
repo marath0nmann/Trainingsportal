@@ -1059,8 +1059,57 @@ function vtimezoneEuropeBerlin(): string {
 // ============================================================
 // Trainingsblöcke (datumsunabhängige Templates)
 // ============================================================
+
+// Legt training_bloecke + training_block_segmente an, falls noch nicht vorhanden,
+// und stellt sicher, dass die Trainer-Rolle in der rollen-Tabelle existiert.
+function ensureBloeckeTabellen(): void {
+    DB::query(
+        "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_bloecke') . " (
+          id            INT UNSIGNED       NOT NULL AUTO_INCREMENT,
+          titel         VARCHAR(200)       NOT NULL,
+          typ           ENUM('intervall','dauerlauf','funktionell','runde','event','frei','kein_training')
+                                           NOT NULL DEFAULT 'intervall',
+          treffpunkt    VARCHAR(200)       NULL,
+          bemerkung     TEXT               NULL,
+          sichtbarkeit  ENUM('global','privat') NOT NULL DEFAULT 'global',
+          erstellt_von  INT UNSIGNED       NULL,
+          erstellt_am   TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          geaendert_am  TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_sichtbarkeit (sichtbarkeit)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    DB::query(
+        "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_block_segmente') . " (
+          id              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+          block_id        INT UNSIGNED    NOT NULL,
+          reihenfolge     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+          gruppen_id      SMALLINT UNSIGNED NULL,
+          wiederholungen  SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+          distanz_m       INT UNSIGNED    NOT NULL,
+          pause_m         INT UNSIGNED    NULL,
+          pause_typ       ENUM('TP','GP','BP','frei') NULL,
+          pace_referenz   VARCHAR(40)     NULL,
+          notiz           VARCHAR(200)    NULL,
+          PRIMARY KEY (id),
+          KEY idx_block (block_id, reihenfolge),
+          CONSTRAINT fk_bsegm_block FOREIGN KEY (block_id)
+              REFERENCES " . DB::tbl('training_bloecke') . "(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    // Trainer- und Editor-Rolle anlegen, falls noch nicht vorhanden
+    DB::query(
+        "INSERT IGNORE INTO " . DB::tbl('rollen') . " (name, beschreibung, rechte) VALUES
+         ('trainer', 'Trainer – darf globale Trainingsblöcke erstellen und verwalten',
+          '[\"training_bloecke_verwalten\",\"training_bearbeiten\"]'),
+         ('editor',  'Editor – darf Trainingseinheiten anlegen und bearbeiten',
+          '[\"training_bearbeiten\"]')"
+    );
+}
+
 function handleBloecke(string $method, string $sub): void
 {
+    ensureBloeckeTabellen();
     $user = Auth::check();
     $istTrainer = $user && Auth::hasRecht('training_bloecke_verwalten');
 

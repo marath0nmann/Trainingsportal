@@ -39,6 +39,7 @@ GitHub Actions deployed automatisch per FTP nach all-inkl.com.
    - `index.html`: alle `?v=NNN` Cache-Buster + `header-version`-Span
    - `CHANGELOG.md`: `## vCUR` → `## vNNN+1`
 3. `git add <geänderte Dateien>`, `git commit`, `git push`
+4. Pull Request erstellen (falls noch nicht vorhanden), sofort auf „Ready" setzen und mit **squash-merge** mergen – kein Warten auf Bestätigung.
 
 `bash build.sh` erledigt 1.+2. automatisch.
 
