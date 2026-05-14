@@ -107,6 +107,25 @@ const SETTINGS = (() => {
         '</div>' +
       '</div>' +
 
+      // ── Migration: Einheiten → Blöcke ──
+      '<div class="panel">' +
+        '<div class="panel-header"><div class="panel-title">🔄 Migration: Einheiten → Trainingsblöcke</div></div>' +
+        '<div class="settings-panel-body">' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Bestehende Kalendereinträge migrieren</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
+                'Liest alle vorhandenen Trainingseinheiten und legt pro eindeutigem Titel einen globalen Trainingsblock an (inklusive Segmente). Bereits vorhandene Blöcke werden übersprungen. Idempotent – kann mehrfach ausgeführt werden.' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<button class="btn btn-primary btn-sm" onclick="SETTINGS.migrieren()">▶ Jetzt migrieren</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="migr-result"></div>' +
+        '</div>' +
+      '</div>' +
+
       // ── Hinweis zu geteilten Settings ──
       '<div class="panel">' +
         '<div class="panel-header"><div class="panel-title">ℹ️ Optik &amp; Verein</div></div>' +
@@ -242,5 +261,20 @@ const SETTINGS = (() => {
     setTimeout(() => div.remove(), 3500);
   }
 
-  return { render, hinzufuegen, entfernen, beispiel, speichern, diagnose };
+  async function migrieren() {
+    const out = document.getElementById('migr-result');
+    if (out) out.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:13px">⏳ Migriere…</div>';
+    try {
+      const r = await apiPost('admin/migrate_einheiten_zu_bloecken', {});
+      if (out) out.innerHTML =
+        '<div style="padding:10px;font-size:13px;color:var(--green,#1a8a3a);font-weight:600">' +
+        '✅ Fertig: ' + r.erstellt + ' neue Blöcke erstellt, ' +
+        r.uebersprungen + ' bereits vorhanden übersprungen ' +
+        '(' + r.unique_titel + ' eindeutige Titel aus ' + r.einheiten_gesamt + ' Einheiten).</div>';
+    } catch (e) {
+      if (out) out.innerHTML = '<div style="padding:10px;color:var(--primary);font-size:13px">Fehler: ' + escapeHtml(e.message) + '</div>';
+    }
+  }
+
+  return { render, hinzufuegen, entfernen, beispiel, speichern, diagnose, migrieren };
 })();

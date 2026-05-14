@@ -205,7 +205,7 @@ async function renderKalender(main, monthArg) {
         <div class="kal-nav-right">
           <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
           <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
-          ${state.user ? `<button class="btn btn-primary" onclick="EDITOR.open({})">+ Neue Einheit</button>` : ''}
+          ${state.user ? `<button class="btn btn-primary" onclick="navigate('bloecke')">Trainingsblöcke</button>` : ''}
         </div>
       </div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
@@ -276,9 +276,7 @@ async function renderKalender(main, monthArg) {
         return `<div class="${cls}" onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
       }).join('');
 
-      const addBtn = state.user
-        ? `<button class="kal-add-btn" title="Einheit hinzufügen" onclick="event.stopPropagation();EDITOR.open({datum:'${k}'})">+</button>`
-        : '';
+      const addBtn = '';
       cells.push(`
         <div class="${dayCls}">
           <div class="kal-cell-head">
