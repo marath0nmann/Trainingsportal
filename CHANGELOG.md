@@ -1,6 +1,6 @@
 # Changelog
 
-## v20
+## v21
 - Fix: Formatierung ICS-Feeds Label-Spalte in Einstellungen (`width:100%` entfernt)
 - Trainingsblöcke: Titel wird beim Öffnen des Editors automatisch in Segmente geparst, wenn noch keine vorhanden sind
 - Block-Karten: zeigen Segmentanzahl-Badge (orange bei 0 Segmenten)

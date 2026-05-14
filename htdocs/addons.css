@@ -489,6 +489,14 @@
 }
 
 /* ============================================================
+   Trainingsportal – Einstellungen-Layout
+   ============================================================ */
+/* Verhindert, dass der Input-Bereich die Label-Spalte zusammendrückt.
+   Flex-Items haben default min-width:auto und schrumpfen nicht unter
+   ihre Content-Mindestbreite – min-width:0 hebt das auf. */
+.settings-row-input { min-width: 0; }
+
+/* ============================================================
    Trainingsportal – Feiertage / Ferien
    ============================================================ */
 .kal-feiertag-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }
