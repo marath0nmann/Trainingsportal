@@ -8,13 +8,9 @@
 
 -- 1. Trainer-Rolle in der rollen-Tabelle anlegen
 --    IGNORE, falls schon vorhanden.
-INSERT IGNORE INTO rollen (name, beschreibung, rechte) VALUES
-  ('trainer',
-   'Trainer – darf globale Trainingsblöcke erstellen und verwalten',
-   '["training_bloecke_verwalten","training_bearbeiten"]'),
-  ('editor',
-   'Editor – darf Trainingseinheiten anlegen und bearbeiten',
-   '["training_bearbeiten"]');
+INSERT IGNORE INTO rollen (name, rechte) VALUES
+  ('trainer', '["training_bloecke_verwalten","training_bearbeiten"]'),
+  ('editor',  '["training_bearbeiten"]');
 
 -- 2. benutzer.rolle: Wert 'trainer' hinzufügen
 --    Falls die Spalte ein ENUM ist, muss er hier ergänzt werden.

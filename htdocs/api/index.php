@@ -1099,11 +1099,9 @@ function ensureBloeckeTabellen(): void {
     );
     // Trainer- und Editor-Rolle anlegen, falls noch nicht vorhanden
     DB::query(
-        "INSERT IGNORE INTO " . DB::tbl('rollen') . " (name, beschreibung, rechte) VALUES
-         ('trainer', 'Trainer – darf globale Trainingsblöcke erstellen und verwalten',
-          '[\"training_bloecke_verwalten\",\"training_bearbeiten\"]'),
-         ('editor',  'Editor – darf Trainingseinheiten anlegen und bearbeiten',
-          '[\"training_bearbeiten\"]')"
+        "INSERT IGNORE INTO " . DB::tbl('rollen') . " (name, rechte) VALUES
+         ('trainer', '[\"training_bloecke_verwalten\",\"training_bearbeiten\"]'),
+         ('editor',  '[\"training_bearbeiten\"]')"
     );
 }
 
