@@ -212,36 +212,8 @@ function handleEinheiten(string $method, string $sub): void
     }
 
     if ($sub === '' && $method === 'POST') {
-        $in = readJsonBody();
-        $errs = validateEinheit($in);
-        if ($errs) { http_response_code(400); echo json_encode(['ok'=>false,'fehler'=>$errs[0]]); return; }
-        $pdo = DB::get();
-        $pdo->beginTransaction();
-        try {
-            DB::query(
-                'INSERT INTO ' . DB::tbl('training_einheiten') . '
-                 (datum, uhrzeit, typ, titel, treffpunkt, bemerkung, sichtbarkeit, status, erstellt_von)
-                 VALUES (?,?,?,?,?,?,?,?,?)',
-                [
-                    $in['datum'],
-                    $in['uhrzeit'] ?? null,
-                    $in['typ'] ?? 'frei',
-                    $in['titel'],
-                    $in['treffpunkt'] ?? null,
-                    $in['bemerkung'] ?? null,
-                    $in['sichtbarkeit'] ?? 'oeffentlich',
-                    $in['status'] ?? 'geplant',
-                    (int)$user['id'],
-                ]
-            );
-            $id = (int)DB::lastInsertId();
-            replaceSegmente($id, $in['segmente'] ?? []);
-            $pdo->commit();
-        } catch (Throwable $e) {
-            $pdo->rollBack();
-            throw $e;
-        }
-        echo json_encode(['ok' => true, 'id' => $id]);
+        http_response_code(405);
+        echo json_encode(['ok' => false, 'fehler' => 'Trainingseinheiten werden über Trainingsblöcke angelegt (POST bloecke/{id}/apply).']);
         return;
     }
 
@@ -452,6 +424,89 @@ function handleAdmin(string $method, string $sub): void {
             ];
         }
         echo json_encode(['ok' => true, 'quellen' => $quellen, 'zeitraum' => ['von' => $von, 'bis' => $bis]]);
+        return;
+    }
+
+    // ── Einheiten → Blöcke migrieren ──
+    if ($sub === 'migrate_einheiten_zu_bloecken' && $method === 'POST') {
+        ensureBloeckeTabellen();
+        // Alle Einheiten mit Segment-Anzahl laden; je Titel-Gruppe die mit den
+        // meisten Segmenten (dann neueste) als Block-Vorlage verwenden.
+        $einheiten = DB::fetchAll(
+            'SELECT e.*, COUNT(s.id) AS seg_count
+               FROM ' . DB::tbl('training_einheiten') . ' e
+               LEFT JOIN ' . DB::tbl('training_segmente') . ' s ON s.einheit_id = e.id
+              GROUP BY e.id
+              ORDER BY e.titel ASC, seg_count DESC, e.erstellt_am DESC'
+        );
+        // In PHP nach normalisertem Titel deduplizieren
+        $seen     = [];
+        $vorlagen = [];
+        foreach ($einheiten as $e) {
+            $key = mb_strtolower(trim((string)$e['titel']));
+            if (!isset($seen[$key])) {
+                $seen[$key] = true;
+                $vorlagen[] = $e;
+            }
+        }
+        $erstellt     = 0;
+        $uebersprungen = 0;
+        foreach ($vorlagen as $e) {
+            $existing = DB::fetchOne(
+                'SELECT id FROM ' . DB::tbl('training_bloecke') . ' WHERE LOWER(TRIM(titel)) = LOWER(TRIM(?))',
+                [$e['titel']]
+            );
+            if ($existing) { $uebersprungen++; continue; }
+            $pdo = DB::get();
+            $pdo->beginTransaction();
+            try {
+                DB::query(
+                    'INSERT INTO ' . DB::tbl('training_bloecke') . '
+                     (titel, typ, treffpunkt, bemerkung, sichtbarkeit, erstellt_von)
+                     VALUES (?,?,?,?,?,?)',
+                    [
+                        $e['titel'], $e['typ'], $e['treffpunkt'], $e['bemerkung'],
+                        'global',
+                        $e['erstellt_von'] ? (int)$e['erstellt_von'] : null,
+                    ]
+                );
+                $blockId = (int)DB::lastInsertId();
+                $segs = DB::fetchAll(
+                    'SELECT * FROM ' . DB::tbl('training_segmente') . '
+                      WHERE einheit_id = ? ORDER BY reihenfolge, id',
+                    [(int)$e['id']]
+                );
+                foreach ($segs as $i => $s) {
+                    DB::query(
+                        'INSERT INTO ' . DB::tbl('training_block_segmente') . '
+                         (block_id, reihenfolge, gruppen_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
+                         VALUES (?,?,?,?,?,?,?,?,?)',
+                        [
+                            $blockId, $i,
+                            isset($s['block_id']) ? $s['block_id'] : null,
+                            (int)($s['wiederholungen'] ?? 1),
+                            (int)$s['distanz_m'],
+                            $s['pause_m'] ?? null,
+                            $s['pause_typ'] ?? null,
+                            $s['pace_referenz'] ?? null,
+                            $s['notiz'] ?? null,
+                        ]
+                    );
+                }
+                $pdo->commit();
+                $erstellt++;
+            } catch (Throwable $ex) {
+                $pdo->rollBack();
+                throw $ex;
+            }
+        }
+        echo json_encode([
+            'ok'              => true,
+            'erstellt'        => $erstellt,
+            'uebersprungen'   => $uebersprungen,
+            'einheiten_gesamt'=> count($einheiten),
+            'unique_titel'    => count($vorlagen),
+        ]);
         return;
     }
 
