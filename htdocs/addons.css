@@ -491,10 +491,12 @@
 /* ============================================================
    Trainingsportal – Einstellungen-Layout
    ============================================================ */
-/* Verhindert, dass der Input-Bereich die Label-Spalte zusammendrückt.
-   Flex-Items haben default min-width:auto und schrumpfen nicht unter
-   ihre Content-Mindestbreite – min-width:0 hebt das auf. */
-.settings-row-input { min-width: 0; }
+/* Label-Spalte bekommt fixe Mindestbreite; Statistikportal-CSS hat
+   kein flex-shrink:0, weshalb sie sonst auf Wortbreite (~60px) schrumpft.
+   Input-Spalte erhält min-width:0 damit sie bei breitem Content nicht
+   die Label-Spalte verdrängt. */
+.settings-row-label { flex-shrink: 0; min-width: 180px; }
+.settings-row-input { flex: 1; min-width: 0; }
 
 /* ============================================================
    Trainingsportal – Feiertage / Ferien

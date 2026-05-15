@@ -1,5 +1,8 @@
 # Changelog
 
+## v23
+- Fix: `.settings-row-label` bekommt `flex-shrink:0; min-width:180px` – verhindert Schrumpfen der Label-Spalte auf Wortbreite
+
 ## v22
 - Profileinstellungen: Klick auf Avatar öffnet Modal mit Pace-Referenz-Konfiguration pro Distanz (5 km, 10 km, HM, Marathon) – Quelle wählbar: Bestzeit gesamt, Bestzeit letzte 12 Monate (je nur wenn im Statistikportal vorhanden) oder manuelle Eingabe; gespeichert in `benutzer.prefs`
 - Neuer API-Endpunkt `GET/PUT pace/prefs` – löst Pace-Referenzen per Distanz auf
@@ -9,11 +12,6 @@
 
 ## v21
 - Fix: settings-row-label Spalte zu schmal – `min-width:0` auf `.settings-row-input`
-- Fix: Formatierung ICS-Feeds Label-Spalte in Einstellungen (`width:100%` entfernt)
-- Trainingsblöcke: Titel wird beim Öffnen des Editors automatisch in Segmente geparst, wenn noch keine vorhanden sind
-- Block-Karten: zeigen Segmentanzahl-Badge (orange bei 0 Segmenten)
-- `GET bloecke` liefert jetzt `seg_count` pro Block
-- Einstellungen: neuer Button „Segmente parsen" – analysiert alle Blöcke ohne Segmente via Kurzschrift-Parser und speichert die Ergebnisse automatisch
 
 ## v18
 - Migration: `POST admin/migrate_einheiten_zu_bloecken` liest alle Kalendereinträge und legt pro eindeutigem Titel einen globalen Trainingsblock an (mit Segmenten, idempotent)
