@@ -63,6 +63,9 @@ function fillUserBadge() {
     } else {
       avatarEl.textContent = initial;
     }
+    avatarEl.onclick = () => PROFIL.open();
+    avatarEl.title   = 'Profileinstellungen öffnen';
+    avatarEl.style.cursor = 'pointer';
   }
 
   // Hauptnavigation abhängig von der Rolle
@@ -322,15 +325,11 @@ async function zeigeEinheit(id) {
     const wochentag = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][datum.getDay()];
     const datStr = `${wochentag}, ${datum.getDate()}. ${MONATSNAMEN[datum.getMonth()]} ${datum.getFullYear()}`;
 
-    const paceModus = state.user ? PACE.getModus() : null;
     const paceHeader = (state.user && hatPaceRef) ? `
       <div class="pace-header">
-        <span class="pace-label">Persönliche Pace:</span>
-        <select class="pace-mode-sel" onchange="PACE.setModus(this.value); zeigeEinheit(${id})">
-          <option value="pb"${paceModus==='pb'?' selected':''}>Bestzeit (alle Zeiten)</option>
-          <option value="12m"${paceModus==='12m'?' selected':''}>Letzte 12 Monate</option>
-        </select>
-        ${paceData ? '' : '<span class="pace-hint">– keine Bestzeit gefunden –</span>'}
+        <span class="pace-label">Persönliche Pace</span>
+        <button class="btn btn-ghost btn-sm" onclick="PROFIL.open()" title="Pace-Referenzen konfigurieren">⚙ Profil</button>
+        ${paceData ? '' : '<span class="pace-hint">– keine Referenz konfiguriert –</span>'}
       </div>` : '';
 
     const segHtml = seg.length ? `

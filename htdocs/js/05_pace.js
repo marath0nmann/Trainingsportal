@@ -1,38 +1,56 @@
 // ============================================================
 // Trainingsportal – Pace-Engine
 // ============================================================
-// Holt persönliche Bestzeiten je Referenzdistanz vom Backend
-// (`pace/me`) und berechnet daraus Pace + Splitzeiten pro Segment.
-//
-// Modus:
-//   'pb'  → persönliche Bestzeit (Standard)
-//   '12m' → Bestzeit der letzten 12 Monate
-//
-// Modus wird im LocalStorage persistiert (pro Browser).
+// Lädt Pace-Präferenzen (pace/prefs) und löst daraus pro Distanz
+// die effektive Referenzzeit auf:
+//   modus='pb'     → Bestzeit gesamt aus dem Statistikportal
+//   modus='12m'    → Bestzeit letzte 12 Monate
+//   modus='manual' → manuell eingegebene Zeit
 // ============================================================
 
 const PACE = (() => {
 
-  let cache = { modus: null, data: null };
-  const LS_KEY = 'training_pace_modus';
+  let cache = { data: null };
 
-  function getModus() {
-    return localStorage.getItem(LS_KEY) || 'pb';
-  }
-  function setModus(m) {
-    localStorage.setItem(LS_KEY, m);
-    cache.data = null; // Invalidate
-  }
+  // Aus localStorage: für die ICS-Funktion und Rückwärtskompatibilität
+  const LS_KEY = 'training_pace_modus';
+  function getModus() { return localStorage.getItem(LS_KEY) || 'pb'; }
+  function setModus(m) { localStorage.setItem(LS_KEY, m); cache.data = null; }
+  function invalidate() { cache.data = null; }
+
+  // Distanz in Metern pro Referenzschlüssel
+  const DIST_M = { '5km': 5000, '10km': 10000, 'HM': 21097.5, 'M': 42195 };
 
   async function load(force) {
-    const modus = getModus();
-    if (!force && cache.modus === modus && cache.data) return cache.data;
+    if (!force && cache.data !== null) return cache.data;
     try {
-      const r = await apiGet('pace/me?modus=' + encodeURIComponent(modus), { silent: true });
-      cache = { modus, data: r };
-      return r;
+      const r = await apiGet('pace/prefs', { silent: true });
+      if (!r || !r.ok) { cache.data = null; return null; }
+
+      const prefs   = r.prefs    || {};
+      const distPb  = (r.distanzen && r.distanzen.pb)    || {};
+      const dist12m = (r.distanzen && r.distanzen['12m']) || {};
+
+      // Pro Referenz die effektive Zeit auflösen
+      const resolved = {};
+      for (const ref of Object.keys(DIST_M)) {
+        const p = prefs[ref] || { modus: 'pb' };
+        if (p.modus === 'manual' && p.manual_sek) {
+          resolved[ref] = { distanz_m: DIST_M[ref], sekunden: p.manual_sek, resultat: null, datum: null };
+        } else if (p.modus === '12m' && dist12m[ref]) {
+          resolved[ref] = dist12m[ref];
+        } else if (distPb[ref]) {
+          resolved[ref] = distPb[ref];
+        } else if (dist12m[ref]) {
+          resolved[ref] = dist12m[ref]; // Fallback: 12m wenn pb fehlt
+        }
+        // Kein Eintrag → kein Wert für diese Distanz
+      }
+
+      cache.data = { ok: true, distanzen: resolved };
+      return cache.data;
     } catch (e) {
-      cache = { modus, data: null };
+      cache.data = null;
       return null;
     }
   }
@@ -45,8 +63,7 @@ const PACE = (() => {
     return d.sekunden / (d.distanz_m / 1000);
   }
 
-  // Splitzeit für ein Segment (Sekunden) — wir nehmen die EINZEL-Distanz,
-  // nicht wiederholungen × distanz, weil das einer Wiederholung entspricht.
+  // Splitzeit für ein Segment (Sekunden)
   function splitzeit(seg, paceData) {
     if (!seg || !seg.pace_referenz) return null;
     const sekProKm = paceSekProKm(paceData, seg.pace_referenz);
@@ -73,5 +90,5 @@ const PACE = (() => {
     return `${m}:${String(s).padStart(2,'0')} /km`;
   }
 
-  return { load, getModus, setModus, paceSekProKm, splitzeit, formatTime, formatPace };
+  return { load, getModus, setModus, invalidate, paceSekProKm, splitzeit, formatTime, formatPace };
 })();
