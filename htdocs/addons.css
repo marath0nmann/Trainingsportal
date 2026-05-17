@@ -258,8 +258,8 @@
   padding: 4px; border-bottom: 1px solid var(--border);
 }
 .ed-seg-input {
-  width: 100%; background: var(--surface); border: 1px solid var(--border);
-  color: var(--text); border-radius: 5px; padding: 5px 7px; font-size: 13px;
+  width: 100%; background: var(--surface); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: 7px; padding: 6px 8px; font-size: 13px;
   font-family: inherit;
 }
 .ed-seg-input:focus { outline: none; border-color: var(--accent); }
@@ -275,6 +275,18 @@
 
 .ed-seghint {
   margin-top: 8px; font-size: 11px; color: var(--text2); font-style: italic;
+}
+
+.ed-titelwrap {
+  padding-top: 14px; margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.ed-titel-row {
+  display: flex; gap: 6px; align-items: center;
+}
+.ed-titel-row input { flex: 1; }
+.ed-titel-reset {
+  flex-shrink: 0; font-size: 16px; padding: 6px 10px;
 }
 
 .ed-footer {
