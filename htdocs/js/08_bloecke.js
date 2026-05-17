@@ -335,16 +335,16 @@ const BLOECKE = (() => {
     }
     const rows = editorSegmente.map((s, i) => `
       <tr>
-        <td><input type="number" min="1" value="${s.wiederholungen ?? 1}" data-i="${i}" data-f="wiederholungen" class="be-seg-input ed-seg-num"></td>
-        <td><input type="number" min="50" step="50" value="${s.distanz_m ?? ''}" data-i="${i}" data-f="distanz_m" class="be-seg-input ed-seg-dist"></td>
-        <td><input type="number" min="0" step="50" value="${s.pause_m ?? ''}" data-i="${i}" data-f="pause_m" class="be-seg-input ed-seg-dist"></td>
+        <td><input type="number" min="1" value="${s.wiederholungen ?? 1}" data-i="${i}" data-f="wiederholungen" class="ed-seg-input ed-seg-num"></td>
+        <td><input type="number" min="50" step="50" value="${s.distanz_m ?? ''}" data-i="${i}" data-f="distanz_m" class="ed-seg-input ed-seg-dist"></td>
+        <td><input type="number" min="0" step="50" value="${s.pause_m ?? ''}" data-i="${i}" data-f="pause_m" class="ed-seg-input ed-seg-dist"></td>
         <td>
-          <select data-i="${i}" data-f="pause_typ" class="be-seg-input">
+          <select data-i="${i}" data-f="pause_typ" class="ed-seg-input">
             ${PAUSE_OPTIONS.map(o => `<option value="${o.value}"${o.value === (s.pause_typ || 'TP') ? ' selected' : ''}>${o.label}</option>`).join('')}
           </select>
         </td>
         <td>
-          <select data-i="${i}" data-f="pace_referenz" class="be-seg-input">
+          <select data-i="${i}" data-f="pace_referenz" class="ed-seg-input">
             ${PARSER.PACE_OPTIONS.map(o => `<option value="${o.value}"${o.value === (s.pace_referenz || '') ? ' selected' : ''}>${o.label}</option>`).join('')}
           </select>
         </td>
@@ -359,7 +359,7 @@ const BLOECKE = (() => {
         <tbody>${rows}</tbody>
       </table>`;
 
-    wrap.querySelectorAll('.be-seg-input').forEach(el => {
+    wrap.querySelectorAll('.ed-seg-input').forEach(el => {
       el.addEventListener('change', onSegEdit);
       el.addEventListener('input',  onSegEdit);
     });
