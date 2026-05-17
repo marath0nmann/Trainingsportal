@@ -239,6 +239,18 @@
 }
 .ed-segactions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+.ed-seg-globals {
+  display: flex; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; align-items: flex-end;
+}
+.ed-seg-global-fg {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ed-seg-global-fg label {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text2);
+}
+.ed-seg-global-fg select { width: auto; min-width: 160px; }
+
 .ed-segleer {
   padding: 18px; text-align: center; color: var(--text2);
   background: var(--surf2); border: 1px dashed var(--border);

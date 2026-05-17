@@ -202,9 +202,7 @@ const BLOECKE = (() => {
       const dist = s.distanz_m != null
         ? (s.distanz_m >= 1000 ? s.distanz_m.toLocaleString('de-DE') : String(s.distanz_m))
         : '?';
-      const ptyp  = s.pause_typ || 'TP';
-      const pause = s.pause_m != null ? ` (${s.pause_m}${ptyp})` : '';
-      return `${wdh}${dist}${pause}`;
+      return `${wdh}${dist}`;
     }).join(' / ');
   }
 
@@ -246,6 +244,10 @@ const BLOECKE = (() => {
       id: null, titel: '', typ: 'intervall',
       treffpunkt: 'Sportplatz', bemerkung: '', sichtbarkeit: 'global',
     };
+    // Globale Pause-Typ / Pace-Referenz aus erstem Segment lesen
+    const initPauseTyp = editorSegmente.length ? (editorSegmente[0].pause_typ || 'TP') : 'TP';
+    const initPaceRef  = editorSegmente.length ? (editorSegmente[0].pace_referenz || '5km') : '5km';
+
     const cont = document.getElementById('modal-container');
 
     cont.innerHTML = `
@@ -286,6 +288,20 @@ const BLOECKE = (() => {
                 <h3>Segmente</h3>
                 <div class="ed-segactions">
                   <button class="btn btn-ghost" onclick="BLOECKE.segmentHinzufuegen()">+ Segment</button>
+                </div>
+              </div>
+              <div class="ed-seg-globals">
+                <div class="ed-seg-global-fg">
+                  <label>Pause-Typ</label>
+                  <select id="be-pause-typ" class="ed-seg-input">
+                    ${PAUSE_OPTIONS.map(o => `<option value="${o.value}"${o.value === initPauseTyp ? ' selected' : ''}>${o.label}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="ed-seg-global-fg">
+                  <label>Pace-Referenz</label>
+                  <select id="be-pace-ref" class="ed-seg-input">
+                    ${PARSER.PACE_OPTIONS.map(o => `<option value="${o.value}"${o.value === initPaceRef ? ' selected' : ''}>${o.label}</option>`).join('')}
+                  </select>
                 </div>
               </div>
               <div id="be-segmente-tabelle"></div>
@@ -338,23 +354,13 @@ const BLOECKE = (() => {
         <td><input type="number" min="1" value="${s.wiederholungen ?? 1}" data-i="${i}" data-f="wiederholungen" class="ed-seg-input ed-seg-num"></td>
         <td><input type="number" min="50" step="50" value="${s.distanz_m ?? ''}" data-i="${i}" data-f="distanz_m" class="ed-seg-input ed-seg-dist"></td>
         <td><input type="number" min="0" step="50" value="${s.pause_m ?? ''}" data-i="${i}" data-f="pause_m" class="ed-seg-input ed-seg-dist"></td>
-        <td>
-          <select data-i="${i}" data-f="pause_typ" class="ed-seg-input">
-            ${PAUSE_OPTIONS.map(o => `<option value="${o.value}"${o.value === (s.pause_typ || 'TP') ? ' selected' : ''}>${o.label}</option>`).join('')}
-          </select>
-        </td>
-        <td>
-          <select data-i="${i}" data-f="pace_referenz" class="ed-seg-input">
-            ${PARSER.PACE_OPTIONS.map(o => `<option value="${o.value}"${o.value === (s.pace_referenz || '') ? ' selected' : ''}>${o.label}</option>`).join('')}
-          </select>
-        </td>
         <td><button class="btn-icon" title="Segment löschen" onclick="BLOECKE.segmentLoeschen(${i})">×</button></td>
       </tr>`).join('');
 
     wrap.innerHTML = `
       <table class="ed-seg-table">
         <thead>
-          <tr><th>Wdh</th><th>Distanz (m)</th><th>Pause (m)</th><th>Pause-Typ</th><th>Pace-Referenz</th><th></th></tr>
+          <tr><th>Wdh</th><th>Distanz (m)</th><th>Pause (m)</th><th></th></tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -390,7 +396,9 @@ const BLOECKE = (() => {
   }
 
   function segmentHinzufuegen() {
-    editorSegmente.push({ wiederholungen: 1, distanz_m: 400, pause_m: 100, pause_typ: 'TP', pace_referenz: '5km', notiz: null });
+    const pauseTyp = val('be-pause-typ') || 'TP';
+    const paceRef  = val('be-pace-ref')  || null;
+    editorSegmente.push({ wiederholungen: 1, distanz_m: 400, pause_m: 100, pause_typ: pauseTyp, pace_referenz: paceRef, notiz: null });
     rendereBlockSegmente();
   }
 
@@ -400,13 +408,15 @@ const BLOECKE = (() => {
   }
 
   async function speichern(blockId) {
+    const pauseTyp = val('be-pause-typ') || 'TP';
+    const paceRef  = val('be-pace-ref')  || null;
     const payload = {
       titel:        val('be-titel'),
       typ:          val('be-typ'),
       treffpunkt:   val('be-treffpunkt') || null,
       bemerkung:    val('be-bemerkung') || null,
       sichtbarkeit: val('be-sichtbarkeit'),
-      segmente:     editorSegmente,
+      segmente:     editorSegmente.map(s => ({ ...s, pause_typ: pauseTyp, pace_referenz: paceRef })),
     };
     if (!payload.titel) { notify('Titel fehlt.', 'err'); return; }
     try {
