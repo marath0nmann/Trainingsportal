@@ -6,6 +6,9 @@
 //   modus='pb'     → Bestzeit gesamt aus dem Statistikportal
 //   modus='12m'    → Bestzeit letzte 12 Monate
 //   modus='manual' → manuell eingegebene Zeit
+//
+// Keys sind Distanzen in Metern als Strings (z.B. "5000", "10000").
+// Alte benannte Keys (5km, 10km, HM, M) werden transparent gemappt.
 // ============================================================
 
 const PACE = (() => {
@@ -18,8 +21,22 @@ const PACE = (() => {
   function setModus(m) { localStorage.setItem(LS_KEY, m); cache.data = null; }
   function invalidate() { cache.data = null; }
 
-  // Distanz in Metern pro Referenzschlüssel
-  const DIST_M = { '5km': 5000, '10km': 10000, 'HM': 21097.5, 'M': 42195 };
+  // Segments stored with old named keys get mapped to meter strings
+  const LEGACY_KEY_MAP = { '5km': '5000', '10km': '10000', 'HM': '21098', 'M': '42195' };
+
+  // Nice display label for a meter-string key
+  const KNOWN_LABELS = { '5000': '5 km', '10000': '10 km', '21098': 'Halbmarathon', '42195': 'Marathon' };
+  function fmtDistLabel(ref) {
+    if (KNOWN_LABELS[ref]) return KNOWN_LABELS[ref];
+    const m = parseFloat(ref);
+    if (!m) return ref;
+    if (m >= 1000) {
+      const km = m / 1000;
+      const s  = Number.isInteger(km) ? String(km) : km.toFixed(1).replace('.', ',');
+      return s + ' km';
+    }
+    return m + ' m';
+  }
 
   async function load(force) {
     if (!force && cache.data !== null) return cache.data;
@@ -33,10 +50,12 @@ const PACE = (() => {
 
       // Pro Referenz die effektive Zeit auflösen
       const resolved = {};
-      for (const ref of Object.keys(DIST_M)) {
+      for (const ref of Object.keys(prefs)) {
+        const distM = parseFloat(ref);
+        if (!distM) continue;
         const p = prefs[ref] || { modus: 'pb' };
         if (p.modus === 'manual' && p.manual_sek) {
-          resolved[ref] = { distanz_m: DIST_M[ref], sekunden: p.manual_sek, resultat: null, datum: null };
+          resolved[ref] = { distanz_m: distM, sekunden: p.manual_sek, resultat: null, datum: null };
         } else if (p.modus === '12m' && dist12m[ref]) {
           resolved[ref] = dist12m[ref];
         } else if (distPb[ref]) {
@@ -58,7 +77,8 @@ const PACE = (() => {
   // Sekunden pro km für eine Referenzdistanz; null wenn keine Bestzeit
   function paceSekProKm(paceData, paceRef) {
     if (!paceData || !paceData.distanzen || !paceRef) return null;
-    const d = paceData.distanzen[paceRef];
+    const ref = LEGACY_KEY_MAP[paceRef] || paceRef;
+    const d = paceData.distanzen[ref];
     if (!d || !d.sekunden || !d.distanz_m) return null;
     return d.sekunden / (d.distanz_m / 1000);
   }
@@ -69,6 +89,22 @@ const PACE = (() => {
     const sekProKm = paceSekProKm(paceData, seg.pace_referenz);
     if (!sekProKm) return null;
     return sekProKm * (seg.distanz_m / 1000);
+  }
+
+  // Options für Editor-Dropdowns (aus Cache oder Defaults)
+  function getOptions() {
+    const DEFAULTS = ['5000', '10000', '21098', '42195'];
+    let distKeys;
+    if (cache.data && cache.data.distanzen && Object.keys(cache.data.distanzen).length) {
+      distKeys = Object.keys(cache.data.distanzen).sort((a, b) => parseFloat(a) - parseFloat(b));
+    } else {
+      distKeys = DEFAULTS;
+    }
+    return [
+      { value: '',   label: '— frei —' },
+      ...distKeys.map(ref => ({ value: ref, label: fmtDistLabel(ref) })),
+      { value: 'DL', label: 'Dauerlauf' },
+    ];
   }
 
   // Format: 1234 sek → "20:34"  bzw. "1:23:45"
@@ -90,5 +126,5 @@ const PACE = (() => {
     return `${m}:${String(s).padStart(2,'0')} /km`;
   }
 
-  return { load, getModus, setModus, invalidate, paceSekProKm, splitzeit, formatTime, formatPace };
+  return { load, getModus, setModus, invalidate, paceSekProKm, splitzeit, getOptions, fmtDistLabel, formatTime, formatPace };
 })();

@@ -30,9 +30,9 @@ const PARSER = (() => {
   }
 
   function defaultPaceRef(pauseTyp) {
-    if (pauseTyp === 'GP') return '10km';
-    if (pauseTyp === 'TP') return '5km';
-    if (pauseTyp === 'BP') return '5km';
+    if (pauseTyp === 'GP') return '10000';
+    if (pauseTyp === 'TP') return '5000';
+    if (pauseTyp === 'BP') return '5000';
     return null;
   }
 
@@ -141,14 +141,14 @@ const PARSER = (() => {
     return m + ' m';
   }
 
-  // Pace-Referenz Optionen für Editor-Dropdown
+  // Pace-Referenz Optionen für Editor-Dropdown (statischer Fallback; Editor nutzt PACE.getOptions())
   const PACE_OPTIONS = [
-    { value: '',         label: '— frei —' },
-    { value: '5km',      label: '5 km'     },
-    { value: '10km',     label: '10 km'    },
-    { value: 'HM',       label: 'Halbmarathon' },
-    { value: 'M',        label: 'Marathon' },
-    { value: 'DL',       label: 'Dauerlauf' },
+    { value: '',      label: '— frei —' },
+    { value: '5000',  label: '5 km'     },
+    { value: '10000', label: '10 km'    },
+    { value: '21098', label: 'Halbmarathon' },
+    { value: '42195', label: 'Marathon' },
+    { value: 'DL',    label: 'Dauerlauf' },
   ];
 
   return { parse, formatSegment, formatDist, PACE_OPTIONS, defaultPaceRef };

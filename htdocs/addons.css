@@ -586,6 +586,16 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .profil-hint {
   font-size: 11px; color: var(--text2); font-style: italic;
 }
+.profil-ref-del {
+  flex: 0 0 auto; margin-left: auto; align-self: flex-start; margin-top: 6px;
+  font-size: 16px; line-height: 1; color: var(--text2);
+}
+.profil-ref-del:hover { color: var(--primary); }
+.profil-add-row {
+  display: flex; gap: 10px; align-items: center; margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.profil-new-dist-input { flex: 1; max-width: 280px; }
 
 /* Error-Notification (fehlte bisher) */
 .notif-err { background: var(--primary); color: white; }

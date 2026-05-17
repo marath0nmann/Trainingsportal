@@ -131,7 +131,7 @@ const EDITOR = (() => {
       wrap.innerHTML = `<div class="ed-segleer">Keine Segmente. Klick „Aus Titel parsen" oder „+ Segment".</div>`;
       return;
     }
-    const paceOpts = PARSER.PACE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    const paceOpts = PACE.getOptions().map(o => `<option value="${o.value}">${o.label}</option>`).join('');
     const rows = currentSegmente.map((s, i) => `
       <tr>
         <td><input type="number" min="1" value="${s.wiederholungen ?? 1}" data-i="${i}" data-f="wiederholungen" class="ed-seg-input ed-seg-num"></td>
@@ -144,7 +144,7 @@ const EDITOR = (() => {
         </td>
         <td>
           <select data-i="${i}" data-f="pace_referenz" class="ed-seg-input">
-            ${PARSER.PACE_OPTIONS.map(o => `<option value="${o.value}"${o.value===(s.pace_referenz||'')?' selected':''}>${o.label}</option>`).join('')}
+            ${PACE.getOptions().map(o => `<option value="${o.value}"${o.value===(s.pace_referenz||'')?' selected':''}>${o.label}</option>`).join('')}
           </select>
         </td>
         <td><button class="btn-icon" title="Segment löschen" onclick="EDITOR.segmentLoeschen(${i})">×</button></td>
@@ -193,7 +193,7 @@ const EDITOR = (() => {
   function segmentHinzufuegen() {
     currentSegmente.push({
       wiederholungen: 1, distanz_m: 400, pause_m: 100,
-      pause_typ: 'TP', pace_referenz: '5km', notiz: null,
+      pause_typ: 'TP', pace_referenz: '5000', notiz: null,
     });
     rendereSegmente();
   }

@@ -310,9 +310,12 @@ function handlePace(string $method, string $sub): void
 }
 
 // Bestzeiten je Referenzdistanz aus dem Statistikportal holen
-function fetchBestzeiten(int $athletId, string $modus): array
+// $refs: ['KEY' => distanzInMetern, ...] – wenn leer, werden Defaults verwendet
+function fetchBestzeiten(int $athletId, string $modus, array $refs = []): array
 {
-    $refs = ['5km' => 5000.0, '10km' => 10000.0, 'HM' => 21097.5, 'M' => 42195.0];
+    if (empty($refs)) {
+        $refs = ['5000' => 5000.0, '10000' => 10000.0, '21098' => 21097.5, '42195' => 42195.0];
+    }
     $datumFilter = ($modus === '12m') ? ' AND v.datum >= (CURDATE() - INTERVAL 12 MONTH)' : '';
     $out = [];
     foreach ($refs as $key => $dist) {
@@ -348,6 +351,8 @@ function fetchBestzeiten(int $athletId, string $modus): array
 }
 
 // Pace-Präferenzen aus benutzer.prefs laden (mit Defaults)
+// Keys sind Distanzen in Metern als Strings (z.B. "5000", "10000").
+// Alte benannte Keys (5km, 10km, HM, M) werden automatisch migriert.
 function ladePacePrefs(int $userId): array
 {
     $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
@@ -355,10 +360,27 @@ function ladePacePrefs(int $userId): array
     if (!is_array($prefs)) $prefs = [];
     $saved = is_array($prefs['training_pace_prefs'] ?? null) ? $prefs['training_pace_prefs'] : [];
 
-    $refs   = ['5km', '10km', 'HM', 'M'];
+    // Alte benannte Keys auf Meter-Strings migrieren
+    $keyMap = ['5km' => '5000', '10km' => '10000', 'HM' => '21098', 'M' => '42195'];
+    foreach ($keyMap as $old => $new) {
+        if (isset($saved[$old]) && !isset($saved[$new])) {
+            $saved[$new] = $saved[$old];
+        }
+        unset($saved[$old]);
+    }
+
+    // Standard-Distanzen wenn noch leer
+    if (empty($saved)) {
+        foreach (['5000', '10000', '21098', '42195'] as $d) {
+            $saved[$d] = ['modus' => 'pb', 'manual_sek' => null];
+        }
+    }
+
     $result = [];
-    foreach ($refs as $ref) {
-        $p     = is_array($saved[$ref] ?? null) ? $saved[$ref] : [];
+    foreach ($saved as $ref => $p) {
+        if (!is_numeric($ref) || (float)$ref <= 0 || (float)$ref > 200000) continue;
+        $ref = (string)(int)round((float)$ref);
+        $p   = is_array($p) ? $p : [];
         $modus = in_array($p['modus'] ?? '', ['pb', '12m', 'manual'], true) ? $p['modus'] : 'pb';
         $result[$ref] = [
             'modus'      => $modus,
@@ -387,8 +409,13 @@ function handlePacePrefsGet(int $userId, int $athletId): void
     $prefs     = ladePacePrefs($userId);
     $distanzen = [];
     if ($athletId > 0) {
-        $distanzen['pb']  = fetchBestzeiten($athletId, 'pb');
-        $distanzen['12m'] = fetchBestzeiten($athletId, '12m');
+        // Refs-Map aus konfigurierten Distanzen aufbauen
+        $refsMap = [];
+        foreach ($prefs as $key => $p) {
+            $refsMap[$key] = (float)$key;
+        }
+        $distanzen['pb']  = fetchBestzeiten($athletId, 'pb',  $refsMap);
+        $distanzen['12m'] = fetchBestzeiten($athletId, '12m', $refsMap);
     }
     echo json_encode([
         'ok'         => true,
@@ -407,10 +434,11 @@ function handlePacePrefsSet(int $userId): void
         echo json_encode(['ok' => false, 'fehler' => 'Ungültige Daten']);
         return;
     }
-    $refs      = ['5km', '10km', 'HM', 'M'];
     $validated = [];
-    foreach ($refs as $ref) {
-        $p      = is_array($body['prefs'][$ref] ?? null) ? $body['prefs'][$ref] : [];
+    foreach ($body['prefs'] as $ref => $p) {
+        if (!is_numeric($ref) || (float)$ref <= 0 || (float)$ref > 200000) continue;
+        $ref    = (string)(int)round((float)$ref);
+        $p      = is_array($p) ? $p : [];
         $modus  = in_array($p['modus'] ?? '', ['pb', '12m', 'manual'], true) ? $p['modus'] : 'pb';
         $manSek = (isset($p['manual_sek']) && is_numeric($p['manual_sek']) && (float)$p['manual_sek'] > 0)
             ? (float)$p['manual_sek'] : null;
