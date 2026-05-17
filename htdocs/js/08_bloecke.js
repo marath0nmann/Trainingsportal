@@ -246,7 +246,7 @@ const BLOECKE = (() => {
     };
     // Globale Pause-Typ / Pace-Referenz aus erstem Segment lesen
     const initPauseTyp = editorSegmente.length ? (editorSegmente[0].pause_typ || 'TP') : 'TP';
-    const initPaceRef  = editorSegmente.length ? (editorSegmente[0].pace_referenz || '5km') : '5km';
+    const initPaceRef  = editorSegmente.length ? (editorSegmente[0].pace_referenz || '5000') : '5000';
 
     const cont = document.getElementById('modal-container');
 
@@ -300,7 +300,7 @@ const BLOECKE = (() => {
                 <div class="ed-seg-global-fg">
                   <label>Pace-Referenz</label>
                   <select id="be-pace-ref" class="ed-seg-input">
-                    ${PARSER.PACE_OPTIONS.map(o => `<option value="${o.value}"${o.value === initPaceRef ? ' selected' : ''}>${o.label}</option>`).join('')}
+                    ${PACE.getOptions().map(o => `<option value="${o.value}"${o.value === initPaceRef ? ' selected' : ''}>${o.label}</option>`).join('')}
                   </select>
                 </div>
               </div>

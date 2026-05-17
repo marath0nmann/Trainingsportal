@@ -2,7 +2,8 @@
 // Trainingsportal – Profil-Modal (Pace-Referenzen)
 // ============================================================
 // Öffnet sich per Klick auf den Avatar (oben rechts).
-// Zeigt Pace-Referenzkonfiguration pro Distanz:
+// Zeigt Pace-Referenzkonfiguration für frei wählbare Distanzen:
+//   - Distanz in Metern (z.B. 5000 = alle 5-km-Ergebnisse)
 //   - Bestzeit gesamt (aus Statistikportal, nur wenn vorhanden)
 //   - Bestzeit letzte 12 Monate (aus Statistikportal, nur wenn vorhanden)
 //   - Manuelle Eingabe
@@ -10,11 +11,8 @@
 
 const PROFIL = (() => {
 
-  const REFS      = ['5km', '10km', 'HM', 'M'];
-  const REF_LABEL = { '5km': '5 km', '10km': '10 km', 'HM': 'Halbmarathon', 'M': 'Marathon' };
-  const REF_DIST  = { '5km': 5000, '10km': 10000, 'HM': 21097.5, 'M': 42195 };
-
-  let _prefsData = null;
+  let _prefsData  = null;
+  let _localPrefs = {}; // Arbeitskopie während der Bearbeitung
 
   async function open() {
     if (!state.user) return;
@@ -37,7 +35,8 @@ const PROFIL = (() => {
         '</div>';
       return;
     }
-    renderModal(cont);
+    _localPrefs = JSON.parse(JSON.stringify(_prefsData.prefs || {}));
+    _renderModal(cont);
   }
 
   function fmtDatum(d) {
@@ -46,64 +45,74 @@ const PROFIL = (() => {
     return `${day}.${m}.${y}`;
   }
 
-  function renderModal(cont) {
-    const prefs    = _prefsData.prefs    || {};
+  function _buildRefRow(ref) {
     const distPb   = (_prefsData.distanzen && _prefsData.distanzen.pb)    || {};
     const dist12m  = (_prefsData.distanzen && _prefsData.distanzen['12m']) || {};
     const hatAthlet = !!_prefsData.hat_athlet;
 
-    const refRows = REFS.map(ref => {
-      const p      = prefs[ref] || { modus: 'pb', manual_sek: null };
-      const pb     = distPb[ref];
-      const m12    = dist12m[ref];
-      const manSek = p.manual_sek || null;
+    const p      = _localPrefs[ref] || { modus: 'pb', manual_sek: null };
+    const pb     = distPb[ref];
+    const m12    = dist12m[ref];
+    const manSek = p.manual_sek || null;
 
-      // Nur verfügbare Optionen anzeigen
-      let opts = '';
-      if (pb) {
-        const pbInfo = `${escapeHtml(pb.resultat)} · ${fmtDatum(pb.datum)}${pb.wettkampf ? ' · ' + escapeHtml(pb.wettkampf) : ''}`;
-        opts += `<option value="pb">Bestzeit gesamt – ${pbInfo}</option>`;
-      }
-      if (m12) {
-        const m12Info = `${escapeHtml(m12.resultat)} · ${fmtDatum(m12.datum)}${m12.wettkampf ? ' · ' + escapeHtml(m12.wettkampf) : ''}`;
-        opts += `<option value="12m">Letzte 12 Monate – ${m12Info}</option>`;
-      }
-      opts += `<option value="manual">Manuelle Eingabe</option>`;
+    // Effektiven Modus bestimmen
+    let selVal = 'manual';
+    if      (p.modus === 'pb'  && pb)  selVal = 'pb';
+    else if (p.modus === '12m' && m12) selVal = '12m';
+    else if (p.modus === 'pb'  && m12) selVal = '12m'; // pb gewählt, aber nur 12m verfügbar
+    else if (pb)                        selVal = 'pb';
+    else if (m12)                       selVal = '12m';
 
-      // Effektiven aktuellen Modus bestimmen
-      let selVal = 'manual';
-      if      (p.modus === 'pb'  && pb)  selVal = 'pb';
-      else if (p.modus === '12m' && m12) selVal = '12m';
-      else if (p.modus === 'pb'  && m12) selVal = '12m'; // pb gewählt, aber nur 12m verfügbar
-      else if (pb)                       selVal = 'pb';
-      else if (m12)                      selVal = '12m';
+    let opts = '';
+    if (pb) {
+      const pbInfo = `${escapeHtml(pb.resultat)} · ${fmtDatum(pb.datum)}${pb.wettkampf ? ' · ' + escapeHtml(pb.wettkampf) : ''}`;
+      opts += `<option value="pb"${selVal === 'pb' ? ' selected' : ''}>Bestzeit gesamt – ${pbInfo}</option>`;
+    }
+    if (m12) {
+      const m12Info = `${escapeHtml(m12.resultat)} · ${fmtDatum(m12.datum)}${m12.wettkampf ? ' · ' + escapeHtml(m12.wettkampf) : ''}`;
+      opts += `<option value="12m"${selVal === '12m' ? ' selected' : ''}>Letzte 12 Monate – ${m12Info}</option>`;
+    }
+    opts += `<option value="manual"${selVal === 'manual' ? ' selected' : ''}>Manuelle Eingabe</option>`;
 
-      const manVisible  = selVal === 'manual';
-      const manVal      = manSek ? PACE.formatTime(manSek) : '';
+    const manVisible = selVal === 'manual';
+    const manVal     = manSek ? PACE.formatTime(manSek) : '';
 
-      const noDataHint  = !hatAthlet
-        ? '<div class="profil-hint">Kein Athletenprofil verknüpft – nur manuelle Eingabe möglich.</div>'
-        : (!pb && !m12
-            ? '<div class="profil-hint">Keine Bestzeiten für ' + escapeHtml(REF_LABEL[ref]) + ' im Statistikportal gefunden.</div>'
-            : '');
+    const noDataHint = !hatAthlet
+      ? '<div class="profil-hint">Kein Athletenprofil verknüpft – nur manuelle Eingabe möglich.</div>'
+      : (!pb && !m12
+          ? '<div class="profil-hint">Keine Ergebnisse für diese Distanz im Statistikportal gefunden.</div>'
+          : '');
 
-      return `
-        <div class="profil-ref-row">
-          <div class="profil-ref-label">${escapeHtml(REF_LABEL[ref])}</div>
-          <div class="profil-ref-controls">
-            <select class="settings-input profil-modus-sel" data-ref="${ref}"
-                    onchange="PROFIL._onModusChange('${ref}', this.value)">${opts}</select>
-            <div class="profil-manual-wrap" id="profil-manual-${ref}"${manVisible ? '' : ' style="display:none"'}>
-              <input type="text" id="profil-manual-input-${ref}"
-                     class="settings-input profil-manual-input"
-                     placeholder="MM:SS oder H:MM:SS"
-                     value="${escapeHtml(manVal)}">
-              <span class="profil-hint">z.&nbsp;B. &nbsp;20:30 &nbsp;oder &nbsp;1:45:00</span>
-            </div>
-            ${noDataHint}
+    const safeRef = escapeHtml(ref);
+    return `
+      <div class="profil-ref-row" id="profil-row-${safeRef}">
+        <div class="profil-ref-label">${escapeHtml(PACE.fmtDistLabel(ref))}</div>
+        <div class="profil-ref-controls">
+          <select class="settings-input profil-modus-sel" data-ref="${safeRef}"
+                  onchange="PROFIL._onModusChange('${safeRef}', this.value)">${opts}</select>
+          <div class="profil-manual-wrap" id="profil-manual-${safeRef}"${manVisible ? '' : ' style="display:none"'}>
+            <input type="text" id="profil-manual-input-${safeRef}"
+                   class="settings-input profil-manual-input"
+                   placeholder="MM:SS oder H:MM:SS"
+                   value="${escapeHtml(manVal)}">
+            <span class="profil-hint">z.&nbsp;B. &nbsp;20:30 &nbsp;oder &nbsp;1:45:00</span>
           </div>
-        </div>`;
-    }).join('');
+          ${noDataHint}
+        </div>
+        <button class="btn-icon profil-ref-del" onclick="PROFIL._distanzEntfernen('${safeRef}')"
+                title="Distanz entfernen">×</button>
+      </div>`;
+  }
+
+  function _renderRefsList() {
+    const listEl = document.getElementById('profil-refs-list');
+    if (!listEl) return;
+    const refs = Object.keys(_localPrefs).sort((a, b) => parseFloat(a) - parseFloat(b));
+    listEl.innerHTML = refs.map(ref => _buildRefRow(ref)).join('');
+  }
+
+  function _renderModal(cont) {
+    const refs = Object.keys(_localPrefs).sort((a, b) => parseFloat(a) - parseFloat(b));
 
     cont.innerHTML = `
       <div class="modal-overlay" onclick="schliesseModal(event)">
@@ -119,10 +128,17 @@ const PROFIL = (() => {
           <div class="modal-body">
             <div class="profil-section-title">Pace-Referenzen</div>
             <p class="profil-hint-global">
-              Wähle pro Distanz, welche Zeit als Referenz für die Pace-Berechnung im Trainingsplan verwendet wird.
-              Bestzeiten werden automatisch aus dem Statistikportal übernommen.
+              Gib die Distanzen in Metern an, für die du Pace-Referenzen verwenden möchtest.
+              Die Referenz findet automatisch alle Wettkampfergebnisse über die exakt gleiche Streckenlänge.
             </p>
-            <div class="profil-refs">${refRows}</div>
+            <div id="profil-refs-list">
+              ${refs.map(ref => _buildRefRow(ref)).join('')}
+            </div>
+            <div class="profil-add-row">
+              <input type="number" id="profil-new-dist" class="settings-input profil-new-dist-input"
+                     placeholder="Distanz in Meter (z. B. 5000)" min="100" max="200000" step="1">
+              <button class="btn btn-ghost btn-sm" onclick="PROFIL._distanzHinzufuegen()">+ Hinzufügen</button>
+            </div>
             <div class="modal-actions">
               <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
               <button class="btn btn-primary" onclick="PROFIL.speichern()">Speichern</button>
@@ -130,27 +146,35 @@ const PROFIL = (() => {
           </div>
         </div>
       </div>`;
-
-    // Select-Werte setzen (nach DOM-Render)
-    REFS.forEach(ref => {
-      const p   = prefs[ref] || { modus: 'pb' };
-      const pb  = distPb[ref];
-      const m12 = dist12m[ref];
-      const sel = document.querySelector(`.profil-modus-sel[data-ref="${ref}"]`);
-      if (!sel) return;
-      let selVal = 'manual';
-      if      (p.modus === 'pb'  && pb)  selVal = 'pb';
-      else if (p.modus === '12m' && m12) selVal = '12m';
-      else if (p.modus === 'pb'  && m12) selVal = '12m';
-      else if (pb)                       selVal = 'pb';
-      else if (m12)                      selVal = '12m';
-      sel.value = selVal;
-    });
   }
 
   function _onModusChange(ref, val) {
     const wrap = document.getElementById('profil-manual-' + ref);
     if (wrap) wrap.style.display = val === 'manual' ? '' : 'none';
+  }
+
+  function _distanzHinzufuegen() {
+    const inp = document.getElementById('profil-new-dist');
+    if (!inp) return;
+    const v = parseInt(inp.value, 10);
+    if (!v || v < 100 || v > 200000) {
+      _notify('Ungültige Distanz (100 – 200.000 m)', 'err');
+      return;
+    }
+    const ref = String(v);
+    if (_localPrefs[ref]) {
+      _notify('Diese Distanz ist bereits konfiguriert.', 'warn');
+      return;
+    }
+    _localPrefs[ref] = { modus: 'pb', manual_sek: null };
+    inp.value = '';
+    _renderRefsList();
+  }
+
+  function _distanzEntfernen(ref) {
+    delete _localPrefs[ref];
+    const row = document.getElementById('profil-row-' + ref);
+    if (row) row.remove();
   }
 
   function _parseZeit(s) {
@@ -164,7 +188,7 @@ const PROFIL = (() => {
 
   async function speichern() {
     const newPrefs = {};
-    for (const ref of REFS) {
+    for (const ref of Object.keys(_localPrefs)) {
       const sel = document.querySelector(`.profil-modus-sel[data-ref="${ref}"]`);
       if (!sel) continue;
       const modus = sel.value;
@@ -196,5 +220,5 @@ const PROFIL = (() => {
     setTimeout(() => div.remove(), 3500);
   }
 
-  return { open, speichern, _onModusChange };
+  return { open, speichern, _onModusChange, _distanzHinzufuegen, _distanzEntfernen };
 })();
