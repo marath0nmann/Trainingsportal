@@ -17,3 +17,7 @@ COMMIT_EDITMSG
 .idea/
 *.swp
 *.swo
+
+# Claude Code – lokale Worktrees und persönliche Einstellungen
+.claude/worktrees/
+.claude/settings.local.json
