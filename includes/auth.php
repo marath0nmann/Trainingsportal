@@ -310,7 +310,7 @@ class Auth {
         $row = [];
         try {
             $row = DB::fetchOne(
-                'SELECT b.avatar_pfad, b.athlet_id, b.benutzername, b.name, b.email,' .
+                'SELECT b.avatar_pfad, b.athlet_id, b.benutzername, b.email,' .
                 ' a.vorname, a.nachname' .
                 ' FROM ' . DB::tbl('benutzer') . ' b' .
                 ' LEFT JOIN ' . DB::tbl('athleten') . ' a ON a.id = b.athlet_id' .
