@@ -108,8 +108,6 @@ function handleAuth(string $method, string $sub): void
                     'email'        => $user['email'] ?? null,
                     'rolle'        => $user['rolle'] ?? null,
                     'avatar_pfad'  => $user['avatar_pfad'] ?? null,
-                    'vorname'      => $user['vorname'] ?? null,
-                    'nachname'     => $user['nachname'] ?? null,
                 ],
             ]);
             return;
@@ -352,11 +350,13 @@ function fetchBestzeiten(int $athletId, string $modus, array $refs = []): array
     return $out;
 }
 
-// Pace-Präferenzen aus benutzer.prefs laden (mit Defaults)
-// Keys sind Distanzen in Metern als Strings (z.B. "5000", "10000").
-// Alte benannte Keys (5km, 10km, HM, M) werden automatisch migriert.
+// Pace-Präferenzen aus benutzer.prefs laden.
+// Maßgeblich sind ausschließlich die Admin-konfigurierten Distanzen.
+// Alte benannte Keys (5km, 10km, HM, M) werden bei Fund migriert.
 function ladePacePrefs(int $userId): array
 {
+    $adminDists = ladeAdminPaceDistanzen();
+
     $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
     $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
     if (!is_array($prefs)) $prefs = [];
@@ -371,18 +371,10 @@ function ladePacePrefs(int $userId): array
         unset($saved[$old]);
     }
 
-    // Standard-Distanzen wenn noch leer
-    if (empty($saved)) {
-        foreach (['5000', '10000', '21098', '42195'] as $d) {
-            $saved[$d] = ['modus' => 'pb', 'manual_sek' => null];
-        }
-    }
-
+    // Nur Admin-Distanzen ausgeben, fehlende mit Defaults füllen
     $result = [];
-    foreach ($saved as $ref => $p) {
-        if (!is_numeric($ref) || (float)$ref <= 0 || (float)$ref > 200000) continue;
-        $ref = (string)(int)round((float)$ref);
-        $p   = is_array($p) ? $p : [];
+    foreach ($adminDists as $ref) {
+        $p     = is_array($saved[$ref] ?? null) ? $saved[$ref] : [];
         $modus = in_array($p['modus'] ?? '', ['pb', '12m', 'manual'], true) ? $p['modus'] : 'pb';
         $result[$ref] = [
             'modus'      => $modus,
@@ -405,13 +397,13 @@ function speicherePacePrefs(int $userId, array $prefs): void
     );
 }
 
-// GET pace/prefs → Prefs + verfügbare Bestzeiten
+// GET pace/prefs → Prefs + verfügbare Bestzeiten + Admin-Distanzliste
 function handlePacePrefsGet(int $userId, int $athletId): void
 {
-    $prefs     = ladePacePrefs($userId);
-    $distanzen = [];
+    $prefs      = ladePacePrefs($userId);
+    $adminDists = ladeAdminPaceDistanzen();
+    $distanzen  = [];
     if ($athletId > 0) {
-        // Refs-Map aus konfigurierten Distanzen aufbauen
         $refsMap = [];
         foreach ($prefs as $key => $p) {
             $refsMap[$key] = (float)$key;
@@ -423,11 +415,12 @@ function handlePacePrefsGet(int $userId, int $athletId): void
         'ok'         => true,
         'prefs'      => $prefs,
         'distanzen'  => $distanzen,
+        'dist_admin' => $adminDists,
         'hat_athlet' => $athletId > 0,
     ]);
 }
 
-// PUT pace/prefs → Prefs speichern
+// PUT pace/prefs → Prefs speichern (nur Admin-Distanzen erlaubt)
 function handlePacePrefsSet(int $userId): void
 {
     $body = json_decode((string)file_get_contents('php://input'), true);
@@ -436,10 +429,12 @@ function handlePacePrefsSet(int $userId): void
         echo json_encode(['ok' => false, 'fehler' => 'Ungültige Daten']);
         return;
     }
-    $validated = [];
+    $adminAllowed = array_flip(ladeAdminPaceDistanzen());
+    $validated    = [];
     foreach ($body['prefs'] as $ref => $p) {
         if (!is_numeric($ref) || (float)$ref <= 0 || (float)$ref > 200000) continue;
-        $ref    = (string)(int)round((float)$ref);
+        $ref = (string)(int)round((float)$ref);
+        if (!isset($adminAllowed[$ref])) continue; // nur Admin-Distanzen speichern
         $p      = is_array($p) ? $p : [];
         $modus  = in_array($p['modus'] ?? '', ['pb', '12m', 'manual'], true) ? $p['modus'] : 'pb';
         $manSek = (isset($p['manual_sek']) && is_numeric($p['manual_sek']) && (float)$p['manual_sek'] > 0)
@@ -478,7 +473,35 @@ function trainingSettingsKeys(): array {
             'beschreibung' => 'Wird im ICS-Export für DTEND benutzt, wenn Uhrzeit gesetzt ist',
             'default'  => '90',
         ],
+        'training_pace_distanzen' => [
+            'label'    => 'Pace-Referenz-Distanzen',
+            'gruppe'   => 'training',
+            'beschreibung' => 'JSON-Array der Distanzen in Metern, die als Pace-Referenz angeboten werden, z. B. [5000,10000,21098,42195]',
+            'default'  => '[5000,10000,21098,42195]',
+        ],
     ];
+}
+
+// Admin-konfigurierte Pace-Distanzen laden (Meter-Strings, sortiert)
+function ladeAdminPaceDistanzen(): array
+{
+    $raw = Settings::get('training_pace_distanzen', '');
+    if ($raw !== '') {
+        $j = json_decode($raw, true);
+        if (is_array($j)) {
+            $result = [];
+            foreach ($j as $v) {
+                if (is_numeric($v) && (float)$v > 0 && (float)$v <= 200000) {
+                    $result[] = (string)(int)round((float)$v);
+                }
+            }
+            if (!empty($result)) {
+                usort($result, fn($a, $b) => (float)$a <=> (float)$b);
+                return $result;
+            }
+        }
+    }
+    return ['5000', '10000', '21098', '42195']; // Fallback-Defaults
 }
 
 function handleAdmin(string $method, string $sub): void {

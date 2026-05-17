@@ -11,6 +11,7 @@ const SETTINGS = (() => {
 
   let felder = [];
   let feiertage = [];
+  let paceDistanzen = [];
 
   async function render(main) {
     if (!state.user || state.user.rolle !== 'admin') {
@@ -27,6 +28,7 @@ const SETTINGS = (() => {
       const r = await apiGet('admin/settings', { silent: true });
       felder = r.felder || [];
       feiertage = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
+      paceDistanzen = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
       rendereForm(main);
     } catch (e) {
       main.innerHTML = '<div style="max-width:680px;margin:24px auto;padding:0 16px">' +
@@ -38,6 +40,16 @@ const SETTINGS = (() => {
   function getWert(key) {
     const f = felder.find(x => x.key === key);
     return f ? f.wert : '';
+  }
+
+  function parsePaceDistanzenJson(raw) {
+    if (!raw) return [5000, 10000, 21098, 42195];
+    try {
+      const j = JSON.parse(raw);
+      if (!Array.isArray(j)) return [5000, 10000, 21098, 42195];
+      const r = j.map(v => parseInt(v, 10)).filter(v => v > 0 && v <= 200000);
+      return r.length ? r : [5000, 10000, 21098, 42195];
+    } catch (e) { return [5000, 10000, 21098, 42195]; }
   }
 
   function parseFeiertageJson(raw) {
@@ -107,6 +119,32 @@ const SETTINGS = (() => {
         '</div>' +
       '</div>' +
 
+      // ── Pace-Referenz-Distanzen ──
+      '<div class="panel">' +
+        '<div class="panel-header">' +
+          '<div class="panel-title">🏃 Pace-Referenz-Distanzen</div>' +
+          '<button class="btn btn-primary btn-sm" onclick="SETTINGS.paceDistanzHinzufuegen()">+ Distanz</button>' +
+        '</div>' +
+        '<div class="settings-panel-body">' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Verfügbare Distanzen</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
+                'Distanzen in Metern, die Athleten als Pace-Referenz auswählen können. ' +
+                'Beispiel: 5000 findet alle 5-km-Ergebnisse (5 km Straße und 5.000 m Bahn).' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<div id="pace-dist-liste"></div>' +
+              '<div class="pace-dist-add-row" style="display:flex;gap:8px;align-items:center;margin-top:10px">' +
+                '<input type="number" id="pace-dist-neu" class="settings-input" placeholder="Meter (z. B. 3000)" min="100" max="200000" step="1" style="width:200px">' +
+                '<button class="btn btn-ghost btn-sm" onclick="SETTINGS.paceDistanzHinzufuegen()">Hinzufügen</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
       // ── Migration: Einheiten → Blöcke ──
       '<div class="panel">' +
         '<div class="panel-header"><div class="panel-title">🔄 Migration: Einheiten → Trainingsblöcke</div></div>' +
@@ -157,6 +195,24 @@ const SETTINGS = (() => {
       '</div>';
 
     rendereFeiertage();
+    renderePaceDistanzen();
+  }
+
+  function renderePaceDistanzen() {
+    const wrap = document.getElementById('pace-dist-liste');
+    if (!wrap) return;
+    if (!paceDistanzen.length) {
+      wrap.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:13px">Keine Distanzen konfiguriert.</div>';
+      return;
+    }
+    const LABELS = { 5000: '5 km', 10000: '10 km', 21098: 'Halbmarathon', 42195: 'Marathon' };
+    wrap.innerHTML = paceDistanzen.map((m, i) => {
+      const label = LABELS[m] ? ` <span style="color:var(--text2);font-size:12px">(${LABELS[m]})</span>` : '';
+      return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
+        '<span style="font-size:13px;font-weight:600;min-width:80px">' + escapeHtml(String(m)) + ' m' + label + '</span>' +
+        '<button class="btn" style="padding:2px 8px;font-size:14px;line-height:1" onclick="SETTINGS.paceDistanzEntfernen(' + i + ')" title="Entfernen">×</button>' +
+      '</div>';
+    }).join('');
   }
 
   function rendereFeiertage() {
@@ -209,6 +265,21 @@ const SETTINGS = (() => {
     rendereFeiertage();
   }
 
+  function paceDistanzHinzufuegen() {
+    const inp = document.getElementById('pace-dist-neu');
+    const v = parseInt(inp ? inp.value : '', 10);
+    if (!v || v < 100 || v > 200000) { benachrichtigen('Ungültige Distanz (100–200.000 m)', 'err'); return; }
+    if (paceDistanzen.includes(v)) { benachrichtigen('Distanz bereits vorhanden.', 'warn'); return; }
+    paceDistanzen.push(v);
+    paceDistanzen.sort((a, b) => a - b);
+    if (inp) inp.value = '';
+    renderePaceDistanzen();
+  }
+  function paceDistanzEntfernen(i) {
+    paceDistanzen.splice(i, 1);
+    renderePaceDistanzen();
+  }
+
   async function speichern() {
     const liste = feiertage
       .map(f => ({ url: (f.url || '').trim(), label: (f.label || '').trim(), farbe: (f.farbe || '').trim() }))
@@ -218,6 +289,7 @@ const SETTINGS = (() => {
       werte: {
         training_feiertage_ics_urls: JSON.stringify(liste),
         training_default_dauer_min:  document.getElementById('set-dauer').value || '90',
+        training_pace_distanzen:     JSON.stringify(paceDistanzen),
       },
     };
     try {
@@ -317,5 +389,6 @@ const SETTINGS = (() => {
     }
   }
 
-  return { render, hinzufuegen, entfernen, beispiel, speichern, diagnose, migrieren };
+  return { render, hinzufuegen, entfernen, beispiel, speichern, diagnose, migrieren,
+           paceDistanzHinzufuegen, paceDistanzEntfernen };
 })();
