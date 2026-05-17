@@ -306,17 +306,20 @@ class Auth {
                 $_SESSION['_last_ping'] = time();
             } catch (\Exception $e) {}
         }
-        // avatar_pfad frisch aus DB (Spalte existiert ggf. erst nach Migration)
-        $avatar = null;
+        // avatar_pfad + athlet_id frisch aus DB (Spalten ggf. erst nach Migration vorhanden)
+        $avatar   = null;
+        $athletId = null;
         try {
-            $row = DB::fetchOne('SELECT avatar_pfad FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$_SESSION['user_id']]);
-            $avatar = $row['avatar_pfad'] ?? null;
+            $row = DB::fetchOne('SELECT avatar_pfad, athlet_id FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$_SESSION['user_id']]);
+            $avatar   = $row['avatar_pfad'] ?? null;
+            $athletId = isset($row['athlet_id']) ? (int)$row['athlet_id'] : null;
         } catch (\Exception $e) {}
         return [
-            'id'     => $_SESSION['user_id'],
-            'name'   => $_SESSION['user_name'],
-            'rolle'  => $_SESSION['user_rolle'],
-            'avatar' => $avatar,
+            'id'        => $_SESSION['user_id'],
+            'name'      => $_SESSION['user_name'],
+            'rolle'     => $_SESSION['user_rolle'],
+            'avatar'    => $avatar,
+            'athlet_id' => $athletId,
         ];
     }
 
