@@ -259,12 +259,26 @@
 }
 .ed-seg-input {
   width: 100%; background: var(--surface); border: 1.5px solid var(--border);
-  color: var(--text); border-radius: 7px; padding: 6px 8px; font-size: 13px;
-  font-family: inherit;
+  color: var(--text); border-radius: 7px; padding: 0 8px; font-size: 13px;
+  font-family: inherit; height: 36px; box-sizing: border-box;
 }
 .ed-seg-input:focus { outline: none; border-color: var(--accent); }
 .ed-seg-num  { width: 60px; }
 .ed-seg-dist { width: 90px; }
+
+/* Selects: einheitlicher heller Pfeil im Darkmode */
+select.ed-seg-input {
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a0a8be' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+  padding-right: 28px; cursor: pointer;
+}
+
+/* Number-Spinner hell im Darkmode */
+input[type=number].ed-seg-input::-webkit-inner-spin-button,
+input[type=number].ed-seg-input::-webkit-outer-spin-button {
+  opacity: 1; filter: brightness(8);
+}
 
 .btn-icon {
   background: transparent; border: none; color: var(--text2);
