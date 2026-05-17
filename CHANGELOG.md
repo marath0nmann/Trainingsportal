@@ -1,5 +1,14 @@
 # Changelog
 
+## v34
+- Trainingstypen in Einstellungen konfigurierbar: Neue Tabelle `training_typen` (Slug, Bezeichnung, Farbe, Reihenfolge, Aktiv); SQL-Migration `migration_v30_typen.sql`
+- Admin-Panel „Trainingstypen": Typen anlegen, umbenennen, Farbe/Reihenfolge/Aktiv-Status ändern, löschen (nur wenn keine Blöcke zugeordnet); Spalte „Blöcke" zeigt Anzahl pro Typ
+- Neue API-Endpunkte: `GET /typen` (öffentlich), `GET|POST|PUT|DELETE admin/typen/{slug}`
+- `GET /config` liefert jetzt `typen`-Array → Editor und Blöcke-Seite verwenden dynamische Typen ohne Extra-Request
+- Trainingsblöcke-Seite gruppiert Blöcke nach Trainingstyp (statt Global/Privat als Primärgruppe); Anzahl-Badge pro Typ-Abschnitt
+- Typ-Auswahl in Block-Editor und Trainingseinheits-Editor liest Typen aus `appConfig.typen`; Fallback auf hardcodierte Werte
+- `typ`-Spalten in `training_bloecke` und `training_einheiten` von ENUM auf VARCHAR(40) migriert
+
 ## v33
 - Fix: `.settings-row-label` bekommt `flex-shrink:0; min-width:180px` – verhindert Schrumpfen der Label-Spalte auf Wortbreite
 
