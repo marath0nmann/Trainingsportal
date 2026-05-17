@@ -193,6 +193,32 @@ const BLOECKE = (() => {
 
   // ── Block-Editor ──────────────────────────────────────────
   let editorSegmente = [];
+  let titelManuellBearbeitet = false;
+
+  function generiereBlockTitel(segs) {
+    if (!segs || !segs.length) return '';
+    return segs.map(s => {
+      const wdh  = (s.wiederholungen && s.wiederholungen > 1) ? `${s.wiederholungen} × ` : '';
+      const dist = s.distanz_m != null
+        ? (s.distanz_m >= 1000 ? s.distanz_m.toLocaleString('de-DE') : String(s.distanz_m))
+        : '?';
+      const ptyp  = s.pause_typ || 'TP';
+      const pause = s.pause_m != null ? ` (${s.pause_m}${ptyp})` : '';
+      return `${wdh}${dist}${pause}`;
+    }).join(' / ');
+  }
+
+  function aktualisiereBlockTitelFeld() {
+    if (titelManuellBearbeitet) return;
+    const el = document.getElementById('be-titel');
+    if (!el) return;
+    el.value = generiereBlockTitel(editorSegmente);
+  }
+
+  function titelNeuGenerieren() {
+    titelManuellBearbeitet = false;
+    aktualisiereBlockTitelFeld();
+  }
 
   function neuerBlock() { openBlockEditor(null, []); }
 
@@ -208,11 +234,14 @@ const BLOECKE = (() => {
   function openBlockEditor(block, segmente) {
     const istNeu = !block;
     editorSegmente = (segmente || []).map(s => ({ ...s }));
-    // Titel automatisch parsen wenn noch keine Segmente vorhanden
+    // Segmente aus Titel parsen falls noch keine vorhanden
     if (!editorSegmente.length && block && block.titel) {
       const parsed = PARSER.parse(block.titel);
       if (parsed.length) editorSegmente = parsed;
     }
+    // Titel für bestehende Blöcke schützen; für neue Blöcke auto-generieren
+    titelManuellBearbeitet = !istNeu;
+
     const b = block || {
       id: null, titel: '', typ: 'intervall',
       treffpunkt: 'Sportplatz', bemerkung: '', sichtbarkeit: 'global',
@@ -242,10 +271,6 @@ const BLOECKE = (() => {
                   <option value="privat"${b.sichtbarkeit === 'privat' ? ' selected' : ''}>Privat (nur ich)</option>
                 </select>
               </div>
-              <div class="ed-fg ed-fg-wide">
-                <label>Titel / Kurzschrift <span class="ed-hint">(z. B. „12 x 400 m (100GP)")</span></label>
-                <input type="text" id="be-titel" value="${escapeHtml(b.titel || '')}" placeholder="z. B. 8 x 600 m (100TP)">
-              </div>
               <div class="ed-fg">
                 <label>Treffpunkt</label>
                 <input type="text" id="be-treffpunkt" value="${escapeHtml(b.treffpunkt || '')}">
@@ -260,13 +285,22 @@ const BLOECKE = (() => {
               <div class="ed-segheader">
                 <h3>Segmente</h3>
                 <div class="ed-segactions">
-                  <button class="btn btn-ghost" onclick="BLOECKE.parsenAusTitel()">Aus Titel parsen</button>
                   <button class="btn btn-ghost" onclick="BLOECKE.segmentHinzufuegen()">+ Segment</button>
                 </div>
               </div>
               <div id="be-segmente-tabelle"></div>
               <div class="ed-seghint">
                 Pause in Metern · TP/GP/BP = Trab-/Geh-/Blockpause · Pace-Referenz für persönliche Pace im Athleten-View
+              </div>
+            </div>
+
+            <div class="ed-titelwrap">
+              <div class="ed-fg">
+                <label>Titel / Kurzschrift <span class="ed-hint">(automatisch aus Segmenten – kann überschrieben werden)</span></label>
+                <div class="ed-titel-row">
+                  <input type="text" id="be-titel" value="${escapeHtml(b.titel || '')}" placeholder="Wird aus Segmenten generiert…">
+                  <button class="btn btn-ghost btn-sm ed-titel-reset" onclick="BLOECKE.titelNeuGenerieren()" title="Titel aus Segmenten neu generieren">↺</button>
+                </div>
               </div>
             </div>
 
@@ -282,6 +316,12 @@ const BLOECKE = (() => {
           </div>
         </div>
       </div>`;
+
+    // Manuelles Bearbeiten des Titels deaktiviert Auto-Generierung
+    const titelEl = document.getElementById('be-titel');
+    if (titelEl) {
+      titelEl.addEventListener('input', () => { titelManuellBearbeitet = true; });
+    }
 
     rendereBlockSegmente();
   }
@@ -323,6 +363,8 @@ const BLOECKE = (() => {
       el.addEventListener('change', onSegEdit);
       el.addEventListener('input',  onSegEdit);
     });
+
+    aktualisiereBlockTitelFeld();
   }
 
   function onSegEdit(ev) {
@@ -336,6 +378,7 @@ const BLOECKE = (() => {
     }
     if (f === 'pace_referenz' && v === '') v = null;
     editorSegmente[i][f] = v;
+    aktualisiereBlockTitelFeld();
   }
 
   function parsenAusTitel() {
@@ -412,5 +455,6 @@ const BLOECKE = (() => {
   return {
     render, neuerBlock, bearbeiten, anwenden, anwendenSpeichern,
     parsenAusTitel, segmentHinzufuegen, segmentLoeschen, speichern, loeschen,
+    titelNeuGenerieren,
   };
 })();
