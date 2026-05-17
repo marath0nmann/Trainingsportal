@@ -15,7 +15,8 @@ const EDITOR = (() => {
   let currentId = null;
   let currentSegmente = [];
 
-  const TYP_OPTIONS = [
+  // Typen dynamisch aus appConfig (via GET /config geladen), Fallback hardcodiert
+  const FALLBACK_TYP_OPTIONS = [
     { value: 'intervall',     label: 'Intervall' },
     { value: 'dauerlauf',     label: 'Dauerlauf' },
     { value: 'funktionell',   label: 'Funktionelles Training' },
@@ -24,6 +25,11 @@ const EDITOR = (() => {
     { value: 'frei',          label: 'Sonstiges' },
     { value: 'kein_training', label: 'Kein Training' },
   ];
+  function getTypOptions() {
+    const t = appConfig && appConfig.typen;
+    if (Array.isArray(t) && t.length) return t.map(x => ({ value: x.slug, label: x.bezeichnung }));
+    return FALLBACK_TYP_OPTIONS;
+  }
   const PAUSE_OPTIONS = [
     { value: 'TP',   label: 'TP – Trabpause' },
     { value: 'GP',   label: 'GP – Gehpause' },
@@ -66,7 +72,7 @@ const EDITOR = (() => {
               </div>
               <div class="ed-fg">
                 <label>Typ</label>
-                <select id="ed-typ">${TYP_OPTIONS.map(o => `<option value="${o.value}"${o.value===e.typ?' selected':''}>${o.label}</option>`).join('')}</select>
+                <select id="ed-typ">${getTypOptions().map(o => `<option value="${o.value}"${o.value===e.typ?' selected':''}>${o.label}</option>`).join('')}</select>
               </div>
               <div class="ed-fg">
                 <label>Sichtbarkeit</label>

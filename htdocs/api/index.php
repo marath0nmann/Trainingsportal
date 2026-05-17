@@ -72,6 +72,10 @@ try {
         handleFeiertage($method, $tail);
         exit;
     }
+    if ($head === 'typen') {
+        handleTypen($method, $tail);
+        exit;
+    }
     if ($head === 'bloecke') {
         handleBloecke($method, $tail);
         exit;
@@ -519,6 +523,13 @@ function handleAdmin(string $method, string $sub): void {
         return;
     }
 
+    // Trainingstypen verwalten
+    if ($sub === 'typen' || str_starts_with($sub, 'typen/')) {
+        $typSub = $sub === 'typen' ? '' : substr($sub, 6);
+        handleAdminTypen($method, $typSub);
+        return;
+    }
+
     // Diagnose-Endpoint: prüft alle konfigurierten Feiertage-Feeds
     if ($sub === 'feiertage_test' && $method === 'GET') {
         $raw = Settings::get('training_feiertage_ics_urls', '');
@@ -720,6 +731,21 @@ function handleConfig(): void {
         }
     }
     $cfg['feiertage'] = $urls;
+
+    // Aktive Trainingstypen mitliefern damit Editor/Blöcke-Seite
+    // keine extra Anfrage brauchen.
+    try {
+        ensureTypenTabelle();
+        $typenRows = DB::fetchAll(
+            'SELECT slug, bezeichnung, farbe, reihenfolge
+               FROM ' . DB::tbl('training_typen') . '
+              WHERE aktiv = 1
+              ORDER BY reihenfolge, slug'
+        );
+        $cfg['typen'] = $typenRows;
+    } catch (Throwable $_) {
+        $cfg['typen'] = [];
+    }
 
     echo json_encode(['ok' => true, 'config' => $cfg]);
 }
@@ -1243,6 +1269,172 @@ function vtimezoneEuropeBerlin(): string {
 // Trainingsblöcke (datumsunabhängige Templates)
 // ============================================================
 
+// ============================================================
+// GET typen  →  Aktive Trainingstypen (kein Auth erforderlich)
+// ============================================================
+function handleTypen(string $method, string $sub): void
+{
+    if ($method !== 'GET' || $sub !== '') {
+        http_response_code(405);
+        echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+        return;
+    }
+    ensureTypenTabelle();
+    $rows = DB::fetchAll(
+        'SELECT slug, bezeichnung, farbe, reihenfolge
+           FROM ' . DB::tbl('training_typen') . '
+          WHERE aktiv = 1
+          ORDER BY reihenfolge, slug'
+    );
+    echo json_encode(['ok' => true, 'typen' => $rows]);
+}
+
+// ============================================================
+// Admin: Trainingstypen verwalten
+//   GET  admin/typen           → alle Typen mit Block-Anzahl
+//   POST admin/typen           → neuen Typ anlegen
+//   PUT  admin/typen/{slug}    → Typ bearbeiten
+//   DELETE admin/typen/{slug}  → Typ löschen (nur wenn keine Blöcke)
+// ============================================================
+function handleAdminTypen(string $method, string $sub): void
+{
+    ensureTypenTabelle();
+
+    if ($sub === '' && $method === 'GET') {
+        $rows = DB::fetchAll(
+            'SELECT t.slug, t.bezeichnung, t.farbe, t.reihenfolge, t.aktiv,
+                    COUNT(b.id) AS block_count
+               FROM ' . DB::tbl('training_typen') . ' t
+               LEFT JOIN ' . DB::tbl('training_bloecke') . ' b ON b.typ = t.slug
+              GROUP BY t.slug
+              ORDER BY t.reihenfolge, t.slug'
+        );
+        echo json_encode(['ok' => true, 'typen' => array_map(function ($r) {
+            return [
+                'slug'        => $r['slug'],
+                'bezeichnung' => $r['bezeichnung'],
+                'farbe'       => $r['farbe'] ?? '',
+                'reihenfolge' => (int)$r['reihenfolge'],
+                'aktiv'       => (bool)$r['aktiv'],
+                'block_count' => (int)$r['block_count'],
+            ];
+        }, $rows)]);
+        return;
+    }
+
+    if ($sub === '' && $method === 'POST') {
+        $in = readJsonBody();
+        $slug = preg_replace('/[^a-z0-9_]/', '_', strtolower(trim((string)($in['slug'] ?? ''))));
+        if ($slug === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Slug erforderlich (nur a-z, 0-9, _)']);
+            return;
+        }
+        $bezeichnung = trim((string)($in['bezeichnung'] ?? ''));
+        if ($bezeichnung === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Bezeichnung erforderlich']);
+            return;
+        }
+        $existing = DB::fetchOne('SELECT slug FROM ' . DB::tbl('training_typen') . ' WHERE slug = ?', [$slug]);
+        if ($existing) {
+            http_response_code(409);
+            echo json_encode(['ok' => false, 'fehler' => 'Slug bereits vorhanden']);
+            return;
+        }
+        $farbe       = substr(trim((string)($in['farbe'] ?? '')), 0, 20) ?: null;
+        $reihenfolge = isset($in['reihenfolge']) ? max(0, (int)$in['reihenfolge']) : 99;
+        DB::query(
+            'INSERT INTO ' . DB::tbl('training_typen') . ' (slug, bezeichnung, farbe, reihenfolge, aktiv) VALUES (?,?,?,?,1)',
+            [$slug, substr($bezeichnung, 0, 100), $farbe, $reihenfolge]
+        );
+        echo json_encode(['ok' => true, 'slug' => $slug]);
+        return;
+    }
+
+    if ($sub !== '' && $method === 'PUT') {
+        $slug = $sub;
+        $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_typen') . ' WHERE slug = ?', [$slug]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Typ nicht gefunden']);
+            return;
+        }
+        $in          = readJsonBody();
+        $bezeichnung = trim((string)($in['bezeichnung'] ?? $row['bezeichnung']));
+        if ($bezeichnung === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Bezeichnung darf nicht leer sein']);
+            return;
+        }
+        $farbe       = array_key_exists('farbe', $in)
+            ? (substr(trim((string)$in['farbe']), 0, 20) ?: null)
+            : $row['farbe'];
+        $reihenfolge = isset($in['reihenfolge']) ? max(0, (int)$in['reihenfolge']) : (int)$row['reihenfolge'];
+        $aktiv       = isset($in['aktiv']) ? ($in['aktiv'] ? 1 : 0) : (int)$row['aktiv'];
+        DB::query(
+            'UPDATE ' . DB::tbl('training_typen') . ' SET bezeichnung=?, farbe=?, reihenfolge=?, aktiv=? WHERE slug=?',
+            [substr($bezeichnung, 0, 100), $farbe, $reihenfolge, $aktiv, $slug]
+        );
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    if ($sub !== '' && $method === 'DELETE') {
+        $slug = $sub;
+        $row = DB::fetchOne('SELECT slug FROM ' . DB::tbl('training_typen') . ' WHERE slug = ?', [$slug]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Typ nicht gefunden']);
+            return;
+        }
+        $blockCount = (int)(DB::fetchOne(
+            'SELECT COUNT(*) AS n FROM ' . DB::tbl('training_bloecke') . ' WHERE typ = ?',
+            [$slug]
+        )['n'] ?? 0);
+        if ($blockCount > 0) {
+            http_response_code(409);
+            echo json_encode(['ok' => false, 'fehler' => "Typ wird von $blockCount Block(s) verwendet und kann nicht gelöscht werden."]);
+            return;
+        }
+        DB::query('DELETE FROM ' . DB::tbl('training_typen') . ' WHERE slug = ?', [$slug]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+}
+
+function ensureTypenTabelle(): void
+{
+    DB::query(
+        "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_typen') . " (
+          slug        VARCHAR(40)        NOT NULL,
+          bezeichnung VARCHAR(100)       NOT NULL,
+          farbe       VARCHAR(20)        NULL,
+          reihenfolge SMALLINT UNSIGNED  NOT NULL DEFAULT 0,
+          aktiv       TINYINT(1)         NOT NULL DEFAULT 1,
+          PRIMARY KEY (slug)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    // Standard-Typen einspielen, falls noch leer
+    $count = (int)(DB::fetchOne('SELECT COUNT(*) AS n FROM ' . DB::tbl('training_typen'))['n'] ?? 0);
+    if ($count === 0) {
+        DB::query(
+            "INSERT IGNORE INTO " . DB::tbl('training_typen') . " (slug, bezeichnung, reihenfolge) VALUES
+             ('intervall',     'Intervall',              1),
+             ('dauerlauf',     'Dauerlauf',              2),
+             ('funktionell',   'Funktionelles Training',  3),
+             ('runde',         'Runde / Strecke',         4),
+             ('event',         'Event / Wettkampf',       5),
+             ('frei',          'Sonstiges',              6),
+             ('kein_training', 'Kein Training',           7)"
+        );
+    }
+}
+
+// ============================================================
 // Legt training_bloecke + training_block_segmente an, falls noch nicht vorhanden,
 // und stellt sicher, dass die Trainer-Rolle in der rollen-Tabelle existiert.
 function ensureBloeckeTabellen(): void {
