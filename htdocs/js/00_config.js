@@ -167,5 +167,6 @@ const CONFIG = (() => {
     return loaded;
   }
   function get(key) { return loaded ? loaded[key] : undefined; }
-  return { load, get };
+  function clear() { loaded = null; }
+  return { load, get, clear };
 })();

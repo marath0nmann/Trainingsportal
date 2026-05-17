@@ -5,18 +5,9 @@
 //   - Alle eingeloggten User sehen globale + eigene private Blöcke
 //   - Trainer/Admin: Neuen Block anlegen, bearbeiten, löschen
 //   - Alle eingeloggten User: Block per „Im Kalender planen" anwenden
+//   - Blöcke werden nach Trainingstyp gruppiert (konfigurierbar in Einstellungen)
 
 const BLOECKE = (() => {
-
-  const TYP_OPTIONS = [
-    { value: 'intervall',     label: 'Intervall' },
-    { value: 'dauerlauf',     label: 'Dauerlauf' },
-    { value: 'funktionell',   label: 'Funktionelles Training' },
-    { value: 'runde',         label: 'Runde / Strecke' },
-    { value: 'event',         label: 'Event / Wettkampf' },
-    { value: 'frei',          label: 'Sonstiges' },
-    { value: 'kein_training', label: 'Kein Training' },
-  ];
 
   const PAUSE_OPTIONS = [
     { value: 'TP',   label: 'TP – Trabpause' },
@@ -25,15 +16,26 @@ const BLOECKE = (() => {
     { value: 'frei', label: '— frei —' },
   ];
 
-  const TYP_LABEL = {
-    intervall:    'Intervall',
-    dauerlauf:    'Dauerlauf',
-    funktionell:  'Funkt. Tr.',
-    runde:        'Runde',
-    event:        'Event',
-    frei:         'Training',
-    kein_training:'Kein Training',
-  };
+  // Fallback-Typen falls Config noch nicht geladen
+  const FALLBACK_TYPEN = [
+    { slug: 'intervall',     bezeichnung: 'Intervall' },
+    { slug: 'dauerlauf',     bezeichnung: 'Dauerlauf' },
+    { slug: 'funktionell',   bezeichnung: 'Funktionelles Training' },
+    { slug: 'runde',         bezeichnung: 'Runde / Strecke' },
+    { slug: 'event',         bezeichnung: 'Event / Wettkampf' },
+    { slug: 'frei',          bezeichnung: 'Sonstiges' },
+    { slug: 'kein_training', bezeichnung: 'Kein Training' },
+  ];
+
+  function getTypen() {
+    const t = appConfig && appConfig.typen;
+    return (Array.isArray(t) && t.length) ? t : FALLBACK_TYPEN;
+  }
+
+  function getTypLabel(slug) {
+    const t = getTypen().find(x => x.slug === slug);
+    return t ? t.bezeichnung : slug;
+  }
 
   function istTrainer() {
     return state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
@@ -67,18 +69,51 @@ const BLOECKE = (() => {
         container.innerHTML = `<div class="bloecke-leer">Noch keine Trainingsblöcke vorhanden.${istTrainer() ? ' Erstelle den ersten Block mit „+ Neuer Block".' : ''}</div>`;
         return;
       }
-      const gruppen = { global: [], privat: [] };
-      bloecke.forEach(b => (gruppen[b.sichtbarkeit] || gruppen.global).push(b));
+
+      // Nach Typ gruppieren (Reihenfolge der Typen aus Config)
+      const typen = getTypen();
+      const slugReihenfolge = typen.map(t => t.slug);
+
+      // Gruppen aufbauen: slug → { bezeichnung, global: [], privat: [] }
+      const gruppen = {};
+      bloecke.forEach(b => {
+        const slug = b.typ || 'frei';
+        if (!gruppen[slug]) {
+          gruppen[slug] = { bezeichnung: getTypLabel(slug), global: [], privat: [] };
+        }
+        if (b.sichtbarkeit === 'privat') {
+          gruppen[slug].privat.push(b);
+        } else {
+          gruppen[slug].global.push(b);
+        }
+      });
+
+      // Sortierreihenfolge: bekannte Typen zuerst (in Config-Reihenfolge), dann Rest
+      const vorhandene = Object.keys(gruppen);
+      const sortiert = [
+        ...slugReihenfolge.filter(s => vorhandene.includes(s)),
+        ...vorhandene.filter(s => !slugReihenfolge.includes(s)).sort(),
+      ];
 
       let html = '';
-      if (gruppen.global.length) {
-        html += `<h2 class="bloecke-gruppe-titel">Globale Blöcke</h2>
-                 <div class="bloecke-grid">${gruppen.global.map(renderBlockCard).join('')}</div>`;
+      for (const slug of sortiert) {
+        const g = gruppen[slug];
+        const alle = [...g.global, ...g.privat];
+        if (!alle.length) continue;
+        const anzahl = alle.length;
+        html += `<h2 class="bloecke-gruppe-titel">
+          <span class="bloecke-gruppe-typ block-typ-${escapeHtml(slug)}">${escapeHtml(g.bezeichnung)}</span>
+          <span class="bloecke-gruppe-count">${anzahl} ${anzahl === 1 ? 'Block' : 'Blöcke'}</span>
+        </h2>`;
+        if (g.global.length && g.privat.length) {
+          // Beide Sichtbarkeiten vorhanden → kurze Sub-Labels
+          html += `<div class="bloecke-grid">${g.global.map(renderBlockCard).join('')}</div>`;
+          html += `<div class="bloecke-grid bloecke-grid-privat">${g.privat.map(renderBlockCard).join('')}</div>`;
+        } else {
+          html += `<div class="bloecke-grid">${alle.map(renderBlockCard).join('')}</div>`;
+        }
       }
-      if (gruppen.privat.length) {
-        html += `<h2 class="bloecke-gruppe-titel">Meine privaten Blöcke</h2>
-                 <div class="bloecke-grid">${gruppen.privat.map(renderBlockCard).join('')}</div>`;
-      }
+
       container.innerHTML = html;
     } catch (e) {
       container.innerHTML = `<div class="bloecke-leer bloecke-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
@@ -98,10 +133,9 @@ const BLOECKE = (() => {
     return `
       <div class="block-card block-typ-${escapeHtml(b.typ)}">
         <div class="block-card-head">
-          <span class="block-typ-badge">${escapeHtml(TYP_LABEL[b.typ] || b.typ)}</span>
-          ${istGlobal
-            ? '<span class="block-sicht-badge block-sicht-global">Global</span>'
-            : '<span class="block-sicht-badge block-sicht-privat">Privat</span>'}
+          ${!istGlobal
+            ? '<span class="block-sicht-badge block-sicht-privat">Privat</span>'
+            : ''}
           ${segBadge}
         </div>
         <div class="block-titel">${escapeHtml(b.titel)}</div>
@@ -246,6 +280,10 @@ const BLOECKE = (() => {
     const initPauseTyp = editorSegmente.length ? (editorSegmente[0].pause_typ || 'TP') : 'TP';
     const initPaceRef  = editorSegmente.length ? (editorSegmente[0].pace_referenz || '5000') : '5000';
 
+    const typenOptionen = getTypen()
+      .map(t => `<option value="${escapeHtml(t.slug)}"${t.slug === b.typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`)
+      .join('');
+
     const cont = document.getElementById('modal-container');
 
     cont.innerHTML = `
@@ -262,7 +300,7 @@ const BLOECKE = (() => {
             <div class="ed-grid">
               <div class="ed-fg">
                 <label>Typ</label>
-                <select id="be-typ">${TYP_OPTIONS.map(o => `<option value="${o.value}"${o.value === b.typ ? ' selected' : ''}>${o.label}</option>`).join('')}</select>
+                <select id="be-typ">${typenOptionen}</select>
               </div>
               <div class="ed-fg">
                 <label>Sichtbarkeit</label>

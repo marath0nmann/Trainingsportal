@@ -12,6 +12,8 @@ const SETTINGS = (() => {
   let felder = [];
   let feiertage = [];
   let paceDistanzen = [];
+  let typen = [];         // { slug, bezeichnung, farbe, reihenfolge, aktiv, block_count }
+  let typenBearbeitet = null; // slug des gerade inline bearbeiteten Typs
 
   async function render(main) {
     if (!state.user || state.user.rolle !== 'admin') {
@@ -25,10 +27,14 @@ const SETTINGS = (() => {
       '<div class="loading"><div class="spinner"></div>Laden…</div></div>';
 
     try {
-      const r = await apiGet('admin/settings', { silent: true });
-      felder = r.felder || [];
-      feiertage = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
+      const [settingsR, typenR] = await Promise.all([
+        apiGet('admin/settings', { silent: true }),
+        apiGet('admin/typen',    { silent: true }),
+      ]);
+      felder        = settingsR.felder || [];
+      feiertage     = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
       paceDistanzen = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
+      typen         = typenR.typen || [];
       rendereForm(main);
     } catch (e) {
       main.innerHTML = '<div style="max-width:680px;margin:24px auto;padding:0 16px">' +
@@ -145,6 +151,20 @@ const SETTINGS = (() => {
         '</div>' +
       '</div>' +
 
+      // ── Trainingstypen ──
+      '<div class="panel">' +
+        '<div class="panel-header">' +
+          '<div class="panel-title">🏷️ Trainingstypen</div>' +
+          '<button class="btn btn-primary btn-sm" onclick="SETTINGS.typHinzufuegen()">+ Typ</button>' +
+        '</div>' +
+        '<div class="settings-panel-body">' +
+          '<div style="font-size:12px;color:var(--text2);margin-bottom:12px">' +
+            'Trainingsblöcke und Kalendereinträge werden einem Typ zugeordnet. Typen mit Blöcken können nicht gelöscht werden.' +
+          '</div>' +
+          '<div id="typen-liste"></div>' +
+        '</div>' +
+      '</div>' +
+
       // ── Migration: Einheiten → Blöcke ──
       '<div class="panel">' +
         '<div class="panel-header"><div class="panel-title">🔄 Migration: Einheiten → Trainingsblöcke</div></div>' +
@@ -196,6 +216,7 @@ const SETTINGS = (() => {
 
     rendereFeiertage();
     renderePaceDistanzen();
+    rendereTypen();
   }
 
   function renderePaceDistanzen() {
@@ -389,6 +410,149 @@ const SETTINGS = (() => {
     }
   }
 
+  // ── Trainingstypen ────────────────────────────────────────
+
+  function rendereTypen() {
+    const wrap = document.getElementById('typen-liste');
+    if (!wrap) return;
+
+    if (!typen.length) {
+      wrap.innerHTML = '<div style="padding:14px;border:1px dashed var(--border);border-radius:6px;color:var(--text2);font-size:13px;text-align:center">Keine Typen vorhanden.</div>';
+      return;
+    }
+
+    const zeilen = typen.map((t, i) => {
+      const bearbeite = typenBearbeitet === t.slug;
+      const gesperrt  = t.block_count > 0;
+      const inaktivStil = !t.aktiv ? 'opacity:0.5;' : '';
+
+      if (bearbeite) {
+        return `
+          <tr data-slug="${escapeHtml(t.slug)}" style="background:var(--panel-bg,var(--bg2))">
+            <td style="padding:6px 4px">
+              <input type="text" id="typ-bez-${i}" value="${escapeHtml(t.bezeichnung)}"
+                class="settings-input" style="width:100%;min-width:120px">
+            </td>
+            <td style="padding:6px 4px;text-align:center">
+              <input type="color" id="typ-farbe-${i}" value="${escapeHtml(t.farbe || '#888888')}"
+                style="width:36px;height:32px;border:none;background:none;cursor:pointer;padding:0">
+            </td>
+            <td style="padding:6px 4px;text-align:center">
+              <input type="number" id="typ-reihenfolge-${i}" value="${t.reihenfolge}"
+                min="0" max="999" class="settings-input" style="width:60px;text-align:center">
+            </td>
+            <td style="padding:6px 4px;text-align:center">
+              <label style="cursor:pointer;font-size:12px">
+                <input type="checkbox" id="typ-aktiv-${i}" ${t.aktiv ? 'checked' : ''}> aktiv
+              </label>
+            </td>
+            <td style="padding:6px 4px;text-align:right;white-space:nowrap">
+              <button class="btn btn-primary btn-sm" onclick="SETTINGS.typSpeichern('${escapeHtml(t.slug)}', ${i})">✓</button>
+              <button class="btn btn-ghost btn-sm" onclick="SETTINGS.typAbbrechen()">✗</button>
+            </td>
+          </tr>`;
+      }
+
+      return `
+        <tr style="${inaktivStil}">
+          <td style="padding:6px 8px;font-weight:600">
+            ${t.farbe ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeHtml(t.farbe)};margin-right:6px;vertical-align:middle"></span>` : ''}
+            ${escapeHtml(t.bezeichnung)}
+            <code style="font-size:11px;color:var(--text2);margin-left:6px">${escapeHtml(t.slug)}</code>
+          </td>
+          <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
+            ${t.block_count} ${t.block_count === 1 ? 'Block' : 'Blöcke'}
+          </td>
+          <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">#${t.reihenfolge}</td>
+          <td style="padding:6px 8px;text-align:center;font-size:12px;color:var(--text2)">${t.aktiv ? '✓' : '—'}</td>
+          <td style="padding:6px 8px;text-align:right;white-space:nowrap">
+            <button class="btn btn-ghost btn-sm" onclick="SETTINGS.typBearbeiten('${escapeHtml(t.slug)}')">Bearbeiten</button>
+            <button class="btn btn-danger btn-sm" onclick="SETTINGS.typLoeschen('${escapeHtml(t.slug)}')" ${gesperrt ? 'disabled title="Typ wird von Blöcken verwendet"' : ''}>Löschen</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    wrap.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Bezeichnung / Slug</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Blöcke</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Reihenfolge</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Aktiv</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${zeilen}</tbody>
+      </table>`;
+  }
+
+  function typBearbeiten(slug) {
+    typenBearbeitet = slug;
+    rendereTypen();
+  }
+
+  function typAbbrechen() {
+    typenBearbeitet = null;
+    rendereTypen();
+  }
+
+  async function typSpeichern(slug, idx) {
+    const bez = (document.getElementById(`typ-bez-${idx}`)?.value || '').trim();
+    if (!bez) { benachrichtigen('Bezeichnung darf nicht leer sein.', 'err'); return; }
+    const farbe       = document.getElementById(`typ-farbe-${idx}`)?.value || null;
+    const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
+    const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
+    try {
+      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv });
+      benachrichtigen('Typ gespeichert.', 'ok');
+      typenBearbeitet = null;
+      const r = await apiGet('admin/typen', { silent: true });
+      typen = r.typen || [];
+      rendereTypen();
+      CONFIG.clear();
+      await CONFIG.load();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function typHinzufuegen() {
+    const slug = prompt('Slug für neuen Typ (a–z, 0–9, _):');
+    if (!slug) return;
+    const slugClean = slug.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    const bez = prompt('Bezeichnung:');
+    if (!bez || !bez.trim()) return;
+    try {
+      await apiPost('admin/typen', { slug: slugClean, bezeichnung: bez.trim(), reihenfolge: 99 });
+      benachrichtigen('Typ angelegt.', 'ok');
+      const r = await apiGet('admin/typen', { silent: true });
+      typen = r.typen || [];
+      rendereTypen();
+      CONFIG.clear();
+      await CONFIG.load();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function typLoeschen(slug) {
+    const t = typen.find(x => x.slug === slug);
+    if (!confirm(`Typ „${t ? t.bezeichnung : slug}" wirklich löschen?`)) return;
+    try {
+      await apiDel(`admin/typen/${slug}`);
+      benachrichtigen('Typ gelöscht.', 'ok');
+      const r = await apiGet('admin/typen', { silent: true });
+      typen = r.typen || [];
+      rendereTypen();
+      CONFIG.clear();
+      await CONFIG.load();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
   return { render, hinzufuegen, entfernen, beispiel, speichern, diagnose, migrieren,
-           paceDistanzHinzufuegen, paceDistanzEntfernen };
+           paceDistanzHinzufuegen, paceDistanzEntfernen, reparseSegmente,
+           typBearbeiten, typAbbrechen, typSpeichern, typHinzufuegen, typLoeschen };
 })();
