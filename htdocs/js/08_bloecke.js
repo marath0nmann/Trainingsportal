@@ -199,9 +199,7 @@ const BLOECKE = (() => {
     if (!segs || !segs.length) return '';
     return segs.map(s => {
       const wdh  = (s.wiederholungen && s.wiederholungen > 1) ? `${s.wiederholungen} × ` : '';
-      const dist = s.distanz_m != null
-        ? (s.distanz_m >= 1000 ? s.distanz_m.toLocaleString('de-DE') : String(s.distanz_m))
-        : '?';
+      const dist = s.distanz_m != null ? String(s.distanz_m) : '?';
       return `${wdh}${dist}`;
     }).join(' / ');
   }
