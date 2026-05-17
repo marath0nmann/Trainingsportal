@@ -1,6 +1,6 @@
 # Changelog
 
-## v32
+## v33
 - Fix: `.settings-row-label` bekommt `flex-shrink:0; min-width:180px` – verhindert Schrumpfen der Label-Spalte auf Wortbreite
 
 ## v22
