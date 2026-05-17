@@ -306,20 +306,28 @@ class Auth {
                 $_SESSION['_last_ping'] = time();
             } catch (\Exception $e) {}
         }
-        // avatar_pfad + athlet_id frisch aus DB (Spalten ggf. erst nach Migration vorhanden)
-        $avatar   = null;
-        $athletId = null;
+        // Benutzerdaten + Athletenprofil frisch aus DB
+        $row = [];
         try {
-            $row = DB::fetchOne('SELECT avatar_pfad, athlet_id FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$_SESSION['user_id']]);
-            $avatar   = $row['avatar_pfad'] ?? null;
-            $athletId = isset($row['athlet_id']) ? (int)$row['athlet_id'] : null;
+            $row = DB::fetchOne(
+                'SELECT b.avatar_pfad, b.athlet_id, b.benutzername, b.name, b.email,' .
+                ' a.vorname, a.nachname' .
+                ' FROM ' . DB::tbl('benutzer') . ' b' .
+                ' LEFT JOIN ' . DB::tbl('athleten') . ' a ON a.id = b.athlet_id' .
+                ' WHERE b.id = ?',
+                [$_SESSION['user_id']]
+            ) ?: [];
         } catch (\Exception $e) {}
         return [
-            'id'        => $_SESSION['user_id'],
-            'name'      => $_SESSION['user_name'],
-            'rolle'     => $_SESSION['user_rolle'],
-            'avatar'    => $avatar,
-            'athlet_id' => $athletId,
+            'id'          => $_SESSION['user_id'],
+            'name'        => $_SESSION['user_name'],
+            'rolle'       => $_SESSION['user_rolle'],
+            'avatar_pfad' => $row['avatar_pfad'] ?? null,
+            'athlet_id'   => (!empty($row['athlet_id'])) ? (int)$row['athlet_id'] : null,
+            'benutzername'=> $row['benutzername'] ?? null,
+            'email'       => $row['email'] ?? null,
+            'vorname'     => $row['vorname'] ?? null,
+            'nachname'    => $row['nachname'] ?? null,
         ];
     }
 

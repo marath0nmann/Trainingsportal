@@ -108,6 +108,8 @@ function handleAuth(string $method, string $sub): void
                     'email'        => $user['email'] ?? null,
                     'rolle'        => $user['rolle'] ?? null,
                     'avatar_pfad'  => $user['avatar_pfad'] ?? null,
+                    'vorname'      => $user['vorname'] ?? null,
+                    'nachname'     => $user['nachname'] ?? null,
                 ],
             ]);
             return;

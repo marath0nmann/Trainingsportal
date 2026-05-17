@@ -36,6 +36,14 @@ function showApp() {
   renderPage();
 }
 
+const ROLLE_LABEL = {
+  admin:    'Administrator',
+  trainer:  'Trainer',
+  editor:   'Editor',
+  athlet:   'Athlet',
+  leser:    'Leser',
+};
+
 function fillUserBadge() {
   const u = state.user;
   const userBtn = document.getElementById('user-btn');
@@ -53,16 +61,19 @@ function fillUserBadge() {
   const rolleEl  = document.getElementById('user-rolle-disp');
   const avatarEl = document.getElementById('user-avatar');
 
-  if (nameEl)  nameEl.textContent  = u.name || u.benutzername || '–';
-  if (rolleEl) rolleEl.textContent = u.rolle || '–';
+  const displayName = u.vorname || u.name || u.benutzername || '–';
+  if (nameEl)  nameEl.textContent  = displayName;
+  if (rolleEl) rolleEl.textContent = ROLLE_LABEL[u.rolle] || u.rolle || '–';
   if (avatarEl) {
-    const initial = (u.name || u.benutzername || '?').trim().charAt(0).toUpperCase();
+    const initial = displayName.trim().charAt(0).toUpperCase();
+    let avatarInner = '';
     if (u.avatar_pfad) {
       // Avatar liegt im Statistikportal-htdocs; über shared.php ausliefern
-      avatarEl.innerHTML = `<img src="${assetUrl(u.avatar_pfad)}" alt="${escapeHtml(u.name || '')}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentNode.textContent='${initial}'">`;
+      avatarInner = `<img src="${assetUrl(u.avatar_pfad)}" alt="${escapeHtml(displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.outerHTML='${escapeHtml(initial)}'">`;
     } else {
-      avatarEl.textContent = initial;
+      avatarInner = escapeHtml(initial);
     }
+    avatarEl.innerHTML = avatarInner + '<span class="user-online-dot" title="Online"></span>';
     avatarEl.onclick = () => PROFIL.open();
     avatarEl.title   = 'Profileinstellungen öffnen';
     avatarEl.style.cursor = 'pointer';
