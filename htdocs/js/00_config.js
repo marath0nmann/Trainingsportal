@@ -73,6 +73,31 @@ function _updateBodyThemeColor() {
 }
 
 // ── Hauptlogik ─────────────────────────────────────────────
+// ── Dynamische Typ-Farben per <style>-Tag injizieren ───────
+function applyTypenFarben(typen) {
+  var el = document.getElementById('typen-farben-style');
+  if (!el) {
+    el = document.createElement('style');
+    el.id = 'typen-farben-style';
+    document.head.appendChild(el);
+  }
+  if (!Array.isArray(typen) || !typen.length) { el.textContent = ''; return; }
+  var css = typen.map(function(t) {
+    if (!t.farbe) return '';
+    var slug = t.slug.replace(/[^a-z0-9_-]/g, '_');
+    var f    = t.farbe;
+    return [
+      // Block-Karte: farbiger Balken oben
+      '.block-typ-' + slug + ' { border-top-color: ' + f + ' !important; }',
+      // Gruppen-Titel: farbiger linker Balken + Textfarbe
+      '.bloecke-gruppe-typ.block-typ-' + slug + ' { border-left-color: ' + f + '; color: ' + f + '; }',
+      // Kalender-Einheiten (linker Balken)
+      '.einheit-typ-' + slug + ' { border-left-color: ' + f + ' !important; }',
+    ].join('\n');
+  }).join('\n');
+  el.textContent = css;
+}
+
 function applyConfig(cfg) {
   appConfig = cfg || {};
   window.appConfig = appConfig;
@@ -143,6 +168,9 @@ function applyConfig(cfg) {
       img.style.display = 'none';
     }
   });
+
+  // Typ-Farben dynamisch als CSS injizieren
+  applyTypenFarben(cfg.typen || []);
 }
 
 // ── Asset-URL aus Statistikportal-uploads über shared.php ──
