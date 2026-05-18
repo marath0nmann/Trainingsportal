@@ -1,6 +1,7 @@
 # Changelog
 
-## v52
+## v53
+- Feiertage/Ferien werden jetzt auch im Planungskalender angezeigt (Farbmarkierung + Label)
 - Fix: Pace-Warnhinweis erscheint jetzt korrekt, wenn Segmente Pace-Referenzen enthalten, die nicht konfiguriert sind (prüft `paceSekProKm` statt `!paceData`)
 
 ## v51

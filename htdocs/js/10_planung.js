@@ -67,18 +67,29 @@ const PLANUNG = (() => {
       </div>
       <div id="planung-kal-grid" class="planung-kal-loading">Lade…</div>`;
 
-    let einheiten = [];
+    let einheiten = [], feiertage = [];
     try {
-      const d = await apiGet(
-        `einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`,
-        { silent: true }
-      );
-      einheiten = d.einheiten || [];
-    } catch (e) { /* Einheiten optional – Fehler ignorieren */ }
+      const [d1, d2] = await Promise.all([
+        apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }),
+        apiGet(`feiertage?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }).catch(() => ({ feiertage: [] })),
+      ]);
+      einheiten = d1.einheiten || [];
+      feiertage = d2.feiertage || [];
+    } catch (e) { /* optional – Fehler ignorieren */ }
 
     const byDate = {};
     einheiten.forEach(e => {
       (byDate[e.datum] = byDate[e.datum] || []).push(e);
+    });
+
+    const feiertageByDate = {};
+    feiertage.forEach(f => {
+      const start = new Date(f.datum + 'T00:00:00');
+      const end   = new Date((f.datum_bis || f.datum) + 'T00:00:00');
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const k = ymd(d);
+        (feiertageByDate[k] = feiertageByDate[k] || []).push(f);
+      }
     });
 
     const head = `<div class="kal-head">${WOCHENTAGE.map(w =>
@@ -94,12 +105,20 @@ const PLANUNG = (() => {
         const isToday = k === todayKey;
         const items = byDate[k] || [];
 
+        const ferien = feiertageByDate[k] || [];
+
         const dayCls = [
           'kal-cell', 'planung-kal-cell',
           inMonth ? 'in-month' : 'out-month',
           isToday ? 'is-today' : '',
           (cursor.getDay() === 0 || cursor.getDay() === 6) ? 'weekend' : '',
+          ferien.length ? 'is-feiertag' : '',
         ].filter(Boolean).join(' ');
+
+        const ferienHtml = ferien.map(f => {
+          const farbeStyle = f.farbe ? ` style="background:${escapeHtml(f.farbe)};color:#fff"` : '';
+          return `<div class="kal-feiertag" title="${escapeHtml(f.titel)}"${farbeStyle}>${escapeHtml(f.titel)}</div>`;
+        }).join('');
 
         const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
         const itemsHtml = items.map(e => {
@@ -119,6 +138,7 @@ const PLANUNG = (() => {
             <div class="kal-cell-head">
               <span class="kal-day-num">${cursor.getDate()}</span>
             </div>
+            ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
             <div class="kal-cell-items">
               ${itemsHtml}
               ${inMonth ? '<div class="planung-drop-hint">Hier ablegen</div>' : ''}
