@@ -879,12 +879,12 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   gap: 0;
 }
 
-/* ── Sidebar: Blöcke (links) ── */
+/* ── Sidebar: Blöcke (rechts) ── */
 .planung-sidebar {
   width: 280px; flex-shrink: 0;
   height: 100%; overflow-y: auto;
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   /* kein border-radius, kein box-shadow – flächig in Layout eingebettet */
 }
 .planung-sidebar-head {
@@ -904,12 +904,17 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   font-size: 11px; color: var(--text2);
 }
 
-/* ── Kalender-Spalte (rechts, scrollbar) ── */
+/* ── Kalender-Spalte (links, scrollbar bei Bedarf) ── */
 .planung-kal-col {
   flex: 1 1 0; min-width: 0;
   height: 100%; overflow-y: auto;
   padding: 16px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
+.planung-kal-col::-webkit-scrollbar { width: 5px; }
+.planung-kal-col::-webkit-scrollbar-track { background: transparent; }
+.planung-kal-col::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .planung-kal-toolbar {
   display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
 }
@@ -1054,13 +1059,14 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 
 /* Responsive */
 @media (max-width: 900px) {
-  .planung-wrap { height: auto; overflow: visible; }
+  .planung-wrap { height: auto !important; overflow: visible; }
   .planung-split { flex-direction: column; align-items: stretch; }
   .planung-sidebar {
     width: 100%; height: auto; max-height: 40vh;
-    border-right: none; border-bottom: 1px solid var(--border);
+    border-left: none; border-top: 1px solid var(--border);
+    order: 2;
   }
-  .planung-kal-col { height: auto; overflow-y: visible; padding: 12px 8px 32px; }
+  .planung-kal-col { height: auto; overflow-y: visible; padding: 12px 8px 24px; order: 1; }
 }
 
 /* ── Treffpunkte ──────────────────────────────────────────── */
