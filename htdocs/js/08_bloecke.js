@@ -123,12 +123,8 @@ const BLOECKE = (() => {
   // Extrahiert Tour-ID aus Komoot-URL → Embed-URL (lokale Kopie des globalen Helpers)
   function komootEmbedUrl(url) {
     if (!url) return null;
-    const tourMatch = String(url).match(/\/tour\/(\d+)/);
-    if (!tourMatch) return null;
-    let token = null;
-    try { token = new URL(url).searchParams.get('share_token'); } catch (_) {}
-    return 'https://www.komoot.com/tour/' + tourMatch[1] + '/embed?profile=1'
-      + (token ? '&share_token=' + encodeURIComponent(token) : '');
+    const m = String(url).match(/\/tour\/(\d+)/);
+    return m ? 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1' : null;
   }
 
   function renderBlockCard(b) {

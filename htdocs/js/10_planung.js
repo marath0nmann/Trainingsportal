@@ -1,22 +1,112 @@
 // ============================================================
-// Trainingsportal – Planung (Split-View: Blöcke links + Kalender rechts per DnD)
+// Trainingsportal – Kalender-Hover-Popover (global)
 // ============================================================
-// Seite: #planung
-//   - Links: Trainingsblöcke als ziehbare Karten
-//   - Rechts: Monatskalender mit bestehenden Einheiten
-//   - Block auf Kalendertag fallen lassen → öffnet "Block anwenden"-Dialog
-//     mit vorausgefülltem Datum
-//   - Hover auf Kalender-Eintrag → Popover mit Details + Bearbeiten-Button
+// Kann von 02_app.js (Hauptkalender) und PLANUNG (Planungskalender) genutzt werden.
+// Voraussetzung: kal-item-Elemente haben data-einheit-id="…"
 
-const PLANUNG = (() => {
-  let kalMonth = null; // Date: erster Tag des angezeigten Monats
+const KAL_POPOVER = (() => {
+  let hideTimer = null;
+  let currentId = null;
 
-  // Popover-State
-  let popHideTimer = null;
-  let popEinheitId = null;
+  function initItems(items) {
+    items.forEach(item => {
+      item.addEventListener('mouseenter', () => {
+        clearTimeout(hideTimer);
+        const id = parseInt(item.dataset.einheitId, 10);
+        if (!id) return;
+        _show(id, item);
+      });
+      item.addEventListener('mouseleave', () => {
+        hideTimer = setTimeout(_hide, 180);
+      });
+    });
+  }
 
-  // ── Typ-Label ─────────────────────────────────────────────
-  function getTypLabel(slug) {
+  function _getPop() {
+    let pop = document.getElementById('kal-popover');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'kal-popover';
+      pop.className = 'kal-popover';
+      pop.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+      pop.addEventListener('mouseleave', () => { hideTimer = setTimeout(_hide, 180); });
+      document.body.appendChild(pop);
+    }
+    return pop;
+  }
+
+  async function _show(einheitId, anchorEl) {
+    const pop = _getPop();
+    pop.innerHTML = `<div class="kal-pop-loading">…</div>`;
+    pop.style.display = 'block';
+    _position(pop, anchorEl.getBoundingClientRect());
+
+    if (currentId === einheitId) return;
+    currentId = einheitId;
+
+    try {
+      const data = await apiGet(`einheiten/${einheitId}`, { silent: true });
+      if (currentId !== einheitId) return; // Maus bereits woanders
+
+      const e    = data.einheit;
+      const segs = data.segmente || [];
+
+      const typLabel  = _getTypLabel(e.typ);
+      const metaParts = [];
+      if (e.uhrzeit) metaParts.push(e.uhrzeit + ' Uhr');
+      if (e.treffpunkt && e.treffpunkt.name) metaParts.push(e.treffpunkt.name);
+
+      const segsHtml = segs.length
+        ? `<div class="kal-pop-segs">${segs.map(s => {
+            const wdh = s.wiederholungen > 1 ? s.wiederholungen + '×' : '';
+            return `<span class="kal-pop-seg">${wdh}${s.distanz_m} m</span>`;
+          }).join('')}</div>`
+        : '';
+
+      // Bearbeiten-Button nur auf der Planung-Seite für Trainer/Admin
+      const onPlanung = (location.hash || '').startsWith('#planung');
+      const kannEdit  = onPlanung && state.user
+        && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
+
+      pop.innerHTML = `
+        <div class="kal-pop-typ kal-typ-${escapeHtml(e.typ)}">${escapeHtml(typLabel)}</div>
+        <div class="kal-pop-titel">${escapeHtml(e.titel)}</div>
+        ${metaParts.length ? `<div class="kal-pop-meta">${metaParts.map(escapeHtml).join(' · ')}</div>` : ''}
+        ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
+        ${segsHtml}
+        ${kannEdit ? `<div class="kal-pop-actions">
+          <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeiten(${einheitId})">Bearbeiten</button>
+        </div>` : ''}`;
+
+      _position(pop, anchorEl.getBoundingClientRect());
+    } catch (_) {
+      pop.style.display = 'none';
+      currentId = null;
+    }
+  }
+
+  function _position(pop, rect) {
+    const popW   = 244;
+    const margin = 10;
+    const viewW  = window.innerWidth;
+    const viewH  = window.innerHeight;
+    let left = rect.right + margin;
+    if (left + popW > viewW - margin) left = rect.left - popW - margin;
+    if (left < margin) left = margin;
+    let top = rect.top;
+    const popH = pop.offsetHeight || 160;
+    if (top + popH > viewH - margin) top = Math.max(margin, viewH - popH - margin);
+    pop.style.left = left + 'px';
+    pop.style.top  = top  + 'px';
+  }
+
+  function _hide() {
+    const pop = document.getElementById('kal-popover');
+    if (pop) pop.style.display = 'none';
+    currentId = null;
+  }
+
+  function _getTypLabel(slug) {
     const typen = (appConfig && Array.isArray(appConfig.typen) && appConfig.typen.length)
       ? appConfig.typen
       : [
@@ -32,6 +122,16 @@ const PLANUNG = (() => {
     return t ? t.bezeichnung : slug;
   }
 
+  return { initItems, hide: _hide };
+})();
+
+
+// ============================================================
+// Trainingsportal – Planung (Split-View: Kalender links + Blöcke rechts)
+// ============================================================
+const PLANUNG = (() => {
+  let kalMonth = null;
+
   // ── Einstieg ─────────────────────────────────────────────
   async function render(main) {
     if (!kalMonth) {
@@ -42,6 +142,9 @@ const PLANUNG = (() => {
     main.innerHTML = `
       <div class="planung-wrap">
         <div class="planung-split">
+          <div class="planung-kal-col" id="planung-kal-col">
+            <div class="planung-kal-loading">Lade Kalender…</div>
+          </div>
           <aside class="planung-sidebar" id="planung-sidebar">
             <div class="planung-sidebar-head">
               <div class="planung-sidebar-head-top">
@@ -54,13 +157,21 @@ const PLANUNG = (() => {
             </div>
             <div id="planung-bloecke-list" class="planung-bloecke-loading">Lade…</div>
           </aside>
-          <div class="planung-kal-col" id="planung-kal-col">
-            <div class="planung-kal-loading">Lade Kalender…</div>
-          </div>
         </div>
       </div>`;
 
+    // Höhe dynamisch setzen (kein hardcodierter Header-Wert nötig)
+    fixPlanungHeight();
+    window.addEventListener('resize', fixPlanungHeight);
+
     await Promise.all([renderKal(), ladeBlocke()]);
+  }
+
+  function fixPlanungHeight() {
+    const wrap = document.querySelector('.planung-wrap');
+    if (!wrap) { window.removeEventListener('resize', fixPlanungHeight); return; }
+    const top = Math.round(wrap.getBoundingClientRect().top + window.scrollY);
+    wrap.style.height = (window.innerHeight - top) + 'px';
   }
 
   // ── Kalender ─────────────────────────────────────────────
@@ -71,8 +182,8 @@ const PLANUNG = (() => {
     const y = kalMonth.getFullYear();
     const m = kalMonth.getMonth();
 
-    const firstDay = new Date(y, m, 1);
-    const dow0 = (firstDay.getDay() + 6) % 7; // Mo=0
+    const firstDay  = new Date(y, m, 1);
+    const dow0      = (firstDay.getDay() + 6) % 7;
     const gridStart = new Date(y, m, 1 - dow0);
 
     const lastDay = new Date(y, m + 1, 0);
@@ -97,12 +208,10 @@ const PLANUNG = (() => {
       ]);
       einheiten = d1.einheiten || [];
       feiertage = d2.feiertage || [];
-    } catch (e) { /* optional – Fehler ignorieren */ }
+    } catch (e) { /* ignorieren */ }
 
     const byDate = {};
-    einheiten.forEach(e => {
-      (byDate[e.datum] = byDate[e.datum] || []).push(e);
-    });
+    einheiten.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push(e); });
 
     const feiertageByDate = {};
     feiertage.forEach(f => {
@@ -122,12 +231,11 @@ const PLANUNG = (() => {
     while (cursor <= gridEnd) {
       const cells = [];
       for (let i = 0; i < 7; i++) {
-        const k = ymd(cursor);
-        const inMonth = cursor.getMonth() === m;
-        const isToday = k === todayKey;
-        const items = byDate[k] || [];
-
-        const ferien = feiertageByDate[k] || [];
+        const k        = ymd(cursor);
+        const inMonth  = cursor.getMonth() === m;
+        const isToday  = k === todayKey;
+        const items    = byDate[k] || [];
+        const ferien   = feiertageByDate[k] || [];
 
         const dayCls = [
           'kal-cell', 'planung-kal-cell',
@@ -144,7 +252,7 @@ const PLANUNG = (() => {
 
         const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
         const itemsHtml = items.map(e => {
-          const cls = `kal-item kal-typ-${e.typ}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
+          const cls    = `kal-item kal-typ-${e.typ}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
           const delBtn = kannEdit
             ? `<button class="kal-item-del" onclick="event.stopPropagation();PLANUNG.loescheEinheit(${e.id})" title="Eintrag löschen">×</button>`
             : '';
@@ -157,9 +265,7 @@ const PLANUNG = (() => {
 
         cells.push(`
           <div class="${dayCls}" data-datum="${k}">
-            <div class="kal-cell-head">
-              <span class="kal-day-num">${cursor.getDate()}</span>
-            </div>
+            <div class="kal-cell-head"><span class="kal-day-num">${cursor.getDate()}</span></div>
             ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
             <div class="kal-cell-items">
               ${itemsHtml}
@@ -176,25 +282,24 @@ const PLANUNG = (() => {
       grid.outerHTML = `<div id="planung-kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
     }
 
-    // Dragstart-Listener auf Kalender-Einheiten (nur für Trainer/Admin)
+    // DnD: Drag von Kalender-Einheiten
     document.querySelectorAll('.planung-kal-cell .kal-item[draggable="true"]').forEach(item => {
       item.addEventListener('dragstart', e => {
         e.stopPropagation();
         e.dataTransfer.setData('text/x-einheit-id', item.dataset.einheitId);
         e.dataTransfer.effectAllowed = 'move';
         item.classList.add('kal-item-dragging');
-        hideKalPopover();
+        KAL_POPOVER.hide();
       });
       item.addEventListener('dragend', () => item.classList.remove('kal-item-dragging'));
     });
 
-    // Drop-Listener auf alle Tages-Zellen des aktuellen Monats
+    // DnD: Drop auf Tages-Zellen
     document.querySelectorAll('.planung-kal-cell.in-month').forEach(cell => {
       const datum = cell.dataset.datum;
       cell.addEventListener('dragover', e => {
         e.preventDefault();
-        const isEinheit = e.dataTransfer.types.includes('text/x-einheit-id');
-        e.dataTransfer.dropEffect = isEinheit ? 'move' : 'copy';
+        e.dataTransfer.dropEffect = e.dataTransfer.types.includes('text/x-einheit-id') ? 'move' : 'copy';
         cell.classList.add('planung-drag-over');
       });
       cell.addEventListener('dragleave', () => cell.classList.remove('planung-drag-over'));
@@ -208,8 +313,8 @@ const PLANUNG = (() => {
       });
     });
 
-    // Hover-Popover auf Kalender-Einträge
-    setupKalItemPopovers();
+    // Hover-Popover
+    KAL_POPOVER.initItems(document.querySelectorAll('.planung-kal-cell .kal-item[data-einheit-id]'));
   }
 
   function navigateMonth(dir) {
@@ -257,7 +362,7 @@ const PLANUNG = (() => {
     });
 
     const slugOrder = typenCfg.map(t => t.slug);
-    const sortiert = [
+    const sortiert  = [
       ...slugOrder.filter(s => gruppen[s]),
       ...Object.keys(gruppen).filter(s => !slugOrder.includes(s)).sort(),
     ];
@@ -265,7 +370,7 @@ const PLANUNG = (() => {
     let html = '';
     sortiert.forEach(slug => {
       const typCfg = typenCfg.find(t => t.slug === slug);
-      const label = typCfg ? typCfg.bezeichnung : slug;
+      const label  = typCfg ? typCfg.bezeichnung : slug;
       html += `<div class="pblock-gruppe">
         <div class="pblock-gruppe-titel block-typ-${escapeHtml(slug)}">${escapeHtml(label)}</div>
         ${gruppen[slug].map(renderPBlockCard).join('')}
@@ -292,15 +397,13 @@ const PLANUNG = (() => {
 
   function renderPBlockCard(b) {
     const privBadge = b.sichtbarkeit === 'privat'
-      ? `<span class="block-sicht-badge block-sicht-privat">Privat</span>`
-      : '';
+      ? `<span class="block-sicht-badge block-sicht-privat">Privat</span>` : '';
     const editBtn = kannBearbeiten(b)
       ? `<button class="btn btn-ghost btn-sm pblock-edit-btn" onclick="event.stopPropagation();BLOECKE.bearbeiten(${b.id})" title="Block bearbeiten">✎</button>`
       : '';
     return `
       <div class="pblock-card block-typ-${escapeHtml(b.typ)}"
-           draggable="true"
-           data-block-id="${b.id}"
+           draggable="true" data-block-id="${b.id}"
            title="${escapeHtml(b.titel)} – auf Kalendertag ziehen">
         <div class="pblock-drag-handle" aria-hidden="true">⠿</div>
         <div class="pblock-info">
@@ -311,10 +414,9 @@ const PLANUNG = (() => {
       </div>`;
   }
 
-  // ── Einheit verschieben (DnD auf anderen Tag) ────────────
+  // ── Einheit verschieben ───────────────────────────────────
   async function verschiebeEinheit(einheitId, neuesDatum) {
-    // Optimistisch: Element sofort in die Ziel-Zelle verschieben
-    const el = document.querySelector(`.kal-item[data-einheit-id="${einheitId}"]`);
+    const el        = document.querySelector(`.kal-item[data-einheit-id="${einheitId}"]`);
     const zielItems = document.querySelector(`.planung-kal-cell[data-datum="${neuesDatum}"] .kal-cell-items`);
     if (el && zielItems) {
       const hint = zielItems.querySelector('.planung-drop-hint');
@@ -325,26 +427,21 @@ const PLANUNG = (() => {
       const e = data.einheit;
       if (e.datum === neuesDatum) return;
       await apiPut(`einheiten/${einheitId}`, {
-        datum:         neuesDatum,
-        uhrzeit:       e.uhrzeit   || null,
-        typ:           e.typ       || 'frei',
-        titel:         e.titel,
-        treffpunkt_id: e.treffpunkt_id || null,
-        bemerkung:     e.bemerkung || null,
-        sichtbarkeit:  e.sichtbarkeit || 'oeffentlich',
-        status:        e.status    || 'geplant',
+        datum: neuesDatum, uhrzeit: e.uhrzeit || null, typ: e.typ || 'frei',
+        titel: e.titel, treffpunkt_id: e.treffpunkt_id || null,
+        bemerkung: e.bemerkung || null, sichtbarkeit: e.sichtbarkeit || 'oeffentlich',
+        status: e.status || 'geplant',
       });
       notify('Training verschoben.', 'ok');
     } catch (err) {
       notify('Fehler: ' + (err.message || ''), 'err');
-      renderKal(); // Fehlerfall: Kalender aus Server-Zustand wiederherstellen
+      renderKal();
     }
   }
 
-  // ── Einheit aus Kalender löschen ─────────────────────────
+  // ── Einheit löschen ───────────────────────────────────────
   async function loescheEinheit(einheitId) {
     if (!confirm('Diesen Kalendereintrag löschen?\nDer Trainingsblock bleibt erhalten.')) return;
-    // Optimistisch: Element sofort entfernen
     const el = document.querySelector(`.kal-item[data-einheit-id="${einheitId}"]`);
     if (el) el.remove();
     try {
@@ -352,23 +449,21 @@ const PLANUNG = (() => {
       notify('Eintrag gelöscht.', 'ok');
     } catch (err) {
       notify('Fehler: ' + (err.message || ''), 'err');
-      renderKal(); // Fehlerfall: Kalender aus Server-Zustand wiederherstellen
+      renderKal();
     }
   }
 
   // ── Einheit bearbeiten (aus Popover) ─────────────────────
   async function einheitBearbeiten(einheitId) {
-    hideKalPopover();
+    KAL_POPOVER.hide();
     let einheitData, tpListe;
     try {
       [einheitData, tpListe] = await Promise.all([
         apiGet(`einheiten/${einheitId}`, { silent: true }),
         TREFFPUNKTE.laden(),
       ]);
-    } catch (e) {
-      notify('Fehler: ' + (e.message || ''), 'err');
-      return;
-    }
+    } catch (e) { notify('Fehler: ' + (e.message || ''), 'err'); return; }
+
     const e = einheitData.einheit;
     const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
       tpListe.map(t =>
@@ -425,7 +520,6 @@ const PLANUNG = (() => {
     if (!datum) { notify('Datum fehlt.', 'err'); return; }
     const tpIdStr = document.getElementById('edit-e-treffpunkt-id')?.value || '';
     try {
-      // Bestehende Einheit lesen, um unveränderliche Felder zu erhalten
       const data = await apiGet(`einheiten/${einheitId}`, { silent: true });
       const e = data.einheit;
       await apiPut(`einheiten/${einheitId}`, {
@@ -440,119 +534,20 @@ const PLANUNG = (() => {
       });
       schliesseModal();
       notify('Eintrag aktualisiert.', 'ok');
-      renderKal();
+      if ((location.hash || '').startsWith('#planung')) {
+        renderKal();
+      } else {
+        renderPage(); // Hauptkalender neu laden
+      }
     } catch (err) {
       notify('Fehler: ' + (err.message || ''), 'err');
     }
-  }
-
-  // ── Hover-Popover ─────────────────────────────────────────
-  function setupKalItemPopovers() {
-    document.querySelectorAll('.planung-kal-cell .kal-item').forEach(item => {
-      item.addEventListener('mouseenter', () => {
-        clearTimeout(popHideTimer);
-        const id = parseInt(item.dataset.einheitId, 10);
-        showKalPopover(id, item);
-      });
-      item.addEventListener('mouseleave', () => {
-        popHideTimer = setTimeout(hideKalPopover, 180);
-      });
-    });
-  }
-
-  async function showKalPopover(einheitId, anchorEl) {
-    let pop = document.getElementById('kal-popover');
-    if (!pop) {
-      pop = document.createElement('div');
-      pop.id = 'kal-popover';
-      pop.className = 'kal-popover';
-      pop.addEventListener('mouseenter', () => clearTimeout(popHideTimer));
-      pop.addEventListener('mouseleave', () => { popHideTimer = setTimeout(hideKalPopover, 180); });
-      document.body.appendChild(pop);
-    }
-
-    const rect = anchorEl.getBoundingClientRect();
-    pop.innerHTML = `<div class="kal-pop-loading">…</div>`;
-    pop.style.display = 'block';
-    positionPopover(pop, rect);
-
-    // Daten schon geladen?
-    if (popEinheitId === einheitId) return;
-    popEinheitId = einheitId;
-
-    try {
-      const data = await apiGet(`einheiten/${einheitId}`, { silent: true });
-      // Prüfen ob Popover noch für diese Einheit gezeigt wird
-      if (popEinheitId !== einheitId) return;
-      const e = data.einheit;
-      const segs = data.segmente || [];
-
-      const metaParts = [];
-      if (e.uhrzeit) metaParts.push(e.uhrzeit + ' Uhr');
-      if (e.treffpunkt && e.treffpunkt.name) metaParts.push(e.treffpunkt.name);
-
-      const segsHtml = segs.length
-        ? `<div class="kal-pop-segs">${segs.map(s => {
-            const wdh = s.wiederholungen > 1 ? s.wiederholungen + '×' : '';
-            return `<span class="kal-pop-seg">${wdh}${s.distanz_m} m</span>`;
-          }).join('')}</div>`
-        : '';
-
-      const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
-
-      pop.innerHTML = `
-        <div class="kal-pop-typ kal-typ-${escapeHtml(e.typ)}">${escapeHtml(getTypLabel(e.typ))}</div>
-        <div class="kal-pop-titel">${escapeHtml(e.titel)}</div>
-        ${metaParts.length ? `<div class="kal-pop-meta">${metaParts.map(escapeHtml).join(' · ')}</div>` : ''}
-        ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
-        ${segsHtml}
-        ${kannEdit ? `<div class="kal-pop-actions">
-          <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeiten(${einheitId})">Bearbeiten</button>
-        </div>` : ''}`;
-
-      // Neu positionieren nach Inhalt gerendert
-      positionPopover(pop, anchorEl.getBoundingClientRect());
-    } catch (_) {
-      pop.style.display = 'none';
-      popEinheitId = null;
-    }
-  }
-
-  function positionPopover(pop, rect) {
-    const popW = 244;
-    const margin = 10;
-    const viewW = window.innerWidth;
-    const viewH = window.innerHeight;
-
-    // Bevorzugt rechts neben dem Element; falls kein Platz → links
-    let left = rect.right + margin;
-    if (left + popW > viewW - margin) {
-      left = rect.left - popW - margin;
-    }
-    if (left < margin) left = margin;
-
-    // Vertikal: oben bündig mit Element, aber nicht über den Viewport hinaus
-    let top = rect.top;
-    const popH = pop.offsetHeight || 160;
-    if (top + popH > viewH - margin) {
-      top = Math.max(margin, viewH - popH - margin);
-    }
-
-    pop.style.left = left + 'px';
-    pop.style.top  = top  + 'px';
-  }
-
-  function hideKalPopover() {
-    const pop = document.getElementById('kal-popover');
-    if (pop) pop.style.display = 'none';
-    popEinheitId = null;
   }
 
   function reloadSidebar() {
     if (document.getElementById('planung-bloecke-list')) ladeBlocke();
   }
 
-  // globale notify-Hilfsfunktion (aus window oder Fallback)
   function notify(text, art) {
     const cont = document.getElementById('notification-container');
     if (!cont) { console.log(text); return; }

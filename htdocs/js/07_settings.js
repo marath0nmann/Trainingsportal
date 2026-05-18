@@ -388,6 +388,7 @@ const SETTINGS = (() => {
     try {
       await apiPut('admin/settings', payload);
       benachrichtigen('Gespeichert.', 'ok');
+      CONFIG.clear();
       await CONFIG.load();
     } catch (e) {
       benachrichtigen('Fehler: ' + e.message, 'err');

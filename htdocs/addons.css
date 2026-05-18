@@ -169,10 +169,31 @@
   border-left: 4px solid var(--accent);
   border-radius: var(--radius);
   padding: 14px 18px;
-  cursor: pointer;
+  cursor: default;
   box-shadow: var(--shadow);
   transition: background .15s, box-shadow .15s;
+  display: flex; flex-direction: row; gap: 16px; align-items: stretch;
+}
+/* Zweispaltig wenn Komoot-Strecke vorhanden */
+.heute-card-main {
+  flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; gap: 5px;
+}
+.heute-card-komoot {
+  display: none; /* wird via JS befüllt und dann sichtbar */
+  flex: 0 0 42%; max-width: 44%;
+  flex-direction: column; gap: 6px;
+  min-height: 200px;
+}
+.heute-card-split .heute-card-komoot {
+  display: flex;
+}
+.heute-card-komoot iframe {
+  flex: 1; width: 100%; border: none;
+  border-radius: 6px; min-height: 200px; display: block;
+}
+.heute-komoot-link {
+  font-size: 12px; text-align: center; display: block; margin-top: 4px;
 }
 .heute-card:hover {
   background: color-mix(in srgb, var(--accent) 5%, var(--surface));
@@ -253,15 +274,129 @@
   font-size: 11px; color: var(--text2); line-height: 1.6;
 }
 
+/* ============================================================
+   Quartalsplan / Listenansicht
+   ============================================================ */
+.liste-wrap { padding: 24px 28px 48px; max-width: 960px; margin: 0 auto; }
+.liste-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.liste-nav { display: flex; align-items: center; gap: 12px; }
+.liste-nav-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.liste-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 24px; letter-spacing: .5px;
+  color: var(--text);
+}
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border); border-radius: 7px; overflow: hidden;
+}
+.view-toggle .btn { border-radius: 0; border: none !important; }
+.view-toggle .btn + .btn { border-left: 1px solid var(--border) !important; }
+.view-toggle .view-active {
+  background: var(--accent); color: var(--on-accent);
+}
+.view-toggle .view-active:hover { background: var(--accent); opacity: .92; }
+
+.liste-week-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.liste-kw-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 16px;
+  background: var(--surf2);
+  border-bottom: 1px solid var(--border);
+}
+.liste-kw-badge {
+  font-size: 11px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--text2);
+  background: var(--border); border-radius: 4px; padding: 2px 7px;
+}
+.liste-kw-range { font-size: 13px; color: var(--text2); font-weight: 500; }
+.liste-rows { display: flex; flex-direction: column; }
+.liste-row {
+  display: grid;
+  grid-template-columns: 110px 52px 88px 1fr auto;
+  align-items: center;
+  gap: 10px; padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  cursor: pointer; transition: background .1s;
+  font-size: 14px;
+}
+.liste-row:last-child { border-bottom: none; }
+.liste-row:hover { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.liste-row.is-today { background: color-mix(in srgb, var(--primary) 6%, var(--surface)); }
+.liste-row.is-cancelled { opacity: .55; text-decoration: line-through; }
+.liste-row.is-kein-training { opacity: .5; cursor: default; font-style: italic; }
+.liste-row.is-kein-training:hover { background: none; }
+.liste-row.kal-typ-intervall   { border-left-color: var(--primary); }
+.liste-row.kal-typ-dauerlauf   { border-left-color: var(--green, #1a8a3a); }
+.liste-row.kal-typ-funktionell { border-left-color: #c08010; }
+.liste-row.kal-typ-runde       { border-left-color: var(--accent); }
+.liste-row.kal-typ-event       { border-left-color: #8845c0; }
+.liste-date { font-weight: 600; color: var(--text); white-space: nowrap; }
+.liste-date-today {
+  background: var(--primary); color: var(--on-primary);
+  border-radius: 4px; padding: 1px 6px;
+}
+.liste-time { color: var(--text2); font-size: 13px; white-space: nowrap; }
+.liste-typ-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; border-radius: 4px; padding: 2px 7px;
+  background: var(--surf2); color: var(--text2); white-space: nowrap;
+  justify-self: start;
+}
+.liste-typ-intervall   { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); color: var(--primary); }
+.liste-typ-dauerlauf   { background: color-mix(in srgb, var(--green, #1a8a3a) 14%, var(--surface)); color: var(--green, #1a8a3a); }
+.liste-typ-funktionell { background: color-mix(in srgb, #c08010 14%, var(--surface)); color: #c08010; }
+.liste-typ-runde       { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); color: var(--accent); }
+.liste-typ-event       { background: color-mix(in srgb, #8845c0 14%, var(--surface)); color: #8845c0; }
+.liste-typ-kein_training { background: none; color: var(--text2); letter-spacing: 0; }
+.liste-title-text {
+  font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.liste-ort { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.liste-loading, .liste-error, .liste-empty {
+  padding: 48px; text-align: center; color: var(--text2);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.liste-error { color: var(--primary); }
+
 /* Mobile: kompakter Kalender */
 @media (max-width: 720px) {
   .kal-wrap { padding: 12px 8px 32px; }
+  .heute-card { flex-direction: column; }
+  .heute-card-komoot { flex: none; max-width: 100%; min-height: 180px; }
+  .heute-card-komoot iframe { min-height: 180px; }
   .kal-title { font-size: 22px; min-width: 0; }
   .kal-cell { min-height: 80px; padding: 3px 4px; }
   .kal-head-cell { padding: 6px 4px; font-size: 10px; letter-spacing: .5px; }
   .kal-day-num { font-size: 13px; }
   .kal-item { font-size: 10px; padding: 2px 4px; }
   .kal-item-time { display: none; }
+  .liste-wrap { padding: 12px 8px 32px; }
+  .liste-title { font-size: 18px; }
+  .liste-nav-right { gap: 6px; }
+  .liste-row {
+    grid-template-columns: 78px 40px 1fr;
+    grid-template-rows: auto auto;
+    gap: 2px 8px; padding: 9px 12px;
+  }
+  .liste-row .liste-typ-badge { display: none; }
+  .liste-row .liste-date  { grid-column: 1; grid-row: 1; }
+  .liste-row .liste-time  { grid-column: 2; grid-row: 1; font-size: 12px; }
+  .liste-row .liste-title-text { grid-column: 3; grid-row: 1; white-space: normal; word-break: break-word; }
+  .liste-row .liste-ort   { grid-column: 2 / 4; grid-row: 2; text-align: left; }
 }
 
 /* ============================================================
@@ -768,12 +903,12 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   gap: 0;
 }
 
-/* ── Sidebar: Blöcke (links) ── */
+/* ── Sidebar: Blöcke (rechts) ── */
 .planung-sidebar {
   width: 280px; flex-shrink: 0;
   height: 100%; overflow-y: auto;
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   /* kein border-radius, kein box-shadow – flächig in Layout eingebettet */
 }
 .planung-sidebar-head {
@@ -793,12 +928,17 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   font-size: 11px; color: var(--text2);
 }
 
-/* ── Kalender-Spalte (rechts, scrollbar) ── */
+/* ── Kalender-Spalte (links, scrollbar bei Bedarf) ── */
 .planung-kal-col {
   flex: 1 1 0; min-width: 0;
   height: 100%; overflow-y: auto;
   padding: 16px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
+.planung-kal-col::-webkit-scrollbar { width: 5px; }
+.planung-kal-col::-webkit-scrollbar-track { background: transparent; }
+.planung-kal-col::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .planung-kal-toolbar {
   display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
 }
@@ -943,13 +1083,14 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 
 /* Responsive */
 @media (max-width: 900px) {
-  .planung-wrap { height: auto; overflow: visible; }
+  .planung-wrap { height: auto !important; overflow: visible; }
   .planung-split { flex-direction: column; align-items: stretch; }
   .planung-sidebar {
     width: 100%; height: auto; max-height: 40vh;
-    border-right: none; border-bottom: 1px solid var(--border);
+    border-left: none; border-top: 1px solid var(--border);
+    order: 2;
   }
-  .planung-kal-col { height: auto; overflow-y: visible; padding: 12px 8px 32px; }
+  .planung-kal-col { height: auto; overflow-y: visible; padding: 12px 8px 24px; order: 1; }
 }
 
 /* ── Treffpunkte ──────────────────────────────────────────── */
