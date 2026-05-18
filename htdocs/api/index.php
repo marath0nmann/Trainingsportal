@@ -170,7 +170,7 @@ function handleEinheiten(string $method, string $sub): void
         }
 
         $rows = DB::fetchAll(
-            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id,
+            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
                     e.bemerkung, e.sichtbarkeit, e.status,
                     t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
                FROM ' . DB::tbl('training_einheiten') . ' e
@@ -247,7 +247,7 @@ function handleEinheiten(string $method, string $sub): void
         try {
             DB::query(
                 'UPDATE ' . DB::tbl('training_einheiten') . '
-                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, bemerkung=?, sichtbarkeit=?, status=?
+                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, komoot_url=?, bemerkung=?, sichtbarkeit=?, status=?
                   WHERE id=?',
                 [
                     $in['datum'],
@@ -256,6 +256,7 @@ function handleEinheiten(string $method, string $sub): void
                     $in['titel'],
                     isset($in['treffpunkt_id']) && $in['treffpunkt_id'] !== '' && $in['treffpunkt_id'] !== null
                         ? (int)$in['treffpunkt_id'] : null,
+                    isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
                     $in['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? 'oeffentlich',
                     $in['status'] ?? 'geplant',
@@ -1481,6 +1482,16 @@ function ensureTreffpunkteTabelle(): void {
              ADD COLUMN treffpunkt_id INT UNSIGNED NULL AFTER titel"
         );
     }
+    // Migration: komoot_url zu training_einheiten hinzufügen, falls noch nicht vorhanden
+    $cols2 = DB::fetchAll(
+        "SHOW COLUMNS FROM " . DB::tbl('training_einheiten') . " LIKE 'komoot_url'"
+    );
+    if (empty($cols2)) {
+        DB::query(
+            "ALTER TABLE " . DB::tbl('training_einheiten') . "
+             ADD COLUMN komoot_url VARCHAR(500) NULL AFTER treffpunkt_id"
+        );
+    }
 }
 
 function mapTreffpunkt(array $r): array {
@@ -1636,6 +1647,16 @@ function ensureBloeckeTabellen(): void {
               REFERENCES " . DB::tbl('training_bloecke') . "(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Migration: komoot_url zu training_bloecke hinzufügen, falls noch nicht vorhanden
+    $bCols = DB::fetchAll(
+        "SHOW COLUMNS FROM " . DB::tbl('training_bloecke') . " LIKE 'komoot_url'"
+    );
+    if (empty($bCols)) {
+        DB::query(
+            "ALTER TABLE " . DB::tbl('training_bloecke') . "
+             ADD COLUMN komoot_url VARCHAR(500) NULL AFTER typ"
+        );
+    }
     // Trainer- und Editor-Rolle anlegen, falls noch nicht vorhanden
     DB::query(
         "INSERT IGNORE INTO " . DB::tbl('rollen') . " (name, rechte) VALUES
@@ -1749,14 +1770,15 @@ function handleBloecke(string $method, string $sub): void
                 ? (int)$in['treffpunkt_id'] : null;
             DB::query(
                 'INSERT INTO ' . DB::tbl('training_einheiten') . '
-                 (datum, uhrzeit, typ, titel, treffpunkt_id, bemerkung, sichtbarkeit, status, erstellt_von)
-                 VALUES (?,?,?,?,?,?,?,?,?)',
+                 (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, bemerkung, sichtbarkeit, status, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?,?,?,?)',
                 [
                     $in['datum'],
                     $in['uhrzeit'] ?? null,
                     $block['typ'],
                     $block['titel'],
                     $tpId,
+                    $block['komoot_url'] ?? null,
                     $block['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? $defaultSicht,
                     'geplant',
@@ -1811,11 +1833,12 @@ function handleBloecke(string $method, string $sub): void
         try {
             DB::query(
                 'INSERT INTO ' . DB::tbl('training_bloecke') . '
-                 (titel, typ, bemerkung, sichtbarkeit, erstellt_von)
-                 VALUES (?,?,?,?,?)',
+                 (titel, typ, komoot_url, bemerkung, sichtbarkeit, erstellt_von)
+                 VALUES (?,?,?,?,?,?)',
                 [
                     $in['titel'],
                     $in['typ'] ?? 'intervall',
+                    isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
                     $in['bemerkung'] ?? null,
                     $sicht,
                     (int)$user['id'],
@@ -1864,11 +1887,12 @@ function handleBloecke(string $method, string $sub): void
         try {
             DB::query(
                 'UPDATE ' . DB::tbl('training_bloecke') . '
-                    SET titel=?, typ=?, bemerkung=?, sichtbarkeit=?
+                    SET titel=?, typ=?, komoot_url=?, bemerkung=?, sichtbarkeit=?
                   WHERE id=?',
                 [
                     $in['titel'],
                     $in['typ'] ?? 'intervall',
+                    isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
                     $in['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? $block['sichtbarkeit'],
                     $id,
@@ -1920,6 +1944,7 @@ function mapBlock(array $r): array {
         'id'           => (int)$r['id'],
         'titel'        => $r['titel'],
         'typ'          => $r['typ'],
+        'komoot_url'   => $r['komoot_url'] ?? null,
         'bemerkung'    => $r['bemerkung'],
         'sichtbarkeit' => $r['sichtbarkeit'],
         'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
@@ -2012,6 +2037,7 @@ function mapEinheit(array $r): array {
         'typ'          => $r['typ'],
         'titel'        => $r['titel'],
         'treffpunkt'   => $tp,
+        'komoot_url'   => $r['komoot_url'] ?? null,
         'bemerkung'    => $r['bemerkung'],
         'sichtbarkeit' => $r['sichtbarkeit'] ?? 'oeffentlich',
         'status'       => $r['status'] ?? 'geplant',

@@ -43,7 +43,7 @@ const EDITOR = (() => {
     const e = opts.einheit || {
       id: null, datum: opts.datum || ymd(new Date()),
       uhrzeit: '', typ: 'intervall', titel: '',
-      treffpunkt: null, bemerkung: '',
+      treffpunkt: null, komoot_url: '', bemerkung: '',
       sichtbarkeit: 'oeffentlich', status: 'geplant',
     };
     currentId = e.id;
@@ -55,6 +55,8 @@ const EDITOR = (() => {
     const curTpId = e.treffpunkt ? e.treffpunkt.id : null;
     const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
       tpListe.map(t => `<option value="${t.id}"${t.id === curTpId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
+
+    const istRunde = e.typ === 'runde';
 
     const cont = document.getElementById('modal-container');
     cont.innerHTML = `
@@ -79,7 +81,7 @@ const EDITOR = (() => {
               </div>
               <div class="ed-fg">
                 <label>Typ</label>
-                <select id="ed-typ">${getTypOptions().map(o => `<option value="${o.value}"${o.value===e.typ?' selected':''}>${o.label}</option>`).join('')}</select>
+                <select id="ed-typ" onchange="EDITOR.onTypChange()">${getTypOptions().map(o => `<option value="${o.value}"${o.value===e.typ?' selected':''}>${o.label}</option>`).join('')}</select>
               </div>
               <div class="ed-fg">
                 <label>Sichtbarkeit</label>
@@ -109,7 +111,14 @@ const EDITOR = (() => {
               </div>
             </div>
 
-            <div class="ed-segwrap">
+            <div id="ed-komoot-wrap" class="ed-komoot-wrap"${istRunde ? '' : ' style="display:none"'}>
+              <div class="ed-fg ed-fg-wide">
+                <label>Komoot-Strecke <span class="ed-hint">(Tour-Link, z. B. https://www.komoot.com/tour/…)</span></label>
+                <input type="url" id="ed-komoot-url" value="${escapeHtml(e.komoot_url || '')}" placeholder="https://www.komoot.com/tour/…">
+              </div>
+            </div>
+
+            <div id="ed-seg-wrap" class="ed-segwrap"${istRunde ? ' style="display:none"' : ''}>
               <div class="ed-segheader">
                 <h3>Segmente</h3>
                 <div class="ed-segactions">
@@ -216,18 +225,30 @@ const EDITOR = (() => {
     rendereSegmente();
   }
 
+  function onTypChange() {
+    const typ = (document.getElementById('ed-typ') || {}).value || '';
+    const istRunde = typ === 'runde';
+    const komootWrap = document.getElementById('ed-komoot-wrap');
+    const segWrap    = document.getElementById('ed-seg-wrap');
+    if (komootWrap) komootWrap.style.display = istRunde ? '' : 'none';
+    if (segWrap)    segWrap.style.display    = istRunde ? 'none' : '';
+  }
+
   async function speichern() {
-    const tpIdStr = val('ed-treffpunkt-id');
+    const tpIdStr  = val('ed-treffpunkt-id');
+    const typ      = val('ed-typ');
+    const istRunde = typ === 'runde';
     const payload = {
       datum:          val('ed-datum'),
       uhrzeit:        val('ed-uhrzeit') || null,
-      typ:            val('ed-typ'),
+      typ,
       titel:          val('ed-titel'),
       treffpunkt_id:  tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
+      komoot_url:     istRunde ? (val('ed-komoot-url') || null) : null,
       bemerkung:      val('ed-bemerkung') || null,
       sichtbarkeit:   val('ed-sichtbarkeit'),
       status:         val('ed-status'),
-      segmente:       currentSegmente,
+      segmente:       istRunde ? [] : currentSegmente,
     };
     if (!payload.datum)  { benachrichtigen('Datum fehlt.', 'err'); return; }
     if (!payload.titel)  { benachrichtigen('Titel fehlt.', 'err'); return; }
@@ -275,5 +296,5 @@ const EDITOR = (() => {
     setTimeout(() => div.remove(), 4000);
   }
 
-  return { open, parsenAusTitel, segmentHinzufuegen, segmentLoeschen, speichern, loeschen };
+  return { open, parsenAusTitel, segmentHinzufuegen, segmentLoeschen, speichern, loeschen, onTypChange };
 })();
