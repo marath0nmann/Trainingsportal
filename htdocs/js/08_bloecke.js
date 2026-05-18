@@ -127,8 +127,8 @@ const BLOECKE = (() => {
     if (!m) return null;
     let token = null;
     try { token = new URL(url).searchParams.get('share_token'); } catch (_) {}
-    return 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1'
-      + (token ? '&share_token=' + encodeURIComponent(token) : '');
+    const qs = token ? '?share_token=' + encodeURIComponent(token) : '';
+    return 'https://www.komoot.com/tour/' + m[1] + '/embed' + qs;
   }
 
   function renderBlockCard(b) {

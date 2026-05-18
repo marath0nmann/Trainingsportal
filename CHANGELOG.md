@@ -1,7 +1,7 @@
 # Changelog
 
-## v62
-- Fix: Komoot-Embed – share_token aus gespeicherter URL extrahiert und an Embed-URL angehängt (private/geteilte Touren zeigen jetzt Vorschau statt leerem iFrame)
+## v63
+- Komoot-Embed: Höhe auf 680px erhöht (Heute-Sektion 400px) damit die Karte gut sichtbar ist; `profile=1` entfernt (kein Höhenprofil, mehr Kartenfläche)
 
 ## v56
 - „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
