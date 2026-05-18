@@ -434,7 +434,7 @@ const BLOECKE = (() => {
   function berechneGesamtdistanz(segs) {
     return (segs || []).reduce((sum, s) => {
       const wdh = (s.wiederholungen > 0) ? s.wiederholungen : 1;
-      return sum + wdh * (s.distanz_m || 0);
+      return sum + wdh * ((s.distanz_m || 0) + (s.pause_m || 0));
     }, 0);
   }
 
