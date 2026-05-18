@@ -167,8 +167,9 @@ const BLOECKE = (() => {
     }
     const b = blockData.block;
     const heute = datum || ymd(new Date());
-    const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
-      tpListe.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+    const stdTpId = String(appConfig && appConfig.training_standard_treffpunkt_id || '');
+    const tpOptionen = `<option value=""${stdTpId === '' ? ' selected' : ''}>— kein Treffpunkt —</option>` +
+      tpListe.map(t => `<option value="${t.id}"${String(t.id) === stdTpId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
 
     // Default-Uhrzeit aus Admin-Einstellungen per Wochentag (1=Mo … 7=So)
     let defaultUhrzeit = '';

@@ -15,6 +15,7 @@ const SETTINGS = (() => {
   let uhrzeiten = {};     // { "1": "18:00", ... } – 1=Mo … 7=So
   let typen = [];         // { slug, bezeichnung, farbe, reihenfolge, aktiv, block_count }
   let typenBearbeitet = null; // slug des gerade inline bearbeiteten Typs
+  let standardTreffpunktId = '';
 
   const WOCHENTAGE_LANG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
@@ -33,11 +34,13 @@ const SETTINGS = (() => {
       const [settingsR, typenR] = await Promise.all([
         apiGet('admin/settings', { silent: true }),
         apiGet('admin/typen',    { silent: true }),
+        TREFFPUNKTE.laden(),
       ]);
       felder        = settingsR.felder || [];
       feiertage     = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
       paceDistanzen = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
       uhrzeiten     = parseUhrzeitenJson(getWert('training_default_uhrzeiten'));
+      standardTreffpunktId = getWert('training_standard_treffpunkt_id') || '';
       typen         = typenR.typen || [];
       rendereForm(main);
     } catch (e) {
@@ -104,7 +107,8 @@ const SETTINGS = (() => {
             '<div class="settings-row-label">' +
               '<div style="font-size:13px;font-weight:600;color:var(--text)">ICS-Feeds</div>' +
               '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
-                'Pro Feed eine ICS-URL. Label und Farbe werden im Kalender als Marker auf den jeweiligen Tagen angezeigt. ' +
+                'Pro Feed eine ICS-URL oder <code style="font-size:11px">builtin://feiertage/NRW</code> für den eingebauten Rechner. ' +
+                '<code style="font-size:11px">{year}</code> in externen URLs wird automatisch ersetzt. ' +
                 'Vorschläge: ' +
                 '<a href="#" onclick="SETTINGS.beispiel(\'feiertage\');return false;" style="color:var(--accent)">Feiertage NRW</a>, ' +
                 '<a href="#" onclick="SETTINGS.beispiel(\'ferien\');return false;" style="color:var(--accent)">Schulferien NRW</a>.' +
@@ -138,6 +142,18 @@ const SETTINGS = (() => {
             '</div>' +
             '<div class="settings-row-input">' +
               '<input type="number" id="set-dauer" min="15" max="600" step="15" value="' + escapeHtml(dauerMin) + '" class="settings-input" style="width:120px">' +
+            '</div>' +
+          '</div>' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Standard-Treffpunkt</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">Wird beim Einplanen eines Trainingsblocks vorausgewählt. Kann im Einzelfall überschrieben werden.</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<select id="set-standard-treffpunkt" class="settings-input">' +
+                '<option value="">— kein Standard —</option>' +
+                TREFFPUNKTE.getListe().map(t => `<option value="${t.id}"${String(t.id) === String(standardTreffpunktId) ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('') +
+              '</select>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -329,8 +345,8 @@ const SETTINGS = (() => {
   }
   function beispiel(typ) {
     const m = {
-      feiertage: { url: 'https://www.schulferien.org/iCal/Ferien/Feiertag/ICalKalender_Schulferien_Feiertage_in_Nordrhein-Westfalen.ics', label: 'Feiertage NRW', farbe: '#cc0000' },
-      ferien:    { url: 'https://www.schulferien.org/iCal/Ferien/ICalKalender_Schulferien_in_Nordrhein-Westfalen.ics',                 label: 'Schulferien NRW', farbe: '#003087' },
+      feiertage: { url: 'builtin://feiertage/NRW', label: 'Feiertage NRW', farbe: '#cc0000' },
+      ferien:    { url: 'https://www.schulferien.org/deutschland/ical/download/?tbid=46&j={year}&t=1', label: 'Schulferien NRW', farbe: '#003087' },
     };
     if (!m[typ]) return;
     feiertage.push(m[typ]);
@@ -362,10 +378,11 @@ const SETTINGS = (() => {
 
     const payload = {
       werte: {
-        training_feiertage_ics_urls:  JSON.stringify(liste),
-        training_default_dauer_min:   document.getElementById('set-dauer').value || '90',
-        training_pace_distanzen:      JSON.stringify(paceDistanzen),
-        training_default_uhrzeiten:   JSON.stringify(uhrzeiten),
+        training_feiertage_ics_urls:      JSON.stringify(liste),
+        training_default_dauer_min:       document.getElementById('set-dauer').value || '90',
+        training_pace_distanzen:          JSON.stringify(paceDistanzen),
+        training_default_uhrzeiten:       JSON.stringify(uhrzeiten),
+        training_standard_treffpunkt_id:  document.getElementById('set-standard-treffpunkt')?.value || '',
       },
     };
     try {
@@ -397,10 +414,16 @@ const SETTINGS = (() => {
           const farbe = q.ok ? 'var(--green,#1a8a3a)' : 'var(--primary)';
           const icon  = q.ok ? '✅' : '❌';
           const detail = q.fehler ? ' <span style="color:var(--text2);font-size:11px">(' + escapeHtml(q.fehler) + ')</span>' : '';
+          const evLabel = q.ok
+            ? (q.events_im_zeitraum ?? 0) + ' / ' + (q.events_gesamt ?? '?') + ' ges.'
+            : '–';
+          const sample = (q.sample || []).map(s =>
+            '<div style="font-size:10px;color:var(--text2)">' + escapeHtml(s.datum) + ' ' + escapeHtml(s.titel) + '</div>'
+          ).join('');
           return '<tr style="border-bottom:1px solid var(--border)">' +
             '<td style="padding:6px 8px;font-family:monospace;font-size:11px;word-break:break-all">' + escapeHtml(q.url) + '</td>' +
             '<td style="padding:6px 8px;color:' + farbe + ';font-weight:600">' + icon + ' ' + escapeHtml(q.status) + detail + '</td>' +
-            '<td style="padding:6px 8px;text-align:right">' + (q.events_im_zeitraum ?? '–') + '</td>' +
+            '<td style="padding:6px 8px;text-align:right;white-space:nowrap">' + evLabel + (sample ? '<br>' + sample : '') + '</td>' +
           '</tr>';
         }).join('') +
         '</tbody></table>';

@@ -428,7 +428,11 @@ function bearbeiteHeuteEinheit(id) {
 // Segment-Blöcke (TrainingPeaks-Stil): jede Wiederholung als eigener Block
 function renderSegmentBlocksHtml(seg, paceData, typ) {
   if (!seg.length) return '';
-  const maxDist = Math.max(...seg.map(s => s.distanz_m || 1));
+  const maxDist = Math.max(
+    ...seg.map(s => s.distanz_m || 0),
+    ...seg.map(s => s.pause_m   || 0),
+    1
+  );
   const typClass = `seg-blk-typ-${typ || 'frei'}`;
 
   let blocksHtml = '';
@@ -445,8 +449,9 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
       const tip = `${wdh > 1 ? (i + 1) + ' / ' + wdh + ' · ' : ''}${distStr}${s.pace_referenz ? ' · ' + s.pace_referenz : ''}${paceStr ? ' · ' + paceStr : ''}`;
       blocksHtml += `<div class="seg-blk seg-blk-work ${typClass}" style="flex:${s.distanz_m};height:${h}px" title="${escapeHtml(tip)}"></div>`;
       if (s.pause_m) {
+        const pH  = Math.round(16 + (s.pause_m / maxDist) * 40);
         const pLbl = PAUSE_LABEL[s.pause_typ] || 'Pause';
-        blocksHtml += `<div class="seg-blk seg-blk-pause" title="${s.pause_m} m ${pLbl}"></div>`;
+        blocksHtml += `<div class="seg-blk seg-blk-pause" style="flex:${s.pause_m};height:${pH}px" title="${s.pause_m} m ${pLbl}"></div>`;
       }
     }
   });
