@@ -1,5 +1,8 @@
 # Changelog
 
+## v49
+- Heute-Sektion: Warnhinweis „Persönliche Pace noch nicht konfiguriert" mit Link zum Athletenprofil, wenn Segmente Pace-Referenzen enthalten aber keine Pace eingestellt ist
+
 ## v48
 - Fix: Komoot-Link – `p[0]` als leerer Platzhalter nötig, damit `p[1][loc]` als Ziel (nicht Start) interpretiert wird
 - Heute-Sektion: Segmente und persönliche Pace direkt inline angezeigt (kein „Details anzeigen"-Link mehr); FIT- und Bearbeiten-Button am unteren Rand der Karte
