@@ -692,10 +692,23 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .bloecke-error { color: var(--primary); }
 
 .bloecke-gruppe-titel {
+  display: flex; align-items: center; gap: 10px;
+  margin: 24px 0 10px;
+}
+.bloecke-gruppe-typ {
   font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 700; font-size: 18px; letter-spacing: .5px;
-  color: var(--text2); margin: 24px 0 10px;
+  font-weight: 700; font-size: 16px;
   text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text2);
+  padding: 2px 10px 2px 8px;
+  border-left: 4px solid var(--accent);
+  /* Farbe wird per JS in applyTypenFarben() überschrieben */
+}
+.bloecke-gruppe-count {
+  font-size: 12px; font-weight: 600;
+  color: var(--text2);
+  background: var(--bg2); border-radius: 20px;
+  padding: 1px 8px;
 }
 
 .bloecke-grid {
