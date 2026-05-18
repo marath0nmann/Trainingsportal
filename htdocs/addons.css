@@ -75,15 +75,28 @@
   border-left: 3px solid var(--accent);
   transition: background .1s, transform .1s;
   display: flex; flex-direction: column; gap: 1px;
-  overflow: hidden;
+  overflow: hidden; position: relative;
 }
 .kal-item:hover { background: color-mix(in srgb, var(--accent) 10%, var(--surf2)); }
 .kal-item.is-cancelled { opacity: .55; text-decoration: line-through; }
+.kal-item[draggable="true"] { cursor: grab; }
+.kal-item[draggable="true"]:active { cursor: grabbing; }
+.kal-item.kal-item-dragging { opacity: .4; }
 .kal-item-time { font-size: 10px; color: var(--text2); font-weight: 600; }
 .kal-item-title {
   font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.kal-item-del {
+  display: none;
+  position: absolute; top: 2px; right: 3px;
+  background: none; border: none; padding: 0 2px;
+  color: var(--text2); font-size: 13px; line-height: 1;
+  cursor: pointer; opacity: .7;
+  transition: opacity .1s, color .1s;
+}
+.kal-item-del:hover { opacity: 1; color: var(--primary); }
+.kal-item:hover .kal-item-del { display: block; }
 
 /* Typ-Farben (Border-Akzent) */
 .kal-item.kal-typ-intervall    { border-left-color: var(--primary); }

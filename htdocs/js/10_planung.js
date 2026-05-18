@@ -101,11 +101,16 @@ const PLANUNG = (() => {
           (cursor.getDay() === 0 || cursor.getDay() === 6) ? 'weekend' : '',
         ].filter(Boolean).join(' ');
 
+        const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
         const itemsHtml = items.map(e => {
           const cls = `kal-item kal-typ-${e.typ}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
-          return `<div class="${cls}" title="${escapeHtml(e.titel)}">
+          const delBtn = kannEdit
+            ? `<button class="kal-item-del" onclick="event.stopPropagation();PLANUNG.loescheEinheit(${e.id})" title="Eintrag löschen">×</button>`
+            : '';
+          return `<div class="${cls}" data-einheit-id="${e.id}" draggable="${kannEdit}" title="${escapeHtml(e.titel)}">
             ${e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : ''}
             <span class="kal-item-title">${escapeHtml(e.titel)}</span>
+            ${delBtn}
           </div>`;
         }).join('');
 
@@ -129,21 +134,34 @@ const PLANUNG = (() => {
       grid.outerHTML = `<div id="planung-kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
     }
 
+    // Dragstart-Listener auf Kalender-Einheiten (nur für Trainer/Admin)
+    document.querySelectorAll('.planung-kal-cell .kal-item[draggable="true"]').forEach(item => {
+      item.addEventListener('dragstart', e => {
+        e.stopPropagation();
+        e.dataTransfer.setData('text/x-einheit-id', item.dataset.einheitId);
+        e.dataTransfer.effectAllowed = 'move';
+        item.classList.add('kal-item-dragging');
+      });
+      item.addEventListener('dragend', () => item.classList.remove('kal-item-dragging'));
+    });
+
     // Drop-Listener auf alle Tages-Zellen des aktuellen Monats
     document.querySelectorAll('.planung-kal-cell.in-month').forEach(cell => {
       const datum = cell.dataset.datum;
       cell.addEventListener('dragover', e => {
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
+        const isEinheit = e.dataTransfer.types.includes('text/x-einheit-id');
+        e.dataTransfer.dropEffect = isEinheit ? 'move' : 'copy';
         cell.classList.add('planung-drag-over');
       });
       cell.addEventListener('dragleave', () => cell.classList.remove('planung-drag-over'));
       cell.addEventListener('drop', e => {
         e.preventDefault();
         cell.classList.remove('planung-drag-over');
-        const blockId = parseInt(e.dataTransfer.getData('text/plain'), 10);
-        if (!blockId) return;
-        BLOECKE.anwenden(blockId, datum);
+        const einheitId = parseInt(e.dataTransfer.getData('text/x-einheit-id') || '', 10);
+        if (einheitId) { verschiebeEinheit(einheitId, datum); return; }
+        const blockId = parseInt(e.dataTransfer.getData('text/plain') || '', 10);
+        if (blockId) BLOECKE.anwenden(blockId, datum);
       });
     });
   }
@@ -247,9 +265,44 @@ const PLANUNG = (() => {
       </div>`;
   }
 
+  // ── Einheit verschieben (DnD auf anderen Tag) ────────────
+  async function verschiebeEinheit(einheitId, neuesDatum) {
+    try {
+      const data = await apiGet(`einheiten/${einheitId}`, { silent: true });
+      const e = data.einheit;
+      if (e.datum === neuesDatum) return;
+      await apiPut(`einheiten/${einheitId}`, {
+        datum:         neuesDatum,
+        uhrzeit:       e.uhrzeit   || null,
+        typ:           e.typ       || 'frei',
+        titel:         e.titel,
+        treffpunkt_id: e.treffpunkt_id || null,
+        bemerkung:     e.bemerkung || null,
+        sichtbarkeit:  e.sichtbarkeit || 'oeffentlich',
+        status:        e.status    || 'geplant',
+      });
+      notify('Training verschoben.', 'ok');
+      renderKal();
+    } catch (err) {
+      notify('Fehler: ' + (err.message || ''), 'err');
+    }
+  }
+
+  // ── Einheit aus Kalender löschen ─────────────────────────
+  async function loescheEinheit(einheitId) {
+    if (!confirm('Diesen Kalendereintrag löschen?\nDer Trainingsblock bleibt erhalten.')) return;
+    try {
+      await apiDel(`einheiten/${einheitId}`);
+      notify('Eintrag gelöscht.', 'ok');
+      renderKal();
+    } catch (err) {
+      notify('Fehler: ' + (err.message || ''), 'err');
+    }
+  }
+
   function reloadSidebar() {
     if (document.getElementById('planung-bloecke-list')) ladeBlocke();
   }
 
-  return { render, navigateMonth, reloadSidebar };
+  return { render, navigateMonth, reloadSidebar, loescheEinheit };
 })();
