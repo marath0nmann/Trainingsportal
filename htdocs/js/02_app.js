@@ -380,23 +380,7 @@ async function ladHeuteDetails(items) {
         </div>`;
       }
       if (seg.length) {
-        const segItems = seg.map((s, i) => {
-          const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
-          const splitSek = paceData ? PACE.splitzeit(s, paceData) : null;
-          const paceBox  = sekProKm != null ? `
-            <div class="seg-pace-info">
-              <div class="seg-split">${PACE.formatTime(splitSek)}<span class="seg-split-unit">/Wdh</span></div>
-              <div class="seg-pace-pace">${PACE.formatPace(sekProKm)}</div>
-            </div>` : '';
-          return `
-            <div class="seg-item">
-              <div class="seg-num">${i + 1}</div>
-              <div class="seg-main">${escapeHtml(PARSER.formatSegment(s))}</div>
-              ${s.pace_referenz ? `<div class="seg-pace">${escapeHtml(s.pace_referenz)}</div>` : ''}
-              ${paceBox}
-            </div>`;
-        }).join('');
-        html += `<div class="seg-list heute-seg-list">${segItems}</div>`;
+        html += renderSegmentBlocksHtml(seg, paceData, einheit.typ);
       }
 
       const actions = [];
@@ -422,6 +406,54 @@ function bearbeiteHeuteEinheit(id) {
   if (data) EDITOR.open(data);
 }
 
+// Segment-Blöcke (TrainingPeaks-Stil): jede Wiederholung als eigener Block
+function renderSegmentBlocksHtml(seg, paceData, typ) {
+  if (!seg.length) return '';
+  const maxDist = Math.max(...seg.map(s => s.distanz_m || 1));
+  const typClass = `seg-blk-typ-${typ || 'frei'}`;
+
+  let blocksHtml = '';
+  seg.forEach((s, si) => {
+    if (si > 0) blocksHtml += `<div class="seg-blk-sep"></div>`;
+    const wdh = s.wiederholungen || 1;
+    const h   = Math.round(16 + (s.distanz_m / maxDist) * 40);
+    const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
+    const splitSek = sekProKm != null ? sekProKm * (s.distanz_m / 1000) : null;
+    const paceStr  = splitSek != null ? PACE.formatTime(splitSek) : '';
+    const distStr  = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
+    const PAUSE_LABEL = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' };
+    for (let i = 0; i < wdh; i++) {
+      if (i > 0 && s.pause_m) {
+        const pLbl = PAUSE_LABEL[s.pause_typ] || 'Pause';
+        blocksHtml += `<div class="seg-blk seg-blk-pause" title="${s.pause_m} m ${pLbl}"></div>`;
+      }
+      const tip = `${wdh > 1 ? (i + 1) + ' / ' + wdh + ' · ' : ''}${distStr}${s.pace_referenz ? ' · ' + s.pace_referenz : ''}${paceStr ? ' · ' + paceStr : ''}`;
+      blocksHtml += `<div class="seg-blk seg-blk-work ${typClass}" style="flex:${s.distanz_m};height:${h}px" title="${escapeHtml(tip)}"></div>`;
+    }
+  });
+
+  const summaryHtml = seg.map(s => {
+    const wdh = s.wiederholungen || 1;
+    const distStr = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
+    let line = (wdh > 1 ? wdh + ' × ' : '') + distStr;
+    if (s.pause_m) {
+      const pLbl = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' }[s.pause_typ] || 'Pause';
+      line += ` · ${s.pause_m} m ${pLbl}`;
+    }
+    if (s.pace_referenz) line += ` · ${escapeHtml(s.pace_referenz)}`;
+    const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
+    const splitSek = sekProKm != null ? sekProKm * (s.distanz_m / 1000) : null;
+    if (splitSek != null) line += ` · ${PACE.formatTime(splitSek)} / Wdh`;
+    if (sekProKm  != null) line += ` · ${PACE.formatPace(sekProKm)}`;
+    return `<div class="seg-blk-sum-row">${line}</div>`;
+  }).join('');
+
+  return `<div class="seg-blocks-wrap">
+    <div class="seg-blocks">${blocksHtml}</div>
+    ${summaryHtml ? `<div class="seg-blk-summary">${summaryHtml}</div>` : ''}
+  </div>`;
+}
+
 function navigateKalender(monthYM) {
   location.hash = `#kalender/${monthYM}`;
 }
@@ -439,7 +471,7 @@ async function zeigeEinheit(id) {
     const seg = data.segmente || [];
     state._lastEinheit = { einheit: e, segmente: seg };
 
-    // Pace nur laden, wenn eingeloggt und Segmente mit pace_referenz vorhanden
+    // Pace laden wenn eingeloggt und Segmente mit Pace-Referenz vorhanden
     let paceData = null;
     const hatPaceRef = seg.some(s => s.pace_referenz);
     if (state.user && hatPaceRef) {
@@ -449,36 +481,10 @@ async function zeigeEinheit(id) {
     const wochentag = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][datum.getDay()];
     const datStr = `${wochentag}, ${datum.getDate()}. ${MONATSNAMEN[datum.getMonth()]} ${datum.getFullYear()}`;
 
-    const paceHeader = (state.user && hatPaceRef) ? `
-      <div class="pace-header">
-        <span class="pace-label">Persönliche Pace</span>
-        <button class="btn btn-ghost btn-sm" onclick="PROFIL.open()" title="Pace-Referenzen konfigurieren">⚙ Profil</button>
-        ${paceData ? '' : '<span class="pace-hint">– keine Referenz konfiguriert –</span>'}
-      </div>` : '';
-
     const segHtml = seg.length ? `
       <div class="modal-row modal-row-block">
         <span class="modal-label">Segmente</span>
-        ${paceHeader}
-        <div class="seg-list">
-          ${seg.map((s, i) => {
-            const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
-            const splitSek = paceData ? PACE.splitzeit(s, paceData) : null;
-            const totalSek = (splitSek != null) ? splitSek * (s.wiederholungen || 1) : null;
-            const paceBox = (sekProKm != null) ? `
-              <div class="seg-pace-info">
-                <div class="seg-split">${PACE.formatTime(splitSek)}<span class="seg-split-unit">/Wdh</span></div>
-                <div class="seg-pace-pace">${PACE.formatPace(sekProKm)}</div>
-              </div>` : '';
-            return `
-              <div class="seg-item">
-                <div class="seg-num">${i + 1}</div>
-                <div class="seg-main">${escapeHtml(PARSER.formatSegment(s))}</div>
-                ${s.pace_referenz ? `<div class="seg-pace">${escapeHtml(s.pace_referenz)}</div>` : ''}
-                ${paceBox}
-              </div>`;
-          }).join('')}
-        </div>
+        ${renderSegmentBlocksHtml(seg, paceData, e.typ)}
       </div>` : '';
 
     cont.innerHTML = `
