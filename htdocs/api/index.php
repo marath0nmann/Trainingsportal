@@ -862,7 +862,12 @@ function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string 
     if (!is_dir($cacheDir)) @mkdir($cacheDir, 0775, true);
     $f = $cacheDir . '/' . sha1($url) . '.ics';
     if (is_file($f) && (time() - filemtime($f) < $ttl)) {
-        return file_get_contents($f);
+        $cached = file_get_contents($f);
+        // Ungültigen Cache (z. B. alten HTML-Inhalt vom früheren Bug) verwerfen
+        if (str_contains($cached, 'BEGIN:VCALENDAR') || str_contains($cached, 'BEGIN:VEVENT')) {
+            return $cached;
+        }
+        @unlink($f); // HTML-Cache löschen, Neu-Fetch erzwingen
     }
 
     $body = false;
