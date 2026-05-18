@@ -272,16 +272,8 @@ async function renderKalender(main, monthArg) {
     (byDate[e.datum] = byDate[e.datum] || []).push(e);
   });
 
-  // Heute-Sektion: nur anzeigen, wenn heute im geladenen Bereich liegt
-  const todayInRange = todayKey >= ymd(gridStart) && todayKey <= ymd(gridEnd);
-  const todayItems = todayInRange
-    ? (byDate[todayKey] || []).filter(e => e.typ !== 'kein_training')
-    : [];
-  const heuteEl = document.getElementById('heute-sektion');
-  if (heuteEl) {
-    heuteEl.innerHTML = todayItems.length ? renderHeuteSektionHtml(todayItems) : '';
-    if (todayItems.length) ladHeuteDetails(todayItems);
-  }
+  // Heute-Sektion immer unabhängig nachladen
+  ladeHeuteSektionInto('heute-sektion');
 
   // Feiertage über Datum spreizen (mehrtägige Ferien)
   const feiertageByDate = {};
@@ -371,6 +363,20 @@ function renderHeuteSektionHtml(items) {
       </div>`;
   }).join('');
   return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
+}
+
+async function ladeHeuteSektionInto(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const today = ymd(new Date());
+  try {
+    const d = await apiGet(`einheiten?von=${today}&bis=${today}`, { silent: true });
+    const items = (d.einheiten || []).filter(e => e.typ !== 'kein_training');
+    el.innerHTML = items.length ? renderHeuteSektionHtml(items) : '';
+    if (items.length) ladHeuteDetails(items);
+  } catch (e) {
+    el.innerHTML = '';
+  }
 }
 
 async function ladHeuteDetails(items) {
@@ -561,8 +567,11 @@ async function renderListe(main, quarterArg) {
           </div>
         </div>
       </div>
+      <div id="heute-sektion"></div>
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
     </div>`;
+
+  ladeHeuteSektionInto('heute-sektion');
 
   let einheiten = [];
   try {
