@@ -872,8 +872,9 @@ function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string 
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT        => 10,
-            CURLOPT_USERAGENT      => 'Trainingsportal-TuSOedt/1.0',
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; Trainingsportal/1.0)',
             CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_HTTPHEADER     => ['Accept: text/calendar, application/ics, */*'],
         ];
         $ch = curl_init($url);
         curl_setopt_array($ch, $curlOpts);
@@ -901,8 +902,8 @@ function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string 
     // Fallback: file_get_contents (falls allow_url_fopen=On)
     if ($body === false && ini_get('allow_url_fopen')) {
         $ctx = stream_context_create([
-            'http'  => ['timeout' => 10, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
-            'https' => ['timeout' => 10, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
+            'http'  => ['timeout' => 10, 'header' => "User-Agent: Mozilla/5.0 (compatible; Trainingsportal/1.0)\r\nAccept: text/calendar, application/ics, */*\r\n"],
+            'https' => ['timeout' => 10, 'header' => "User-Agent: Mozilla/5.0 (compatible; Trainingsportal/1.0)\r\nAccept: text/calendar, application/ics, */*\r\n"],
         ]);
         $body = @file_get_contents($url, false, $ctx);
         if ($body === false) $fehler = ($fehler ? $fehler . '; ' : '') . 'file_get_contents fehlgeschlagen';
@@ -914,6 +915,14 @@ function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string 
         if (is_file($f)) { $fehler = ($fehler ?: '') . ' – nutze alten Cache'; return file_get_contents($f); }
         return null;
     }
+
+    // Schutz: Server lieferte HTML statt ICS (z. B. Login-/Download-Seite)
+    if (!str_contains($body, 'BEGIN:VCALENDAR') && !str_contains($body, 'BEGIN:VEVENT')) {
+        $fehler = 'Kein gültiges ICS (Antwort ist kein Kalender – HTML statt .ics?)';
+        if (is_file($f)) { $fehler .= ' – nutze alten Cache'; return file_get_contents($f); }
+        return null;
+    }
+
     @file_put_contents($f, $body);
     return $body;
 }
