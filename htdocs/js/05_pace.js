@@ -54,10 +54,16 @@ const PACE = (() => {
         const distM = parseFloat(ref);
         if (!distM) continue;
         const p = prefs[ref] || { modus: 'pb' };
-        if (p.modus === 'manual' && p.manual_sek) {
-          resolved[ref] = { distanz_m: distM, sekunden: p.manual_sek, resultat: null, datum: null };
+        if (p.modus === 'manual') {
+          // Manuell: nur übernehmen wenn eine Zeit eingetragen ist – kein Fallback auf Bestzeiten
+          if (p.manual_sek) {
+            resolved[ref] = { distanz_m: distM, sekunden: p.manual_sek, resultat: null, datum: null };
+          }
+          // leeres Manual → kein Eintrag (Distanz bleibt ohne Referenz)
         } else if (p.modus === '12m' && dist12m[ref]) {
           resolved[ref] = dist12m[ref];
+        } else if (p.modus === '12m' && distPb[ref]) {
+          resolved[ref] = distPb[ref]; // Fallback pb wenn 12m fehlt
         } else if (distPb[ref]) {
           resolved[ref] = distPb[ref];
         } else if (dist12m[ref]) {
