@@ -1509,7 +1509,7 @@ function mapTreffpunkt(array $r): array {
             ? 'https://maps.apple.com/?ll=' . $lat . ',' . $lng . '&q=' . rawurlencode($r['name'])
             : null,
         'maps_komoot' => ($lat !== null && $lng !== null)
-            ? 'https://www.komoot.com/de-de/plan/@' . $lat . ',' . $lng . ',16.000z?p[1][loc]=' . $lat . ',' . $lng . '&sport=jogging'
+            ? 'https://www.komoot.com/de-de/plan/@' . $lat . ',' . $lng . ',16.000z?p[0]&p[1][loc]=' . $lat . ',' . $lng . '&sport=jogging'
             : null,
         'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
     ];
@@ -2026,7 +2026,7 @@ function mapEinheit(array $r): array {
                 ? 'https://maps.apple.com/?ll=' . $lat . ',' . $lng . '&q=' . rawurlencode($r['tp_name'] ?? '')
                 : null,
             'maps_komoot' => ($lat !== null && $lng !== null)
-                ? 'https://www.komoot.com/de-de/plan/@' . $lat . ',' . $lng . ',16.000z?p[1][loc]=' . $lat . ',' . $lng . '&sport=jogging'
+                ? 'https://www.komoot.com/de-de/plan/@' . $lat . ',' . $lng . ',16.000z?p[0]&p[1][loc]=' . $lat . ',' . $lng . '&sport=jogging'
                 : null,
         ];
     }
