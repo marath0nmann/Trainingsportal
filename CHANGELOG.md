@@ -1,6 +1,7 @@
 # Changelog
 
 ## v54
+- Fix: Standard-Treffpunkt wurde nach Speichern nicht sofort angewendet – `CONFIG.clear()` vor `CONFIG.load()` in Settings-`speichern()` ergänzt
 - Heute-Sektion erscheint in Kalender- und Listenansicht gleichermaßen, unabhängig vom angezeigten Monat/Quartal (eigener API-Call für heute)
 
 ## v53
