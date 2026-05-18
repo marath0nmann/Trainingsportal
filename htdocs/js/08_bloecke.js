@@ -241,8 +241,12 @@ const BLOECKE = (() => {
       await apiPost(`bloecke/${blockId}/apply`, payload);
       schliesseModal();
       notify('Training in den Kalender eingetragen.', 'ok');
-      const [y, m] = datum.split('-');
-      location.hash = `#kalender/${y}-${m}`;
+      if ((location.hash || '').startsWith('#planung') && typeof PLANUNG !== 'undefined') {
+        PLANUNG.reloadKal();
+      } else {
+        const [y, m] = datum.split('-');
+        location.hash = `#kalender/${y}-${m}`;
+      }
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
     }

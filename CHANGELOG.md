@@ -1,9 +1,13 @@
 # Changelog
 
-## v43
+## v44
+- Fix: Verschieben/Löschen im Planung-Kalender sofort sichtbar (optimistisches DOM-Update statt re-fetch)
+- Fix: Nach Einplanen eines Blocks von der Planung-Seite bleibt man auf Planung (kein ungewollter Wechsel zum Kalender)
 - Trainingsblöcke Typ „Runde / Strecke": Segmente-Sektion durch Komoot-Streckenfeld ersetzt; URL wird beim Einplanen auf die Kalendereinheit übertragen und im Kalender-Detail-Modal als Link angezeigt; DB-Migration: komoot_url in training_bloecke und training_einheiten
 
-## v41
+## v43
+- Fix: Kalender in Planung aktualisiert nach Verschieben/Löschen sofort (cache:no-store verhindert gecachte GET-Antwort)
+- Fix: Heute-Sektion zeigte „[object Object]" statt Treffpunktname – `e.treffpunkt` ist jetzt Objekt, Zugriff via `.name`
 - Komoot-Link zu Treffpunkten; Kartenvorschau (OpenStreetMap-Embed) in jeder Treffpunkt-Karte auf der Übersichtsseite
 - Planung: Kalendereinheiten per Drag & Drop auf einen anderen Tag verschieben (nur Trainer/Admin); Kalendereinträge per ×-Button (erscheint beim Hover) löschen – der zugehörige Trainingsblock bleibt erhalten
 

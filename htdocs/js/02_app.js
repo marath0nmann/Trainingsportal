@@ -343,7 +343,7 @@ function renderHeuteSektionHtml(items) {
           ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
         </div>
         <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-        ${e.treffpunkt ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(e.treffpunkt)}</div>` : ''}
+        ${e.treffpunkt ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(e.treffpunkt.name || '')}</div>` : ''}
         ${e.bemerkung  ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
         <div class="heute-card-link">Details &amp; Segmente anzeigen →</div>
       </div>`;
