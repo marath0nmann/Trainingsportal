@@ -222,6 +222,36 @@
   border-top: 1px solid var(--border);
 }
 
+/* Segment-Blöcke (TrainingPeaks-Stil) */
+.seg-blocks-wrap { margin-top: 10px; }
+.seg-blocks {
+  display: flex; align-items: flex-end; gap: 3px;
+  min-height: 24px; padding: 4px 0 2px;
+}
+.seg-blk {
+  border-radius: 3px; transition: opacity .15s; cursor: default;
+}
+.seg-blk-work {
+  min-width: 12px; opacity: .9;
+}
+.seg-blk-work:hover { opacity: 1; filter: brightness(1.1); }
+.seg-blk-pause {
+  flex: 0 0 5px !important; height: 22px !important;
+  background: var(--border); border-radius: 2px; opacity: .6;
+}
+.seg-blk-sep {
+  flex: 0 0 12px;
+}
+.seg-blk-typ-laufen    { background: var(--primary); }
+.seg-blk-typ-intervall { background: var(--accent); }
+.seg-blk-typ-kraft     { background: var(--green, #3a9); }
+.seg-blk-typ-runde     { background: #8b5cf6; }
+.seg-blk-typ-frei      { background: var(--text2); }
+.seg-blk-summary { margin-top: 6px; }
+.seg-blk-sum-row {
+  font-size: 11px; color: var(--text2); line-height: 1.6;
+}
+
 /* Mobile: kompakter Kalender */
 @media (max-width: 720px) {
   .kal-wrap { padding: 12px 8px 32px; }
