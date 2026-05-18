@@ -1,7 +1,9 @@
 # Changelog
 
-## v53
+## v54
 - Feiertage/Ferien werden jetzt auch im Planungskalender angezeigt (Farbmarkierung + Label)
+- ICS-Fetch: SSL-Fallback wenn Peer-Verifikation auf Server schlägt (Shared-Hosting-CA-Bundle)
+- Diagnose-Tool: zeigt jetzt Events-Gesamt + 3 Beispiel-Events pro Feed
 - Fix: Pace-Warnhinweis erscheint jetzt korrekt, wenn Segmente Pace-Referenzen enthalten, die nicht konfiguriert sind (prüft `paceSekProKm` statt `!paceData`)
 
 ## v51

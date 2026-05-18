@@ -397,10 +397,16 @@ const SETTINGS = (() => {
           const farbe = q.ok ? 'var(--green,#1a8a3a)' : 'var(--primary)';
           const icon  = q.ok ? '✅' : '❌';
           const detail = q.fehler ? ' <span style="color:var(--text2);font-size:11px">(' + escapeHtml(q.fehler) + ')</span>' : '';
+          const evLabel = q.ok
+            ? (q.events_im_zeitraum ?? 0) + ' / ' + (q.events_gesamt ?? '?') + ' ges.'
+            : '–';
+          const sample = (q.sample || []).map(s =>
+            '<div style="font-size:10px;color:var(--text2)">' + escapeHtml(s.datum) + ' ' + escapeHtml(s.titel) + '</div>'
+          ).join('');
           return '<tr style="border-bottom:1px solid var(--border)">' +
             '<td style="padding:6px 8px;font-family:monospace;font-size:11px;word-break:break-all">' + escapeHtml(q.url) + '</td>' +
             '<td style="padding:6px 8px;color:' + farbe + ';font-weight:600">' + icon + ' ' + escapeHtml(q.status) + detail + '</td>' +
-            '<td style="padding:6px 8px;text-align:right">' + (q.events_im_zeitraum ?? '–') + '</td>' +
+            '<td style="padding:6px 8px;text-align:right;white-space:nowrap">' + evLabel + (sample ? '<br>' + sample : '') + '</td>' +
           '</tr>';
         }).join('') +
         '</tbody></table>';
