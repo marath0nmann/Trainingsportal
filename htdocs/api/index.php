@@ -507,6 +507,12 @@ function trainingSettingsKeys(): array {
             'beschreibung' => 'JSON-Objekt {"1":"18:00","2":"","3":"18:00",...} – 1=Mo bis 7=So, leer = kein Standard',
             'default'  => '{}',
         ],
+        'training_standard_treffpunkt_id' => [
+            'label'    => 'Standard-Treffpunkt',
+            'gruppe'   => 'training',
+            'beschreibung' => 'ID des Treffpunkts, der beim Einplanen eines Blocks vorausgewählt wird',
+            'default'  => '',
+        ],
     ];
 }
 

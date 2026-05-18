@@ -1,6 +1,7 @@
 # Changelog
 
 ## v58
+- Einstellungen: Standard-Treffpunkt konfigurierbar (Admin); wird beim Einplanen eines Trainingsblocks automatisch vorausgewählt
 - Eingebauter Feiertags-Rechner: `builtin://feiertage/NRW` (und andere Bundesländer) berechnet gesetzliche Feiertage direkt in PHP – kein externer Dienst nötig
 - Beispiel-URL „Feiertage NRW" nutzt jetzt den eingebauten Rechner statt schulferien.org (das HTML statt ICS lieferte)
 - Fix: Erkennung wenn Server HTML statt ICS antwortet (Fehlermeldung im Diagnose-Tool)

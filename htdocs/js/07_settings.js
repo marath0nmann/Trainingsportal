@@ -15,6 +15,7 @@ const SETTINGS = (() => {
   let uhrzeiten = {};     // { "1": "18:00", ... } – 1=Mo … 7=So
   let typen = [];         // { slug, bezeichnung, farbe, reihenfolge, aktiv, block_count }
   let typenBearbeitet = null; // slug des gerade inline bearbeiteten Typs
+  let standardTreffpunktId = '';
 
   const WOCHENTAGE_LANG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
@@ -33,11 +34,13 @@ const SETTINGS = (() => {
       const [settingsR, typenR] = await Promise.all([
         apiGet('admin/settings', { silent: true }),
         apiGet('admin/typen',    { silent: true }),
+        TREFFPUNKTE.laden(),
       ]);
       felder        = settingsR.felder || [];
       feiertage     = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
       paceDistanzen = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
       uhrzeiten     = parseUhrzeitenJson(getWert('training_default_uhrzeiten'));
+      standardTreffpunktId = getWert('training_standard_treffpunkt_id') || '';
       typen         = typenR.typen || [];
       rendereForm(main);
     } catch (e) {
@@ -139,6 +142,18 @@ const SETTINGS = (() => {
             '</div>' +
             '<div class="settings-row-input">' +
               '<input type="number" id="set-dauer" min="15" max="600" step="15" value="' + escapeHtml(dauerMin) + '" class="settings-input" style="width:120px">' +
+            '</div>' +
+          '</div>' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Standard-Treffpunkt</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">Wird beim Einplanen eines Trainingsblocks vorausgewählt. Kann im Einzelfall überschrieben werden.</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<select id="set-standard-treffpunkt" class="settings-input">' +
+                '<option value="">— kein Standard —</option>' +
+                TREFFPUNKTE.getListe().map(t => `<option value="${t.id}"${String(t.id) === String(standardTreffpunktId) ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('') +
+              '</select>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -363,10 +378,11 @@ const SETTINGS = (() => {
 
     const payload = {
       werte: {
-        training_feiertage_ics_urls:  JSON.stringify(liste),
-        training_default_dauer_min:   document.getElementById('set-dauer').value || '90',
-        training_pace_distanzen:      JSON.stringify(paceDistanzen),
-        training_default_uhrzeiten:   JSON.stringify(uhrzeiten),
+        training_feiertage_ics_urls:      JSON.stringify(liste),
+        training_default_dauer_min:       document.getElementById('set-dauer').value || '90',
+        training_pace_distanzen:          JSON.stringify(paceDistanzen),
+        training_default_uhrzeiten:       JSON.stringify(uhrzeiten),
+        training_standard_treffpunkt_id:  document.getElementById('set-standard-treffpunkt')?.value || '',
       },
     };
     try {
