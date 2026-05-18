@@ -351,15 +351,18 @@ function renderHeuteSektionHtml(items) {
     const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : null;
     return `
       <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}">
-        <div class="heute-card-eyebrow">
-          <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
-          ${abgesagt ? '<span class="heute-badge heute-badge-abgesagt">Abgesagt</span>' : ''}
-          ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
+        <div class="heute-card-main">
+          <div class="heute-card-eyebrow">
+            <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
+            ${abgesagt ? '<span class="heute-badge heute-badge-abgesagt">Abgesagt</span>' : ''}
+            ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
+          </div>
+          <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
+          ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
+          ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+          <div id="heute-segs-${e.id}"></div>
         </div>
-        <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-        ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
-        ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
-        <div id="heute-segs-${e.id}"></div>
+        <div id="heute-komoot-${e.id}" class="heute-card-komoot"></div>
       </div>`;
   }).join('');
   return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
@@ -410,14 +413,6 @@ async function ladHeuteDetails(items) {
       if (seg.length) {
         html += renderSegmentBlocksHtml(seg, paceData, einheit.typ);
       }
-      if (einheit.komoot_url) {
-        const embedUrl = komootEmbedUrl(einheit.komoot_url);
-        if (embedUrl) {
-          html += `<div class="komoot-embed" style="margin-top:10px"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>`;
-        }
-        html += `<div style="margin-top:4px"><a class="tp-link tp-link-komoot" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a></div>`;
-      }
-
       const actions = [];
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
@@ -430,6 +425,19 @@ async function ladHeuteDetails(items) {
       }
 
       areaEl.innerHTML = html;
+
+      // Komoot-Strecke in rechte Spalte
+      const komootEl = document.getElementById(`heute-komoot-${einheit.id}`);
+      if (komootEl && einheit.komoot_url) {
+        const embedUrl = komootEmbedUrl(einheit.komoot_url);
+        let komootHtml = '';
+        if (embedUrl) {
+          komootHtml += `<iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe>`;
+        }
+        komootHtml += `<a class="tp-link tp-link-komoot heute-komoot-link" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a>`;
+        komootEl.innerHTML = komootHtml;
+        komootEl.closest('.heute-card').classList.add('heute-card-split');
+      }
     } catch (_) {
       // Segmente bleiben leer bei Fehler
     }
@@ -747,7 +755,7 @@ function schliesseModal(ev) {
 function komootEmbedUrl(url) {
   if (!url) return null;
   const m = String(url).match(/\/tour\/(\d+)/);
-  return m ? 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1' : null;
+  return m ? 'https://www.komoot.com/de-de/tour/' + m[1] + '/embed?profile=1' : null;
 }
 
 function escapeHtml(s) {
