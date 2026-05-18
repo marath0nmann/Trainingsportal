@@ -412,6 +412,10 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .ed-seghint {
   margin-top: 8px; font-size: 11px; color: var(--text2); font-style: italic;
 }
+.be-gesamtdistanz {
+  margin-top: 6px; font-size: 12px; color: var(--text2);
+  text-align: right; min-height: 1em;
+}
 
 .ed-titelwrap {
   padding-top: 14px; margin-top: 4px;
