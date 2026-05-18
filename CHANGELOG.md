@@ -1,6 +1,8 @@
 # Changelog
 
-## v54
+## v55
+- ICS-URLs: `{year}`-Platzhalter wird automatisch durch alle relevanten Jahre ersetzt (schulferien.org nutzt jahresspezifische URLs)
+- Beispiel-URLs in Einstellungen auf neues schulferien.org-Format aktualisiert
 - Feiertage/Ferien werden jetzt auch im Planungskalender angezeigt (Farbmarkierung + Label)
 - ICS-Fetch: SSL-Fallback wenn Peer-Verifikation auf Server schlägt (Shared-Hosting-CA-Bundle)
 - Diagnose-Tool: zeigt jetzt Events-Gesamt + 3 Beispiel-Events pro Feed

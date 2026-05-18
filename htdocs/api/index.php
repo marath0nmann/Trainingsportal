@@ -566,26 +566,38 @@ function handleAdmin(string $method, string $sub): void {
             }
         }
         $von = date('Y-m-d', strtotime('-7 days'));
-        $bis = date('Y-m-d', strtotime('+90 days'));
+        $bis = date('Y-m-d', strtotime('+400 days'));
         $quellen = [];
         foreach ($entries as $entry) {
-            $fehler = null;
-            $body = ladeIcsCached($entry['url'], 0, $fehler); // ttl=0 → stets neu
-            if ($body === null) {
-                $quellen[] = ['url' => $entry['url'], 'ok' => false, 'status' => 'unerreichbar', 'fehler' => $fehler ?? 'unbekannt'];
+            $expandedUrls = expandJahresUrls($entry['url'], $von, $bis);
+            $rowEvents = [];
+            $rowFehler = [];
+            $rowBytes  = 0;
+            $rowOk     = false;
+            foreach ($expandedUrls as $eu) {
+                $fehler = null;
+                $body = ladeIcsCached($eu, 0, $fehler); // ttl=0 → stets neu
+                if ($body === null) {
+                    $rowFehler[] = basename(parse_url($eu, PHP_URL_QUERY) ?: $eu) . ': ' . ($fehler ?? 'unerreichbar');
+                    continue;
+                }
+                $rowOk = true;
+                $rowBytes += strlen($body);
+                $rowEvents = array_merge($rowEvents, parseIcsEvents($body, $von, $bis));
+            }
+            if (!$rowOk) {
+                $quellen[] = ['url' => $entry['url'], 'ok' => false, 'status' => 'unerreichbar', 'fehler' => implode('; ', $rowFehler)];
                 continue;
             }
-            $events = parseIcsEvents($body, $von, $bis);
-            // Alle events für langen Zeitraum zählen (Debugging)
-            $alleEvents = parseIcsEvents($body, date('Y-m-d', strtotime('-365 days')), date('Y-m-d', strtotime('+365 days')));
+            usort($rowEvents, fn($a, $b) => $a['datum'] <=> $b['datum']);
             $quellen[] = [
                 'url'                => $entry['url'],
                 'ok'                 => true,
-                'status'             => 'OK (' . strlen($body) . ' B)',
-                'events_im_zeitraum' => count($events),
-                'events_gesamt'      => count($alleEvents),
-                'sample'             => array_slice($alleEvents, 0, 3),
-                'fehler'             => $fehler,
+                'status'             => 'OK (' . $rowBytes . ' B, ' . count($expandedUrls) . ' URLs)',
+                'events_im_zeitraum' => count($rowEvents),
+                'events_gesamt'      => count($rowEvents),
+                'sample'             => array_slice($rowEvents, 0, 3),
+                'fehler'             => $rowFehler ? implode('; ', $rowFehler) : null,
             ];
         }
         echo json_encode(['ok' => true, 'quellen' => $quellen, 'zeitraum' => ['von' => $von, 'bis' => $bis]]);
@@ -812,20 +824,35 @@ function handleFeiertage(string $method, string $sub): void {
 
     $events = [];
     foreach ($entries as $entry) {
-        $body = ladeIcsCached($entry['url'], 6 * 3600);
-        if (!$body) continue;
-        foreach (parseIcsEvents($body, $von, $bis) as $ev) {
-            $events[] = [
-                'datum'        => $ev['datum'],
-                'datum_bis'    => $ev['datum_bis'],
-                'titel'        => $ev['titel'],
-                'kategorie'    => $entry['label'] ?: 'Feiertag',
-                'farbe'        => $entry['farbe'] ?: '',
-            ];
+        foreach (expandJahresUrls($entry['url'], $von, $bis) as $url) {
+            $body = ladeIcsCached($url, 6 * 3600);
+            if (!$body) continue;
+            foreach (parseIcsEvents($body, $von, $bis) as $ev) {
+                $events[] = [
+                    'datum'     => $ev['datum'],
+                    'datum_bis' => $ev['datum_bis'],
+                    'titel'     => $ev['titel'],
+                    'kategorie' => $entry['label'] ?: 'Feiertag',
+                    'farbe'     => $entry['farbe'] ?: '',
+                ];
+            }
         }
     }
 
     echo json_encode(['ok' => true, 'feiertage' => $events]);
+}
+
+// Ersetzt {year} in einer URL durch alle relevanten Jahre des Abfragezeitraums.
+// Ohne {year}-Platzhalter wird die URL unverändert zurückgegeben.
+function expandJahresUrls(string $url, string $von, string $bis): array {
+    if (!str_contains($url, '{year}')) return [$url];
+    $vonJahr = (int)substr($von, 0, 4);
+    $bisJahr = (int)substr($bis, 0, 4);
+    $urls = [];
+    for ($y = $vonJahr; $y <= $bisJahr; $y++) {
+        $urls[] = str_replace('{year}', (string)$y, $url);
+    }
+    return $urls;
 }
 
 function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string {
