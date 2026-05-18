@@ -1,8 +1,29 @@
 # Changelog
 
-## v38
+## v48
+- Heute-Sektion: Segmente und persönliche Pace direkt inline angezeigt (kein „Details anzeigen"-Link mehr); FIT- und Bearbeiten-Button am unteren Rand der Karte
+
+## v47
+- Komoot-Link: Treffpunkt wird als Ziel gesetzt (`p[1][loc]`), kein Startpunkt vorbelegt
+- Fix: Komoot-Link setzt jetzt Startpunkt via `p[0][loc]` und nutzt korrektes URL-Format (`/de-de/plan/@lat,lng,16z`)
+- Fix: Kartenausschnitt in Treffpunkt-Karte korrekt zentriert (left/top via CSS calc statt fixer Pixelrechnung)
+- Treffpunkte-Übersicht: statisches Kartenbild statt interaktivem OSM-Iframe (OSM-Tiles, SVG-Pin, nicht verschiebbar, kein Attribution-Overlay)
+- Fix: Verschieben/Löschen im Planung-Kalender sofort sichtbar (optimistisches DOM-Update statt re-fetch)
+- Fix: Nach Einplanen eines Blocks von der Planung-Seite bleibt man auf Planung (kein ungewollter Wechsel zum Kalender)
+- Trainingsblöcke Typ „Runde / Strecke": Segmente-Sektion durch Komoot-Streckenfeld ersetzt; URL wird beim Einplanen auf die Kalendereinheit übertragen und im Kalender-Detail-Modal als Link angezeigt; DB-Migration: komoot_url in training_bloecke und training_einheiten
+
+## v43
+- Fix: Kalender in Planung aktualisiert nach Verschieben/Löschen sofort (cache:no-store verhindert gecachte GET-Antwort)
+- Fix: Heute-Sektion zeigte „[object Object]" statt Treffpunktname – `e.treffpunkt` ist jetzt Objekt, Zugriff via `.name`
+- Komoot-Link zu Treffpunkten; Kartenvorschau (OpenStreetMap-Embed) in jeder Treffpunkt-Karte auf der Übersichtsseite
+- Planung: Kalendereinheiten per Drag & Drop auf einen anderen Tag verschieben (nur Trainer/Admin); Kalendereinträge per ×-Button (erscheint beim Hover) löschen – der zugehörige Trainingsblock bleibt erhalten
+
+## v39
+- Treffpunkte als eigene Entität: neuer Menüpunkt „Treffpunkte" (Trainer/Admin), CRUD mit Name, GPS-Koordinaten (Leaflet-Kartenpicker, OpenStreetMap) und automatisch generierten Links zu Google Maps und Apple Maps; Treffpunkt-Freitext aus Trainingsblöcken entfernt; beim Einplanen eines Blocks (Apply) und im Einheits-Editor wird Treffpunkt aus der gepflegten Liste gewählt (treffpunkt_id FK); Kalendermodal zeigt Treffpunktname mit Maps-Links; DB-Migration: neue Tabelle training_treffpunkte, treffpunkt_id in training_einheiten
+
+## v37
 - Planung-Sidebar: Segmentanzahl aus Block-Karten entfernt; Typ-Überschriften kleiner und linksbündig
-- Heute-Sektion: Segmente und persönliche Pace direkt in der Box angezeigt (kein Modal-Link mehr); FIT-Download- und Bearbeiten-Button am unteren Rand der Karte
+- Heute-Sektion über dem Kalender: erscheint automatisch, wenn heute ein Training eingetragen ist; zeigt Typ, Uhrzeit, Titel, Treffpunkt, Bemerkung sowie Status-Badges; Klick öffnet Detail-Modal
 
 ## v36
 - Seite „Trainingsblöcke" entfernt; Block-Verwaltung vollständig in Planung-Sidebar integriert: „+ Neu"-Button (Trainer/Admin), Bearbeiten-Button (✎) erscheint beim Hover über jede Karte, Sidebar lädt nach Speichern/Löschen automatisch neu

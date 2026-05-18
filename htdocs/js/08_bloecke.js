@@ -124,22 +124,26 @@ const BLOECKE = (() => {
     const istGlobal = b.sichtbarkeit === 'global';
     const kannBearbeiten = istTrainer()
       || (!istGlobal && state.user && b.erstellt_von === state.user.id);
+    const istRunde = b.typ === 'runde';
     const segCount = b.seg_count ?? null;
-    const segBadge = segCount !== null
-      ? (segCount > 0
-          ? `<span class="block-seg-badge">${segCount} Seg.</span>`
-          : `<span class="block-seg-badge block-seg-leer" title="Titel wird beim Öffnen automatisch geparst">∅ Segmente</span>`)
-      : '';
+    const infoBadge = istRunde
+      ? (b.komoot_url
+          ? `<a class="block-seg-badge block-komoot-badge" href="${escapeHtml(b.komoot_url)}" target="_blank" rel="noopener" title="Komoot-Strecke öffnen">Komoot</a>`
+          : `<span class="block-seg-badge block-seg-leer">Keine Strecke</span>`)
+      : (segCount !== null
+          ? (segCount > 0
+              ? `<span class="block-seg-badge">${segCount} Seg.</span>`
+              : `<span class="block-seg-badge block-seg-leer" title="Titel wird beim Öffnen automatisch geparst">∅ Segmente</span>`)
+          : '');
     return `
       <div class="block-card block-typ-${escapeHtml(b.typ)}">
         <div class="block-card-head">
           ${!istGlobal
             ? '<span class="block-sicht-badge block-sicht-privat">Privat</span>'
             : ''}
-          ${segBadge}
+          ${infoBadge}
         </div>
         <div class="block-titel">${escapeHtml(b.titel)}</div>
-        ${b.treffpunkt ? `<div class="block-treffpunkt">📍 ${escapeHtml(b.treffpunkt)}</div>` : ''}
         ${b.bemerkung  ? `<div class="block-bemerkung">${escapeHtml(b.bemerkung)}</div>`   : ''}
         <div class="block-card-actions">
           <button class="btn btn-primary btn-sm" onclick="BLOECKE.anwenden(${b.id})">Im Kalender planen</button>
@@ -151,15 +155,32 @@ const BLOECKE = (() => {
   // ── Block auf Kalender anwenden ───────────────────────────
   // datum: optionales ISO-Datum (YYYY-MM-DD), z. B. vom Planung-DnD gesetzt
   async function anwenden(blockId, datum) {
-    let blockData;
+    let blockData, tpListe;
     try {
-      blockData = await apiGet(`bloecke/${blockId}`, { silent: true });
+      [blockData, tpListe] = await Promise.all([
+        apiGet(`bloecke/${blockId}`, { silent: true }),
+        TREFFPUNKTE.laden(),
+      ]);
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
       return;
     }
     const b = blockData.block;
     const heute = datum || ymd(new Date());
+    const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
+      tpListe.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+
+    // Default-Uhrzeit aus Admin-Einstellungen per Wochentag (1=Mo … 7=So)
+    let defaultUhrzeit = '';
+    try {
+      const raw = appConfig && appConfig.training_default_uhrzeiten;
+      if (raw) {
+        const datObj = new Date(heute + 'T00:00:00');
+        const dow = String(((datObj.getDay() + 6) % 7) + 1);
+        const uMap = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        defaultUhrzeit = (uMap[dow] || '').trim();
+      }
+    } catch (_) {}
     const cont = document.getElementById('modal-container');
 
     cont.innerHTML = `
@@ -180,11 +201,11 @@ const BLOECKE = (() => {
               </div>
               <div class="ed-fg">
                 <label>Uhrzeit</label>
-                <input type="time" id="apply-uhrzeit">
+                <input type="time" id="apply-uhrzeit" value="${escapeHtml(defaultUhrzeit)}">
               </div>
               <div class="ed-fg">
                 <label>Treffpunkt</label>
-                <input type="text" id="apply-treffpunkt" value="${escapeHtml(b.treffpunkt || '')}">
+                <select id="apply-treffpunkt-id">${tpOptionen}</select>
               </div>
               <div class="ed-fg">
                 <label>Sichtbarkeit</label>
@@ -209,18 +230,23 @@ const BLOECKE = (() => {
   async function anwendenSpeichern(blockId) {
     const datum = val('apply-datum');
     if (!datum) { notify('Datum fehlt.', 'err'); return; }
+    const tpIdStr = val('apply-treffpunkt-id');
     const payload = {
       datum,
-      uhrzeit:      val('apply-uhrzeit') || null,
-      treffpunkt:   val('apply-treffpunkt') || null,
-      sichtbarkeit: val('apply-sichtbarkeit'),
+      uhrzeit:       val('apply-uhrzeit') || null,
+      treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
+      sichtbarkeit:  val('apply-sichtbarkeit'),
     };
     try {
       await apiPost(`bloecke/${blockId}/apply`, payload);
       schliesseModal();
       notify('Training in den Kalender eingetragen.', 'ok');
-      const [y, m] = datum.split('-');
-      location.hash = `#kalender/${y}-${m}`;
+      if ((location.hash || '').startsWith('#planung') && typeof PLANUNG !== 'undefined') {
+        PLANUNG.reloadKal();
+      } else {
+        const [y, m] = datum.split('-');
+        location.hash = `#kalender/${y}-${m}`;
+      }
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
     }
@@ -275,7 +301,7 @@ const BLOECKE = (() => {
 
     const b = block || {
       id: null, titel: '', typ: 'intervall',
-      treffpunkt: 'Sportplatz', bemerkung: '', sichtbarkeit: 'global',
+      komoot_url: '', bemerkung: '', sichtbarkeit: 'global',
     };
     // Globale Pause-Typ / Pace-Referenz aus erstem Segment lesen
     const initPauseTyp = editorSegmente.length ? (editorSegmente[0].pause_typ || 'TP') : 'TP';
@@ -284,6 +310,8 @@ const BLOECKE = (() => {
     const typenOptionen = getTypen()
       .map(t => `<option value="${escapeHtml(t.slug)}"${t.slug === b.typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`)
       .join('');
+
+    const istRunde = b.typ === 'runde';
 
     const cont = document.getElementById('modal-container');
 
@@ -301,7 +329,7 @@ const BLOECKE = (() => {
             <div class="ed-grid">
               <div class="ed-fg">
                 <label>Typ</label>
-                <select id="be-typ">${typenOptionen}</select>
+                <select id="be-typ" onchange="BLOECKE.onTypChange()">${typenOptionen}</select>
               </div>
               <div class="ed-fg">
                 <label>Sichtbarkeit</label>
@@ -310,17 +338,20 @@ const BLOECKE = (() => {
                   <option value="privat"${b.sichtbarkeit === 'privat' ? ' selected' : ''}>Privat (nur ich)</option>
                 </select>
               </div>
-              <div class="ed-fg">
-                <label>Treffpunkt</label>
-                <input type="text" id="be-treffpunkt" value="${escapeHtml(b.treffpunkt || '')}">
-              </div>
               <div class="ed-fg ed-fg-wide">
                 <label>Bemerkung</label>
                 <textarea id="be-bemerkung" rows="2">${escapeHtml(b.bemerkung || '')}</textarea>
               </div>
             </div>
 
-            <div class="ed-segwrap">
+            <div id="be-komoot-wrap" class="ed-komoot-wrap"${istRunde ? '' : ' style="display:none"'}>
+              <div class="ed-fg ed-fg-wide">
+                <label>Komoot-Strecke <span class="ed-hint">(Tour-Link, z. B. https://www.komoot.com/tour/…)</span></label>
+                <input type="url" id="be-komoot-url" value="${escapeHtml(b.komoot_url || '')}" placeholder="https://www.komoot.com/tour/…">
+              </div>
+            </div>
+
+            <div id="be-seg-wrap" class="ed-segwrap"${istRunde ? ' style="display:none"' : ''}>
               <div class="ed-segheader">
                 <h3>Segmente</h3>
                 <div class="ed-segactions">
@@ -349,10 +380,10 @@ const BLOECKE = (() => {
 
             <div class="ed-titelwrap">
               <div class="ed-fg">
-                <label>Titel / Kurzschrift <span class="ed-hint">(automatisch aus Segmenten – kann überschrieben werden)</span></label>
+                <label>Titel <span class="ed-hint" id="be-titel-hint">${istRunde ? '' : '(automatisch aus Segmenten – kann überschrieben werden)'}</span></label>
                 <div class="ed-titel-row">
-                  <input type="text" id="be-titel" value="${escapeHtml(b.titel || '')}" placeholder="Wird aus Segmenten generiert…">
-                  <button class="btn btn-ghost btn-sm ed-titel-reset" onclick="BLOECKE.titelNeuGenerieren()" title="Titel aus Segmenten neu generieren">↺</button>
+                  <input type="text" id="be-titel" value="${escapeHtml(b.titel || '')}" placeholder="${istRunde ? 'Name der Runde / Strecke' : 'Wird aus Segmenten generiert…'}">
+                  <button class="btn btn-ghost btn-sm ed-titel-reset" id="be-titel-reset-btn" onclick="BLOECKE.titelNeuGenerieren()" title="Titel aus Segmenten neu generieren"${istRunde ? ' style="display:none"' : ''}>↺</button>
                 </div>
               </div>
             </div>
@@ -377,6 +408,25 @@ const BLOECKE = (() => {
     }
 
     rendereBlockSegmente();
+  }
+
+  function onTypChange() {
+    const typ = val('be-typ');
+    const istRunde = typ === 'runde';
+    const komootWrap = document.getElementById('be-komoot-wrap');
+    const segWrap    = document.getElementById('be-seg-wrap');
+    const resetBtn   = document.getElementById('be-titel-reset-btn');
+    const titelHint  = document.getElementById('be-titel-hint');
+    if (komootWrap) komootWrap.style.display = istRunde ? '' : 'none';
+    if (segWrap)    segWrap.style.display    = istRunde ? 'none' : '';
+    if (resetBtn)   resetBtn.style.display   = istRunde ? 'none' : '';
+    if (titelHint)  titelHint.textContent    = istRunde ? '' : '(automatisch aus Segmenten – kann überschrieben werden)';
+    const titelEl = document.getElementById('be-titel');
+    if (titelEl) titelEl.placeholder = istRunde ? 'Name der Runde / Strecke' : 'Wird aus Segmenten generiert…';
+    if (!istRunde) {
+      titelManuellBearbeitet = false;
+      aktualisiereBlockTitelFeld();
+    }
   }
 
   function rendereBlockSegmente() {
@@ -447,13 +497,15 @@ const BLOECKE = (() => {
   async function speichern(blockId) {
     const pauseTyp = val('be-pause-typ') || 'TP';
     const paceRef  = val('be-pace-ref')  || null;
+    const typ      = val('be-typ');
+    const istRunde = typ === 'runde';
     const payload = {
       titel:        val('be-titel'),
-      typ:          val('be-typ'),
-      treffpunkt:   val('be-treffpunkt') || null,
+      typ,
+      komoot_url:   istRunde ? (val('be-komoot-url') || null) : null,
       bemerkung:    val('be-bemerkung') || null,
       sichtbarkeit: val('be-sichtbarkeit'),
-      segmente:     editorSegmente.map(s => ({ ...s, pause_typ: pauseTyp, pace_referenz: paceRef })),
+      segmente:     istRunde ? [] : editorSegmente.map(s => ({ ...s, pause_typ: pauseTyp, pace_referenz: paceRef })),
     };
     if (!payload.titel) { notify('Titel fehlt.', 'err'); return; }
     try {
@@ -504,6 +556,6 @@ const BLOECKE = (() => {
   return {
     render, neuerBlock, bearbeiten, anwenden, anwendenSpeichern,
     parsenAusTitel, segmentHinzufuegen, segmentLoeschen, speichern, loeschen,
-    titelNeuGenerieren,
+    titelNeuGenerieren, onTypChange,
   };
 })();

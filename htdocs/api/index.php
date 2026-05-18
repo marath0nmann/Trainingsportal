@@ -17,6 +17,10 @@
 //   PUT  bloecke/{id}               → Update (Trainer oder eigener privater Block)
 //   DEL  bloecke/{id}               → Löschen (Trainer oder eigener privater Block)
 //   POST bloecke/{id}/apply         → Block als Einheit auf den Kalender legen (auth)
+//   GET  treffpunkte                → Liste (auth)
+//   POST treffpunkte                → Neu (Recht: training_bloecke_verwalten)
+//   PUT  treffpunkte/{id}           → Update (Recht: training_bloecke_verwalten)
+//   DEL  treffpunkte/{id}           → Löschen (Recht: training_bloecke_verwalten)
 // ============================================================
 
 declare(strict_types=1);
@@ -78,6 +82,10 @@ try {
     }
     if ($head === 'bloecke') {
         handleBloecke($method, $tail);
+        exit;
+    }
+    if ($head === 'treffpunkte') {
+        handleTreffpunkte($method, $tail);
         exit;
     }
     if ($head === 'admin') {
@@ -162,10 +170,13 @@ function handleEinheiten(string $method, string $sub): void
         }
 
         $rows = DB::fetchAll(
-            'SELECT id, datum, uhrzeit, typ, titel, treffpunkt, bemerkung, sichtbarkeit, status
-               FROM ' . DB::tbl('training_einheiten') . "
-              WHERE $where
-           ORDER BY datum, uhrzeit",
+            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
+                    e.bemerkung, e.sichtbarkeit, e.status,
+                    t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
+               FROM ' . DB::tbl('training_einheiten') . ' e
+               LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
+              WHERE ' . $where . '
+           ORDER BY e.datum, e.uhrzeit',
             $params
         );
 
@@ -177,7 +188,10 @@ function handleEinheiten(string $method, string $sub): void
     if ($sub !== '' && $method === 'GET' && ctype_digit($sub)) {
         $id = (int)$sub;
         $row = DB::fetchOne(
-            'SELECT * FROM ' . DB::tbl('training_einheiten') . ' WHERE id = ?',
+            'SELECT e.*, t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
+               FROM ' . DB::tbl('training_einheiten') . ' e
+               LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
+              WHERE e.id = ?',
             [$id]
         );
         if (!$row) {
@@ -233,14 +247,16 @@ function handleEinheiten(string $method, string $sub): void
         try {
             DB::query(
                 'UPDATE ' . DB::tbl('training_einheiten') . '
-                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt=?, bemerkung=?, sichtbarkeit=?, status=?
+                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, komoot_url=?, bemerkung=?, sichtbarkeit=?, status=?
                   WHERE id=?',
                 [
                     $in['datum'],
                     $in['uhrzeit'] ?? null,
                     $in['typ'] ?? 'frei',
                     $in['titel'],
-                    $in['treffpunkt'] ?? null,
+                    isset($in['treffpunkt_id']) && $in['treffpunkt_id'] !== '' && $in['treffpunkt_id'] !== null
+                        ? (int)$in['treffpunkt_id'] : null,
+                    isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
                     $in['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? 'oeffentlich',
                     $in['status'] ?? 'geplant',
@@ -484,6 +500,12 @@ function trainingSettingsKeys(): array {
             'gruppe'   => 'training',
             'beschreibung' => 'JSON-Array der Distanzen in Metern, die als Pace-Referenz angeboten werden, z. B. [5000,10000,21098,42195]',
             'default'  => '[5000,10000,21098,42195]',
+        ],
+        'training_default_uhrzeiten' => [
+            'label'    => 'Standard-Uhrzeiten pro Wochentag',
+            'gruppe'   => 'training',
+            'beschreibung' => 'JSON-Objekt {"1":"18:00","2":"","3":"18:00",...} – 1=Mo bis 7=So, leer = kein Standard',
+            'default'  => '{}',
         ],
     ];
 }
@@ -1057,11 +1079,12 @@ function sendeIcs(string $body, string $filename): void {
 
 function buildIcsPublic(): string {
     $rows = DB::fetchAll(
-        'SELECT * FROM ' . DB::tbl('training_einheiten') . "
-          WHERE sichtbarkeit = 'oeffentlich'
-            AND datum >= (CURDATE() - INTERVAL 60 DAY)
-            AND datum <= (CURDATE() + INTERVAL 365 DAY)
-       ORDER BY datum, uhrzeit"
+        'SELECT e.*, t.name AS tp_name FROM ' . DB::tbl('training_einheiten') . ' e
+         LEFT JOIN ' . DB::tbl('training_treffpunkte') . " t ON t.id = e.treffpunkt_id
+          WHERE e.sichtbarkeit = 'oeffentlich'
+            AND e.datum >= (CURDATE() - INTERVAL 60 DAY)
+            AND e.datum <= (CURDATE() + INTERVAL 365 DAY)
+       ORDER BY e.datum, e.uhrzeit"
     );
     $events = [];
     foreach ($rows as $e) {
@@ -1099,10 +1122,11 @@ function buildIcsForUser(int $userId): string {
     }
 
     $rows = DB::fetchAll(
-        'SELECT * FROM ' . DB::tbl('training_einheiten') . "
-          WHERE datum >= (CURDATE() - INTERVAL 60 DAY)
-            AND datum <= (CURDATE() + INTERVAL 365 DAY)
-       ORDER BY datum, uhrzeit"
+        'SELECT e.*, t.name AS tp_name FROM ' . DB::tbl('training_einheiten') . ' e
+         LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
+          WHERE e.datum >= (CURDATE() - INTERVAL 60 DAY)
+            AND e.datum <= (CURDATE() + INTERVAL 365 DAY)
+       ORDER BY e.datum, e.uhrzeit'
     );
 
     $events = [];
@@ -1145,8 +1169,8 @@ function bauVevent(array $e, array $segs, array $bestzeiten = []): string {
     }
 
     $lines[] = 'SUMMARY:' . icsEsc($e['titel']);
-    if (!empty($e['treffpunkt'])) {
-        $lines[] = 'LOCATION:' . icsEsc($e['treffpunkt']);
+    if (!empty($e['tp_name'])) {
+        $lines[] = 'LOCATION:' . icsEsc($e['tp_name']);
     }
     if (($e['status'] ?? '') === 'abgesagt') {
         $lines[] = 'STATUS:CANCELLED';
@@ -1435,16 +1459,167 @@ function ensureTypenTabelle(): void
 }
 
 // ============================================================
+function ensureTreffpunkteTabelle(): void {
+    DB::query(
+        "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_treffpunkte') . " (
+          id            INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+          name          VARCHAR(200)    NOT NULL,
+          lat           DECIMAL(10,7)   NULL,
+          lng           DECIMAL(10,7)   NULL,
+          erstellt_von  INT UNSIGNED    NULL,
+          erstellt_am   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          geaendert_am  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    // Migration: treffpunkt_id zu training_einheiten hinzufügen, falls noch nicht vorhanden
+    $cols = DB::fetchAll(
+        "SHOW COLUMNS FROM " . DB::tbl('training_einheiten') . " LIKE 'treffpunkt_id'"
+    );
+    if (empty($cols)) {
+        DB::query(
+            "ALTER TABLE " . DB::tbl('training_einheiten') . "
+             ADD COLUMN treffpunkt_id INT UNSIGNED NULL AFTER titel"
+        );
+    }
+    // Migration: komoot_url zu training_einheiten hinzufügen, falls noch nicht vorhanden
+    $cols2 = DB::fetchAll(
+        "SHOW COLUMNS FROM " . DB::tbl('training_einheiten') . " LIKE 'komoot_url'"
+    );
+    if (empty($cols2)) {
+        DB::query(
+            "ALTER TABLE " . DB::tbl('training_einheiten') . "
+             ADD COLUMN komoot_url VARCHAR(500) NULL AFTER treffpunkt_id"
+        );
+    }
+}
+
+function mapTreffpunkt(array $r): array {
+    $lat = $r['lat'] !== null ? (float)$r['lat'] : null;
+    $lng = $r['lng'] !== null ? (float)$r['lng'] : null;
+    return [
+        'id'          => (int)$r['id'],
+        'name'        => $r['name'],
+        'lat'         => $lat,
+        'lng'         => $lng,
+        'maps_google' => ($lat !== null && $lng !== null)
+            ? 'https://www.google.com/maps/search/?api=1&query=' . $lat . ',' . $lng
+            : null,
+        'maps_apple'  => ($lat !== null && $lng !== null)
+            ? 'https://maps.apple.com/?ll=' . $lat . ',' . $lng . '&q=' . rawurlencode($r['name'])
+            : null,
+        'maps_komoot' => ($lat !== null && $lng !== null)
+            ? 'https://www.komoot.com/de-de/plan/@' . $lat . ',' . $lng . ',16.000z?p[1][loc]=' . $lat . ',' . $lng . '&sport=jogging'
+            : null,
+        'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
+    ];
+}
+
+function handleTreffpunkte(string $method, string $sub): void
+{
+    ensureTreffpunkteTabelle();
+    $user      = Auth::check();
+    $istTrainer = $user && Auth::hasRecht('training_bloecke_verwalten');
+
+    // GET Liste
+    if ($sub === '' && $method === 'GET') {
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+            return;
+        }
+        $rows = DB::fetchAll(
+            'SELECT * FROM ' . DB::tbl('training_treffpunkte') . ' ORDER BY name'
+        );
+        echo json_encode(['ok' => true, 'treffpunkte' => array_map('mapTreffpunkt', $rows)]);
+        return;
+    }
+
+    // POST neu
+    if ($sub === '' && $method === 'POST') {
+        if (!$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Nur Trainer dürfen Treffpunkte anlegen.']);
+            return;
+        }
+        $in = readJsonBody();
+        if (empty($in['name'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "name" erforderlich']);
+            return;
+        }
+        $lat = isset($in['lat']) && $in['lat'] !== '' && $in['lat'] !== null ? (float)$in['lat'] : null;
+        $lng = isset($in['lng']) && $in['lng'] !== '' && $in['lng'] !== null ? (float)$in['lng'] : null;
+        DB::query(
+            'INSERT INTO ' . DB::tbl('training_treffpunkte') . ' (name, lat, lng, erstellt_von) VALUES (?,?,?,?)',
+            [trim($in['name']), $lat, $lng, (int)$user['id']]
+        );
+        $id = (int)DB::lastInsertId();
+        $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_treffpunkte') . ' WHERE id = ?', [$id]);
+        echo json_encode(['ok' => true, 'treffpunkt' => mapTreffpunkt($row)]);
+        return;
+    }
+
+    // PUT update
+    if ($sub !== '' && $method === 'PUT' && ctype_digit($sub)) {
+        if (!$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $id = (int)$sub;
+        $in = readJsonBody();
+        if (empty($in['name'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "name" erforderlich']);
+            return;
+        }
+        $lat = isset($in['lat']) && $in['lat'] !== '' && $in['lat'] !== null ? (float)$in['lat'] : null;
+        $lng = isset($in['lng']) && $in['lng'] !== '' && $in['lng'] !== null ? (float)$in['lng'] : null;
+        DB::query(
+            'UPDATE ' . DB::tbl('training_treffpunkte') . ' SET name=?, lat=?, lng=? WHERE id=?',
+            [trim($in['name']), $lat, $lng, $id]
+        );
+        $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_treffpunkte') . ' WHERE id = ?', [$id]);
+        echo json_encode(['ok' => true, 'treffpunkt' => mapTreffpunkt($row)]);
+        return;
+    }
+
+    // DELETE
+    if ($sub !== '' && $method === 'DELETE' && ctype_digit($sub)) {
+        if (!$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $id = (int)$sub;
+        // Referenzen auf diesen Treffpunkt auf NULL setzen
+        DB::query(
+            'UPDATE ' . DB::tbl('training_einheiten') . ' SET treffpunkt_id = NULL WHERE treffpunkt_id = ?',
+            [$id]
+        );
+        DB::query('DELETE FROM ' . DB::tbl('training_treffpunkte') . ' WHERE id = ?', [$id]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Treffpunkte-Endpoint nicht gefunden']);
+}
+
+// ============================================================
 // Legt training_bloecke + training_block_segmente an, falls noch nicht vorhanden,
 // und stellt sicher, dass die Trainer-Rolle in der rollen-Tabelle existiert.
 function ensureBloeckeTabellen(): void {
+    // Treffpunkte-Tabelle und Migration von training_einheiten
+    ensureTreffpunkteTabelle();
+
     DB::query(
         "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_bloecke') . " (
           id            INT UNSIGNED       NOT NULL AUTO_INCREMENT,
           titel         VARCHAR(200)       NOT NULL,
           typ           ENUM('intervall','dauerlauf','funktionell','runde','event','frei','kein_training')
                                            NOT NULL DEFAULT 'intervall',
-          treffpunkt    VARCHAR(200)       NULL,
           bemerkung     TEXT               NULL,
           sichtbarkeit  ENUM('global','privat') NOT NULL DEFAULT 'global',
           erstellt_von  INT UNSIGNED       NULL,
@@ -1472,6 +1647,16 @@ function ensureBloeckeTabellen(): void {
               REFERENCES " . DB::tbl('training_bloecke') . "(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Migration: komoot_url zu training_bloecke hinzufügen, falls noch nicht vorhanden
+    $bCols = DB::fetchAll(
+        "SHOW COLUMNS FROM " . DB::tbl('training_bloecke') . " LIKE 'komoot_url'"
+    );
+    if (empty($bCols)) {
+        DB::query(
+            "ALTER TABLE " . DB::tbl('training_bloecke') . "
+             ADD COLUMN komoot_url VARCHAR(500) NULL AFTER typ"
+        );
+    }
     // Trainer- und Editor-Rolle anlegen, falls noch nicht vorhanden
     DB::query(
         "INSERT IGNORE INTO " . DB::tbl('rollen') . " (name, rechte) VALUES
@@ -1581,16 +1766,19 @@ function handleBloecke(string $method, string $sub): void
         $pdo->beginTransaction();
         try {
             $defaultSicht = ($block['sichtbarkeit'] === 'global') ? 'oeffentlich' : 'intern';
+            $tpId = isset($in['treffpunkt_id']) && $in['treffpunkt_id'] !== '' && $in['treffpunkt_id'] !== null
+                ? (int)$in['treffpunkt_id'] : null;
             DB::query(
                 'INSERT INTO ' . DB::tbl('training_einheiten') . '
-                 (datum, uhrzeit, typ, titel, treffpunkt, bemerkung, sichtbarkeit, status, erstellt_von)
-                 VALUES (?,?,?,?,?,?,?,?,?)',
+                 (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, bemerkung, sichtbarkeit, status, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?,?,?,?)',
                 [
                     $in['datum'],
                     $in['uhrzeit'] ?? null,
                     $block['typ'],
                     $block['titel'],
-                    $in['treffpunkt'] ?? $block['treffpunkt'] ?? null,
+                    $tpId,
+                    $block['komoot_url'] ?? null,
                     $block['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? $defaultSicht,
                     'geplant',
@@ -1645,12 +1833,12 @@ function handleBloecke(string $method, string $sub): void
         try {
             DB::query(
                 'INSERT INTO ' . DB::tbl('training_bloecke') . '
-                 (titel, typ, treffpunkt, bemerkung, sichtbarkeit, erstellt_von)
+                 (titel, typ, komoot_url, bemerkung, sichtbarkeit, erstellt_von)
                  VALUES (?,?,?,?,?,?)',
                 [
                     $in['titel'],
                     $in['typ'] ?? 'intervall',
-                    $in['treffpunkt'] ?? null,
+                    isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
                     $in['bemerkung'] ?? null,
                     $sicht,
                     (int)$user['id'],
@@ -1699,12 +1887,12 @@ function handleBloecke(string $method, string $sub): void
         try {
             DB::query(
                 'UPDATE ' . DB::tbl('training_bloecke') . '
-                    SET titel=?, typ=?, treffpunkt=?, bemerkung=?, sichtbarkeit=?
+                    SET titel=?, typ=?, komoot_url=?, bemerkung=?, sichtbarkeit=?
                   WHERE id=?',
                 [
                     $in['titel'],
                     $in['typ'] ?? 'intervall',
-                    $in['treffpunkt'] ?? null,
+                    isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
                     $in['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? $block['sichtbarkeit'],
                     $id,
@@ -1756,7 +1944,7 @@ function mapBlock(array $r): array {
         'id'           => (int)$r['id'],
         'titel'        => $r['titel'],
         'typ'          => $r['typ'],
-        'treffpunkt'   => $r['treffpunkt'],
+        'komoot_url'   => $r['komoot_url'] ?? null,
         'bemerkung'    => $r['bemerkung'],
         'sichtbarkeit' => $r['sichtbarkeit'],
         'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
@@ -1822,13 +2010,34 @@ function validateBlock(array $in): array {
 
 // ============================================================
 function mapEinheit(array $r): array {
+    $tp = null;
+    if (!empty($r['treffpunkt_id'])) {
+        $lat = $r['tp_lat'] !== null ? (float)$r['tp_lat'] : null;
+        $lng = $r['tp_lng'] !== null ? (float)$r['tp_lng'] : null;
+        $tp = [
+            'id'          => (int)$r['treffpunkt_id'],
+            'name'        => $r['tp_name'] ?? null,
+            'lat'         => $lat,
+            'lng'         => $lng,
+            'maps_google' => ($lat !== null && $lng !== null)
+                ? 'https://www.google.com/maps/search/?api=1&query=' . $lat . ',' . $lng
+                : null,
+            'maps_apple'  => ($lat !== null && $lng !== null)
+                ? 'https://maps.apple.com/?ll=' . $lat . ',' . $lng . '&q=' . rawurlencode($r['tp_name'] ?? '')
+                : null,
+            'maps_komoot' => ($lat !== null && $lng !== null)
+                ? 'https://www.komoot.com/de-de/plan/@' . $lat . ',' . $lng . ',16.000z?p[1][loc]=' . $lat . ',' . $lng . '&sport=jogging'
+                : null,
+        ];
+    }
     return [
         'id'           => (int)$r['id'],
         'datum'        => $r['datum'],
         'uhrzeit'      => $r['uhrzeit'] ? substr($r['uhrzeit'], 0, 5) : null,
         'typ'          => $r['typ'],
         'titel'        => $r['titel'],
-        'treffpunkt'   => $r['treffpunkt'],
+        'treffpunkt'   => $tp,
+        'komoot_url'   => $r['komoot_url'] ?? null,
         'bemerkung'    => $r['bemerkung'],
         'sichtbarkeit' => $r['sichtbarkeit'] ?? 'oeffentlich',
         'status'       => $r['status'] ?? 'geplant',

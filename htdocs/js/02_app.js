@@ -87,6 +87,7 @@ function fillUserBadge() {
     nav.innerHTML = `
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
       ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
+      ${isTrainer ? `<button onclick="navigate('treffpunkte')"${state.tab === 'treffpunkte' ? ' class="active"' : ''}>Treffpunkte</button>` : ''}
       ${isAdmin ? `<button onclick="navigate('einstellungen')"${state.tab === 'einstellungen' ? ' class="active"' : ''}>Einstellungen</button>` : ''}`;
   }
 }
@@ -127,6 +128,11 @@ function renderPage() {
   if (state.tab === 'planung') {
     if (!state.user) { location.replace('#kalender'); return; }
     PLANUNG.render(main);
+    return;
+  }
+  if (state.tab === 'treffpunkte') {
+    if (!state.user) { location.replace('#kalender'); return; }
+    TREFFPUNKTE.render(main);
     return;
   }
   if (state.tab === 'einstellungen') {
@@ -331,6 +337,7 @@ function renderHeuteSektionHtml(items) {
     const zeitStr = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
     const abgesagt = e.status === 'abgesagt';
     const intern = e.sichtbarkeit === 'intern';
+    const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : null;
     return `
       <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}">
         <div class="heute-card-eyebrow">
@@ -339,8 +346,8 @@ function renderHeuteSektionHtml(items) {
           ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
         </div>
         <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-        ${e.treffpunkt ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(e.treffpunkt)}</div>` : ''}
-        ${e.bemerkung  ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+        ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
+        ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
         <div id="heute-segs-${e.id}"></div>
       </div>`;
   }).join('');
@@ -356,7 +363,7 @@ async function ladHeuteDetails(items) {
     if (!areaEl) continue;
     try {
       const data = await apiGet(`einheiten/${item.id}`, { silent: true });
-      const seg  = data.segmente || [];
+      const seg     = data.segmente || [];
       const einheit = data.einheit;
       state._heuteEinheiten[einheit.id] = { einheit, segmente: seg };
 
@@ -480,7 +487,13 @@ async function zeigeEinheit(id) {
             <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
           </div>
           <div class="modal-body">
-            ${e.treffpunkt ? `<div class="modal-row"><span class="modal-label">Treffpunkt</span><span>${escapeHtml(e.treffpunkt)}</span></div>` : ''}
+            ${e.treffpunkt ? `<div class="modal-row"><span class="modal-label">Treffpunkt</span><span class="modal-treffpunkt">
+              ${escapeHtml(e.treffpunkt.name || '')}
+              ${e.treffpunkt.maps_google ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_google)}" target="_blank" rel="noopener" title="Google Maps öffnen">Google Maps</a>` : ''}
+              ${e.treffpunkt.maps_apple  ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_apple)}"  target="_blank" rel="noopener" title="Apple Maps öffnen">Apple Maps</a>`  : ''}
+              ${e.treffpunkt.maps_komoot ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_komoot)}" target="_blank" rel="noopener" title="In Komoot öffnen">Komoot</a>` : ''}
+            </span></div>` : ''}
+            ${e.komoot_url ? `<div class="modal-row"><span class="modal-label">Strecke</span><span><a class="tp-link tp-link-komoot" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Komoot-Strecke öffnen</a></span></div>` : ''}
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
             ${e.sichtbarkeit === 'intern' ? `<div class="modal-row"><span class="modal-label">Sichtbarkeit</span><span>Nur intern</span></div>` : ''}
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
