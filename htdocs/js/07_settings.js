@@ -104,7 +104,7 @@ const SETTINGS = (() => {
             '<div class="settings-row-label">' +
               '<div style="font-size:13px;font-weight:600;color:var(--text)">ICS-Feeds</div>' +
               '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
-                'Pro Feed eine ICS-URL. Label und Farbe werden im Kalender als Marker auf den jeweiligen Tagen angezeigt. ' +
+                'Pro Feed eine ICS-URL. <code style="font-size:11px">{year}</code> wird automatisch durch alle relevanten Jahre ersetzt. ' +
                 'Vorschläge: ' +
                 '<a href="#" onclick="SETTINGS.beispiel(\'feiertage\');return false;" style="color:var(--accent)">Feiertage NRW</a>, ' +
                 '<a href="#" onclick="SETTINGS.beispiel(\'ferien\');return false;" style="color:var(--accent)">Schulferien NRW</a>.' +
@@ -329,8 +329,8 @@ const SETTINGS = (() => {
   }
   function beispiel(typ) {
     const m = {
-      feiertage: { url: 'https://www.schulferien.org/iCal/Ferien/Feiertag/ICalKalender_Schulferien_Feiertage_in_Nordrhein-Westfalen.ics', label: 'Feiertage NRW', farbe: '#cc0000' },
-      ferien:    { url: 'https://www.schulferien.org/iCal/Ferien/ICalKalender_Schulferien_in_Nordrhein-Westfalen.ics',                 label: 'Schulferien NRW', farbe: '#003087' },
+      feiertage: { url: 'https://www.schulferien.org/deutschland/ical/download/?lrid=37&j={year}&t=2', label: 'Feiertage NRW', farbe: '#cc0000' },
+      ferien:    { url: 'https://www.schulferien.org/deutschland/ical/download/?tbid=46&j={year}&t=1', label: 'Schulferien NRW', farbe: '#003087' },
     };
     if (!m[typ]) return;
     feiertage.push(m[typ]);
