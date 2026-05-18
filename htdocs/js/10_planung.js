@@ -267,6 +267,14 @@ const PLANUNG = (() => {
 
   // ── Einheit verschieben (DnD auf anderen Tag) ────────────
   async function verschiebeEinheit(einheitId, neuesDatum) {
+    // Optimistisch: Element sofort in die Ziel-Zelle verschieben
+    const el = document.querySelector(`.kal-item[data-einheit-id="${einheitId}"]`);
+    const zielItems = document.querySelector(`.planung-kal-cell[data-datum="${neuesDatum}"] .kal-cell-items`);
+    let quellZelle = el ? el.closest('.planung-kal-cell') : null;
+    if (el && zielItems) {
+      const hint = zielItems.querySelector('.planung-drop-hint');
+      hint ? zielItems.insertBefore(el, hint) : zielItems.appendChild(el);
+    }
     try {
       const data = await apiGet(`einheiten/${einheitId}`, { silent: true });
       const e = data.einheit;
@@ -282,21 +290,24 @@ const PLANUNG = (() => {
         status:        e.status    || 'geplant',
       });
       notify('Training verschoben.', 'ok');
-      renderKal();
     } catch (err) {
       notify('Fehler: ' + (err.message || ''), 'err');
+      renderKal(); // Fehlerfall: Kalender aus Server-Zustand wiederherstellen
     }
   }
 
   // ── Einheit aus Kalender löschen ─────────────────────────
   async function loescheEinheit(einheitId) {
     if (!confirm('Diesen Kalendereintrag löschen?\nDer Trainingsblock bleibt erhalten.')) return;
+    // Optimistisch: Element sofort entfernen
+    const el = document.querySelector(`.kal-item[data-einheit-id="${einheitId}"]`);
+    if (el) el.remove();
     try {
       await apiDel(`einheiten/${einheitId}`);
       notify('Eintrag gelöscht.', 'ok');
-      renderKal();
     } catch (err) {
       notify('Fehler: ' + (err.message || ''), 'err');
+      renderKal(); // Fehlerfall: Kalender aus Server-Zustand wiederherstellen
     }
   }
 
@@ -304,5 +315,5 @@ const PLANUNG = (() => {
     if (document.getElementById('planung-bloecke-list')) ladeBlocke();
   }
 
-  return { render, navigateMonth, reloadSidebar, loescheEinheit };
+  return { render, navigateMonth, reloadSidebar, loescheEinheit, reloadKal: renderKal };
 })();
