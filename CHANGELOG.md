@@ -1,5 +1,8 @@
 # Changelog
 
+## v54
+- Heute-Sektion erscheint in Kalender- und Listenansicht gleichermaßen, unabhängig vom angezeigten Monat/Quartal (eigener API-Call für heute)
+
 ## v53
 - Quartalsplan (Listenansicht): neue Ansicht `#liste/YYYY-QN` zeigt alle Einheiten eines Quartals nach Kalenderwochen gruppiert; Typ-Farbakzente, Heute-Markierung, Kein-Training-Styling; View-Toggle-Buttons in Kalender- und Listenansicht; auf Mobilgeräten ist Listenansicht Standard-Ansicht beim ersten Aufruf
 
