@@ -226,6 +226,7 @@ async function renderKalender(main, monthArg) {
           ${state.user ? `<button class="btn btn-primary" onclick="navigate('planung')">Planung</button>` : ''}
         </div>
       </div>
+      <div id="heute-sektion"></div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
     </div>`;
 
@@ -248,6 +249,14 @@ async function renderKalender(main, monthArg) {
   einheiten.forEach(e => {
     (byDate[e.datum] = byDate[e.datum] || []).push(e);
   });
+
+  // Heute-Sektion: nur anzeigen, wenn heute im geladenen Bereich liegt
+  const todayInRange = todayKey >= ymd(gridStart) && todayKey <= ymd(gridEnd);
+  const todayItems = todayInRange
+    ? (byDate[todayKey] || []).filter(e => e.typ !== 'kein_training')
+    : [];
+  const heuteEl = document.getElementById('heute-sektion');
+  if (heuteEl) heuteEl.innerHTML = todayItems.length ? renderHeuteSektionHtml(todayItems) : '';
 
   // Feiertage über Datum spreizen (mehrtägige Ferien)
   const feiertageByDate = {};
@@ -311,6 +320,29 @@ async function renderKalender(main, monthArg) {
 
   document.getElementById('kal-grid').outerHTML =
     `<div id="kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
+}
+
+function renderHeuteSektionHtml(items) {
+  const cardsHtml = items.map(e => {
+    const typLabel = TYP_LABEL[e.typ] || e.typ;
+    const zeitStr = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
+    const abgesagt = e.status === 'abgesagt';
+    const intern = e.sichtbarkeit === 'intern';
+    return `
+      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}"
+           onclick="zeigeEinheit(${e.id})" role="button" tabindex="0">
+        <div class="heute-card-eyebrow">
+          <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
+          ${abgesagt ? '<span class="heute-badge heute-badge-abgesagt">Abgesagt</span>' : ''}
+          ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
+        </div>
+        <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
+        ${e.treffpunkt ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(e.treffpunkt)}</div>` : ''}
+        ${e.bemerkung  ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+        <div class="heute-card-link">Details &amp; Segmente anzeigen →</div>
+      </div>`;
+  }).join('');
+  return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
 }
 
 function navigateKalender(monthYM) {

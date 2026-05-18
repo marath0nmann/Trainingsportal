@@ -142,6 +142,60 @@
   font-weight: 800; font-size: 32px; letter-spacing: .5px;
 }
 
+/* ── Heute-Sektion ── */
+.heute-sektion { margin-bottom: 20px; }
+.heute-heading {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 13px; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--text2); margin-bottom: 10px;
+}
+.heute-cards { display: flex; flex-direction: column; gap: 10px; }
+.heute-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: background .15s, box-shadow .15s;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.heute-card:hover {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+}
+.heute-card.is-cancelled { opacity: .6; }
+.heute-card.kal-typ-intervall   { border-left-color: var(--primary); }
+.heute-card.kal-typ-dauerlauf   { border-left-color: var(--green, #1a8a3a); }
+.heute-card.kal-typ-funktionell { border-left-color: #c08010; }
+.heute-card.kal-typ-runde       { border-left-color: var(--accent); }
+.heute-card.kal-typ-event       { border-left-color: #8845c0; }
+.heute-card-eyebrow {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.heute-typ-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--text2);
+}
+.heute-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; border-radius: 4px; padding: 1px 6px;
+}
+.heute-badge-abgesagt { background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
+.heute-badge-intern   { background: color-mix(in srgb, var(--text2) 12%, transparent); color: var(--text2); }
+.heute-card-titel {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 24px; letter-spacing: .3px;
+  color: var(--text); line-height: 1.1;
+}
+.heute-card-info { font-size: 13px; color: var(--text2); }
+.heute-treffpunkt { color: var(--text); }
+.heute-card-link {
+  font-size: 12px; font-weight: 600; color: var(--accent);
+  margin-top: 4px; letter-spacing: .3px;
+}
+
 /* Mobile: kompakter Kalender */
 @media (max-width: 720px) {
   .kal-wrap { padding: 12px 8px 32px; }
