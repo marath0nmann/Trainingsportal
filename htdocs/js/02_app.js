@@ -26,6 +26,14 @@ async function init() {
   } catch (e) {
     state.user = null;
   }
+  // Mobile: Standard-Ansicht ist Quartalsplan
+  if (!location.hash || location.hash === '#') {
+    const now = new Date();
+    const q = Math.floor(now.getMonth() / 3) + 1;
+    location.hash = window.innerWidth < 720
+      ? `#liste/${now.getFullYear()}-Q${q}`
+      : '#kalender';
+  }
   showApp();
 }
 
@@ -119,6 +127,10 @@ function renderPage() {
 
   if (state.tab === 'kalender') {
     renderKalender(main, args && args[0]);
+    return;
+  }
+  if (state.tab === 'liste') {
+    renderListe(main, args && args[0]);
     return;
   }
   if (state.tab === 'bloecke') {
@@ -229,7 +241,10 @@ async function renderKalender(main, monthArg) {
         <div class="kal-nav-right">
           <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
           <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
-          ${state.user ? `<button class="btn btn-primary" onclick="navigate('planung')">Planung</button>` : ''}
+          <div class="view-toggle">
+            <button class="btn btn-ghost view-active" title="Kalenderansicht">▦ Kalender</button>
+            <button class="btn btn-ghost" onclick="navigateListeFromKal('${ymd(monthStart).slice(0,7)}')" title="Quartalsplan">☰ Liste</button>
+          </div>
         </div>
       </div>
       <div id="heute-sektion"></div>
@@ -256,16 +271,8 @@ async function renderKalender(main, monthArg) {
     (byDate[e.datum] = byDate[e.datum] || []).push(e);
   });
 
-  // Heute-Sektion: nur anzeigen, wenn heute im geladenen Bereich liegt
-  const todayInRange = todayKey >= ymd(gridStart) && todayKey <= ymd(gridEnd);
-  const todayItems = todayInRange
-    ? (byDate[todayKey] || []).filter(e => e.typ !== 'kein_training')
-    : [];
-  const heuteEl = document.getElementById('heute-sektion');
-  if (heuteEl) {
-    heuteEl.innerHTML = todayItems.length ? renderHeuteSektionHtml(todayItems) : '';
-    if (todayItems.length) ladHeuteDetails(todayItems);
-  }
+  // Heute-Sektion immer unabhängig nachladen
+  ladeHeuteSektionInto('heute-sektion');
 
   // Feiertage über Datum spreizen (mehrtägige Ferien)
   const feiertageByDate = {};
@@ -309,7 +316,7 @@ async function renderKalender(main, monthArg) {
       const itemsHtml = items.map(e => {
         const cls = `kal-item kal-typ-${e.typ}` + (e.status === 'abgesagt' ? ' is-cancelled' : '');
         const time = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
-        return `<div class="${cls}" onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
+        return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
       }).join('');
 
       const addBtn = '';
@@ -329,6 +336,9 @@ async function renderKalender(main, monthArg) {
 
   document.getElementById('kal-grid').outerHTML =
     `<div id="kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
+  if (typeof KAL_POPOVER !== 'undefined') {
+    KAL_POPOVER.initItems(document.querySelectorAll('#kal-grid .kal-item[data-einheit-id]'));
+  }
 }
 
 function renderHeuteSektionHtml(items) {
@@ -340,18 +350,35 @@ function renderHeuteSektionHtml(items) {
     const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : null;
     return `
       <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}">
-        <div class="heute-card-eyebrow">
-          <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
-          ${abgesagt ? '<span class="heute-badge heute-badge-abgesagt">Abgesagt</span>' : ''}
-          ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
+        <div class="heute-card-main">
+          <div class="heute-card-eyebrow">
+            <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
+            ${abgesagt ? '<span class="heute-badge heute-badge-abgesagt">Abgesagt</span>' : ''}
+            ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
+          </div>
+          <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
+          ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
+          ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+          <div id="heute-segs-${e.id}"></div>
         </div>
-        <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-        ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
-        ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
-        <div id="heute-segs-${e.id}"></div>
+        <div id="heute-komoot-${e.id}" class="heute-card-komoot"></div>
       </div>`;
   }).join('');
   return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
+}
+
+async function ladeHeuteSektionInto(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const today = ymd(new Date());
+  try {
+    const d = await apiGet(`einheiten?von=${today}&bis=${today}`, { silent: true });
+    const items = (d.einheiten || []).filter(e => e.typ !== 'kein_training');
+    el.innerHTML = items.length ? renderHeuteSektionHtml(items) : '';
+    if (items.length) ladHeuteDetails(items);
+  } catch (e) {
+    el.innerHTML = '';
+  }
 }
 
 async function ladHeuteDetails(items) {
@@ -385,14 +412,6 @@ async function ladHeuteDetails(items) {
       if (seg.length) {
         html += renderSegmentBlocksHtml(seg, paceData, einheit.typ);
       }
-      if (einheit.komoot_url) {
-        const embedUrl = komootEmbedUrl(einheit.komoot_url);
-        if (embedUrl) {
-          html += `<div class="komoot-embed" style="margin-top:10px"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>`;
-        }
-        html += `<div style="margin-top:4px"><a class="tp-link tp-link-komoot" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a></div>`;
-      }
-
       const actions = [];
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
@@ -405,6 +424,19 @@ async function ladHeuteDetails(items) {
       }
 
       areaEl.innerHTML = html;
+
+      // Komoot-Strecke in rechte Spalte
+      const komootEl = document.getElementById(`heute-komoot-${einheit.id}`);
+      if (komootEl && einheit.komoot_url) {
+        const embedUrl = komootEmbedUrl(einheit.komoot_url);
+        let komootHtml = '';
+        if (embedUrl) {
+          komootHtml += `<iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe>`;
+        }
+        komootHtml += `<a class="tp-link tp-link-komoot heute-komoot-link" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a>`;
+        komootEl.innerHTML = komootHtml;
+        komootEl.closest('.heute-card').classList.add('heute-card-split');
+      }
     } catch (_) {
       // Segmente bleiben leer bei Fehler
     }
@@ -475,6 +507,173 @@ function navigateKalender(monthYM) {
 function navigateKalenderHeute() {
   const d = new Date();
   navigateKalender(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+}
+
+function navigateListeFromKal(monthYM) {
+  const [y, mo] = monthYM.split('-').map(Number);
+  navigateListe(`${y}-Q${Math.floor((mo - 1) / 3) + 1}`);
+}
+
+function navigateListe(quarterKey) {
+  if (!quarterKey) {
+    const now = new Date();
+    quarterKey = `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
+  }
+  location.hash = `#liste/${quarterKey}`;
+}
+
+function parseQuarterArg(arg) {
+  if (arg && /^\d{4}-Q[1-4]$/.test(arg)) {
+    const [y, qStr] = arg.split('-Q');
+    return { year: +y, quarter: +qStr };
+  }
+  const now = new Date();
+  return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
+}
+
+function isoWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+
+function isoWeekYear(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  return d.getFullYear();
+}
+
+async function renderListe(main, quarterArg) {
+  const { year, quarter } = parseQuarterArg(quarterArg);
+  const qStart = new Date(year, (quarter - 1) * 3, 1);
+  const qEnd   = new Date(year, quarter * 3, 0);
+
+  const QUARTALS_MONATE_LABEL = [
+    'Jan. – März', 'Apr. – Jun.', 'Jul. – Sep.', 'Okt. – Dez.'
+  ];
+  const prevQ = quarter === 1 ? `${year - 1}-Q4` : `${year}-Q${quarter - 1}`;
+  const nextQ = quarter === 4 ? `${year + 1}-Q1` : `${year}-Q${quarter + 1}`;
+  const moKalStart = `${year}-${String((quarter - 1) * 3 + 1).padStart(2, '0')}`;
+
+  main.innerHTML = `
+    <div class="liste-wrap">
+      <div class="liste-toolbar">
+        <div class="liste-nav">
+          <button class="btn btn-ghost" onclick="navigateListe('${prevQ}')" aria-label="Vorheriges Quartal">‹</button>
+          <span class="liste-title">Q${quarter} ${year} · ${QUARTALS_MONATE_LABEL[quarter - 1]}</span>
+          <button class="btn btn-ghost" onclick="navigateListe('${nextQ}')" aria-label="Nächstes Quartal">›</button>
+        </div>
+        <div class="liste-nav-right">
+          <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
+          <button class="btn btn-ghost" onclick="navigateListe()">Heute</button>
+          <div class="view-toggle">
+            <button class="btn btn-ghost" onclick="navigateKalender('${moKalStart}')" title="Kalenderansicht">▦ Kalender</button>
+            <button class="btn btn-ghost view-active" title="Quartalsplan">☰ Liste</button>
+          </div>
+        </div>
+      </div>
+      <div id="heute-sektion"></div>
+      <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
+    </div>`;
+
+  ladeHeuteSektionInto('heute-sektion');
+
+  let einheiten = [];
+  try {
+    const d = await apiGet(`einheiten?von=${ymd(qStart)}&bis=${ymd(qEnd)}`, { silent: true });
+    einheiten = d.einheiten || [];
+  } catch (e) {
+    document.getElementById('liste-content').innerHTML =
+      `<div class="liste-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
+    return;
+  }
+
+  // Group by ISO calendar week (only days within the quarter)
+  const byWeek = new Map(); // "YYYY-WW" → { weekNum, weekStart, items }
+  const todayKey = ymd(new Date());
+
+  for (let d = new Date(qStart); d <= qEnd; d.setDate(d.getDate() + 1)) {
+    const k = ymd(new Date(d));
+    const kw  = isoWeek(new Date(d));
+    const wy  = isoWeekYear(new Date(d));
+    const wKey = `${wy}-${String(kw).padStart(2, '0')}`;
+
+    if (!byWeek.has(wKey)) {
+      const mon = new Date(d);
+      const dow = (mon.getDay() + 6) % 7;
+      mon.setDate(mon.getDate() - dow);
+      byWeek.set(wKey, { weekNum: kw, weekStart: new Date(mon), items: [] });
+    }
+
+    const dayItems = einheiten.filter(e => e.datum === k);
+    if (dayItems.length) byWeek.get(wKey).items.push(...dayItems);
+  }
+
+  const WOCHENTAG_KURZ = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const MONAT_KURZ = ['Jan.','Feb.','März','Apr.','Mai','Jun.','Jul.','Aug.','Sep.','Okt.','Nov.','Dez.'];
+
+  let html = '';
+  for (const [, week] of byWeek) {
+    if (!week.items.length) continue;
+
+    const ws = week.weekStart;
+    const we = new Date(ws); we.setDate(ws.getDate() + 6);
+    let rangeStr;
+    if (ws.getMonth() === we.getMonth()) {
+      rangeStr = `${ws.getDate()}. – ${we.getDate()}. ${MONAT_KURZ[ws.getMonth()]} ${ws.getFullYear()}`;
+    } else if (ws.getFullYear() === we.getFullYear()) {
+      rangeStr = `${ws.getDate()}. ${MONAT_KURZ[ws.getMonth()]} – ${we.getDate()}. ${MONAT_KURZ[we.getMonth()]} ${ws.getFullYear()}`;
+    } else {
+      rangeStr = `${ws.getDate()}. ${MONAT_KURZ[ws.getMonth()]} ${ws.getFullYear()} – ${we.getDate()}. ${MONAT_KURZ[we.getMonth()]} ${we.getFullYear()}`;
+    }
+
+    const rowsHtml = week.items.map(e => {
+      const dateObj = new Date(e.datum + 'T00:00:00');
+      const dayStr = `${WOCHENTAG_KURZ[dateObj.getDay()]}, ${dateObj.getDate()}. ${MONAT_KURZ[dateObj.getMonth()]}`;
+      const isToday = e.datum === todayKey;
+      const isCancelled = e.status === 'abgesagt';
+      const isKeinTraining = e.typ === 'kein_training';
+      const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : '';
+      const typLabel = TYP_LABEL[e.typ] || e.typ;
+
+      const rowCls = [
+        'liste-row', `kal-typ-${e.typ}`,
+        isToday ? 'is-today' : '',
+        isCancelled ? 'is-cancelled' : '',
+        isKeinTraining ? 'is-kein-training' : '',
+      ].filter(Boolean).join(' ');
+
+      const clickAttr = isKeinTraining ? '' : ` onclick="zeigeEinheit(${e.id})"`;
+      const dateHtml = isToday
+        ? `<span class="liste-date"><span class="liste-date-today">${escapeHtml(dayStr)}</span></span>`
+        : `<span class="liste-date">${escapeHtml(dayStr)}</span>`;
+
+      return `<div class="${rowCls}"${clickAttr}>
+        ${dateHtml}
+        <span class="liste-time">${e.uhrzeit ? escapeHtml(e.uhrzeit) : '–'}</span>
+        <span class="liste-typ-badge liste-typ-${e.typ}">${escapeHtml(typLabel)}</span>
+        <span class="liste-title-text">${escapeHtml(e.titel)}</span>
+        <span class="liste-ort">${escapeHtml(treffpunktName)}</span>
+      </div>`;
+    }).join('');
+
+    html += `<div class="liste-week-block">
+      <div class="liste-kw-head">
+        <span class="liste-kw-badge">KW ${week.weekNum}</span>
+        <span class="liste-kw-range">${escapeHtml(rangeStr)}</span>
+      </div>
+      <div class="liste-rows">${rowsHtml}</div>
+    </div>`;
+  }
+
+  if (!html) {
+    html = '<div class="liste-empty">Keine Trainingseinheiten in diesem Quartal eingetragen.</div>';
+  }
+
+  document.getElementById('liste-content').outerHTML =
+    `<div id="liste-content" class="liste-content">${html}</div>`;
 }
 
 async function zeigeEinheit(id) {
@@ -554,8 +753,13 @@ function schliesseModal(ev) {
 // Unterstützt: komoot.com/tour/ID, komoot.com/de-de/tour/ID, etc.
 function komootEmbedUrl(url) {
   if (!url) return null;
-  const m = String(url).match(/\/tour\/(\d+)/);
-  return m ? 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1' : null;
+  const tourMatch = String(url).match(/\/tour\/(\d+)/);
+  if (!tourMatch) return null;
+  // share_token aus der URL übernehmen (nötig für nicht-öffentliche Touren)
+  let token = null;
+  try { token = new URL(url).searchParams.get('share_token'); } catch (_) {}
+  return 'https://www.komoot.com/tour/' + tourMatch[1] + '/embed?profile=1'
+    + (token ? '&share_token=' + encodeURIComponent(token) : '');
 }
 
 function escapeHtml(s) {
