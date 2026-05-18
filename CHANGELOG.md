@@ -1,7 +1,8 @@
 # Changelog
 
-## v63
-- Komoot-Embed: Höhe auf 680px erhöht (Heute-Sektion 400px) damit die Karte gut sichtbar ist; `profile=1` entfernt (kein Höhenprofil, mehr Kartenfläche)
+## v64
+- Komoot-Embed im Darkmode: CSS-Filter `invert + hue-rotate` sorgt für Nachtmodus-Optik der Karte
+- „Auf Komoot ↗"-Button in Aktionsleiste (neben Bearbeiten) verschoben; separater Link unter dem iFrame entfernt
 
 ## v56
 - „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
