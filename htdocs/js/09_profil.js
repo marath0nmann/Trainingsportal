@@ -95,13 +95,17 @@ const PROFIL = (() => {
       const m12    = dist12m[ref];
       const manSek = p.manual_sek || null;
 
-      // Effektiven Modus bestimmen
-      let selVal = 'manual';
-      if      (p.modus === 'pb'  && pb)  selVal = 'pb';
-      else if (p.modus === '12m' && m12) selVal = '12m';
-      else if (p.modus === 'pb'  && m12) selVal = '12m';
-      else if (pb)                        selVal = 'pb';
-      else if (m12)                       selVal = '12m';
+      // Effektiven Modus bestimmen – explizit 'manual' wird immer respektiert
+      let selVal;
+      if (p.modus === 'manual') {
+        selVal = 'manual';                              // explizite Wahl → nie überschreiben
+      } else if (p.modus === 'pb'  && pb)  { selVal = 'pb';     }
+      else if   (p.modus === '12m' && m12) { selVal = '12m';    }
+      else if   (p.modus === 'pb'  && m12) { selVal = '12m';    } // pb gewünscht, nur 12m da
+      else if   (p.modus === '12m' && pb)  { selVal = 'pb';     } // 12m gewünscht, nur pb da
+      else if   (pb)                        { selVal = 'pb';     } // kein Modus → best available
+      else if   (m12)                       { selVal = '12m';    }
+      else                                  { selVal = 'manual'; }
 
       let opts = '';
       if (pb) {
