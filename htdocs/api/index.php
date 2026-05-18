@@ -576,12 +576,16 @@ function handleAdmin(string $method, string $sub): void {
                 continue;
             }
             $events = parseIcsEvents($body, $von, $bis);
+            // Alle events für langen Zeitraum zählen (Debugging)
+            $alleEvents = parseIcsEvents($body, date('Y-m-d', strtotime('-365 days')), date('Y-m-d', strtotime('+365 days')));
             $quellen[] = [
-                'url' => $entry['url'],
-                'ok'  => true,
-                'status' => 'OK (' . strlen($body) . ' B)',
+                'url'                => $entry['url'],
+                'ok'                 => true,
+                'status'             => 'OK (' . strlen($body) . ' B)',
                 'events_im_zeitraum' => count($events),
-                'fehler' => $fehler,
+                'events_gesamt'      => count($alleEvents),
+                'sample'             => array_slice($alleEvents, 0, 3),
+                'fehler'             => $fehler,
             ];
         }
         echo json_encode(['ok' => true, 'quellen' => $quellen, 'zeitraum' => ['von' => $von, 'bis' => $bis]]);
@@ -837,21 +841,34 @@ function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string 
     $body = false;
     // Bevorzugt cURL (auf shared hosting oft vorhanden, robuster als file_get_contents)
     if (function_exists('curl_init')) {
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
+        $curlOpts = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT        => 10,
             CURLOPT_USERAGENT      => 'Trainingsportal-TuSOedt/1.0',
             CURLOPT_SSL_VERIFYPEER => true,
-        ]);
+        ];
+        $ch = curl_init($url);
+        curl_setopt_array($ch, $curlOpts);
         $body = curl_exec($ch);
-        if ($body === false) $fehler = 'curl: ' . curl_error($ch);
-        else {
-            $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            if ($http >= 400) { $fehler = 'HTTP ' . $http; $body = false; }
-        }
+        $curlErr = curl_error($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        if ($body === false) {
+            $fehler = 'curl: ' . $curlErr;
+            // SSL-Fehler: einmalig ohne Peer-Verify wiederholen (Shared-Hosting-CA-Bundle oft veraltet)
+            if (str_contains($curlErr, 'SSL') || str_contains($curlErr, 'certificate')) {
+                $ch2 = curl_init($url);
+                curl_setopt_array($ch2, $curlOpts + [CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => false]);
+                $body = curl_exec($ch2);
+                $http  = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+                if ($body === false) $fehler = 'curl (SSL-Fallback): ' . curl_error($ch2);
+                else $fehler = null;
+                curl_close($ch2);
+            }
+        }
+        if ($body !== false && $http >= 400) { $fehler = 'HTTP ' . $http; $body = false; }
     }
 
     // Fallback: file_get_contents (falls allow_url_fopen=On)
@@ -861,9 +878,9 @@ function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string 
             'https' => ['timeout' => 10, 'header' => "User-Agent: Trainingsportal-TuSOedt/1.0\r\n"],
         ]);
         $body = @file_get_contents($url, false, $ctx);
-        if ($body === false && !$fehler) $fehler = 'file_get_contents fehlgeschlagen';
-    } elseif ($body === false && !$fehler) {
-        $fehler = $fehler ?: 'cURL nicht verfügbar und allow_url_fopen=Off';
+        if ($body === false) $fehler = ($fehler ? $fehler . '; ' : '') . 'file_get_contents fehlgeschlagen';
+    } elseif ($body === false && !function_exists('curl_init') && !$fehler) {
+        $fehler = 'cURL nicht verfügbar und allow_url_fopen=Off';
     }
 
     if ($body === false) {
