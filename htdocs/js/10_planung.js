@@ -160,18 +160,17 @@ const PLANUNG = (() => {
         </div>
       </div>`;
 
-    // Höhe dynamisch setzen (kein hardcodierter Header-Wert nötig)
-    fixPlanungHeight();
-    window.addEventListener('resize', fixPlanungHeight);
+    // body.planung-active: App-Screen als Flex-Spalte → kein Seiten-Scroll
+    document.body.classList.add('planung-active');
+    const offPlanung = () => {
+      if (!(location.hash || '').startsWith('#planung')) {
+        document.body.classList.remove('planung-active');
+        window.removeEventListener('hashchange', offPlanung);
+      }
+    };
+    window.addEventListener('hashchange', offPlanung);
 
     await Promise.all([renderKal(), ladeBlocke()]);
-  }
-
-  function fixPlanungHeight() {
-    const wrap = document.querySelector('.planung-wrap');
-    if (!wrap) { window.removeEventListener('resize', fixPlanungHeight); return; }
-    const top = Math.round(wrap.getBoundingClientRect().top + window.scrollY);
-    wrap.style.height = (window.innerHeight - top) + 'px';
   }
 
   // ── Kalender ─────────────────────────────────────────────

@@ -1,7 +1,15 @@
 # Changelog
 
+## v67
+- Fix: Planung-Seite ohne Scrollbalken – Layout via `body.planung-active` (Flex-Spalte 100vh), statt fragiler `calc(100vh - 76px)`; Footer und Main-Padding werden korrekt neutralisiert
+
 ## v66
 - Komoot-Embed Darkmode: Filter `invert+hue-rotate` nur wenn App dunkel ist aber OS hell (Komoot rendert dann hell); bei dunklem OS übernimmt Komoot selbst
+
+## v65
+- Hover-Popover jetzt auch auf dem Haupt-Kalender (Startseite) aktiv
+- Planung: Trainingsblöcke-Sidebar zurück auf die rechte Seite
+- Planung: Bearbeiten-Dialog aktualisiert nach Speichern den jeweils aktiven Kalender
 
 ## v56
 - „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
@@ -11,6 +19,7 @@
 
 ## v54
 - Heute-Sektion erscheint in Kalender- und Listenansicht gleichermaßen, unabhängig vom angezeigten Monat/Quartal (eigener API-Call für heute)
+
 
 ## v53
 - Quartalsplan (Listenansicht): neue Ansicht `#liste/YYYY-QN` zeigt alle Einheiten eines Quartals nach Kalenderwochen gruppiert; Typ-Farbakzente, Heute-Markierung, Kein-Training-Styling; View-Toggle-Buttons in Kalender- und Listenansicht; auf Mobilgeräten ist Listenansicht Standard-Ansicht beim ersten Aufruf

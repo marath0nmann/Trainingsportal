@@ -881,9 +881,14 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
    Trainingsportal – Planung (Split-View: Blöcke links + Kalender rechts)
    ============================================================ */
 
-/* Gesamte Planung-Seite füllt Viewport ohne Seiten-Scroll */
+/* body.planung-active: App-Screen als Flex-Spalte, main füllt Rest – kein Seiten-Scroll */
+body.planung-active                { overflow: hidden; }
+body.planung-active #app-screen    { display: flex !important; flex-direction: column; height: 100vh; overflow: hidden; }
+body.planung-active #main-content  { flex: 1; min-height: 0; overflow: hidden; padding: 0 !important; }
+body.planung-active #app-footer    { display: none; }
+
 .planung-wrap {
-  height: calc(100vh - 76px);
+  height: 100%;    /* füllt das durch body-Class beschränkte #main-content */
   overflow: hidden;
   display: flex;
   flex-direction: column;
