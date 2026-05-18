@@ -92,14 +92,9 @@ const TREFFPUNKTE = (() => {
       }
     }
 
-    // Sichtbares Fenster: volle Breite der Karte (CSS), 160 px hoch
-    // Innen-Div wird so verschoben, dass der Marker in der Mitte liegt
-    const VIEW_H = 160;
-    const shiftX = Math.round(markerX - TILE * GRID / 2);
-    const shiftY = Math.round(markerY - VIEW_H / 2);
-
+    // Marker via CSS in der Mitte des Containers platzieren (unabhängig von der Containerbreite)
     return `<div class="tp-karte-map" style="overflow:hidden;position:relative;user-select:none">
-      <div style="position:absolute;width:${GRID*TILE}px;height:${GRID*TILE}px;left:${-shiftX}px;top:${-shiftY}px;pointer-events:none">
+      <div style="position:absolute;width:${GRID*TILE}px;height:${GRID*TILE}px;left:calc(50% - ${Math.round(markerX)}px);top:calc(50% - ${Math.round(markerY)}px);pointer-events:none">
         ${tiles}
         <div style="position:absolute;left:${Math.round(markerX)-12}px;top:${Math.round(markerY)-32}px;width:24px;height:32px">
           <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
