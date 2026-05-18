@@ -236,8 +236,9 @@
 }
 .seg-blk-work:hover { opacity: 1; filter: brightness(1.1); }
 .seg-blk-pause {
-  flex: 0 0 5px !important; height: 22px !important;
-  background: var(--border); border-radius: 2px; opacity: .6;
+  min-width: 8px; opacity: .7;
+  background: color-mix(in srgb, var(--text2) 35%, var(--surface));
+  border-radius: 2px;
 }
 .seg-blk-sep {
   flex: 0 0 12px;
