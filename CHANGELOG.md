@@ -1,6 +1,7 @@
 # Changelog
 
-## v46
+## v47
+- Komoot-Link: Treffpunkt wird als Ziel gesetzt (`p[1][loc]`), kein Startpunkt vorbelegt
 - Fix: Komoot-Link setzt jetzt Startpunkt via `p[0][loc]` und nutzt korrektes URL-Format (`/de-de/plan/@lat,lng,16z`)
 - Fix: Kartenausschnitt in Treffpunkt-Karte korrekt zentriert (left/top via CSS calc statt fixer Pixelrechnung)
 - Treffpunkte-Übersicht: statisches Kartenbild statt interaktivem OSM-Iframe (OSM-Tiles, SVG-Pin, nicht verschiebbar, kein Attribution-Overlay)
