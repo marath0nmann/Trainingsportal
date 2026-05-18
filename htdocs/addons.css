@@ -169,10 +169,31 @@
   border-left: 4px solid var(--accent);
   border-radius: var(--radius);
   padding: 14px 18px;
-  cursor: pointer;
+  cursor: default;
   box-shadow: var(--shadow);
   transition: background .15s, box-shadow .15s;
+  display: flex; flex-direction: row; gap: 16px; align-items: stretch;
+}
+/* Zweispaltig wenn Komoot-Strecke vorhanden */
+.heute-card-main {
+  flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; gap: 5px;
+}
+.heute-card-komoot {
+  display: none; /* wird via JS befüllt und dann sichtbar */
+  flex: 0 0 42%; max-width: 44%;
+  flex-direction: column; gap: 6px;
+  min-height: 200px;
+}
+.heute-card-split .heute-card-komoot {
+  display: flex;
+}
+.heute-card-komoot iframe {
+  flex: 1; width: 100%; border: none;
+  border-radius: 6px; min-height: 200px; display: block;
+}
+.heute-komoot-link {
+  font-size: 12px; text-align: center; display: block; margin-top: 4px;
 }
 .heute-card:hover {
   background: color-mix(in srgb, var(--accent) 5%, var(--surface));
@@ -354,6 +375,9 @@
 /* Mobile: kompakter Kalender */
 @media (max-width: 720px) {
   .kal-wrap { padding: 12px 8px 32px; }
+  .heute-card { flex-direction: column; }
+  .heute-card-komoot { flex: none; max-width: 100%; min-height: 180px; }
+  .heute-card-komoot iframe { min-height: 180px; }
   .kal-title { font-size: 22px; min-width: 0; }
   .kal-cell { min-height: 80px; padding: 3px 4px; }
   .kal-head-cell { padding: 6px 4px; font-size: 10px; letter-spacing: .5px; }
