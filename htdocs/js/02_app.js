@@ -262,7 +262,10 @@ async function renderKalender(main, monthArg) {
     ? (byDate[todayKey] || []).filter(e => e.typ !== 'kein_training')
     : [];
   const heuteEl = document.getElementById('heute-sektion');
-  if (heuteEl) heuteEl.innerHTML = todayItems.length ? renderHeuteSektionHtml(todayItems) : '';
+  if (heuteEl) {
+    heuteEl.innerHTML = todayItems.length ? renderHeuteSektionHtml(todayItems) : '';
+    if (todayItems.length) ladHeuteDetails(todayItems);
+  }
 
   // Feiertage über Datum spreizen (mehrtägige Ferien)
   const feiertageByDate = {};
@@ -334,21 +337,136 @@ function renderHeuteSektionHtml(items) {
     const zeitStr = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
     const abgesagt = e.status === 'abgesagt';
     const intern = e.sichtbarkeit === 'intern';
+    const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : null;
     return `
-      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}"
-           onclick="zeigeEinheit(${e.id})" role="button" tabindex="0">
+      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}">
         <div class="heute-card-eyebrow">
           <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
           ${abgesagt ? '<span class="heute-badge heute-badge-abgesagt">Abgesagt</span>' : ''}
           ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
         </div>
         <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-        ${e.treffpunkt ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(e.treffpunkt.name || '')}</div>` : ''}
-        ${e.bemerkung  ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
-        <div class="heute-card-link">Details &amp; Segmente anzeigen →</div>
+        ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
+        ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+        <div id="heute-segs-${e.id}"></div>
       </div>`;
   }).join('');
   return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
+}
+
+async function ladHeuteDetails(items) {
+  if (!state._heuteEinheiten) state._heuteEinheiten = {};
+  let paceData = null;
+
+  for (const item of items) {
+    const areaEl = document.getElementById(`heute-segs-${item.id}`);
+    if (!areaEl) continue;
+    try {
+      const data = await apiGet(`einheiten/${item.id}`, { silent: true });
+      const seg     = data.segmente || [];
+      const einheit = data.einheit;
+      state._heuteEinheiten[einheit.id] = { einheit, segmente: seg };
+
+      const hatPaceRef = seg.some(s => s.pace_referenz);
+      if (state.user && hatPaceRef && !paceData) {
+        paceData = await PACE.load();
+      }
+
+      const hatUnresolvedPace = state.user && hatPaceRef &&
+        seg.filter(s => s.pace_referenz).some(s => PACE.paceSekProKm(paceData, s.pace_referenz) == null);
+
+      let html = '';
+      if (hatUnresolvedPace) {
+        html += `<div class="heute-pace-warn">
+          Persönliche Pace noch nicht konfiguriert –
+          <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
+        </div>`;
+      }
+      if (seg.length) {
+        html += renderSegmentBlocksHtml(seg, paceData, einheit.typ);
+      }
+      if (einheit.komoot_url) {
+        const embedUrl = komootEmbedUrl(einheit.komoot_url);
+        if (embedUrl) {
+          html += `<div class="komoot-embed" style="margin-top:10px"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>`;
+        }
+        html += `<div style="margin-top:4px"><a class="tp-link tp-link-komoot" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a></div>`;
+      }
+
+      const actions = [];
+      if (seg.length) {
+        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
+      }
+      if (state.user) {
+        actions.push(`<button class="btn btn-ghost btn-sm" onclick="bearbeiteHeuteEinheit(${einheit.id})">Bearbeiten</button>`);
+      }
+      if (actions.length) {
+        html += `<div class="heute-card-actions">${actions.join('')}</div>`;
+      }
+
+      areaEl.innerHTML = html;
+    } catch (_) {
+      // Segmente bleiben leer bei Fehler
+    }
+  }
+}
+
+function bearbeiteHeuteEinheit(id) {
+  const data = state._heuteEinheiten && state._heuteEinheiten[id];
+  if (data) EDITOR.open(data);
+}
+
+// Segment-Blöcke (TrainingPeaks-Stil): jede Wiederholung als eigener Block
+function renderSegmentBlocksHtml(seg, paceData, typ) {
+  if (!seg.length) return '';
+  const maxDist = Math.max(
+    ...seg.map(s => s.distanz_m || 0),
+    ...seg.map(s => s.pause_m   || 0),
+    1
+  );
+  const typClass = `seg-blk-typ-${typ || 'frei'}`;
+
+  let blocksHtml = '';
+  seg.forEach((s, si) => {
+    if (si > 0) blocksHtml += `<div class="seg-blk-sep"></div>`;
+    const wdh = s.wiederholungen || 1;
+    const h   = Math.round(16 + (s.distanz_m / maxDist) * 40);
+    const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
+    const splitSek = sekProKm != null ? sekProKm * (s.distanz_m / 1000) : null;
+    const paceStr  = splitSek != null ? PACE.formatTime(splitSek) : '';
+    const distStr  = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
+    const PAUSE_LABEL = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' };
+    for (let i = 0; i < wdh; i++) {
+      const tip = `${wdh > 1 ? (i + 1) + ' / ' + wdh + ' · ' : ''}${distStr}${s.pace_referenz ? ' · ' + s.pace_referenz : ''}${paceStr ? ' · ' + paceStr : ''}`;
+      blocksHtml += `<div class="seg-blk seg-blk-work ${typClass}" style="flex:${s.distanz_m};height:${h}px" title="${escapeHtml(tip)}"></div>`;
+      if (s.pause_m) {
+        const pH  = Math.round(16 + (s.pause_m / maxDist) * 40);
+        const pLbl = PAUSE_LABEL[s.pause_typ] || 'Pause';
+        blocksHtml += `<div class="seg-blk seg-blk-pause" style="flex:${s.pause_m};height:${pH}px" title="${s.pause_m} m ${pLbl}"></div>`;
+      }
+    }
+  });
+
+  const summaryHtml = seg.map(s => {
+    const wdh = s.wiederholungen || 1;
+    const distStr = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
+    let line = (wdh > 1 ? wdh + ' × ' : '') + distStr;
+    if (s.pause_m) {
+      const pLbl = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' }[s.pause_typ] || 'Pause';
+      line += ` · ${s.pause_m} m ${pLbl}`;
+    }
+    if (s.pace_referenz) line += ` · ${escapeHtml(s.pace_referenz)}`;
+    const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
+    const splitSek = sekProKm != null ? sekProKm * (s.distanz_m / 1000) : null;
+    if (splitSek != null) line += ` · ${PACE.formatTime(splitSek)} / Wdh`;
+    if (sekProKm  != null) line += ` · ${PACE.formatPace(sekProKm)}`;
+    return `<div class="seg-blk-sum-row">${line}</div>`;
+  }).join('');
+
+  return `<div class="seg-blocks-wrap">
+    <div class="seg-blocks">${blocksHtml}</div>
+    ${summaryHtml ? `<div class="seg-blk-summary">${summaryHtml}</div>` : ''}
+  </div>`;
 }
 
 function navigateKalender(monthYM) {
@@ -368,7 +486,7 @@ async function zeigeEinheit(id) {
     const seg = data.segmente || [];
     state._lastEinheit = { einheit: e, segmente: seg };
 
-    // Pace nur laden, wenn eingeloggt und Segmente mit pace_referenz vorhanden
+    // Pace laden wenn eingeloggt und Segmente mit Pace-Referenz vorhanden
     let paceData = null;
     const hatPaceRef = seg.some(s => s.pace_referenz);
     if (state.user && hatPaceRef) {
@@ -378,36 +496,10 @@ async function zeigeEinheit(id) {
     const wochentag = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][datum.getDay()];
     const datStr = `${wochentag}, ${datum.getDate()}. ${MONATSNAMEN[datum.getMonth()]} ${datum.getFullYear()}`;
 
-    const paceHeader = (state.user && hatPaceRef) ? `
-      <div class="pace-header">
-        <span class="pace-label">Persönliche Pace</span>
-        <button class="btn btn-ghost btn-sm" onclick="PROFIL.open()" title="Pace-Referenzen konfigurieren">⚙ Profil</button>
-        ${paceData ? '' : '<span class="pace-hint">– keine Referenz konfiguriert –</span>'}
-      </div>` : '';
-
     const segHtml = seg.length ? `
       <div class="modal-row modal-row-block">
         <span class="modal-label">Segmente</span>
-        ${paceHeader}
-        <div class="seg-list">
-          ${seg.map((s, i) => {
-            const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
-            const splitSek = paceData ? PACE.splitzeit(s, paceData) : null;
-            const totalSek = (splitSek != null) ? splitSek * (s.wiederholungen || 1) : null;
-            const paceBox = (sekProKm != null) ? `
-              <div class="seg-pace-info">
-                <div class="seg-split">${PACE.formatTime(splitSek)}<span class="seg-split-unit">/Wdh</span></div>
-                <div class="seg-pace-pace">${PACE.formatPace(sekProKm)}</div>
-              </div>` : '';
-            return `
-              <div class="seg-item">
-                <div class="seg-num">${i + 1}</div>
-                <div class="seg-main">${escapeHtml(PARSER.formatSegment(s))}</div>
-                ${s.pace_referenz ? `<div class="seg-pace">${escapeHtml(s.pace_referenz)}</div>` : ''}
-                ${paceBox}
-              </div>`;
-          }).join('')}
-        </div>
+        ${renderSegmentBlocksHtml(seg, paceData, e.typ)}
       </div>` : '';
 
     cont.innerHTML = `
@@ -428,7 +520,15 @@ async function zeigeEinheit(id) {
               ${e.treffpunkt.maps_apple  ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_apple)}"  target="_blank" rel="noopener" title="Apple Maps öffnen">Apple Maps</a>`  : ''}
               ${e.treffpunkt.maps_komoot ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_komoot)}" target="_blank" rel="noopener" title="In Komoot öffnen">Komoot</a>` : ''}
             </span></div>` : ''}
-            ${e.komoot_url ? `<div class="modal-row"><span class="modal-label">Strecke</span><span><a class="tp-link tp-link-komoot" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Komoot-Strecke öffnen</a></span></div>` : ''}
+            ${(() => {
+              if (!e.komoot_url) return '';
+              const embedUrl = komootEmbedUrl(e.komoot_url);
+              return `<div class="modal-row modal-row-block">
+                <span class="modal-label">Strecke</span>
+                ${embedUrl ? `<div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>` : ''}
+                <a class="tp-link tp-link-komoot" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a>
+              </div>`;
+            })()}
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
             ${e.sichtbarkeit === 'intern' ? `<div class="modal-row"><span class="modal-label">Sichtbarkeit</span><span>Nur intern</span></div>` : ''}
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
@@ -448,6 +548,14 @@ async function zeigeEinheit(id) {
 function schliesseModal(ev) {
   if (ev && ev.target && !ev.target.classList.contains('modal-overlay')) return;
   document.getElementById('modal-container').innerHTML = '';
+}
+
+// Extrahiert die Tour-ID aus einer Komoot-URL und gibt die Embed-URL zurück.
+// Unterstützt: komoot.com/tour/ID, komoot.com/de-de/tour/ID, etc.
+function komootEmbedUrl(url) {
+  if (!url) return null;
+  const m = String(url).match(/\/tour\/(\d+)/);
+  return m ? 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1' : null;
 }
 
 function escapeHtml(s) {

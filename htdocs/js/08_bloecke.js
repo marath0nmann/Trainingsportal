@@ -120,6 +120,13 @@ const BLOECKE = (() => {
     }
   }
 
+  // Extrahiert Tour-ID aus Komoot-URL → Embed-URL (lokale Kopie des globalen Helpers)
+  function komootEmbedUrl(url) {
+    if (!url) return null;
+    const m = String(url).match(/\/tour\/(\d+)/);
+    return m ? 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1' : null;
+  }
+
   function renderBlockCard(b) {
     const istGlobal = b.sichtbarkeit === 'global';
     const kannBearbeiten = istTrainer()
@@ -167,8 +174,9 @@ const BLOECKE = (() => {
     }
     const b = blockData.block;
     const heute = datum || ymd(new Date());
-    const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
-      tpListe.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+    const stdTpId = String(appConfig && appConfig.training_standard_treffpunkt_id || '');
+    const tpOptionen = `<option value=""${stdTpId === '' ? ' selected' : ''}>— kein Treffpunkt —</option>` +
+      tpListe.map(t => `<option value="${t.id}"${String(t.id) === stdTpId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
 
     // Default-Uhrzeit aus Admin-Einstellungen per Wochentag (1=Mo … 7=So)
     let defaultUhrzeit = '';
@@ -266,10 +274,11 @@ const BLOECKE = (() => {
   }
 
   function aktualisiereBlockTitelFeld() {
-    if (titelManuellBearbeitet) return;
-    const el = document.getElementById('be-titel');
-    if (!el) return;
-    el.value = generiereBlockTitel(editorSegmente);
+    if (!titelManuellBearbeitet) {
+      const el = document.getElementById('be-titel');
+      if (el) el.value = generiereBlockTitel(editorSegmente);
+    }
+    aktualisiereGesamtdistanz();
   }
 
   function titelNeuGenerieren() {
@@ -349,6 +358,9 @@ const BLOECKE = (() => {
                 <label>Komoot-Strecke <span class="ed-hint">(Tour-Link, z. B. https://www.komoot.com/tour/…)</span></label>
                 <input type="url" id="be-komoot-url" value="${escapeHtml(b.komoot_url || '')}" placeholder="https://www.komoot.com/tour/…">
               </div>
+              <div class="ed-komoot-preview" id="be-komoot-preview">
+                ${komootEmbedUrl(b.komoot_url) ? `<div class="komoot-embed"><iframe src="${escapeHtml(komootEmbedUrl(b.komoot_url))}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>` : ''}
+              </div>
             </div>
 
             <div id="be-seg-wrap" class="ed-segwrap"${istRunde ? ' style="display:none"' : ''}>
@@ -373,6 +385,7 @@ const BLOECKE = (() => {
                 </div>
               </div>
               <div id="be-segmente-tabelle"></div>
+              <div id="be-gesamtdistanz" class="be-gesamtdistanz"></div>
               <div class="ed-seghint">
                 Pause in Metern · TP/GP/BP = Trab-/Geh-/Blockpause · Pace-Referenz für persönliche Pace im Athleten-View
               </div>
@@ -407,6 +420,19 @@ const BLOECKE = (() => {
       titelEl.addEventListener('input', () => { titelManuellBearbeitet = true; });
     }
 
+    // Live-Vorschau für Komoot-URL
+    const komootUrlEl = document.getElementById('be-komoot-url');
+    if (komootUrlEl) {
+      komootUrlEl.addEventListener('input', () => {
+        const preview = document.getElementById('be-komoot-preview');
+        if (!preview) return;
+        const embedUrl = komootEmbedUrl(komootUrlEl.value);
+        preview.innerHTML = embedUrl
+          ? `<div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>`
+          : '';
+      });
+    }
+
     rendereBlockSegmente();
   }
 
@@ -427,6 +453,28 @@ const BLOECKE = (() => {
       titelManuellBearbeitet = false;
       aktualisiereBlockTitelFeld();
     }
+  }
+
+  function berechneGesamtdistanz(segs) {
+    return (segs || []).reduce((sum, s) => {
+      const wdh = (s.wiederholungen > 0) ? s.wiederholungen : 1;
+      return sum + wdh * ((s.distanz_m || 0) + (s.pause_m || 0));
+    }, 0);
+  }
+
+  function formatDistanz(m) {
+    if (!m) return null;
+    if (m < 1000) return m + ' m';
+    const km = m / 1000;
+    return km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' km';
+  }
+
+  function aktualisiereGesamtdistanz() {
+    const el = document.getElementById('be-gesamtdistanz');
+    if (!el) return;
+    const gesamt = berechneGesamtdistanz(editorSegmente);
+    const text = formatDistanz(gesamt);
+    el.textContent = text ? 'Gesamtdistanz: ' + text : '';
   }
 
   function rendereBlockSegmente() {
