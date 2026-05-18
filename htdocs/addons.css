@@ -792,7 +792,9 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .pblock-titel {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700; font-size: 15px; letter-spacing: .2px;
-  color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .pblock-meta {
   display: flex; gap: 6px; flex-wrap: wrap; margin-top: 3px;
