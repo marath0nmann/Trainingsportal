@@ -1,7 +1,8 @@
 # Changelog
 
-## v49
-- Heute-Sektion: Warnhinweis „Persönliche Pace noch nicht konfiguriert" mit Link zum Athletenprofil, wenn Segmente Pace-Referenzen enthalten aber keine Pace eingestellt ist
+## v50
+- Segmente grafisch als Blöcke dargestellt (TrainingPeaks-Stil): jede Wiederholung als eigener Block, Breite proportional zur Distanz, Pausen als schmale Trennblöcke, Typ-Farben; gilt für Modal und Heute-Sektion
+- „Persönliche Pace"-Header aus dem Modal entfernt; Pace-Werte weiterhin in Zusammenfassungszeile sichtbar
 
 ## v48
 - Fix: Komoot-Link – `p[0]` als leerer Platzhalter nötig, damit `p[1][loc]` als Ziel (nicht Start) interpretiert wird
