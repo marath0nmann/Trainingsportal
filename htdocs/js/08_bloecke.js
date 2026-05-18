@@ -149,7 +149,8 @@ const BLOECKE = (() => {
   }
 
   // ── Block auf Kalender anwenden ───────────────────────────
-  async function anwenden(blockId) {
+  // datum: optionales ISO-Datum (YYYY-MM-DD), z. B. vom Planung-DnD gesetzt
+  async function anwenden(blockId, datum) {
     let blockData;
     try {
       blockData = await apiGet(`bloecke/${blockId}`, { silent: true });
@@ -158,7 +159,7 @@ const BLOECKE = (() => {
       return;
     }
     const b = blockData.block;
-    const heute = ymd(new Date());
+    const heute = datum || ymd(new Date());
     const cont = document.getElementById('modal-container');
 
     cont.innerHTML = `

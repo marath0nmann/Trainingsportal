@@ -1,5 +1,8 @@
 # Changelog
 
+## v35
+- Neue Seite „Planung" (#planung): Split-Layout mit Monatskalender links und Trainingsblöcken rechts; Blöcke per Drag & Drop auf Kalendertage ziehen öffnet den „Block anwenden"-Dialog mit vorausgefülltem Datum; Navigation für Trainer/Admin; responsiv (mobile: untereinander)
+
 ## v34
 - Trainingstypen in Einstellungen konfigurierbar: Neue Tabelle `training_typen` (Slug, Bezeichnung, Farbe, Reihenfolge, Aktiv); SQL-Migration `migration_v30_typen.sql`
 - Admin-Panel „Trainingstypen": Typen anlegen, umbenennen, Farbe/Reihenfolge/Aktiv-Status ändern, löschen (nur wenn keine Blöcke zugeordnet); Spalte „Blöcke" zeigt Anzahl pro Typ

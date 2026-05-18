@@ -87,6 +87,7 @@ function fillUserBadge() {
     nav.innerHTML = `
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
       <button onclick="navigate('bloecke')"${state.tab === 'bloecke' ? ' class="active"' : ''}>Trainingsblöcke</button>
+      ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
       ${isAdmin ? `<button onclick="navigate('einstellungen')"${state.tab === 'einstellungen' ? ' class="active"' : ''}>Einstellungen</button>` : ''}`;
   }
 }
@@ -123,6 +124,11 @@ function renderPage() {
   if (state.tab === 'bloecke') {
     if (!state.user) { location.replace('#kalender'); return; }
     BLOECKE.render(main);
+    return;
+  }
+  if (state.tab === 'planung') {
+    if (!state.user) { location.replace('#kalender'); return; }
+    PLANUNG.render(main);
     return;
   }
   if (state.tab === 'einstellungen') {

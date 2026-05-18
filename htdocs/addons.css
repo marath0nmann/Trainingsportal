@@ -611,3 +611,134 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   pointer-events: none;
 }
 
+/* ============================================================
+   Trainingsportal – Planung (Split-View: Kalender + DnD-Blöcke)
+   ============================================================ */
+.planung-wrap { padding: 24px 28px 48px; max-width: 1600px; margin: 0 auto; }
+
+.planung-split {
+  display: flex; gap: 24px; align-items: flex-start;
+}
+
+/* ── Kalender-Spalte ── */
+.planung-kal-col {
+  flex: 1 1 0; min-width: 0;
+}
+.planung-kal-toolbar {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+}
+.planung-kal-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 24px; letter-spacing: .5px;
+  color: var(--text); margin: 0; flex: 1; text-align: center;
+}
+.planung-kal-loading {
+  padding: 32px; text-align: center; color: var(--text2);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+
+/* Drop-Hinweis in leeren Zellen */
+.planung-drop-hint {
+  font-size: 10px; color: var(--text2); opacity: 0;
+  text-align: center; padding: 4px 0; letter-spacing: .5px;
+  transition: opacity .15s; pointer-events: none;
+  text-transform: uppercase;
+}
+.planung-kal-cell:hover .planung-drop-hint { opacity: .6; }
+.planung-kal-cell.planung-drag-over .planung-drop-hint { opacity: 1; }
+
+/* Drop-Zone Highlight */
+.planung-kal-cell.in-month {
+  cursor: default;
+  transition: background .1s, outline .1s;
+}
+.planung-kal-cell.planung-drag-over {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface)) !important;
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+/* ── Sidebar: Blöcke ── */
+.planung-sidebar {
+  width: 300px; flex-shrink: 0;
+  position: sticky; top: 16px;
+  max-height: calc(100vh - 80px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.planung-sidebar-head {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 2px;
+  position: sticky; top: 0; background: var(--surface); z-index: 1;
+}
+.planung-sidebar-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 18px; letter-spacing: .3px; color: var(--text);
+}
+.planung-sidebar-hint {
+  font-size: 11px; color: var(--text2);
+}
+.planung-bloecke-loading {
+  padding: 32px 16px; text-align: center; color: var(--text2); font-size: 13px;
+}
+
+/* Gruppen in der Sidebar */
+.pblock-gruppe { padding: 0 12px 12px; }
+.pblock-gruppe-titel {
+  font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text2);
+  padding: 12px 4px 6px;
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: 8px;
+}
+.pblock-gruppe-titel.block-typ-intervall   { border-bottom-color: var(--primary); }
+.pblock-gruppe-titel.block-typ-dauerlauf   { border-bottom-color: var(--green, #1a8a3a); }
+.pblock-gruppe-titel.block-typ-funktionell { border-bottom-color: #c08010; }
+.pblock-gruppe-titel.block-typ-runde       { border-bottom-color: var(--accent); }
+.pblock-gruppe-titel.block-typ-event       { border-bottom-color: #8845c0; }
+.pblock-gruppe-titel.block-typ-kein_training { border-bottom-color: var(--border); }
+
+/* Draggable Block-Karte */
+.pblock-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; margin-bottom: 6px;
+  background: var(--surf2); border: 1.5px solid var(--border);
+  border-radius: 8px; cursor: grab;
+  border-left: 4px solid var(--accent);
+  transition: box-shadow .12s, background .1s, opacity .15s;
+  user-select: none;
+}
+.pblock-card:hover { box-shadow: var(--shadow); background: var(--surface); }
+.pblock-card:active { cursor: grabbing; }
+.pblock-card.pblock-dragging { opacity: .45; box-shadow: var(--shadow-lg); }
+.pblock-card.block-typ-intervall   { border-left-color: var(--primary); }
+.pblock-card.block-typ-dauerlauf   { border-left-color: var(--green, #1a8a3a); }
+.pblock-card.block-typ-funktionell { border-left-color: #c08010; }
+.pblock-card.block-typ-runde       { border-left-color: var(--accent); }
+.pblock-card.block-typ-event       { border-left-color: #8845c0; }
+.pblock-card.block-typ-kein_training { border-left-color: var(--border); }
+
+.pblock-drag-handle {
+  color: var(--text2); font-size: 16px; line-height: 1;
+  flex-shrink: 0; opacity: .5; letter-spacing: -1px;
+}
+.pblock-info { flex: 1; min-width: 0; }
+.pblock-titel {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 15px; letter-spacing: .2px;
+  color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pblock-meta {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 3px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .planung-split { flex-direction: column; }
+  .planung-sidebar {
+    width: 100%; position: static; max-height: none;
+  }
+  .planung-wrap { padding: 12px 8px 32px; }
+}
+
