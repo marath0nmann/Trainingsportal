@@ -1497,6 +1497,9 @@ function mapTreffpunkt(array $r): array {
         'maps_apple'  => ($lat !== null && $lng !== null)
             ? 'https://maps.apple.com/?ll=' . $lat . ',' . $lng . '&q=' . rawurlencode($r['name'])
             : null,
+        'maps_komoot' => ($lat !== null && $lng !== null)
+            ? 'https://www.komoot.com/plan/#map=16/' . $lat . '/' . $lng . '/terrain'
+            : null,
         'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
     ];
 }
@@ -1996,6 +1999,9 @@ function mapEinheit(array $r): array {
                 : null,
             'maps_apple'  => ($lat !== null && $lng !== null)
                 ? 'https://maps.apple.com/?ll=' . $lat . ',' . $lng . '&q=' . rawurlencode($r['tp_name'] ?? '')
+                : null,
+            'maps_komoot' => ($lat !== null && $lng !== null)
+                ? 'https://www.komoot.com/plan/#map=16/' . $lat . '/' . $lng . '/terrain'
                 : null,
         ];
     }

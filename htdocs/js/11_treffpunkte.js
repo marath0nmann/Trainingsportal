@@ -68,10 +68,22 @@ const TREFFPUNKTE = (() => {
     const istTrainer = state.user &&
       (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
     const hatKoords = t.lat != null && t.lng != null;
+
+    // Kartenvorschau via OSM-Embed (kein API-Key nötig)
+    const mapPreview = hatKoords
+      ? (() => {
+          const d = 0.004;
+          const bbox = `${(t.lng - d).toFixed(6)},${(t.lat - d).toFixed(6)},${(t.lng + d).toFixed(6)},${(t.lat + d).toFixed(6)}`;
+          const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${t.lat.toFixed(6)},${t.lng.toFixed(6)}`;
+          return `<div class="tp-karte-map"><iframe src="${src}" loading="lazy" referrerpolicy="no-referrer" title="Kartenvorschau ${escapeHtml(t.name)}"></iframe></div>`;
+        })()
+      : '';
+
     const mapLinks = hatKoords
       ? `<div class="tp-map-links">
            ${t.maps_google ? `<a class="btn btn-ghost btn-sm" href="${escapeHtml(t.maps_google)}" target="_blank" rel="noopener">Google Maps</a>` : ''}
            ${t.maps_apple  ? `<a class="btn btn-ghost btn-sm" href="${escapeHtml(t.maps_apple)}"  target="_blank" rel="noopener">Apple Maps</a>`  : ''}
+           ${t.maps_komoot ? `<a class="btn btn-ghost btn-sm" href="${escapeHtml(t.maps_komoot)}" target="_blank" rel="noopener">Komoot</a>` : ''}
          </div>`
       : '';
     const coords = hatKoords
@@ -79,14 +91,17 @@ const TREFFPUNKTE = (() => {
       : `<div class="tp-coords tp-coords-leer">Keine Koordinaten</div>`;
     return `
       <div class="tp-karte" id="tpk-${t.id}">
-        <div class="tp-karte-name">${escapeHtml(t.name)}</div>
-        ${coords}
-        ${mapLinks}
-        ${istTrainer ? `
-          <div class="tp-karte-actions">
-            <button class="btn btn-ghost btn-sm" onclick="TREFFPUNKTE.bearbeiten(${t.id})">Bearbeiten</button>
-            <button class="btn btn-ghost btn-sm tp-del-btn" onclick="TREFFPUNKTE.loeschen(${t.id})">Löschen</button>
-          </div>` : ''}
+        ${mapPreview}
+        <div class="tp-karte-body">
+          <div class="tp-karte-name">${escapeHtml(t.name)}</div>
+          ${coords}
+          ${mapLinks}
+          ${istTrainer ? `
+            <div class="tp-karte-actions">
+              <button class="btn btn-ghost btn-sm" onclick="TREFFPUNKTE.bearbeiten(${t.id})">Bearbeiten</button>
+              <button class="btn btn-ghost btn-sm tp-del-btn" onclick="TREFFPUNKTE.loeschen(${t.id})">Löschen</button>
+            </div>` : ''}
+        </div>
       </div>`;
   }
 
