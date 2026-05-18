@@ -423,12 +423,12 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
     const distStr  = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
     const PAUSE_LABEL = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' };
     for (let i = 0; i < wdh; i++) {
-      if (i > 0 && s.pause_m) {
+      const tip = `${wdh > 1 ? (i + 1) + ' / ' + wdh + ' · ' : ''}${distStr}${s.pace_referenz ? ' · ' + s.pace_referenz : ''}${paceStr ? ' · ' + paceStr : ''}`;
+      blocksHtml += `<div class="seg-blk seg-blk-work ${typClass}" style="flex:${s.distanz_m};height:${h}px" title="${escapeHtml(tip)}"></div>`;
+      if (s.pause_m) {
         const pLbl = PAUSE_LABEL[s.pause_typ] || 'Pause';
         blocksHtml += `<div class="seg-blk seg-blk-pause" title="${s.pause_m} m ${pLbl}"></div>`;
       }
-      const tip = `${wdh > 1 ? (i + 1) + ' / ' + wdh + ' · ' : ''}${distStr}${s.pace_referenz ? ' · ' + s.pace_referenz : ''}${paceStr ? ' · ' + paceStr : ''}`;
-      blocksHtml += `<div class="seg-blk seg-blk-work ${typClass}" style="flex:${s.distanz_m};height:${h}px" title="${escapeHtml(tip)}"></div>`;
     }
   });
 
