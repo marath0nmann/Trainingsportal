@@ -26,6 +26,14 @@ async function init() {
   } catch (e) {
     state.user = null;
   }
+  // Mobile: Standard-Ansicht ist Quartalsplan
+  if (!location.hash || location.hash === '#') {
+    const now = new Date();
+    const q = Math.floor(now.getMonth() / 3) + 1;
+    location.hash = window.innerWidth < 720
+      ? `#liste/${now.getFullYear()}-Q${q}`
+      : '#kalender';
+  }
   showApp();
 }
 
@@ -119,6 +127,10 @@ function renderPage() {
 
   if (state.tab === 'kalender') {
     renderKalender(main, args && args[0]);
+    return;
+  }
+  if (state.tab === 'liste') {
+    renderListe(main, args && args[0]);
     return;
   }
   if (state.tab === 'bloecke') {
@@ -229,6 +241,10 @@ async function renderKalender(main, monthArg) {
         <div class="kal-nav-right">
           <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
           <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
+          <div class="view-toggle">
+            <button class="btn btn-ghost view-active" title="Kalenderansicht">▦ Kalender</button>
+            <button class="btn btn-ghost" onclick="navigateListeFromKal('${ymd(monthStart).slice(0,7)}')" title="Quartalsplan">☰ Liste</button>
+          </div>
           ${state.user ? `<button class="btn btn-primary" onclick="navigate('planung')">Planung</button>` : ''}
         </div>
       </div>
@@ -475,6 +491,170 @@ function navigateKalender(monthYM) {
 function navigateKalenderHeute() {
   const d = new Date();
   navigateKalender(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+}
+
+function navigateListeFromKal(monthYM) {
+  const [y, mo] = monthYM.split('-').map(Number);
+  navigateListe(`${y}-Q${Math.floor((mo - 1) / 3) + 1}`);
+}
+
+function navigateListe(quarterKey) {
+  if (!quarterKey) {
+    const now = new Date();
+    quarterKey = `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
+  }
+  location.hash = `#liste/${quarterKey}`;
+}
+
+function parseQuarterArg(arg) {
+  if (arg && /^\d{4}-Q[1-4]$/.test(arg)) {
+    const [y, qStr] = arg.split('-Q');
+    return { year: +y, quarter: +qStr };
+  }
+  const now = new Date();
+  return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
+}
+
+function isoWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+
+function isoWeekYear(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  return d.getFullYear();
+}
+
+async function renderListe(main, quarterArg) {
+  const { year, quarter } = parseQuarterArg(quarterArg);
+  const qStart = new Date(year, (quarter - 1) * 3, 1);
+  const qEnd   = new Date(year, quarter * 3, 0);
+
+  const QUARTALS_MONATE_LABEL = [
+    'Jan. – März', 'Apr. – Jun.', 'Jul. – Sep.', 'Okt. – Dez.'
+  ];
+  const prevQ = quarter === 1 ? `${year - 1}-Q4` : `${year}-Q${quarter - 1}`;
+  const nextQ = quarter === 4 ? `${year + 1}-Q1` : `${year}-Q${quarter + 1}`;
+  const moKalStart = `${year}-${String((quarter - 1) * 3 + 1).padStart(2, '0')}`;
+
+  main.innerHTML = `
+    <div class="liste-wrap">
+      <div class="liste-toolbar">
+        <div class="liste-nav">
+          <button class="btn btn-ghost" onclick="navigateListe('${prevQ}')" aria-label="Vorheriges Quartal">‹</button>
+          <span class="liste-title">Q${quarter} ${year} · ${QUARTALS_MONATE_LABEL[quarter - 1]}</span>
+          <button class="btn btn-ghost" onclick="navigateListe('${nextQ}')" aria-label="Nächstes Quartal">›</button>
+        </div>
+        <div class="liste-nav-right">
+          <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
+          <button class="btn btn-ghost" onclick="navigateListe()">Heute</button>
+          <div class="view-toggle">
+            <button class="btn btn-ghost" onclick="navigateKalender('${moKalStart}')" title="Kalenderansicht">▦ Kalender</button>
+            <button class="btn btn-ghost view-active" title="Quartalsplan">☰ Liste</button>
+          </div>
+        </div>
+      </div>
+      <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
+    </div>`;
+
+  let einheiten = [];
+  try {
+    const d = await apiGet(`einheiten?von=${ymd(qStart)}&bis=${ymd(qEnd)}`, { silent: true });
+    einheiten = d.einheiten || [];
+  } catch (e) {
+    document.getElementById('liste-content').innerHTML =
+      `<div class="liste-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
+    return;
+  }
+
+  // Group by ISO calendar week (only days within the quarter)
+  const byWeek = new Map(); // "YYYY-WW" → { weekNum, weekStart, items }
+  const todayKey = ymd(new Date());
+
+  for (let d = new Date(qStart); d <= qEnd; d.setDate(d.getDate() + 1)) {
+    const k = ymd(new Date(d));
+    const kw  = isoWeek(new Date(d));
+    const wy  = isoWeekYear(new Date(d));
+    const wKey = `${wy}-${String(kw).padStart(2, '0')}`;
+
+    if (!byWeek.has(wKey)) {
+      const mon = new Date(d);
+      const dow = (mon.getDay() + 6) % 7;
+      mon.setDate(mon.getDate() - dow);
+      byWeek.set(wKey, { weekNum: kw, weekStart: new Date(mon), items: [] });
+    }
+
+    const dayItems = einheiten.filter(e => e.datum === k);
+    if (dayItems.length) byWeek.get(wKey).items.push(...dayItems);
+  }
+
+  const WOCHENTAG_KURZ = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const MONAT_KURZ = ['Jan.','Feb.','März','Apr.','Mai','Jun.','Jul.','Aug.','Sep.','Okt.','Nov.','Dez.'];
+
+  let html = '';
+  for (const [, week] of byWeek) {
+    if (!week.items.length) continue;
+
+    const ws = week.weekStart;
+    const we = new Date(ws); we.setDate(ws.getDate() + 6);
+    let rangeStr;
+    if (ws.getMonth() === we.getMonth()) {
+      rangeStr = `${ws.getDate()}. – ${we.getDate()}. ${MONAT_KURZ[ws.getMonth()]} ${ws.getFullYear()}`;
+    } else if (ws.getFullYear() === we.getFullYear()) {
+      rangeStr = `${ws.getDate()}. ${MONAT_KURZ[ws.getMonth()]} – ${we.getDate()}. ${MONAT_KURZ[we.getMonth()]} ${ws.getFullYear()}`;
+    } else {
+      rangeStr = `${ws.getDate()}. ${MONAT_KURZ[ws.getMonth()]} ${ws.getFullYear()} – ${we.getDate()}. ${MONAT_KURZ[we.getMonth()]} ${we.getFullYear()}`;
+    }
+
+    const rowsHtml = week.items.map(e => {
+      const dateObj = new Date(e.datum + 'T00:00:00');
+      const dayStr = `${WOCHENTAG_KURZ[dateObj.getDay()]}, ${dateObj.getDate()}. ${MONAT_KURZ[dateObj.getMonth()]}`;
+      const isToday = e.datum === todayKey;
+      const isCancelled = e.status === 'abgesagt';
+      const isKeinTraining = e.typ === 'kein_training';
+      const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : '';
+      const typLabel = TYP_LABEL[e.typ] || e.typ;
+
+      const rowCls = [
+        'liste-row', `kal-typ-${e.typ}`,
+        isToday ? 'is-today' : '',
+        isCancelled ? 'is-cancelled' : '',
+        isKeinTraining ? 'is-kein-training' : '',
+      ].filter(Boolean).join(' ');
+
+      const clickAttr = isKeinTraining ? '' : ` onclick="zeigeEinheit(${e.id})"`;
+      const dateHtml = isToday
+        ? `<span class="liste-date"><span class="liste-date-today">${escapeHtml(dayStr)}</span></span>`
+        : `<span class="liste-date">${escapeHtml(dayStr)}</span>`;
+
+      return `<div class="${rowCls}"${clickAttr}>
+        ${dateHtml}
+        <span class="liste-time">${e.uhrzeit ? escapeHtml(e.uhrzeit) : '–'}</span>
+        <span class="liste-typ-badge liste-typ-${e.typ}">${escapeHtml(typLabel)}</span>
+        <span class="liste-title-text">${escapeHtml(e.titel)}</span>
+        <span class="liste-ort">${escapeHtml(treffpunktName)}</span>
+      </div>`;
+    }).join('');
+
+    html += `<div class="liste-week-block">
+      <div class="liste-kw-head">
+        <span class="liste-kw-badge">KW ${week.weekNum}</span>
+        <span class="liste-kw-range">${escapeHtml(rangeStr)}</span>
+      </div>
+      <div class="liste-rows">${rowsHtml}</div>
+    </div>`;
+  }
+
+  if (!html) {
+    html = '<div class="liste-empty">Keine Trainingseinheiten in diesem Quartal eingetragen.</div>';
+  }
+
+  document.getElementById('liste-content').outerHTML =
+    `<div id="liste-content" class="liste-content">${html}</div>`;
 }
 
 async function zeigeEinheit(id) {

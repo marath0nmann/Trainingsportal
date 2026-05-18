@@ -1,26 +1,9 @@
 # Changelog
 
-## v60
-- Komoot-Streckenvorschau: iFrame-Embed direkt im Kalender-Modal, in der Heute-Sektion und im Block-Editor (live beim Tippen); Tour-ID wird aus der eingetragenen URL automatisch extrahiert (unterstützt alle Komoot-URL-Formate inkl. Share-Token und Länderprefix)
-- Planung: Trainingsblöcke-Sidebar auf die linke Seite verschoben
-- Planung: Seite scrollt nicht mehr (Layout füllt Viewport; Sidebar scrollt intern)
-- Planung: Hover auf Kalender-Eintrag zeigt Popover mit Typ, Titel, Uhrzeit, Treffpunkt, Bemerkung und Segmenten
-- Planung: „Bearbeiten"-Button im Popover öffnet Dialog zum Ändern von Datum, Uhrzeit, Treffpunkt und Sichtbarkeit
+## v53
+- Quartalsplan (Listenansicht): neue Ansicht `#liste/YYYY-QN` zeigt alle Einheiten eines Quartals nach Kalenderwochen gruppiert; Typ-Farbakzente, Heute-Markierung, Kein-Training-Styling; View-Toggle-Buttons in Kalender- und Listenansicht; auf Mobilgeräten ist Listenansicht Standard-Ansicht beim ersten Aufruf
 
-## v59
-- Pause-Blöcke in Segment-Visualisierung proportional zur Distanz (analog Tempoabschnitte); Farbe via color-mix gedimmt
-
-## v58
-- Einstellungen: Standard-Treffpunkt konfigurierbar (Admin); wird beim Einplanen eines Trainingsblocks automatisch vorausgewählt
-- Eingebauter Feiertags-Rechner: `builtin://feiertage/NRW` (und andere Bundesländer) berechnet gesetzliche Feiertage direkt in PHP – kein externer Dienst nötig
-- Beispiel-URL „Feiertage NRW" nutzt jetzt den eingebauten Rechner statt schulferien.org (das HTML statt ICS lieferte)
-
-## v57
-- Fix: Erkennung wenn Server HTML statt ICS antwortet (Fehlermeldung im Diagnose-Tool)
-- Beispiel-URLs in Einstellungen auf neues schulferien.org-Format aktualisiert
-- Feiertage/Ferien werden jetzt auch im Planungskalender angezeigt (Farbmarkierung + Label)
-- ICS-Fetch: SSL-Fallback wenn Peer-Verifikation auf Server schlägt (Shared-Hosting-CA-Bundle)
-- Diagnose-Tool: zeigt jetzt Events-Gesamt + 3 Beispiel-Events pro Feed
+## v52
 - Fix: Pace-Warnhinweis erscheint jetzt korrekt, wenn Segmente Pace-Referenzen enthalten, die nicht konfiguriert sind (prüft `paceSekProKm` statt `!paceData`)
 
 ## v51
