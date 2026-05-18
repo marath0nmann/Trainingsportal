@@ -192,9 +192,6 @@
   flex: 1; width: 100%; border: none;
   border-radius: 6px; min-height: 400px; display: block;
 }
-.heute-komoot-link {
-  font-size: 12px; text-align: center; display: block; margin-top: 4px;
-}
 .heute-card:hover {
   background: color-mix(in srgb, var(--accent) 5%, var(--surface));
   box-shadow: 0 4px 16px rgba(0,0,0,.12);
@@ -1150,4 +1147,18 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 /* Im Editor etwas kompakter */
 .ed-komoot-preview { margin-top: 8px; }
 .ed-komoot-preview .komoot-embed iframe { height: 480px; }
+
+/* Komoot-Embed im Darkmode invertieren (Karte als Nachtmodus) */
+[data-theme="dark"] .komoot-embed iframe,
+[data-theme="dark"] .heute-card-komoot iframe,
+[data-theme="dark"] .ed-komoot-preview iframe {
+  filter: invert(1) hue-rotate(180deg);
+}
+@media (prefers-color-scheme: dark) {
+  :not([data-theme="light"]) .komoot-embed iframe,
+  :not([data-theme="light"]) .heute-card-komoot iframe,
+  :not([data-theme="light"]) .ed-komoot-preview iframe {
+    filter: invert(1) hue-rotate(180deg);
+  }
+}
 

@@ -416,6 +416,9 @@ async function ladHeuteDetails(items) {
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
       }
+      if (einheit.komoot_url) {
+        actions.push(`<a class="btn btn-ghost btn-sm" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>`);
+      }
       if (state.user) {
         actions.push(`<button class="btn btn-ghost btn-sm" onclick="bearbeiteHeuteEinheit(${einheit.id})">Bearbeiten</button>`);
       }
@@ -429,13 +432,10 @@ async function ladHeuteDetails(items) {
       const komootEl = document.getElementById(`heute-komoot-${einheit.id}`);
       if (komootEl && einheit.komoot_url) {
         const embedUrl = komootEmbedUrl(einheit.komoot_url);
-        let komootHtml = '';
         if (embedUrl) {
-          komootHtml += `<iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe>`;
+          komootEl.innerHTML = `<iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe>`;
+          komootEl.closest('.heute-card').classList.add('heute-card-split');
         }
-        komootHtml += `<a class="tp-link tp-link-komoot heute-komoot-link" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a>`;
-        komootEl.innerHTML = komootHtml;
-        komootEl.closest('.heute-card').classList.add('heute-card-split');
       }
     } catch (_) {
       // Segmente bleiben leer bei Fehler
@@ -722,10 +722,10 @@ async function zeigeEinheit(id) {
             ${(() => {
               if (!e.komoot_url) return '';
               const embedUrl = komootEmbedUrl(e.komoot_url);
+              if (!embedUrl) return '';
               return `<div class="modal-row modal-row-block">
                 <span class="modal-label">Strecke</span>
-                ${embedUrl ? `<div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>` : ''}
-                <a class="tp-link tp-link-komoot" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a>
+                <div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>
               </div>`;
             })()}
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
@@ -734,6 +734,7 @@ async function zeigeEinheit(id) {
             ${segHtml}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
+              ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
               ${state.user ? `<button class="btn btn-ghost" onclick="EDITOR.open(state._lastEinheit)">Bearbeiten</button>` : ''}
             </div>
           </div>
