@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS training_einheiten (
                                    NOT NULL DEFAULT 'frei',
   titel         VARCHAR(200)       NOT NULL,
   treffpunkt_id INT UNSIGNED       NULL,
+  komoot_url    VARCHAR(500)       NULL COMMENT 'Komoot-Streckenlink (v. a. für typ=runde)',
   bemerkung     TEXT               NULL,
   sichtbarkeit  ENUM('oeffentlich','intern')
                                    NOT NULL DEFAULT 'oeffentlich',
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS training_bloecke (
   titel         VARCHAR(200)       NOT NULL,
   typ           ENUM('intervall','dauerlauf','funktionell','runde','event','frei','kein_training')
                                    NOT NULL DEFAULT 'intervall',
+  komoot_url    VARCHAR(500)       NULL COMMENT 'Komoot-Streckenlink (v. a. für typ=runde)',
   bemerkung     TEXT               NULL,
   sichtbarkeit  ENUM('global','privat')
                                    NOT NULL DEFAULT 'global',
