@@ -569,6 +569,20 @@ function handleAdmin(string $method, string $sub): void {
         $bis = date('Y-m-d', strtotime('+400 days'));
         $quellen = [];
         foreach ($entries as $entry) {
+            // builtin://-URLs direkt auswerten
+            if (str_starts_with($entry['url'], 'builtin://')) {
+                $rowEvents = berechneBuiltinEvents($entry['url'], $von, $bis);
+                $quellen[] = [
+                    'url'                => $entry['url'],
+                    'ok'                 => true,
+                    'status'             => 'OK (builtin)',
+                    'events_im_zeitraum' => count($rowEvents),
+                    'events_gesamt'      => count($rowEvents),
+                    'sample'             => array_slice($rowEvents, 0, 3),
+                    'fehler'             => null,
+                ];
+                continue;
+            }
             $expandedUrls = expandJahresUrls($entry['url'], $von, $bis);
             $rowEvents = [];
             $rowFehler = [];
@@ -824,8 +838,23 @@ function handleFeiertage(string $method, string $sub): void {
 
     $events = [];
     foreach ($entries as $entry) {
-        foreach (expandJahresUrls($entry['url'], $von, $bis) as $url) {
-            $body = ladeIcsCached($url, 6 * 3600);
+        $url = $entry['url'];
+        // Eingebauter Rechner für builtin://-URLs
+        if (str_starts_with($url, 'builtin://')) {
+            foreach (berechneBuiltinEvents($url, $von, $bis) as $ev) {
+                $events[] = [
+                    'datum'     => $ev['datum'],
+                    'datum_bis' => $ev['datum_bis'],
+                    'titel'     => $ev['titel'],
+                    'kategorie' => $entry['label'] ?: 'Feiertag',
+                    'farbe'     => $entry['farbe'] ?: '',
+                ];
+            }
+            continue;
+        }
+        // Externe ICS-Feeds
+        foreach (expandJahresUrls($url, $von, $bis) as $expandedUrl) {
+            $body = ladeIcsCached($expandedUrl, 6 * 3600);
             if (!$body) continue;
             foreach (parseIcsEvents($body, $von, $bis) as $ev) {
                 $events[] = [
@@ -853,6 +882,88 @@ function expandJahresUrls(string $url, string $von, string $bis): array {
         $urls[] = str_replace('{year}', (string)$y, $url);
     }
     return $urls;
+}
+
+// ============================================================
+// Eingebauter Feiertags-/Ferien-Rechner (builtin://-URLs)
+// Syntax: builtin://feiertage/<land>   z. B. builtin://feiertage/NRW
+//         builtin://schulferien/<land>  (Platzhalter, liefert leeres Array)
+// Gibt ein Array von ['datum'=>…,'datum_bis'=>…,'titel'=>…] zurück.
+// ============================================================
+function berechneBuiltinEvents(string $url, string $von, string $bis): array {
+    if (!preg_match('#^builtin://([^/]+)/(.+)$#i', $url, $m)) return [];
+    $typ  = strtolower($m[1]); // 'feiertage'
+    $land = strtoupper($m[2]); // 'NRW', 'BY', …
+
+    if ($typ !== 'feiertage') return [];
+
+    $vonJahr = (int)substr($von, 0, 4);
+    $bisJahr = (int)substr($bis, 0, 4);
+    $events  = [];
+
+    for ($y = $vonJahr; $y <= $bisJahr; $y++) {
+        $easter = berechneeOstern($y); // Unix-Timestamp Ostersonntag
+
+        $feiertage = [
+            // Bundesweite Feiertage
+            ['datum' => "$y-01-01", 'titel' => 'Neujahr'],
+            ['datum' => date('Y-m-d', strtotime("$y-01-01 -2 days", $easter + 86400)), 'titel' => 'Karfreitag',
+             'datum' => date('Y-m-d', $easter - 2 * 86400)],
+            ['datum' => date('Y-m-d', $easter + 86400),  'titel' => 'Ostermontag'],
+            ['datum' => "$y-05-01", 'titel' => 'Tag der Arbeit'],
+            ['datum' => date('Y-m-d', $easter + 39 * 86400), 'titel' => 'Christi Himmelfahrt'],
+            ['datum' => date('Y-m-d', $easter + 50 * 86400), 'titel' => 'Pfingstmontag'],
+            ['datum' => "$y-10-03", 'titel' => 'Tag der Deutschen Einheit'],
+            ['datum' => "$y-12-25", 'titel' => '1. Weihnachtstag'],
+            ['datum' => "$y-12-26", 'titel' => '2. Weihnachtstag'],
+        ];
+
+        // Bundesland-spezifische Ergänzungen
+        if (in_array($land, ['NRW', 'BY', 'BW', 'ST', 'SN', 'HE', 'RP', 'SL', 'TH'])) {
+            $feiertage[] = ['datum' => date('Y-m-d', $easter + 60 * 86400), 'titel' => 'Fronleichnam'];
+        }
+        if (in_array($land, ['NRW', 'BY', 'BW', 'ST', 'SL', 'RP', 'TH'])) {
+            $feiertage[] = ['datum' => "$y-11-01", 'titel' => 'Allerheiligen'];
+        }
+        if (in_array($land, ['BW', 'BY', 'ST'])) {
+            $feiertage[] = ['datum' => "$y-01-06", 'titel' => 'Heilige Drei Könige'];
+        }
+        if (in_array($land, ['BB', 'MV', 'SN', 'ST', 'TH'])) {
+            $feiertage[] = ['datum' => "$y-10-31", 'titel' => 'Reformationstag'];
+        }
+        if ($land === 'BY') {
+            $feiertage[] = ['datum' => "$y-08-15", 'titel' => 'Mariä Himmelfahrt'];
+        }
+
+        foreach ($feiertage as $f) {
+            if (!isset($f['datum'])) continue;
+            if ($f['datum'] >= $von && $f['datum'] <= $bis) {
+                $events[] = ['datum' => $f['datum'], 'datum_bis' => $f['datum'], 'titel' => $f['titel']];
+            }
+        }
+    }
+
+    usort($events, fn($a, $b) => $a['datum'] <=> $b['datum']);
+    return $events;
+}
+
+function berechneeOstern(int $jahr): int {
+    // Anonyme Gregorianische Algorithmus
+    $a = $jahr % 19;
+    $b = intdiv($jahr, 100);
+    $c = $jahr % 100;
+    $d = intdiv($b, 4);
+    $e = $b % 4;
+    $f = intdiv($b + 8, 25);
+    $g = intdiv($b - $f + 1, 3);
+    $h = (19 * $a + $b - $d - $g + 15) % 30;
+    $i = intdiv($c, 4);
+    $k = $c % 4;
+    $l = (32 + 2 * $e + 2 * $i - $h - $k) % 7;
+    $m = intdiv($a + 11 * $h + 22 * $l, 451);
+    $monat = intdiv($h + $l - 7 * $m + 114, 31);
+    $tag   = (($h + $l - 7 * $m + 114) % 31) + 1;
+    return mktime(12, 0, 0, $monat, $tag, $jahr);
 }
 
 function ladeIcsCached(string $url, int $ttl, ?string &$fehler = null): ?string {

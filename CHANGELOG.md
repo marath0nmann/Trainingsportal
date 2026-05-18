@@ -1,7 +1,8 @@
 # Changelog
 
-## v57
-- Fix: Ungültiger ICS-Cache (alter HTML-Inhalt) wird beim Lesen erkannt und gelöscht → Kalender holte bisher stale HTML aus Cache statt valide ICS-Daten
+## v58
+- Eingebauter Feiertags-Rechner: `builtin://feiertage/NRW` (und andere Bundesländer) berechnet gesetzliche Feiertage direkt in PHP – kein externer Dienst nötig
+- Beispiel-URL „Feiertage NRW" nutzt jetzt den eingebauten Rechner statt schulferien.org (das HTML statt ICS lieferte)
 - Fix: Erkennung wenn Server HTML statt ICS antwortet (Fehlermeldung im Diagnose-Tool)
 - Beispiel-URLs in Einstellungen auf neues schulferien.org-Format aktualisiert
 - Feiertage/Ferien werden jetzt auch im Planungskalender angezeigt (Farbmarkierung + Label)
