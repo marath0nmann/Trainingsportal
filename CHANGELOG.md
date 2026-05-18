@@ -1,6 +1,10 @@
 # Changelog
 
 ## v37
+- Planung-Sidebar: Segmentanzahl aus Block-Karten entfernt; Typ-Überschriften kleiner und linksbündig
+- Heute-Sektion über dem Kalender: erscheint automatisch, wenn heute ein Training eingetragen ist; zeigt Typ, Uhrzeit, Titel, Treffpunkt, Bemerkung sowie Status-Badges; Klick öffnet Detail-Modal
+
+## v36
 - Seite „Trainingsblöcke" entfernt; Block-Verwaltung vollständig in Planung-Sidebar integriert: „+ Neu"-Button (Trainer/Admin), Bearbeiten-Button (✎) erscheint beim Hover über jede Karte, Sidebar lädt nach Speichern/Löschen automatisch neu
 - `#bloecke` leitet auf `#planung` um; Kalender-Button „Trainingsblöcke" heißt jetzt „Planung"
 

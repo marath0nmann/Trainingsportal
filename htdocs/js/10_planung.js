@@ -227,9 +227,6 @@ const PLANUNG = (() => {
   }
 
   function renderPBlockCard(b) {
-    const segBadge = b.seg_count > 0
-      ? `<span class="block-seg-badge">${b.seg_count} Seg.</span>`
-      : '';
     const privBadge = b.sichtbarkeit === 'privat'
       ? `<span class="block-sicht-badge block-sicht-privat">Privat</span>`
       : '';
@@ -244,7 +241,7 @@ const PLANUNG = (() => {
         <div class="pblock-drag-handle" aria-hidden="true">⠿</div>
         <div class="pblock-info">
           <div class="pblock-titel">${escapeHtml(b.titel)}</div>
-          <div class="pblock-meta">${privBadge}${segBadge}</div>
+          <div class="pblock-meta">${privBadge}</div>
         </div>
         ${editBtn}
       </div>`;
