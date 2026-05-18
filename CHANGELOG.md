@@ -1,7 +1,8 @@
 # Changelog
 
-## v55
-- ICS-URLs: `{year}`-Platzhalter wird automatisch durch alle relevanten Jahre ersetzt (schulferien.org nutzt jahresspezifische URLs)
+## v56
+- Fix: ICS-Fetch sendet jetzt `Accept: text/calendar` + Browser-ähnlichen User-Agent → schulferien.org lieferte sonst HTML statt .ics
+- Fix: Erkennung wenn Server HTML statt ICS antwortet (Fehlermeldung im Diagnose-Tool)
 - Beispiel-URLs in Einstellungen auf neues schulferien.org-Format aktualisiert
 - Feiertage/Ferien werden jetzt auch im Planungskalender angezeigt (Farbmarkierung + Label)
 - ICS-Fetch: SSL-Fallback wenn Peer-Verifikation auf Server schlägt (Shared-Hosting-CA-Bundle)
