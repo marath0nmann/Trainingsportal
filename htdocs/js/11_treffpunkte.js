@@ -64,20 +64,60 @@ const TREFFPUNKTE = (() => {
       </div>`;
   }
 
+  function staticMapHtml(lat, lng) {
+    const zoom = 16;
+    const TILE  = 256;
+    const GRID  = 3; // 3×3 Kacheln
+    const n     = Math.pow(2, zoom);
+
+    const cx = (lng + 180) / 360 * n;
+    const latRad = lat * Math.PI / 180;
+    const cy = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
+
+    const tx0 = Math.floor(cx) - 1; // linke Kachel
+    const ty0 = Math.floor(cy) - 1; // obere Kachel
+
+    // Pixel-Position des Markers innerhalb des 3×3-Blocks
+    const markerX = (cx - tx0) * TILE;
+    const markerY = (cy - ty0) * TILE;
+
+    let tiles = '';
+    for (let dy = 0; dy < GRID; dy++) {
+      for (let dx = 0; dx < GRID; dx++) {
+        const tx = tx0 + dx;
+        const ty = ty0 + dy;
+        tiles += `<img src="https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png" `
+               + `style="position:absolute;left:${dx*TILE}px;top:${dy*TILE}px;width:${TILE}px;height:${TILE}px" `
+               + `draggable="false" alt="">`;
+      }
+    }
+
+    // Sichtbares Fenster: volle Breite der Karte (CSS), 160 px hoch
+    // Innen-Div wird so verschoben, dass der Marker in der Mitte liegt
+    const VIEW_H = 160;
+    const shiftX = Math.round(markerX - TILE * GRID / 2);
+    const shiftY = Math.round(markerY - VIEW_H / 2);
+
+    return `<div class="tp-karte-map" style="overflow:hidden;position:relative;user-select:none">
+      <div style="position:absolute;width:${GRID*TILE}px;height:${GRID*TILE}px;left:${-shiftX}px;top:${-shiftY}px;pointer-events:none">
+        ${tiles}
+        <div style="position:absolute;left:${Math.round(markerX)-12}px;top:${Math.round(markerY)-32}px;width:24px;height:32px">
+          <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 7.75 12 20 12 20S24 19.75 24 12C24 5.37 18.63 0 12 0z" fill="#cc0000"/>
+            <circle cx="12" cy="12" r="5" fill="#fff"/>
+          </svg>
+        </div>
+      </div>
+    </div>`;
+  }
+
   function renderKarte(t) {
     const istTrainer = state.user &&
       (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
     const hatKoords = t.lat != null && t.lng != null;
 
-    // Kartenvorschau via OSM-Embed (kein API-Key nötig)
-    const mapPreview = hatKoords
-      ? (() => {
-          const d = 0.004;
-          const bbox = `${(t.lng - d).toFixed(6)},${(t.lat - d).toFixed(6)},${(t.lng + d).toFixed(6)},${(t.lat + d).toFixed(6)}`;
-          const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${t.lat.toFixed(6)},${t.lng.toFixed(6)}`;
-          return `<div class="tp-karte-map"><iframe src="${src}" loading="lazy" referrerpolicy="no-referrer" title="Kartenvorschau ${escapeHtml(t.name)}"></iframe></div>`;
-        })()
-      : '';
+    // Kartenvorschau via OSM-Tiles (statisch, nicht verschiebbar)
+    const mapPreview = hatKoords ? staticMapHtml(t.lat, t.lng) : '';
 
     const mapLinks = hatKoords
       ? `<div class="tp-map-links">
