@@ -754,7 +754,11 @@ function schliesseModal(ev) {
 function komootEmbedUrl(url) {
   if (!url) return null;
   const m = String(url).match(/\/tour\/(\d+)/);
-  return m ? 'https://www.komoot.com/de-de/tour/' + m[1] + '/embed?profile=1' : null;
+  if (!m) return null;
+  let token = null;
+  try { token = new URL(url).searchParams.get('share_token'); } catch (_) {}
+  return 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1'
+    + (token ? '&share_token=' + encodeURIComponent(token) : '');
 }
 
 function escapeHtml(s) {

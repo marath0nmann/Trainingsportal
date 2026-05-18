@@ -1,5 +1,8 @@
 # Changelog
 
+## v62
+- Fix: Komoot-Embed – share_token aus gespeicherter URL extrahiert und an Embed-URL angehängt (private/geteilte Touren zeigen jetzt Vorschau statt leerem iFrame)
+
 ## v56
 - „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
 
