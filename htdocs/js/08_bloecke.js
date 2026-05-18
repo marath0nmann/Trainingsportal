@@ -120,6 +120,13 @@ const BLOECKE = (() => {
     }
   }
 
+  // Extrahiert Tour-ID aus Komoot-URL → Embed-URL (lokale Kopie des globalen Helpers)
+  function komootEmbedUrl(url) {
+    if (!url) return null;
+    const m = String(url).match(/\/tour\/(\d+)/);
+    return m ? 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1' : null;
+  }
+
   function renderBlockCard(b) {
     const istGlobal = b.sichtbarkeit === 'global';
     const kannBearbeiten = istTrainer()
@@ -351,6 +358,9 @@ const BLOECKE = (() => {
                 <label>Komoot-Strecke <span class="ed-hint">(Tour-Link, z. B. https://www.komoot.com/tour/…)</span></label>
                 <input type="url" id="be-komoot-url" value="${escapeHtml(b.komoot_url || '')}" placeholder="https://www.komoot.com/tour/…">
               </div>
+              <div class="ed-komoot-preview" id="be-komoot-preview">
+                ${komootEmbedUrl(b.komoot_url) ? `<div class="komoot-embed"><iframe src="${escapeHtml(komootEmbedUrl(b.komoot_url))}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>` : ''}
+              </div>
             </div>
 
             <div id="be-seg-wrap" class="ed-segwrap"${istRunde ? ' style="display:none"' : ''}>
@@ -408,6 +418,19 @@ const BLOECKE = (() => {
     const titelEl = document.getElementById('be-titel');
     if (titelEl) {
       titelEl.addEventListener('input', () => { titelManuellBearbeitet = true; });
+    }
+
+    // Live-Vorschau für Komoot-URL
+    const komootUrlEl = document.getElementById('be-komoot-url');
+    if (komootUrlEl) {
+      komootUrlEl.addEventListener('input', () => {
+        const preview = document.getElementById('be-komoot-preview');
+        if (!preview) return;
+        const embedUrl = komootEmbedUrl(komootUrlEl.value);
+        preview.innerHTML = embedUrl
+          ? `<div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>`
+          : '';
+      });
     }
 
     rendereBlockSegmente();
