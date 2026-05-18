@@ -325,7 +325,7 @@ async function renderKalender(main, monthArg) {
       const itemsHtml = items.map(e => {
         const cls = `kal-item kal-typ-${e.typ}` + (e.status === 'abgesagt' ? ' is-cancelled' : '');
         const time = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
-        return `<div class="${cls}" onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
+        return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
       }).join('');
 
       const addBtn = '';
@@ -345,6 +345,9 @@ async function renderKalender(main, monthArg) {
 
   document.getElementById('kal-grid').outerHTML =
     `<div id="kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
+  if (typeof KAL_POPOVER !== 'undefined') {
+    KAL_POPOVER.initItems(document.querySelectorAll('#kal-grid .kal-item[data-einheit-id]'));
+  }
 }
 
 function renderHeuteSektionHtml(items) {

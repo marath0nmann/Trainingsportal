@@ -1,7 +1,14 @@
 # Changelog
 
+## v61
+- Hover-Popover jetzt auch auf dem Haupt-Kalender (Startseite) aktiv
+- Planung: Trainingsblöcke-Sidebar zurück auf die rechte Seite
+- Planung: Viewport-Höhe per JavaScript dynamisch berechnet → kein Seiten-Scroll, schmale interne Scrollbar im Kalender
+- Planung: Bearbeiten-Dialog aktualisiert nach Speichern den jeweils aktiven Kalender
+
 ## v53
 - Quartalsplan (Listenansicht): neue Ansicht `#liste/YYYY-QN` zeigt alle Einheiten eines Quartals nach Kalenderwochen gruppiert; Typ-Farbakzente, Heute-Markierung, Kein-Training-Styling; View-Toggle-Buttons in Kalender- und Listenansicht; auf Mobilgeräten ist Listenansicht Standard-Ansicht beim ersten Aufruf
+
 
 ## v52
 - Fix: Pace-Warnhinweis erscheint jetzt korrekt, wenn Segmente Pace-Referenzen enthalten, die nicht konfiguriert sind (prüft `paceSekProKm` statt `!paceData`)
