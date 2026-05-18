@@ -1,5 +1,8 @@
 # Changelog
 
+## v52
+- Trainingsblock-Editor: Gesamtdistanz automatisch berechnet (Σ Wdh × Distanz) und rechts unter der Segmenttabelle angezeigt; aktualisiert sich live bei jeder Segment-Änderung
+
 ## v51
 - Fix: Pausenblock nach der letzten Wiederholung eines Segments wird jetzt ebenfalls angezeigt
 
@@ -16,6 +19,8 @@
 - Fix: Komoot-Link setzt jetzt Startpunkt via `p[0][loc]` und nutzt korrektes URL-Format (`/de-de/plan/@lat,lng,16z`)
 - Fix: Kartenausschnitt in Treffpunkt-Karte korrekt zentriert (left/top via CSS calc statt fixer Pixelrechnung)
 - Treffpunkte-Übersicht: statisches Kartenbild statt interaktivem OSM-Iframe (OSM-Tiles, SVG-Pin, nicht verschiebbar, kein Attribution-Overlay)
+
+## v45
 - Fix: Verschieben/Löschen im Planung-Kalender sofort sichtbar (optimistisches DOM-Update statt re-fetch)
 - Fix: Nach Einplanen eines Blocks von der Planung-Seite bleibt man auf Planung (kein ungewollter Wechsel zum Kalender)
 - Trainingsblöcke Typ „Runde / Strecke": Segmente-Sektion durch Komoot-Streckenfeld ersetzt; URL wird beim Einplanen auf die Kalendereinheit übertragen und im Kalender-Detail-Modal als Link angezeigt; DB-Migration: komoot_url in training_bloecke und training_einheiten

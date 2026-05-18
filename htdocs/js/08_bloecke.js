@@ -266,10 +266,11 @@ const BLOECKE = (() => {
   }
 
   function aktualisiereBlockTitelFeld() {
-    if (titelManuellBearbeitet) return;
-    const el = document.getElementById('be-titel');
-    if (!el) return;
-    el.value = generiereBlockTitel(editorSegmente);
+    if (!titelManuellBearbeitet) {
+      const el = document.getElementById('be-titel');
+      if (el) el.value = generiereBlockTitel(editorSegmente);
+    }
+    aktualisiereGesamtdistanz();
   }
 
   function titelNeuGenerieren() {
@@ -373,6 +374,7 @@ const BLOECKE = (() => {
                 </div>
               </div>
               <div id="be-segmente-tabelle"></div>
+              <div id="be-gesamtdistanz" class="be-gesamtdistanz"></div>
               <div class="ed-seghint">
                 Pause in Metern · TP/GP/BP = Trab-/Geh-/Blockpause · Pace-Referenz für persönliche Pace im Athleten-View
               </div>
@@ -427,6 +429,28 @@ const BLOECKE = (() => {
       titelManuellBearbeitet = false;
       aktualisiereBlockTitelFeld();
     }
+  }
+
+  function berechneGesamtdistanz(segs) {
+    return (segs || []).reduce((sum, s) => {
+      const wdh = (s.wiederholungen > 0) ? s.wiederholungen : 1;
+      return sum + wdh * (s.distanz_m || 0);
+    }, 0);
+  }
+
+  function formatDistanz(m) {
+    if (!m) return null;
+    if (m < 1000) return m + ' m';
+    const km = m / 1000;
+    return km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' km';
+  }
+
+  function aktualisiereGesamtdistanz() {
+    const el = document.getElementById('be-gesamtdistanz');
+    if (!el) return;
+    const gesamt = berechneGesamtdistanz(editorSegmente);
+    const text = formatDistanz(gesamt);
+    el.textContent = text ? 'Gesamtdistanz: ' + text : '';
   }
 
   function rendereBlockSegmente() {
