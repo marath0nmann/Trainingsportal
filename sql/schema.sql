@@ -10,6 +10,18 @@
 -- händisch ergänzt werden (Standardfall: leerer Präfix).
 -- ============================================================
 
+-- ── Treffpunkte (werden beim Einplanen einer Einheit gewählt) ──
+CREATE TABLE IF NOT EXISTS training_treffpunkte (
+  id            INT UNSIGNED       NOT NULL AUTO_INCREMENT,
+  name          VARCHAR(200)       NOT NULL,
+  lat           DECIMAL(10,7)      NULL COMMENT 'GPS-Breitengrad',
+  lng           DECIMAL(10,7)      NULL COMMENT 'GPS-Längengrad',
+  erstellt_von  INT UNSIGNED       NULL,
+  erstellt_am   TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  geaendert_am  TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Trainingseinheit (Kalendereintrag) ─────────────────────────
 CREATE TABLE IF NOT EXISTS training_einheiten (
   id            INT UNSIGNED       NOT NULL AUTO_INCREMENT,
@@ -18,7 +30,7 @@ CREATE TABLE IF NOT EXISTS training_einheiten (
   typ           ENUM('intervall','dauerlauf','funktionell','runde','event','frei','kein_training')
                                    NOT NULL DEFAULT 'frei',
   titel         VARCHAR(200)       NOT NULL,
-  treffpunkt    VARCHAR(200)       NULL,
+  treffpunkt_id INT UNSIGNED       NULL,
   bemerkung     TEXT               NULL,
   sichtbarkeit  ENUM('oeffentlich','intern')
                                    NOT NULL DEFAULT 'oeffentlich',
@@ -29,7 +41,9 @@ CREATE TABLE IF NOT EXISTS training_einheiten (
   geaendert_am  TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_datum (datum),
-  KEY idx_sichtbarkeit (sichtbarkeit, datum)
+  KEY idx_sichtbarkeit (sichtbarkeit, datum),
+  CONSTRAINT fk_einh_treffpunkt FOREIGN KEY (treffpunkt_id)
+      REFERENCES training_treffpunkte(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Strukturierte Segmente (Intervalle, Pyramiden, Blöcke) ─────
@@ -60,7 +74,6 @@ CREATE TABLE IF NOT EXISTS training_bloecke (
   titel         VARCHAR(200)       NOT NULL,
   typ           ENUM('intervall','dauerlauf','funktionell','runde','event','frei','kein_training')
                                    NOT NULL DEFAULT 'intervall',
-  treffpunkt    VARCHAR(200)       NULL,
   bemerkung     TEXT               NULL,
   sichtbarkeit  ENUM('global','privat')
                                    NOT NULL DEFAULT 'global',

@@ -87,6 +87,7 @@ function fillUserBadge() {
     nav.innerHTML = `
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
       ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
+      ${isTrainer ? `<button onclick="navigate('treffpunkte')"${state.tab === 'treffpunkte' ? ' class="active"' : ''}>Treffpunkte</button>` : ''}
       ${isAdmin ? `<button onclick="navigate('einstellungen')"${state.tab === 'einstellungen' ? ' class="active"' : ''}>Einstellungen</button>` : ''}`;
   }
 }
@@ -127,6 +128,11 @@ function renderPage() {
   if (state.tab === 'planung') {
     if (!state.user) { location.replace('#kalender'); return; }
     PLANUNG.render(main);
+    return;
+  }
+  if (state.tab === 'treffpunkte') {
+    if (!state.user) { location.replace('#kalender'); return; }
+    TREFFPUNKTE.render(main);
     return;
   }
   if (state.tab === 'einstellungen') {
@@ -416,7 +422,11 @@ async function zeigeEinheit(id) {
             <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
           </div>
           <div class="modal-body">
-            ${e.treffpunkt ? `<div class="modal-row"><span class="modal-label">Treffpunkt</span><span>${escapeHtml(e.treffpunkt)}</span></div>` : ''}
+            ${e.treffpunkt ? `<div class="modal-row"><span class="modal-label">Treffpunkt</span><span class="modal-treffpunkt">
+              ${escapeHtml(e.treffpunkt.name || '')}
+              ${e.treffpunkt.maps_google ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_google)}" target="_blank" rel="noopener" title="Google Maps öffnen">Google Maps</a>` : ''}
+              ${e.treffpunkt.maps_apple  ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_apple)}"  target="_blank" rel="noopener" title="Apple Maps öffnen">Apple Maps</a>`  : ''}
+            </span></div>` : ''}
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
             ${e.sichtbarkeit === 'intern' ? `<div class="modal-row"><span class="modal-label">Sichtbarkeit</span><span>Nur intern</span></div>` : ''}
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
