@@ -1,8 +1,7 @@
 # Changelog
 
-## v64
-- Komoot-Embed im Darkmode: CSS-Filter `invert + hue-rotate` sorgt für Nachtmodus-Optik der Karte
-- „Auf Komoot ↗"-Button in Aktionsleiste (neben Bearbeiten) verschoben; separater Link unter dem iFrame entfernt
+## v65
+- Fix: Komoot-Embed CSS-Filter entfernt – Komoot unterstützt `prefers-color-scheme` nativ, kein doppeltes Invertieren mehr
 
 ## v56
 - „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)

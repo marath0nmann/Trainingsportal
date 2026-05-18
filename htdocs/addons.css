@@ -1148,17 +1148,5 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .ed-komoot-preview { margin-top: 8px; }
 .ed-komoot-preview .komoot-embed iframe { height: 480px; }
 
-/* Komoot-Embed im Darkmode invertieren (Karte als Nachtmodus) */
-[data-theme="dark"] .komoot-embed iframe,
-[data-theme="dark"] .heute-card-komoot iframe,
-[data-theme="dark"] .ed-komoot-preview iframe {
-  filter: invert(1) hue-rotate(180deg);
-}
-@media (prefers-color-scheme: dark) {
-  :not([data-theme="light"]) .komoot-embed iframe,
-  :not([data-theme="light"]) .heute-card-komoot iframe,
-  :not([data-theme="light"]) .ed-komoot-preview iframe {
-    filter: invert(1) hue-rotate(180deg);
-  }
-}
+/* Komoot-Embed reagiert nativ auf prefers-color-scheme – kein CSS-Filter nötig */
 
