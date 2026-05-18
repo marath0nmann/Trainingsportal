@@ -18,6 +18,7 @@ async function apiCall(method, path, body, opts) {
   const init = {
     method,
     credentials: 'include',
+    cache: 'no-store',
     headers: { 'Accept': 'application/json' },
   };
   if (body !== undefined) {
