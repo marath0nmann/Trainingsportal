@@ -373,6 +373,12 @@ async function ladHeuteDetails(items) {
       }
 
       let html = '';
+      if (state.user && hatPaceRef && !paceData) {
+        html += `<div class="heute-pace-warn">
+          Persönliche Pace noch nicht konfiguriert –
+          <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
+        </div>`;
+      }
       if (seg.length) {
         const segItems = seg.map((s, i) => {
           const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;

@@ -204,6 +204,18 @@
 }
 .heute-card-info { font-size: 13px; color: var(--text2); }
 .heute-treffpunkt { color: var(--text); }
+.heute-pace-warn {
+  margin-top: 8px; padding: 8px 12px;
+  background: color-mix(in srgb, #c08010 12%, var(--surf2));
+  border-left: 3px solid #c08010;
+  border-radius: 5px; font-size: 13px; color: var(--text);
+}
+.btn-link {
+  background: none; border: none; padding: 0;
+  color: var(--accent); font-size: inherit; font-weight: 600;
+  cursor: pointer; text-decoration: underline; font-family: inherit;
+}
+.btn-link:hover { color: var(--primary); }
 .heute-seg-list { margin-top: 10px; }
 .heute-card-actions {
   display: flex; gap: 8px; margin-top: 12px; padding-top: 10px;
