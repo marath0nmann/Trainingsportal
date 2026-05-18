@@ -245,7 +245,6 @@ async function renderKalender(main, monthArg) {
             <button class="btn btn-ghost view-active" title="Kalenderansicht">▦ Kalender</button>
             <button class="btn btn-ghost" onclick="navigateListeFromKal('${ymd(monthStart).slice(0,7)}')" title="Quartalsplan">☰ Liste</button>
           </div>
-          ${state.user ? `<button class="btn btn-primary" onclick="navigate('planung')">Planung</button>` : ''}
         </div>
       </div>
       <div id="heute-sektion"></div>

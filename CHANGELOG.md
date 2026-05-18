@@ -1,5 +1,8 @@
 # Changelog
 
+## v56
+- „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
+
 ## v55
 - Heute-Sektion: zweispaltiges Layout – Trainingsinfos links, Komoot-Strecken-iFrame rechts (nur wenn Strecke hinterlegt); Komoot-Embed-URL auf `de-de`-Locale korrigiert; auf Mobile einspaltig gestapelt
 
