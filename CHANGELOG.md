@@ -1,6 +1,9 @@
 # Changelog
 
 ## v51
+- Fix: Pausenblock nach der letzten Wiederholung eines Segments wird jetzt ebenfalls angezeigt
+
+## v50
 - Segmente als grafische Blöcke (TrainingPeaks-Stil): Wiederholungen einzeln dargestellt, proportionale Breite nach Distanz, Pausenblöcke zwischen Wdh, Farbe nach Trainingstyp; „Persönliche Pace"-Header aus Detail-Modal entfernt
 
 ## v49
