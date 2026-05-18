@@ -86,7 +86,6 @@ function fillUserBadge() {
     const isTrainer = isAdmin || u.rolle === 'trainer';
     nav.innerHTML = `
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
-      <button onclick="navigate('bloecke')"${state.tab === 'bloecke' ? ' class="active"' : ''}>Trainingsblöcke</button>
       ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
       ${isAdmin ? `<button onclick="navigate('einstellungen')"${state.tab === 'einstellungen' ? ' class="active"' : ''}>Einstellungen</button>` : ''}`;
   }
@@ -122,8 +121,7 @@ function renderPage() {
     return;
   }
   if (state.tab === 'bloecke') {
-    if (!state.user) { location.replace('#kalender'); return; }
-    BLOECKE.render(main);
+    location.replace('#planung');
     return;
   }
   if (state.tab === 'planung') {
@@ -225,7 +223,7 @@ async function renderKalender(main, monthArg) {
         <div class="kal-nav-right">
           <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
           <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
-          ${state.user ? `<button class="btn btn-primary" onclick="navigate('bloecke')">Trainingsblöcke</button>` : ''}
+          ${state.user ? `<button class="btn btn-primary" onclick="navigate('planung')">Planung</button>` : ''}
         </div>
       </div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>

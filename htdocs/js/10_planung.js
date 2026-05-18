@@ -25,7 +25,12 @@ const PLANUNG = (() => {
           </div>
           <aside class="planung-sidebar" id="planung-sidebar">
             <div class="planung-sidebar-head">
-              <span class="planung-sidebar-title">Trainingsblöcke</span>
+              <div class="planung-sidebar-head-top">
+                <span class="planung-sidebar-title">Trainingsblöcke</span>
+                ${state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer')
+                  ? `<button class="btn btn-primary btn-sm" onclick="BLOECKE.neuerBlock()">+ Neu</button>`
+                  : ''}
+              </div>
               <span class="planung-sidebar-hint">Auf einen Kalendertag ziehen</span>
             </div>
             <div id="planung-bloecke-list" class="planung-bloecke-loading">Lade…</div>
@@ -215,12 +220,21 @@ const PLANUNG = (() => {
     });
   }
 
+  function kannBearbeiten(b) {
+    if (!state.user) return false;
+    if (state.user.rolle === 'admin' || state.user.rolle === 'trainer') return true;
+    return b.sichtbarkeit === 'privat' && b.erstellt_von === state.user.id;
+  }
+
   function renderPBlockCard(b) {
     const segBadge = b.seg_count > 0
       ? `<span class="block-seg-badge">${b.seg_count} Seg.</span>`
       : '';
     const privBadge = b.sichtbarkeit === 'privat'
       ? `<span class="block-sicht-badge block-sicht-privat">Privat</span>`
+      : '';
+    const editBtn = kannBearbeiten(b)
+      ? `<button class="btn btn-ghost btn-sm pblock-edit-btn" onclick="event.stopPropagation();BLOECKE.bearbeiten(${b.id})" title="Block bearbeiten">✎</button>`
       : '';
     return `
       <div class="pblock-card block-typ-${escapeHtml(b.typ)}"
@@ -232,8 +246,13 @@ const PLANUNG = (() => {
           <div class="pblock-titel">${escapeHtml(b.titel)}</div>
           <div class="pblock-meta">${privBadge}${segBadge}</div>
         </div>
+        ${editBtn}
       </div>`;
   }
 
-  return { render, navigateMonth };
+  function reloadSidebar() {
+    if (document.getElementById('planung-bloecke-list')) ladeBlocke();
+  }
+
+  return { render, navigateMonth, reloadSidebar };
 })();

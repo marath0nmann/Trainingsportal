@@ -465,6 +465,7 @@ const BLOECKE = (() => {
       schliesseModal();
       notify('Block gespeichert.', 'ok');
       await ladeListe();
+      if (typeof PLANUNG !== 'undefined') PLANUNG.reloadSidebar();
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
     }
@@ -477,6 +478,7 @@ const BLOECKE = (() => {
       schliesseModal();
       notify('Block gelöscht.', 'ok');
       await ladeListe();
+      if (typeof PLANUNG !== 'undefined') PLANUNG.reloadSidebar();
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
     }

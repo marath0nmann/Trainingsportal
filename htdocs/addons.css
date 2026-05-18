@@ -669,8 +669,11 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .planung-sidebar-head {
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 4px;
   position: sticky; top: 0; background: var(--surface); z-index: 1;
+}
+.planung-sidebar-head-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .planung-sidebar-title {
   font-family: 'Barlow Condensed', sans-serif;
@@ -679,6 +682,13 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .planung-sidebar-hint {
   font-size: 11px; color: var(--text2);
 }
+
+/* Bearbeiten-Button auf Block-Karte */
+.pblock-edit-btn {
+  flex-shrink: 0; opacity: 0; transition: opacity .12s;
+  padding: 3px 7px; font-size: 13px;
+}
+.pblock-card:hover .pblock-edit-btn { opacity: 1; }
 .planung-bloecke-loading {
   padding: 32px 16px; text-align: center; color: var(--text2); font-size: 13px;
 }
