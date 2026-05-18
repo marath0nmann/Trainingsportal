@@ -164,6 +164,18 @@ const BLOECKE = (() => {
     const heute = datum || ymd(new Date());
     const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
       tpListe.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+
+    // Default-Uhrzeit aus Admin-Einstellungen per Wochentag (1=Mo … 7=So)
+    let defaultUhrzeit = '';
+    try {
+      const raw = appConfig && appConfig.training_default_uhrzeiten;
+      if (raw) {
+        const datObj = new Date(heute + 'T00:00:00');
+        const dow = String(((datObj.getDay() + 6) % 7) + 1);
+        const uMap = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        defaultUhrzeit = (uMap[dow] || '').trim();
+      }
+    } catch (_) {}
     const cont = document.getElementById('modal-container');
 
     cont.innerHTML = `
@@ -184,7 +196,7 @@ const BLOECKE = (() => {
               </div>
               <div class="ed-fg">
                 <label>Uhrzeit</label>
-                <input type="time" id="apply-uhrzeit">
+                <input type="time" id="apply-uhrzeit" value="${escapeHtml(defaultUhrzeit)}">
               </div>
               <div class="ed-fg">
                 <label>Treffpunkt</label>

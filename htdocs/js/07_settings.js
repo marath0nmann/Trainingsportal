@@ -12,8 +12,11 @@ const SETTINGS = (() => {
   let felder = [];
   let feiertage = [];
   let paceDistanzen = [];
+  let uhrzeiten = {};     // { "1": "18:00", ... } – 1=Mo … 7=So
   let typen = [];         // { slug, bezeichnung, farbe, reihenfolge, aktiv, block_count }
   let typenBearbeitet = null; // slug des gerade inline bearbeiteten Typs
+
+  const WOCHENTAGE_LANG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
   async function render(main) {
     if (!state.user || state.user.rolle !== 'admin') {
@@ -34,6 +37,7 @@ const SETTINGS = (() => {
       felder        = settingsR.felder || [];
       feiertage     = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
       paceDistanzen = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
+      uhrzeiten     = parseUhrzeitenJson(getWert('training_default_uhrzeiten'));
       typen         = typenR.typen || [];
       rendereForm(main);
     } catch (e) {
@@ -46,6 +50,20 @@ const SETTINGS = (() => {
   function getWert(key) {
     const f = felder.find(x => x.key === key);
     return f ? f.wert : '';
+  }
+
+  function parseUhrzeitenJson(raw) {
+    if (!raw) return {};
+    try {
+      const j = JSON.parse(raw);
+      if (!j || typeof j !== 'object' || Array.isArray(j)) return {};
+      const result = {};
+      for (let d = 1; d <= 7; d++) {
+        const v = (j[String(d)] || '').trim();
+        result[String(d)] = /^\d{2}:\d{2}$/.test(v) ? v : '';
+      }
+      return result;
+    } catch (e) { return {}; }
   }
 
   function parsePaceDistanzenJson(raw) {
@@ -120,6 +138,22 @@ const SETTINGS = (() => {
             '</div>' +
             '<div class="settings-row-input">' +
               '<input type="number" id="set-dauer" min="15" max="600" step="15" value="' + escapeHtml(dauerMin) + '" class="settings-input" style="width:120px">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // ── Standard-Uhrzeiten ──
+      '<div class="panel">' +
+        '<div class="panel-header"><div class="panel-title">🕐 Standard-Uhrzeiten pro Wochentag</div></div>' +
+        '<div class="settings-panel-body">' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Uhrzeit je Wochentag</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">Wird beim Planen eines Trainings als Standarduhrzeit vorausgefüllt. Leer lassen = kein Standard.</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<div id="uhrzeiten-grid" class="uhrzeiten-grid"></div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -215,8 +249,25 @@ const SETTINGS = (() => {
       '</div>';
 
     rendereFeiertage();
+    rendereUhrzeiten();
     renderePaceDistanzen();
     rendereTypen();
+  }
+
+  function rendereUhrzeiten() {
+    const wrap = document.getElementById('uhrzeiten-grid');
+    if (!wrap) return;
+    wrap.innerHTML = WOCHENTAGE_LANG.map((tag, i) => {
+      const key = String(i + 1);
+      const val = uhrzeiten[key] || '';
+      return '<div class="uhrzeit-row">' +
+        '<label class="uhrzeit-label">' + escapeHtml(tag) + '</label>' +
+        '<input type="time" class="settings-input uhrzeit-input" data-dow="' + key + '" value="' + escapeHtml(val) + '" style="width:120px">' +
+      '</div>';
+    }).join('');
+    wrap.querySelectorAll('.uhrzeit-input').forEach(el => {
+      el.addEventListener('change', () => { uhrzeiten[el.dataset.dow] = el.value; });
+    });
   }
 
   function renderePaceDistanzen() {
@@ -306,11 +357,15 @@ const SETTINGS = (() => {
       .map(f => ({ url: (f.url || '').trim(), label: (f.label || '').trim(), farbe: (f.farbe || '').trim() }))
       .filter(f => f.url !== '');
 
+    // Uhrzeiten aus den Inputs einlesen (damit auch direkte Eingabe ohne change-Event erfasst wird)
+    document.querySelectorAll('.uhrzeit-input').forEach(el => { uhrzeiten[el.dataset.dow] = el.value; });
+
     const payload = {
       werte: {
-        training_feiertage_ics_urls: JSON.stringify(liste),
-        training_default_dauer_min:  document.getElementById('set-dauer').value || '90',
-        training_pace_distanzen:     JSON.stringify(paceDistanzen),
+        training_feiertage_ics_urls:  JSON.stringify(liste),
+        training_default_dauer_min:   document.getElementById('set-dauer').value || '90',
+        training_pace_distanzen:      JSON.stringify(paceDistanzen),
+        training_default_uhrzeiten:   JSON.stringify(uhrzeiten),
       },
     };
     try {

@@ -590,6 +590,13 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .settings-row-label { flex-shrink: 0; min-width: 180px; }
 .settings-row-input { flex: 1; min-width: 0; }
 
+.uhrzeiten-grid { display: flex; flex-direction: column; gap: 6px; }
+.uhrzeit-row { display: flex; align-items: center; gap: 12px; }
+.uhrzeit-label {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  min-width: 90px; flex-shrink: 0;
+}
+
 /* ============================================================
    Trainingsportal – Feiertage / Ferien
    ============================================================ */

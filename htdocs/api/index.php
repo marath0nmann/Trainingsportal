@@ -500,6 +500,12 @@ function trainingSettingsKeys(): array {
             'beschreibung' => 'JSON-Array der Distanzen in Metern, die als Pace-Referenz angeboten werden, z. B. [5000,10000,21098,42195]',
             'default'  => '[5000,10000,21098,42195]',
         ],
+        'training_default_uhrzeiten' => [
+            'label'    => 'Standard-Uhrzeiten pro Wochentag',
+            'gruppe'   => 'training',
+            'beschreibung' => 'JSON-Objekt {"1":"18:00","2":"","3":"18:00",...} – 1=Mo bis 7=So, leer = kein Standard',
+            'default'  => '{}',
+        ],
     ];
 }
 
