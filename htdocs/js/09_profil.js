@@ -3,7 +3,8 @@
 // ============================================================
 // Öffnet sich per Klick auf den Avatar (oben rechts).
 // Zeigt Pace-Referenzkonfiguration für die vom Admin definierten Distanzen.
-// Athleten wählen pro Distanz nur den Modus (Bestzeit / 12 Monate / manuell).
+// Athleten wählen pro Distanz nur den Modus (Bestzeit / 12 Monate / manuell)
+// und sehen sofort die resultierende Pace.
 // Welche Distanzen verfügbar sind, bestimmt ausschließlich der Admin
 // über Einstellungen → Pace-Referenz-Distanzen.
 // ============================================================
@@ -42,13 +43,51 @@ const PROFIL = (() => {
     return `${day}.${m}.${y}`;
   }
 
+  // Pace in sek/km für eine Distanz berechnen (null wenn nicht ermittelbar)
+  function _paceForRef(ref, modus, manInput) {
+    const distPb  = (_prefsData.distanzen && _prefsData.distanzen.pb)    || {};
+    const dist12m = (_prefsData.distanzen && _prefsData.distanzen['12m']) || {};
+    const distM   = parseFloat(ref);
+    if (!distM) return null;
+
+    let sek = null;
+    if (modus === 'pb') {
+      sek = distPb[ref]  ? distPb[ref].sekunden
+          : dist12m[ref] ? dist12m[ref].sekunden : null; // Fallback auf 12m
+    } else if (modus === '12m') {
+      sek = dist12m[ref] ? dist12m[ref].sekunden : null;
+    } else if (modus === 'manual') {
+      sek = _parseZeit(manInput || '');
+    }
+
+    if (!sek || !distM) return null;
+    return sek / (distM / 1000);
+  }
+
+  // Pace-Chip für eine Distanz aktuell halten
+  function _updatePaceChip(ref) {
+    const chip = document.getElementById('profil-pace-' + ref);
+    if (!chip) return;
+    const sel = document.querySelector(`.profil-modus-sel[data-ref="${ref}"]`);
+    const inp = document.getElementById('profil-manual-input-' + ref);
+    const modus    = sel ? sel.value : 'pb';
+    const manInput = inp ? inp.value : '';
+    const sekProKm = _paceForRef(ref, modus, manInput);
+    chip.textContent = sekProKm ? PACE.formatPace(sekProKm) : '–';
+  }
+
   function renderModal(cont) {
+    const u         = state.user;
     const prefs     = _prefsData.prefs    || {};
     const distPb    = (_prefsData.distanzen && _prefsData.distanzen.pb)    || {};
     const dist12m   = (_prefsData.distanzen && _prefsData.distanzen['12m']) || {};
     const hatAthlet = !!_prefsData.hat_athlet;
-    // Admin-definierte Distanzliste (bereits aufsteigend sortiert vom Server)
     const refs      = _prefsData.dist_admin || Object.keys(prefs);
+
+    // Name + Rolle identisch wie Header
+    const displayName  = u.vorname || u.name || u.benutzername || '';
+    const displayRolle = (typeof ROLLE_LABEL !== 'undefined' && ROLLE_LABEL[u.rolle])
+      || u.rolle || '';
 
     const refRows = refs.map(ref => {
       const p      = prefs[ref] || { modus: 'pb', manual_sek: null };
@@ -56,13 +95,17 @@ const PROFIL = (() => {
       const m12    = dist12m[ref];
       const manSek = p.manual_sek || null;
 
-      // Effektiven Modus bestimmen
-      let selVal = 'manual';
-      if      (p.modus === 'pb'  && pb)  selVal = 'pb';
-      else if (p.modus === '12m' && m12) selVal = '12m';
-      else if (p.modus === 'pb'  && m12) selVal = '12m'; // pb gewählt, aber nur 12m verfügbar
-      else if (pb)                        selVal = 'pb';
-      else if (m12)                       selVal = '12m';
+      // Effektiven Modus bestimmen – explizit 'manual' wird immer respektiert
+      let selVal;
+      if (p.modus === 'manual') {
+        selVal = 'manual';                              // explizite Wahl → nie überschreiben
+      } else if (p.modus === 'pb'  && pb)  { selVal = 'pb';     }
+      else if   (p.modus === '12m' && m12) { selVal = '12m';    }
+      else if   (p.modus === 'pb'  && m12) { selVal = '12m';    } // pb gewünscht, nur 12m da
+      else if   (p.modus === '12m' && pb)  { selVal = 'pb';     } // 12m gewünscht, nur pb da
+      else if   (pb)                        { selVal = 'pb';     } // kein Modus → best available
+      else if   (m12)                       { selVal = '12m';    }
+      else                                  { selVal = 'manual'; }
 
       let opts = '';
       if (pb) {
@@ -78,6 +121,11 @@ const PROFIL = (() => {
       const manVisible = selVal === 'manual';
       const manVal     = manSek ? PACE.formatTime(manSek) : '';
 
+      // Initiale Pace berechnen
+      const initManInput = manVal;
+      const initPaceSekKm = _paceForRef(ref, selVal, initManInput);
+      const initPaceStr   = initPaceSekKm ? PACE.formatPace(initPaceSekKm) : '–';
+
       const noDataHint = !hatAthlet
         ? '<div class="profil-hint">Kein Athletenprofil verknüpft – nur manuelle Eingabe möglich.</div>'
         : (!pb && !m12
@@ -89,14 +137,17 @@ const PROFIL = (() => {
         <div class="profil-ref-row">
           <div class="profil-ref-label">${escapeHtml(PACE.fmtDistLabel(ref))}</div>
           <div class="profil-ref-controls">
-            <select class="settings-input profil-modus-sel" data-ref="${safeRef}"
-                    onchange="PROFIL._onModusChange('${safeRef}', this.value)">${opts}</select>
+            <div class="profil-sel-row">
+              <select class="settings-input profil-modus-sel" data-ref="${safeRef}"
+                      onchange="PROFIL._onModusChange('${safeRef}', this.value)">${opts}</select>
+              <span class="profil-pace-chip" id="profil-pace-${safeRef}">${escapeHtml(initPaceStr)}</span>
+            </div>
             <div class="profil-manual-wrap" id="profil-manual-${safeRef}"${manVisible ? '' : ' style="display:none"'}>
               <input type="text" id="profil-manual-input-${safeRef}"
                      class="settings-input profil-manual-input"
-                     placeholder="MM:SS oder H:MM:SS"
-                     value="${escapeHtml(manVal)}">
-              <span class="profil-hint">z.&nbsp;B. &nbsp;20:30 &nbsp;oder &nbsp;1:45:00</span>
+                     placeholder="MM:SS oder H:MM:SS (leer = keine Referenz)"
+                     value="${escapeHtml(manVal)}"
+                     oninput="PROFIL._onManualInput('${safeRef}')">
             </div>
             ${noDataHint}
           </div>
@@ -109,8 +160,8 @@ const PROFIL = (() => {
           <div class="modal-head">
             <div>
               <div class="modal-eyebrow">Mein Profil</div>
-              <div class="modal-title">${escapeHtml(state.user.name || state.user.benutzername || '')}</div>
-              <div class="modal-sub">${escapeHtml(state.user.rolle || '')}</div>
+              <div class="modal-title">${escapeHtml(displayName)}</div>
+              <div class="modal-sub">${escapeHtml(displayRolle)}</div>
             </div>
             <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
           </div>
@@ -133,6 +184,11 @@ const PROFIL = (() => {
   function _onModusChange(ref, val) {
     const wrap = document.getElementById('profil-manual-' + ref);
     if (wrap) wrap.style.display = val === 'manual' ? '' : 'none';
+    _updatePaceChip(ref);
+  }
+
+  function _onManualInput(ref) {
+    _updatePaceChip(ref);
   }
 
   function _parseZeit(s) {
@@ -155,6 +211,7 @@ const PROFIL = (() => {
       if (modus === 'manual') {
         const inp = document.getElementById('profil-manual-input-' + ref);
         manualSek = inp ? _parseZeit(inp.value) : null;
+        // Leere Eingabe ist erlaubt → manualSek bleibt null
       }
       newPrefs[ref] = { modus, manual_sek: manualSek };
     }
@@ -179,5 +236,5 @@ const PROFIL = (() => {
     setTimeout(() => div.remove(), 3500);
   }
 
-  return { open, speichern, _onModusChange };
+  return { open, speichern, _onModusChange, _onManualInput };
 })();
