@@ -1,5 +1,8 @@
 # Changelog
 
+## v52
+- Fix: Pace-Warnhinweis erscheint jetzt korrekt, wenn Segmente Pace-Referenzen enthalten, die nicht konfiguriert sind (prüft `paceSekProKm` statt `!paceData`)
+
 ## v51
 - Fix: Pausenblock nach der letzten Wiederholung eines Segments wird jetzt ebenfalls angezeigt
 

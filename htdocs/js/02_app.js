@@ -372,8 +372,11 @@ async function ladHeuteDetails(items) {
         paceData = await PACE.load();
       }
 
+      const hatUnresolvedPace = state.user && hatPaceRef &&
+        seg.filter(s => s.pace_referenz).some(s => PACE.paceSekProKm(paceData, s.pace_referenz) == null);
+
       let html = '';
-      if (state.user && hatPaceRef && !paceData) {
+      if (hatUnresolvedPace) {
         html += `<div class="heute-pace-warn">
           Persönliche Pace noch nicht konfiguriert –
           <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
