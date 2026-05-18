@@ -37,17 +37,24 @@ const EDITOR = (() => {
     { value: 'frei', label: '— frei —' },
   ];
 
-  function open(opts) {
+  async function open(opts) {
     // opts: { datum?, einheit?, segmente? }
     const ist_neu = !opts.einheit;
     const e = opts.einheit || {
       id: null, datum: opts.datum || ymd(new Date()),
       uhrzeit: '', typ: 'intervall', titel: '',
-      treffpunkt: 'Sportplatz', bemerkung: '',
+      treffpunkt: null, bemerkung: '',
       sichtbarkeit: 'oeffentlich', status: 'geplant',
     };
     currentId = e.id;
     currentSegmente = (opts.segmente || []).map(s => ({...s}));
+
+    // Treffpunkte für Dropdown laden
+    let tpListe = [];
+    try { tpListe = await TREFFPUNKTE.laden(); } catch (_) {}
+    const curTpId = e.treffpunkt ? e.treffpunkt.id : null;
+    const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
+      tpListe.map(t => `<option value="${t.id}"${t.id === curTpId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
 
     const cont = document.getElementById('modal-container');
     cont.innerHTML = `
@@ -87,7 +94,7 @@ const EDITOR = (() => {
               </div>
               <div class="ed-fg">
                 <label>Treffpunkt</label>
-                <input type="text" id="ed-treffpunkt" value="${escapeHtml(e.treffpunkt || '')}">
+                <select id="ed-treffpunkt-id">${tpOptionen}</select>
               </div>
               <div class="ed-fg">
                 <label>Status</label>
@@ -210,16 +217,17 @@ const EDITOR = (() => {
   }
 
   async function speichern() {
+    const tpIdStr = val('ed-treffpunkt-id');
     const payload = {
-      datum:        val('ed-datum'),
-      uhrzeit:      val('ed-uhrzeit') || null,
-      typ:          val('ed-typ'),
-      titel:        val('ed-titel'),
-      treffpunkt:   val('ed-treffpunkt') || null,
-      bemerkung:    val('ed-bemerkung') || null,
-      sichtbarkeit: val('ed-sichtbarkeit'),
-      status:       val('ed-status'),
-      segmente:     currentSegmente,
+      datum:          val('ed-datum'),
+      uhrzeit:        val('ed-uhrzeit') || null,
+      typ:            val('ed-typ'),
+      titel:          val('ed-titel'),
+      treffpunkt_id:  tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
+      bemerkung:      val('ed-bemerkung') || null,
+      sichtbarkeit:   val('ed-sichtbarkeit'),
+      status:         val('ed-status'),
+      segmente:       currentSegmente,
     };
     if (!payload.datum)  { benachrichtigen('Datum fehlt.', 'err'); return; }
     if (!payload.titel)  { benachrichtigen('Titel fehlt.', 'err'); return; }

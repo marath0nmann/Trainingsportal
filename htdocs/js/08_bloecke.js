@@ -139,7 +139,6 @@ const BLOECKE = (() => {
           ${segBadge}
         </div>
         <div class="block-titel">${escapeHtml(b.titel)}</div>
-        ${b.treffpunkt ? `<div class="block-treffpunkt">📍 ${escapeHtml(b.treffpunkt)}</div>` : ''}
         ${b.bemerkung  ? `<div class="block-bemerkung">${escapeHtml(b.bemerkung)}</div>`   : ''}
         <div class="block-card-actions">
           <button class="btn btn-primary btn-sm" onclick="BLOECKE.anwenden(${b.id})">Im Kalender planen</button>
@@ -151,15 +150,20 @@ const BLOECKE = (() => {
   // ── Block auf Kalender anwenden ───────────────────────────
   // datum: optionales ISO-Datum (YYYY-MM-DD), z. B. vom Planung-DnD gesetzt
   async function anwenden(blockId, datum) {
-    let blockData;
+    let blockData, tpListe;
     try {
-      blockData = await apiGet(`bloecke/${blockId}`, { silent: true });
+      [blockData, tpListe] = await Promise.all([
+        apiGet(`bloecke/${blockId}`, { silent: true }),
+        TREFFPUNKTE.laden(),
+      ]);
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
       return;
     }
     const b = blockData.block;
     const heute = datum || ymd(new Date());
+    const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
+      tpListe.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
     const cont = document.getElementById('modal-container');
 
     cont.innerHTML = `
@@ -184,7 +188,7 @@ const BLOECKE = (() => {
               </div>
               <div class="ed-fg">
                 <label>Treffpunkt</label>
-                <input type="text" id="apply-treffpunkt" value="${escapeHtml(b.treffpunkt || '')}">
+                <select id="apply-treffpunkt-id">${tpOptionen}</select>
               </div>
               <div class="ed-fg">
                 <label>Sichtbarkeit</label>
@@ -209,11 +213,12 @@ const BLOECKE = (() => {
   async function anwendenSpeichern(blockId) {
     const datum = val('apply-datum');
     if (!datum) { notify('Datum fehlt.', 'err'); return; }
+    const tpIdStr = val('apply-treffpunkt-id');
     const payload = {
       datum,
-      uhrzeit:      val('apply-uhrzeit') || null,
-      treffpunkt:   val('apply-treffpunkt') || null,
-      sichtbarkeit: val('apply-sichtbarkeit'),
+      uhrzeit:       val('apply-uhrzeit') || null,
+      treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
+      sichtbarkeit:  val('apply-sichtbarkeit'),
     };
     try {
       await apiPost(`bloecke/${blockId}/apply`, payload);
@@ -275,7 +280,7 @@ const BLOECKE = (() => {
 
     const b = block || {
       id: null, titel: '', typ: 'intervall',
-      treffpunkt: 'Sportplatz', bemerkung: '', sichtbarkeit: 'global',
+      bemerkung: '', sichtbarkeit: 'global',
     };
     // Globale Pause-Typ / Pace-Referenz aus erstem Segment lesen
     const initPauseTyp = editorSegmente.length ? (editorSegmente[0].pause_typ || 'TP') : 'TP';
@@ -309,10 +314,6 @@ const BLOECKE = (() => {
                   <option value="global"${b.sichtbarkeit === 'global' ? ' selected' : ''}>Global (für alle Trainer sichtbar)</option>
                   <option value="privat"${b.sichtbarkeit === 'privat' ? ' selected' : ''}>Privat (nur ich)</option>
                 </select>
-              </div>
-              <div class="ed-fg">
-                <label>Treffpunkt</label>
-                <input type="text" id="be-treffpunkt" value="${escapeHtml(b.treffpunkt || '')}">
               </div>
               <div class="ed-fg ed-fg-wide">
                 <label>Bemerkung</label>
@@ -450,7 +451,6 @@ const BLOECKE = (() => {
     const payload = {
       titel:        val('be-titel'),
       typ:          val('be-typ'),
-      treffpunkt:   val('be-treffpunkt') || null,
       bemerkung:    val('be-bemerkung') || null,
       sichtbarkeit: val('be-sichtbarkeit'),
       segmente:     editorSegmente.map(s => ({ ...s, pause_typ: pauseTyp, pace_referenz: paceRef })),
