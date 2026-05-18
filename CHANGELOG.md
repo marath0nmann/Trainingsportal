@@ -1,6 +1,7 @@
 # Changelog
 
 ## v60
+- Komoot-Streckenvorschau: iFrame-Embed direkt im Kalender-Modal, in der Heute-Sektion und im Block-Editor (live beim Tippen); Tour-ID wird aus der eingetragenen URL automatisch extrahiert (unterstützt alle Komoot-URL-Formate inkl. Share-Token und Länderprefix)
 - Planung: Trainingsblöcke-Sidebar auf die linke Seite verschoben
 - Planung: Seite scrollt nicht mehr (Layout füllt Viewport; Sidebar scrollt intern)
 - Planung: Hover auf Kalender-Eintrag zeigt Popover mit Typ, Titel, Uhrzeit, Treffpunkt, Bemerkung und Segmenten

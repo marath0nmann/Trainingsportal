@@ -385,6 +385,13 @@ async function ladHeuteDetails(items) {
       if (seg.length) {
         html += renderSegmentBlocksHtml(seg, paceData, einheit.typ);
       }
+      if (einheit.komoot_url) {
+        const embedUrl = komootEmbedUrl(einheit.komoot_url);
+        if (embedUrl) {
+          html += `<div class="komoot-embed" style="margin-top:10px"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>`;
+        }
+        html += `<div style="margin-top:4px"><a class="tp-link tp-link-komoot" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a></div>`;
+      }
 
       const actions = [];
       if (seg.length) {
@@ -513,7 +520,15 @@ async function zeigeEinheit(id) {
               ${e.treffpunkt.maps_apple  ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_apple)}"  target="_blank" rel="noopener" title="Apple Maps öffnen">Apple Maps</a>`  : ''}
               ${e.treffpunkt.maps_komoot ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_komoot)}" target="_blank" rel="noopener" title="In Komoot öffnen">Komoot</a>` : ''}
             </span></div>` : ''}
-            ${e.komoot_url ? `<div class="modal-row"><span class="modal-label">Strecke</span><span><a class="tp-link tp-link-komoot" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Komoot-Strecke öffnen</a></span></div>` : ''}
+            ${(() => {
+              if (!e.komoot_url) return '';
+              const embedUrl = komootEmbedUrl(e.komoot_url);
+              return `<div class="modal-row modal-row-block">
+                <span class="modal-label">Strecke</span>
+                ${embedUrl ? `<div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>` : ''}
+                <a class="tp-link tp-link-komoot" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a>
+              </div>`;
+            })()}
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
             ${e.sichtbarkeit === 'intern' ? `<div class="modal-row"><span class="modal-label">Sichtbarkeit</span><span>Nur intern</span></div>` : ''}
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
@@ -533,6 +548,14 @@ async function zeigeEinheit(id) {
 function schliesseModal(ev) {
   if (ev && ev.target && !ev.target.classList.contains('modal-overlay')) return;
   document.getElementById('modal-container').innerHTML = '';
+}
+
+// Extrahiert die Tour-ID aus einer Komoot-URL und gibt die Embed-URL zurück.
+// Unterstützt: komoot.com/tour/ID, komoot.com/de-de/tour/ID, etc.
+function komootEmbedUrl(url) {
+  if (!url) return null;
+  const m = String(url).match(/\/tour\/(\d+)/);
+  return m ? 'https://www.komoot.com/tour/' + m[1] + '/embed?profile=1' : null;
 }
 
 function escapeHtml(s) {
