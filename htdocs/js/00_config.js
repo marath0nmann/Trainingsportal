@@ -72,6 +72,34 @@ function _updateBodyThemeColor() {
   if (metaTheme) metaTheme.setAttribute('content', color);
 }
 
+// ── Dynamische Typ-Farben per <style>-Tag injizieren ───────
+function applyTypenFarben(typen) {
+  var el = document.getElementById('typen-farben-style');
+  if (!el) {
+    el = document.createElement('style');
+    el.id = 'typen-farben-style';
+    document.head.appendChild(el);
+  }
+  if (!Array.isArray(typen) || !typen.length) { el.textContent = ''; return; }
+  var css = typen.map(function(t) {
+    if (!t.farbe) return '';
+    var slug = t.slug.replace(/[^a-z0-9_-]/g, '_');
+    var f    = t.farbe;
+    return [
+      // Block-Karte (Blöcke-Seite): farbiger Balken oben
+      '.block-typ-' + slug + ' { border-top-color: ' + f + ' !important; }',
+      // Gruppen-Titel (Blöcke-Seite): farbiger linker Balken + Textfarbe
+      '.bloecke-gruppe-typ.block-typ-' + slug + ' { border-left-color: ' + f + '; color: ' + f + '; }',
+      // Kalender-Einheiten (linker Balken)
+      '.einheit-typ-' + slug + ' { border-left-color: ' + f + ' !important; }',
+      // Planung-Sidebar: Gruppen-Titel (unterer Balken) + Karte (linker Balken)
+      '.pblock-gruppe-titel.block-typ-' + slug + ' { border-bottom-color: ' + f + ' !important; }',
+      '.pblock-card.block-typ-' + slug + ' { border-left-color: ' + f + ' !important; }',
+    ].join('\n');
+  }).join('\n');
+  el.textContent = css;
+}
+
 // ── Hauptlogik ─────────────────────────────────────────────
 function applyConfig(cfg) {
   appConfig = cfg || {};
@@ -143,6 +171,9 @@ function applyConfig(cfg) {
       img.style.display = 'none';
     }
   });
+
+  // Typ-Farben dynamisch als CSS injizieren
+  applyTypenFarben(cfg.typen || []);
 }
 
 // ── Asset-URL aus Statistikportal-uploads über shared.php ──
