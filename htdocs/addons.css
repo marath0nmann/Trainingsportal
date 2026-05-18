@@ -850,7 +850,6 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   border-radius: 10px; overflow: hidden; display: flex; flex-direction: column;
 }
 .tp-karte-map { width: 100%; height: 160px; overflow: hidden; flex-shrink: 0; }
-.tp-karte-map iframe { width: 100%; height: 100%; border: none; display: block; }
 .tp-karte-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .tp-karte-name {
   font-family: 'Barlow Condensed', sans-serif;
