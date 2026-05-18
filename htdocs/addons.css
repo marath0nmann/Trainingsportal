@@ -1148,5 +1148,23 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .ed-komoot-preview { margin-top: 8px; }
 .ed-komoot-preview .komoot-embed iframe { height: 480px; }
 
-/* Komoot-Embed reagiert nativ auf prefers-color-scheme – kein CSS-Filter nötig */
+/*
+ * Komoot-Embed im App-Darkmode:
+ * Komoot liest prefers-color-scheme vom OS, nicht von data-theme.
+ * → Filter nur wenn App dunkel ist UND OS hell (Komoot rendert dann hell).
+ * → Wenn OS dunkel ist, schaltet Komoot selbst – kein Filter.
+ */
+[data-theme="dark"] .komoot-embed iframe,
+[data-theme="dark"] .heute-card-komoot iframe,
+[data-theme="dark"] .ed-komoot-preview iframe {
+  filter: invert(1) hue-rotate(180deg);
+}
+@media (prefers-color-scheme: dark) {
+  /* OS dunkel → Komoot bereits dunkel → Filter zurücksetzen */
+  [data-theme="dark"] .komoot-embed iframe,
+  [data-theme="dark"] .heute-card-komoot iframe,
+  [data-theme="dark"] .ed-komoot-preview iframe {
+    filter: none;
+  }
+}
 
