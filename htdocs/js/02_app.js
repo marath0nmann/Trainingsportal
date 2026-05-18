@@ -262,7 +262,10 @@ async function renderKalender(main, monthArg) {
     ? (byDate[todayKey] || []).filter(e => e.typ !== 'kein_training')
     : [];
   const heuteEl = document.getElementById('heute-sektion');
-  if (heuteEl) heuteEl.innerHTML = todayItems.length ? renderHeuteSektionHtml(todayItems) : '';
+  if (heuteEl) {
+    heuteEl.innerHTML = todayItems.length ? renderHeuteSektionHtml(todayItems) : '';
+    if (todayItems.length) ladHeuteDetails(todayItems);
+  }
 
   // Feiertage über Datum spreizen (mehrtägige Ferien)
   const feiertageByDate = {};
@@ -334,21 +337,83 @@ function renderHeuteSektionHtml(items) {
     const zeitStr = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
     const abgesagt = e.status === 'abgesagt';
     const intern = e.sichtbarkeit === 'intern';
+    const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : null;
     return `
-      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}"
-           onclick="zeigeEinheit(${e.id})" role="button" tabindex="0">
+      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}">
         <div class="heute-card-eyebrow">
           <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
           ${abgesagt ? '<span class="heute-badge heute-badge-abgesagt">Abgesagt</span>' : ''}
           ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
         </div>
         <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-        ${e.treffpunkt ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(e.treffpunkt.name || '')}</div>` : ''}
-        ${e.bemerkung  ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
-        <div class="heute-card-link">Details &amp; Segmente anzeigen →</div>
+        ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
+        ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+        <div id="heute-segs-${e.id}"></div>
       </div>`;
   }).join('');
   return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
+}
+
+async function ladHeuteDetails(items) {
+  if (!state._heuteEinheiten) state._heuteEinheiten = {};
+  let paceData = null;
+
+  for (const item of items) {
+    const areaEl = document.getElementById(`heute-segs-${item.id}`);
+    if (!areaEl) continue;
+    try {
+      const data = await apiGet(`einheiten/${item.id}`, { silent: true });
+      const seg     = data.segmente || [];
+      const einheit = data.einheit;
+      state._heuteEinheiten[einheit.id] = { einheit, segmente: seg };
+
+      const hatPaceRef = seg.some(s => s.pace_referenz);
+      if (state.user && hatPaceRef && !paceData) {
+        paceData = await PACE.load();
+      }
+
+      let html = '';
+      if (seg.length) {
+        const segItems = seg.map((s, i) => {
+          const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
+          const splitSek = paceData ? PACE.splitzeit(s, paceData) : null;
+          const paceBox  = sekProKm != null ? `
+            <div class="seg-pace-info">
+              <div class="seg-split">${PACE.formatTime(splitSek)}<span class="seg-split-unit">/Wdh</span></div>
+              <div class="seg-pace-pace">${PACE.formatPace(sekProKm)}</div>
+            </div>` : '';
+          return `
+            <div class="seg-item">
+              <div class="seg-num">${i + 1}</div>
+              <div class="seg-main">${escapeHtml(PARSER.formatSegment(s))}</div>
+              ${s.pace_referenz ? `<div class="seg-pace">${escapeHtml(s.pace_referenz)}</div>` : ''}
+              ${paceBox}
+            </div>`;
+        }).join('');
+        html += `<div class="seg-list heute-seg-list">${segItems}</div>`;
+      }
+
+      const actions = [];
+      if (seg.length) {
+        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
+      }
+      if (state.user) {
+        actions.push(`<button class="btn btn-ghost btn-sm" onclick="bearbeiteHeuteEinheit(${einheit.id})">Bearbeiten</button>`);
+      }
+      if (actions.length) {
+        html += `<div class="heute-card-actions">${actions.join('')}</div>`;
+      }
+
+      areaEl.innerHTML = html;
+    } catch (_) {
+      // Segmente bleiben leer bei Fehler
+    }
+  }
+}
+
+function bearbeiteHeuteEinheit(id) {
+  const data = state._heuteEinheiten && state._heuteEinheiten[id];
+  if (data) EDITOR.open(data);
 }
 
 function navigateKalender(monthYM) {
