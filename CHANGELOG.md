@@ -1,7 +1,7 @@
 # Changelog
 
-## v65
-- Fix: Komoot-Embed CSS-Filter entfernt – Komoot unterstützt `prefers-color-scheme` nativ, kein doppeltes Invertieren mehr
+## v66
+- Komoot-Embed Darkmode: Filter `invert+hue-rotate` nur wenn App dunkel ist aber OS hell (Komoot rendert dann hell); bei dunklem OS übernimmt Komoot selbst
 
 ## v56
 - „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
