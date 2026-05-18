@@ -734,7 +734,7 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   color: var(--text2); font-size: 16px; line-height: 1;
   flex-shrink: 0; opacity: .5; letter-spacing: -1px;
 }
-.pblock-info { flex: 1; min-width: 0; }
+.pblock-info { flex: 1; min-width: 0; text-align: left; }
 .pblock-titel {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700; font-size: 15px; letter-spacing: .2px;
