@@ -500,10 +500,19 @@ const SETTINGS = (() => {
       return;
     }
 
+    // Compute CSS fallback colors once (temporarily hide injected overrides)
+    const cssDefaults = {};
+    const _styleEl = document.getElementById('typen-farben-style');
+    const _savedStyle = _styleEl ? _styleEl.textContent : '';
+    if (_styleEl) _styleEl.textContent = '';
+    typen.forEach(function(t) { cssDefaults[t.slug] = getTypDefaultFarbe(t.slug) || '#888888'; });
+    if (_styleEl) _styleEl.textContent = _savedStyle;
+
     const zeilen = typen.map((t, i) => {
       const bearbeite = typenBearbeitet === t.slug;
       const gesperrt  = t.block_count > 0;
       const inaktivStil = !t.aktiv ? 'opacity:0.5;' : '';
+      const defaultFarbe = cssDefaults[t.slug];
 
       if (bearbeite) {
         return `
@@ -512,9 +521,19 @@ const SETTINGS = (() => {
               <input type="text" id="typ-bez-${i}" value="${escapeHtml(t.bezeichnung)}"
                 class="settings-input" style="width:100%;min-width:120px">
             </td>
-            <td style="padding:6px 4px;text-align:center">
-              <input type="color" id="typ-farbe-${i}" value="${escapeHtml(t.farbe || '#888888')}"
-                style="width:36px;height:32px;border:none;background:none;cursor:pointer;padding:0">
+            <td style="padding:6px 4px">
+              <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+                  <input type="checkbox" id="typ-farbe-aktiv-${i}" ${t.farbe ? 'checked' : ''}>
+                  Eigene Farbe:
+                  <input type="color" id="typ-farbe-${i}" value="${escapeHtml(t.farbe || defaultFarbe)}"
+                    style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0">
+                </label>
+                <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);white-space:nowrap;padding-left:2px">
+                  <span style="display:inline-block;width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${escapeHtml(defaultFarbe)};border:1px solid var(--border)"></span>
+                  CSS-Standard: <code style="font-size:10px">${escapeHtml(defaultFarbe)}</code>
+                </div>
+              </div>
             </td>
             <td style="padding:6px 4px;text-align:center">
               <input type="number" id="typ-reihenfolge-${i}" value="${t.reihenfolge}"
@@ -532,10 +551,16 @@ const SETTINGS = (() => {
           </tr>`;
       }
 
+      // View row: show custom color or CSS default (dashed border = CSS fallback)
+      const swatchFarbe = t.farbe || defaultFarbe;
+      const swatchStyle = t.farbe
+        ? `background:${escapeHtml(swatchFarbe)}`
+        : `background:${escapeHtml(swatchFarbe)};border:1.5px dashed var(--border)`;
+
       return `
         <tr style="${inaktivStil}">
           <td style="padding:6px 8px;font-weight:600">
-            ${t.farbe ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeHtml(t.farbe)};margin-right:6px;vertical-align:middle"></span>` : ''}
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;${swatchStyle};margin-right:6px;vertical-align:middle"></span>
             ${escapeHtml(t.bezeichnung)}
             <code style="font-size:11px;color:var(--text2);margin-left:6px">${escapeHtml(t.slug)}</code>
           </td>
@@ -579,7 +604,8 @@ const SETTINGS = (() => {
   async function typSpeichern(slug, idx) {
     const bez = (document.getElementById(`typ-bez-${idx}`)?.value || '').trim();
     if (!bez) { benachrichtigen('Bezeichnung darf nicht leer sein.', 'err'); return; }
-    const farbe       = document.getElementById(`typ-farbe-${idx}`)?.value || null;
+    const farbeAktiv  = document.getElementById(`typ-farbe-aktiv-${idx}`)?.checked;
+    const farbe       = farbeAktiv ? (document.getElementById(`typ-farbe-${idx}`)?.value || null) : null;
     const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
     const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
     try {

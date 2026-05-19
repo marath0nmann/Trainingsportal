@@ -1,11 +1,14 @@
 # Changelog
 
 ## v68
+<<<<<<< HEAD
 - Fix: Typ-Farben aus den Einstellungen werden jetzt überall angewendet – applyTypenFarben() injiziert dynamisch CSS fuer Block-Karten, Bloecke-Gruppen-Titel, Kalender-Einheiten und Planung-Karten
 - CSS: .bloecke-gruppe-titel mit .bloecke-gruppe-typ-Badge und .bloecke-gruppe-count-Chip
 
 
 ## v67
+=======
+>>>>>>> 786d883 (fix(typen): Farbsystem vollständig implementiert + Reset auf CSS-Standard)
 - Fix: Planung-Seite ohne Scrollbalken – Layout via `body.planung-active` (Flex-Spalte 100vh), statt fragiler `calc(100vh - 76px)`; Footer und Main-Padding werden korrekt neutralisiert
 
 ## v66
