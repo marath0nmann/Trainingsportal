@@ -523,13 +523,15 @@ const SETTINGS = (() => {
             </td>
             <td style="padding:6px 4px">
               <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">
-                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
-                  <input type="checkbox" id="typ-farbe-aktiv-${i}" ${t.farbe ? 'checked' : ''}>
-                  Eigene Farbe:
+                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+                  <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+                    <input type="checkbox" id="typ-farbe-aktiv-${i}" ${t.farbe ? 'checked' : ''}>
+                    Eigene Farbe
+                  </label>
                   <input type="color" id="typ-farbe-${i}" value="${escapeHtml(t.farbe || defaultFarbe)}"
                     style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0">
-                </label>
-                <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);white-space:nowrap;padding-left:2px">
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);white-space:nowrap">
                   <span style="display:inline-block;width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${escapeHtml(defaultFarbe)};border:1px solid var(--border)"></span>
                   CSS-Standard: <code style="font-size:10px">${escapeHtml(defaultFarbe)}</code>
                 </div>

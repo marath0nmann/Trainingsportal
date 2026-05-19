@@ -78,7 +78,7 @@ function _updateBodyThemeColor() {
 function getTypDefaultFarbe(slug) {
   var el = document.createElement('div');
   el.className = 'kal-item kal-typ-' + slug;
-  el.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;border-left:4px solid transparent';
+  el.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;border-left-width:4px;border-left-style:solid';
   document.body.appendChild(el);
   var rgb = getComputedStyle(el).borderLeftColor;
   document.body.removeChild(el);
