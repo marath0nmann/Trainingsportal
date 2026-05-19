@@ -943,19 +943,35 @@ body.planung-active #app-footer    { display: none; }
   font-size: 11px; color: var(--text2);
 }
 
-/* ── Kalender-Spalte (links, scrollbar bei Bedarf) ── */
+/* ── Kalender-Spalte (links) – Grid füllt exakt die Höhe, kein Scroll ── */
 .planung-kal-col {
   flex: 1 1 0; min-width: 0;
-  height: 100%; overflow-y: auto;
-  padding: 16px 20px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  height: 100%;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.planung-kal-col::-webkit-scrollbar { width: 5px; }
-.planung-kal-col::-webkit-scrollbar-track { background: transparent; }
-.planung-kal-col::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .planung-kal-toolbar {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+  flex-shrink: 0;
+}
+/* Grid füllt den verbleibenden Platz, Zeilen teilen sich die Höhe gleichmäßig */
+.planung-kal-col .kal-grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.planung-kal-col .kal-row {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.planung-kal-col .kal-cell {
+  min-height: 0;
+}
+.planung-kal-col .kal-cell-items {
+  overflow: hidden;
 }
 .planung-kal-title {
   font-family: 'Barlow Condensed', sans-serif;
