@@ -1,6 +1,6 @@
 # Changelog
 
-## v71
+## v72
 - Planung-Kalender: Grid füllt exakt die verfügbare Höhe – die 4–6 Wochenzeilen teilen sich den Platz gleichmäßig (flex statt fixer 120px-Zellen); passt jetzt immer komplett ins Bild ohne Scroll
 
 ## v70
