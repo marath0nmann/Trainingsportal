@@ -1,6 +1,6 @@
 # Changelog
 
-## v69
+## v70
 - Fix: Planung kein Seiten-Scroll – Layout-Lock via JS `style.setProperty(..., 'important')` direkt auf body/#app-screen/#main-content; schlägt zuverlässig jedes shared-CSS `!important`
 
 ## v68
