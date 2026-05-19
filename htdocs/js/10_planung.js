@@ -132,6 +132,51 @@ const KAL_POPOVER = (() => {
 const PLANUNG = (() => {
   let kalMonth = null;
 
+  // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
+  function _applyPlanungLayout() {
+    // Inline-Styles mit !important überschreiben shared.php CSS zuverlässig
+    document.body.style.setProperty('overflow', 'hidden', 'important');
+
+    const screen = document.getElementById('app-screen');
+    if (screen) {
+      screen.style.setProperty('display',        'flex',    'important');
+      screen.style.setProperty('flex-direction', 'column',  'important');
+      screen.style.setProperty('height',         '100vh',   'important');
+      screen.style.setProperty('overflow',       'hidden',  'important');
+    }
+
+    const main = document.getElementById('main-content');
+    if (main) {
+      main.style.setProperty('flex',       '1',       'important');
+      main.style.setProperty('min-height', '0',       'important');
+      main.style.setProperty('overflow',   'hidden',  'important');
+      main.style.setProperty('padding',    '0',       'important');
+    }
+
+    const footer = document.getElementById('app-footer');
+    if (footer) footer.style.setProperty('display', 'none', 'important');
+  }
+
+  function _clearPlanungLayout() {
+    document.body.style.removeProperty('overflow');
+    const screen = document.getElementById('app-screen');
+    if (screen) {
+      screen.style.removeProperty('display');
+      screen.style.removeProperty('flex-direction');
+      screen.style.removeProperty('height');
+      screen.style.removeProperty('overflow');
+    }
+    const main = document.getElementById('main-content');
+    if (main) {
+      main.style.removeProperty('flex');
+      main.style.removeProperty('min-height');
+      main.style.removeProperty('overflow');
+      main.style.removeProperty('padding');
+    }
+    const footer = document.getElementById('app-footer');
+    if (footer) footer.style.removeProperty('display');
+  }
+
   // ── Einstieg ─────────────────────────────────────────────
   async function render(main) {
     if (!kalMonth) {
@@ -160,15 +205,17 @@ const PLANUNG = (() => {
         </div>
       </div>`;
 
-    // body.planung-active: App-Screen als Flex-Spalte → kein Seiten-Scroll
-    document.body.classList.add('planung-active');
-    const offPlanung = () => {
+    // Layout einfrieren: kein Seiten-Scroll, Wrap füllt genau den verbleibenden Raum
+    _applyPlanungLayout();
+    window.addEventListener('resize', _applyPlanungLayout);
+    const _offPlanung = () => {
       if (!(location.hash || '').startsWith('#planung')) {
-        document.body.classList.remove('planung-active');
-        window.removeEventListener('hashchange', offPlanung);
+        _clearPlanungLayout();
+        window.removeEventListener('resize', _applyPlanungLayout);
+        window.removeEventListener('hashchange', _offPlanung);
       }
     };
-    window.addEventListener('hashchange', offPlanung);
+    window.addEventListener('hashchange', _offPlanung);
 
     await Promise.all([renderKal(), ladeBlocke()]);
   }
