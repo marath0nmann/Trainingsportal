@@ -72,7 +72,27 @@ function _updateBodyThemeColor() {
   if (metaTheme) metaTheme.setAttribute('content', color);
 }
 
+// ── Typ-Fallback-Farbe aus CSS berechnen ───────────────────
+// Legt kurz ein unsichtbares Element mit der kal-typ-{slug}-Klasse an
+// und liest die computed border-left-color aus (→ CSS-Fallback-Wert).
+function getTypDefaultFarbe(slug) {
+  var el = document.createElement('div');
+  el.className = 'kal-item kal-typ-' + slug;
+  el.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;border-left:4px solid transparent';
+  document.body.appendChild(el);
+  var rgb = getComputedStyle(el).borderLeftColor;
+  document.body.removeChild(el);
+  var m = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  if (!m) return null;
+  return '#' + [m[1], m[2], m[3]].map(function(n) {
+    return parseInt(n, 10).toString(16).padStart(2, '0');
+  }).join('');
+}
+
 // ── Dynamische Typ-Farben per <style>-Tag injizieren ───────
+// Erzeugt .kal-typ-{slug}, .block-typ-{slug}, .liste-typ-{slug} etc.
+// mit der in training_typen.farbe gespeicherten Farbe.
+// Typen ohne farbe werden übersprungen → CSS-Fallback greift.
 function applyTypenFarben(typen) {
   var el = document.getElementById('typen-farben-style');
   if (!el) {
@@ -81,23 +101,25 @@ function applyTypenFarben(typen) {
     document.head.appendChild(el);
   }
   if (!Array.isArray(typen) || !typen.length) { el.textContent = ''; return; }
-  var css = typen.map(function(t) {
-    if (!t.farbe) return '';
-    var slug = t.slug.replace(/[^a-z0-9_-]/g, '_');
-    var f    = t.farbe;
-    return [
-      // Block-Karte (Blöcke-Seite): farbiger Balken oben
-      '.block-typ-' + slug + ' { border-top-color: ' + f + ' !important; }',
-      // Gruppen-Titel (Blöcke-Seite): farbiger linker Balken + Textfarbe
-      '.bloecke-gruppe-typ.block-typ-' + slug + ' { border-left-color: ' + f + '; color: ' + f + '; }',
-      // Kalender-Einheiten (linker Balken)
-      '.einheit-typ-' + slug + ' { border-left-color: ' + f + ' !important; }',
-      // Planung-Sidebar: Gruppen-Titel (unterer Balken) + Karte (linker Balken)
-      '.pblock-gruppe-titel.block-typ-' + slug + ' { border-bottom-color: ' + f + ' !important; }',
-      '.pblock-card.block-typ-' + slug + ' { border-left-color: ' + f + ' !important; }',
-    ].join('\n');
-  }).join('\n');
-  el.textContent = css;
+  var lines = [];
+  typen.forEach(function(t) {
+    if (!t.farbe) return;
+    var s = t.slug.replace(/[^a-z0-9_-]/g, '_');
+    var f = t.farbe;
+    // Kalender (Monat + Heute-Card + Hover-Popover + Listenansicht)
+    lines.push('.kal-item.kal-typ-'          + s + ' { border-left-color: '   + f + ' !important; }');
+    lines.push('.heute-card.kal-typ-'         + s + ' { border-left-color: '   + f + ' !important; }');
+    lines.push('.kal-pop-typ.kal-typ-'        + s + ' { color: '               + f + ' !important; }');
+    lines.push('.liste-row.kal-typ-'          + s + ' { border-left-color: '   + f + ' !important; }');
+    lines.push('.liste-typ-'                  + s + ' { background: color-mix(in srgb, ' + f + ' 14%, var(--surface)); color: ' + f + ' !important; }');
+    // Planung-Sidebar
+    lines.push('.pblock-gruppe-titel.block-typ-' + s + ' { border-bottom-color: ' + f + ' !important; }');
+    lines.push('.pblock-card.block-typ-'      + s + ' { border-left-color: '   + f + ' !important; }');
+    // Blöcke-Seite (Block-Karte oben + Gruppen-Titel)
+    lines.push('.block-typ-'                  + s + ' { border-top-color: '    + f + ' !important; }');
+    lines.push('.bloecke-gruppe-typ.block-typ-' + s + ' { border-left-color: ' + f + '; color: ' + f + '; }');
+  });
+  el.textContent = lines.join('\n');
 }
 
 // ── Hauptlogik ─────────────────────────────────────────────
@@ -172,7 +194,7 @@ function applyConfig(cfg) {
     }
   });
 
-  // Typ-Farben dynamisch als CSS injizieren
+  // ── Typ-Farben injizieren ──
   applyTypenFarben(cfg.typen || []);
 }
 
