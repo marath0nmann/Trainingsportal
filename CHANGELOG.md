@@ -1,9 +1,12 @@
 # Changelog
 
 ## v79
+- Kalender: heutiger Tag ohne farbige Zellhinterlegung – nur der Kreis um die Tageszahl bleibt farbig
+
+## v75
 - Pace-Warnung und Heute-Sektion innerhalb von `.kal-wrap` / `.liste-wrap` verschoben – gleiche Breite wie Kalender/Liste
 
-## v79
+## v74
 - Pace-Warnung „Persönliche Pace noch nicht konfiguriert" wird über der Heute-Sektion angezeigt, unabhängig vom heutigen Training; per-Einheit-Warnung entfernt
 - Fix: Link-Farbe in Warnhinweisen nutzt jetzt `color: inherit` – immer lesbar unabhängig von der Theme-Farbe
 

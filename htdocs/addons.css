@@ -54,7 +54,7 @@
 .kal-cell.out-month { background: var(--surf2); }
 .kal-cell.out-month .kal-day-num { color: var(--text2); opacity: .55; }
 .kal-cell.weekend { background: color-mix(in srgb, var(--accent) 3%, var(--surface)); }
-.kal-cell.is-today { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.kal-cell.is-today { background: var(--surface); }
 .kal-cell.is-today .kal-day-num {
   background: var(--primary); color: var(--on-primary);
   border-radius: 50%; width: 24px; height: 24px;
