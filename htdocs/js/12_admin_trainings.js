@@ -3,12 +3,13 @@
 // ============================================================
 
 const ADMIN_TRAININGS = (() => {
-  let einheiten  = [];
+  let einheiten   = [];
   let treffpunkte = [];
-  let sortKey    = 'datum';
-  let sortDir    = -1;     // -1 = DESC
-  let selected   = new Set();
-  let container  = null;
+  let sortKey     = 'datum';
+  let sortDir     = -1;     // -1 = DESC
+  let selected    = new Set();
+  let container   = null;
+  let filterTyp   = '';
 
   const TYP_LABEL = {
     intervall: 'Intervall', dauerlauf: 'Dauerlauf',
@@ -35,6 +36,7 @@ const ADMIN_TRAININGS = (() => {
       einheiten   = resp.einheiten || [];
       treffpunkte = await TREFFPUNKTE.laden().catch(() => []);
       selected.clear();
+      filterTyp = '';
       rendereTabelle();
     } catch (e) {
       if (container) {
@@ -53,8 +55,15 @@ const ADMIN_TRAININGS = (() => {
     rendereTabelle();
   }
 
+  function setFilter(val) {
+    filterTyp = val;
+    selected.clear();
+    rendereTabelle();
+  }
+
   function getSortiert() {
-    return [...einheiten].sort((a, b) => {
+    const basis = filterTyp ? einheiten.filter(e => e.typ === filterTyp) : einheiten;
+    return basis.slice().sort((a, b) => {
       let av = a[sortKey] ?? '';
       let bv = b[sortKey] ?? '';
       if (sortKey === 'datum') {
@@ -85,6 +94,7 @@ const ADMIN_TRAININGS = (() => {
       const chk      = selected.has(e.id) ? ' checked' : '';
       const d        = new Date(e.datum + 'T00:00:00');
       const datStr   = `${WOCHENTAG[d.getDay()]}, ${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+      const zeitStr  = e.uhrzeit ? e.uhrzeit.slice(0, 5) : '–';
       const abgesagt = e.status === 'abgesagt';
       const typLbl   = TYP_LABEL[e.typ] || e.typ;
       const rowHover = 'cursor:pointer';
@@ -99,13 +109,22 @@ const ADMIN_TRAININGS = (() => {
           <input type="checkbox" data-id="${e.id}"${chk} onchange="ADMIN_TRAININGS.toggle(${e.id})">
         </td>
         <td style="${tdClip}">${escapeHtml(datStr)}</td>
-        <td style="${tdClip}">${escapeHtml(e.uhrzeit || '–')}</td>
+        <td style="${tdClip}">${escapeHtml(zeitStr)}</td>
         <td style="${tdClip}"><span class="liste-typ-badge liste-typ-${escapeHtml(e.typ)}">${escapeHtml(typLbl)}</span></td>
         <td style="${tdClip}" title="${escapeHtml(e.titel)}">${escapeHtml(e.titel)}</td>
         <td style="${tdClip}">${escapeHtml(e.treffpunkt || '–')}</td>
         <td style="${tdClip};${statusSty}">${abgesagt ? 'Abgesagt' : 'Geplant'}</td>
       </tr>`;
     }).join('');
+
+    // ── Typ-Filter ───────────────────────────────────────────
+    const vorhandeneTypen = [...new Set(einheiten.map(e => e.typ))].sort();
+    const typFilterOptionen = vorhandeneTypen.map(t =>
+      `<option value="${t}"${filterTyp === t ? ' selected' : ''}>${escapeHtml(TYP_LABEL[t] || t)}</option>`
+    ).join('');
+    const filterAnzeige = filterTyp
+      ? `${data.length} von ${einheiten.length}`
+      : `${einheiten.length}`;
 
     // ── Aktionsleiste (nur wenn Auswahl vorhanden) ──────────
     const tpOptionen = treffpunkte.map(t =>
@@ -138,8 +157,15 @@ const ADMIN_TRAININGS = (() => {
     container.innerHTML = `
       <div class="panel">
         <div class="panel-header">
-          <div class="panel-title">Alle Trainings (${einheiten.length})</div>
-          <button class="btn btn-ghost btn-sm" onclick="ADMIN_TRAININGS.reload()" title="Liste neu laden">↻ Aktualisieren</button>
+          <div class="panel-title">Alle Trainings (${filterAnzeige})</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="settings-input" style="height:30px;font-size:13px;padding:2px 8px"
+              onchange="ADMIN_TRAININGS.setFilter(this.value)">
+              <option value="">Alle Typen</option>
+              ${typFilterOptionen}
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="ADMIN_TRAININGS.reload()" title="Liste neu laden">↻</button>
+          </div>
         </div>
         ${aktionsleiste}
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
@@ -268,5 +294,5 @@ const ADMIN_TRAININGS = (() => {
     setTimeout(() => d.remove(), 3500);
   }
 
-  return { render, sort, toggle, toggleAll, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
+  return { render, sort, setFilter, toggle, toggleAll, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
 })();
