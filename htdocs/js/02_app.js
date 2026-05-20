@@ -231,9 +231,9 @@ async function renderKalender(main, monthArg) {
   const todayKey = ymd(new Date());
 
   main.innerHTML = `
-    <div id="pace-warn-sektion"></div>
-    <div id="heute-sektion"></div>
     <div class="kal-wrap">
+      <div id="pace-warn-sektion"></div>
+      <div id="heute-sektion"></div>
       <div class="kal-toolbar">
         <div class="kal-nav">
           <button class="btn btn-ghost" onclick="navigateKalender('${ymd(prev).slice(0,7)}')" aria-label="Vorheriger Monat">‹</button>
@@ -578,9 +578,9 @@ async function renderListe(main, quarterArg) {
   const moKalStart = `${year}-${String((quarter - 1) * 3 + 1).padStart(2, '0')}`;
 
   main.innerHTML = `
-    <div id="pace-warn-sektion"></div>
-    <div id="heute-sektion"></div>
     <div class="liste-wrap">
+      <div id="pace-warn-sektion"></div>
+      <div id="heute-sektion"></div>
       <div class="liste-toolbar">
         <div class="liste-nav">
           <button class="btn btn-ghost" onclick="navigateListe('${prevQ}')" aria-label="Vorheriges Quartal">‹</button>
