@@ -485,9 +485,84 @@ async function ladHeuteDetails(items) {
   }
 }
 
-function bearbeiteHeuteEinheit(id) {
+async function bearbeiteHeuteEinheit(id) {
   const data = state._heuteEinheiten && state._heuteEinheiten[id];
-  if (data) EDITOR.open(data);
+  if (!data) return;
+
+  // Slim-Modal: nur Termin-Felder (Datum, Uhrzeit, Treffpunkt, Sichtbarkeit)
+  let tpListe = [];
+  try { tpListe = await TREFFPUNKTE.laden(); } catch (_) {}
+  const curTpId = data.treffpunkt ? data.treffpunkt.id : null;
+  const tpOptionen = '<option value="">— kein Treffpunkt —</option>' +
+    tpListe.map(t => '<option value="' + t.id + '"' + (t.id === curTpId ? ' selected' : '') + '>' + escapeHtml(t.name) + '</option>').join('');
+
+  const cont = document.getElementById('modal-container');
+  cont.innerHTML = '<div class="modal-overlay" onclick="schliesseModal(event)">' +
+    '<div class="modal-card" onclick="event.stopPropagation()">' +
+      '<div class="modal-head">' +
+        '<div>' +
+          '<div class="modal-eyebrow">Kalendereintrag bearbeiten</div>' +
+          '<div class="modal-title">' + escapeHtml(data.titel || '') + '</div>' +
+        '</div>' +
+        '<button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<div class="ed-grid">' +
+          '<div class="ed-fg">' +
+            '<label>Datum</label>' +
+            '<input type="date" id="hte-datum" value="' + escapeHtml(data.datum || '') + '">' +
+          '</div>' +
+          '<div class="ed-fg">' +
+            '<label>Uhrzeit</label>' +
+            '<input type="time" id="hte-uhrzeit" value="' + escapeHtml(data.uhrzeit || '') + '">' +
+          '</div>' +
+          '<div class="ed-fg">' +
+            '<label>Treffpunkt</label>' +
+            '<select id="hte-treffpunkt-id">' + tpOptionen + '</select>' +
+          '</div>' +
+          '<div class="ed-fg">' +
+            '<label>Sichtbarkeit</label>' +
+            '<select id="hte-sichtbarkeit">' +
+              '<option value="oeffentlich"' + (data.sichtbarkeit === 'oeffentlich' ? ' selected' : '') + '>Öffentlich</option>' +
+              '<option value="intern"' + (data.sichtbarkeit === 'intern' ? ' selected' : '') + '>Intern (nur eingeloggt)</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+        '<div class="ed-footer">' +
+          '<span></span>' +
+          '<div class="ed-footer-right">' +
+            '<button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>' +
+            '<button class="btn btn-primary" onclick="speichereHeuteTermin(' + id + ')">Speichern</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+async function speichereHeuteTermin(id) {
+  function val(elId) {
+    const el = document.getElementById(elId);
+    return el ? (el.value || '').trim() : '';
+  }
+  const tpIdStr = val('hte-treffpunkt-id');
+  const payload = {
+    treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
+    datum:         val('hte-datum'),
+    uhrzeit:       val('hte-uhrzeit') || null,
+    sichtbarkeit:  val('hte-sichtbarkeit'),
+  };
+  if (!payload.datum) { benachrichtigen('Datum fehlt.', 'err'); return; }
+  try {
+    await apiPut('einheiten/' + id, payload);
+    schliesseModal();
+    benachrichtigen('Gespeichert.', 'ok');
+    // Heute-Sektion neu laden
+    const containerId = 'heute-sektion';
+    await ladeHeuteSektionInto(containerId);
+  } catch (e) {
+    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+  }
 }
 
 // Segment-Blöcke (TrainingPeaks-Stil): jede Wiederholung als eigener Block
