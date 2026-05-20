@@ -1,13 +1,21 @@
 # Changelog
 
-## v60
-- Eingebauter Feiertags-Rechner: `builtin://feiertage/NRW` (und andere Bundesländer) berechnet gesetzliche Feiertage direkt in PHP – kein externer Dienst nötig
-- Beispiel-URL „Feiertage NRW" nutzt jetzt den eingebauten Rechner statt schulferien.org (das HTML statt ICS lieferte)
-- Fix: Erkennung wenn Server HTML statt ICS antwortet (Fehlermeldung im Diagnose-Tool)
-- Beispiel-URLs in Einstellungen auf neues schulferien.org-Format aktualisiert
-- Feiertage/Ferien werden jetzt auch im Planungskalender angezeigt (Farbmarkierung + Label)
-- ICS-Fetch: SSL-Fallback wenn Peer-Verifikation auf Server schlägt (Shared-Hosting-CA-Bundle)
-- Diagnose-Tool: zeigt jetzt Events-Gesamt + 3 Beispiel-Events pro Feed
+## v57
+- Heute-Sektion wird oberhalb der gesamten Kalender-/Listenansicht angezeigt (über Toolbar und Date-Picker)
+
+## v56
+- „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
+
+## v55
+- Heute-Sektion: zweispaltiges Layout – Trainingsinfos links, Komoot-Strecken-iFrame rechts (nur wenn Strecke hinterlegt); Komoot-Embed-URL auf `de-de`-Locale korrigiert; auf Mobile einspaltig gestapelt
+
+## v54
+- Heute-Sektion erscheint in Kalender- und Listenansicht gleichermaßen, unabhängig vom angezeigten Monat/Quartal (eigener API-Call für heute)
+
+## v53
+- Quartalsplan (Listenansicht): neue Ansicht `#liste/YYYY-QN` zeigt alle Einheiten eines Quartals nach Kalenderwochen gruppiert; Typ-Farbakzente, Heute-Markierung, Kein-Training-Styling; View-Toggle-Buttons in Kalender- und Listenansicht; auf Mobilgeräten ist Listenansicht Standard-Ansicht beim ersten Aufruf
+
+## v52
 - Fix: Pace-Warnhinweis erscheint jetzt korrekt, wenn Segmente Pace-Referenzen enthalten, die nicht konfiguriert sind (prüft `paceSekProKm` statt `!paceData`)
 
 ## v51
