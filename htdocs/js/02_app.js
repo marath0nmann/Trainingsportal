@@ -485,14 +485,14 @@ async function ladHeuteDetails(items) {
   }
 }
 
-async function bearbeiteHeuteEinheit(id) {
-  const data = state._heuteEinheiten && state._heuteEinheiten[id];
-  if (!data) return;
+async function oeffneTerminModal(einheit) {
+  if (!einheit) return;
+  const id = einheit.id;
 
   // Slim-Modal: nur Termin-Felder (Datum, Uhrzeit, Treffpunkt, Sichtbarkeit)
   let tpListe = [];
   try { tpListe = await TREFFPUNKTE.laden(); } catch (_) {}
-  const curTpId = data.treffpunkt ? data.treffpunkt.id : null;
+  const curTpId = einheit.treffpunkt ? einheit.treffpunkt.id : null;
   const tpOptionen = '<option value="">— kein Treffpunkt —</option>' +
     tpListe.map(t => '<option value="' + t.id + '"' + (t.id === curTpId ? ' selected' : '') + '>' + escapeHtml(t.name) + '</option>').join('');
 
@@ -502,7 +502,7 @@ async function bearbeiteHeuteEinheit(id) {
       '<div class="modal-head">' +
         '<div>' +
           '<div class="modal-eyebrow">Kalendereintrag bearbeiten</div>' +
-          '<div class="modal-title">' + escapeHtml(data.titel || '') + '</div>' +
+          '<div class="modal-title">' + escapeHtml(einheit.titel || '') + '</div>' +
         '</div>' +
         '<button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>' +
       '</div>' +
@@ -510,11 +510,11 @@ async function bearbeiteHeuteEinheit(id) {
         '<div class="ed-grid">' +
           '<div class="ed-fg">' +
             '<label>Datum</label>' +
-            '<input type="date" id="hte-datum" value="' + escapeHtml(data.datum || '') + '">' +
+            '<input type="date" id="hte-datum" value="' + escapeHtml(einheit.datum || '') + '">' +
           '</div>' +
           '<div class="ed-fg">' +
             '<label>Uhrzeit</label>' +
-            '<input type="time" id="hte-uhrzeit" value="' + escapeHtml(data.uhrzeit || '') + '">' +
+            '<input type="time" id="hte-uhrzeit" value="' + escapeHtml(einheit.uhrzeit || '') + '">' +
           '</div>' +
           '<div class="ed-fg">' +
             '<label>Treffpunkt</label>' +
@@ -523,8 +523,8 @@ async function bearbeiteHeuteEinheit(id) {
           '<div class="ed-fg">' +
             '<label>Sichtbarkeit</label>' +
             '<select id="hte-sichtbarkeit">' +
-              '<option value="oeffentlich"' + (data.sichtbarkeit === 'oeffentlich' ? ' selected' : '') + '>Öffentlich</option>' +
-              '<option value="intern"' + (data.sichtbarkeit === 'intern' ? ' selected' : '') + '>Intern (nur eingeloggt)</option>' +
+              '<option value="oeffentlich"' + (einheit.sichtbarkeit === 'oeffentlich' ? ' selected' : '') + '>Öffentlich</option>' +
+              '<option value="intern"' + (einheit.sichtbarkeit === 'intern' ? ' selected' : '') + '>Intern (nur eingeloggt)</option>' +
             '</select>' +
           '</div>' +
         '</div>' +
@@ -532,7 +532,7 @@ async function bearbeiteHeuteEinheit(id) {
           '<span></span>' +
           '<div class="ed-footer-right">' +
             '<button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>' +
-            '<button class="btn btn-primary" onclick="speichereHeuteTermin(' + id + ')">Speichern</button>' +
+            '<button class="btn btn-primary" onclick="speichereTermin(' + id + ')">Speichern</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -540,7 +540,12 @@ async function bearbeiteHeuteEinheit(id) {
   '</div>';
 }
 
-async function speichereHeuteTermin(id) {
+async function bearbeiteHeuteEinheit(id) {
+  const data = state._heuteEinheiten && state._heuteEinheiten[id];
+  await oeffneTerminModal(data);
+}
+
+async function speichereTermin(id) {
   function val(elId) {
     const el = document.getElementById(elId);
     return el ? (el.value || '').trim() : '';
@@ -557,9 +562,7 @@ async function speichereHeuteTermin(id) {
     await apiPut('einheiten/' + id, payload);
     schliesseModal();
     benachrichtigen('Gespeichert.', 'ok');
-    // Heute-Sektion neu laden
-    const containerId = 'heute-sektion';
-    await ladeHeuteSektionInto(containerId);
+    renderPage();
   } catch (e) {
     benachrichtigen('Fehler: ' + (e.message || ''), 'err');
   }
@@ -864,7 +867,7 @@ async function zeigeEinheit(id) {
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
               ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
-              ${state.user ? `<button class="btn btn-ghost" onclick="EDITOR.open(state._lastEinheit)">Bearbeiten</button>` : ''}
+              ${state.user ? `<button class="btn btn-ghost" onclick="oeffneTerminModal(state._lastEinheit)">Bearbeiten</button>` : ''}
             </div>
           </div>
         </div>
