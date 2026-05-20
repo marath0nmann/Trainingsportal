@@ -740,6 +740,40 @@ function handleAdmin(string $method, string $sub): void {
         return;
     }
 
+    // ── Mehrere Einheiten auf einmal ändern (Status / Treffpunkt) ──
+    if ($sub === 'einheiten/bulk_update' && $method === 'POST') {
+        $in  = readJsonBody();
+        $ids = array_values(array_filter(array_map('intval', $in['ids'] ?? []), fn($id) => $id > 0));
+        if (!$ids) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine gültigen IDs']);
+            return;
+        }
+        $sets   = [];
+        $params = [];
+        if (array_key_exists('status', $in) && in_array($in['status'] ?? '', ['geplant', 'abgesagt'], true)) {
+            $sets[]   = 'status = ?';
+            $params[] = $in['status'];
+        }
+        if (array_key_exists('treffpunkt_id', $in)) {
+            $sets[]   = 'treffpunkt_id = ?';
+            $params[]  = ($in['treffpunkt_id'] !== null && $in['treffpunkt_id'] !== '')
+                ? (int)$in['treffpunkt_id'] : null;
+        }
+        if (!$sets) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Nichts zu ändern']);
+            return;
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        DB::query(
+            'UPDATE ' . DB::tbl('training_einheiten') . ' SET ' . implode(', ', $sets) . ' WHERE id IN (' . $ph . ')',
+            array_merge($params, $ids)
+        );
+        echo json_encode(['ok' => true, 'geaendert' => count($ids)]);
+        return;
+    }
+
     // ── Mehrere Einheiten auf einmal löschen ──
     if ($sub === 'einheiten/bulk_delete' && $method === 'POST') {
         $in  = readJsonBody();
