@@ -96,7 +96,7 @@ function fillUserBadge() {
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
       ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
       ${isTrainer ? `<button onclick="navigate('treffpunkte')"${state.tab === 'treffpunkte' ? ' class="active"' : ''}>Treffpunkte</button>` : ''}
-      ${isAdmin ? `<button onclick="navigate('einstellungen')"${state.tab === 'einstellungen' ? ' class="active"' : ''}>Einstellungen</button>` : ''}`;
+      ${isAdmin ? `<button onclick="navigate('admin')"${state.tab === 'admin' ? ' class="active"' : ''}>Admin</button>` : ''}`;
   }
 }
 
@@ -148,7 +148,12 @@ function renderPage() {
     return;
   }
   if (state.tab === 'einstellungen') {
-    SETTINGS.render(main);
+    location.replace('#admin/einstellungen');
+    return;
+  }
+  if (state.tab === 'admin') {
+    if (!state.user || state.user.rolle !== 'admin') { location.replace('#kalender'); return; }
+    renderAdminPage(main, args && args[0]);
     return;
   }
 
@@ -175,6 +180,33 @@ function closeBurgerMenu() {
   const overlay = document.getElementById('mobile-nav-overlay');
   if (drawer)  { drawer.classList.remove('open'); drawer.style.visibility = 'hidden'; }
   if (overlay) overlay.classList.remove('open');
+}
+
+// ── Admin-Seite mit Sub-Navigation ──────────────────────────
+function renderAdminPage(main, subTab) {
+  const tab = subTab || 'einstellungen';
+
+  main.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;padding:16px">
+      <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:10px">
+        <button class="btn btn-ghost${tab === 'einstellungen' ? ' active' : ''}"
+          onclick="navigateAdmin('einstellungen')">Einstellungen</button>
+        <button class="btn btn-ghost${tab === 'trainings' ? ' active' : ''}"
+          onclick="navigateAdmin('trainings')">Trainings</button>
+      </div>
+      <div id="admin-content"></div>
+    </div>`;
+
+  const contentEl = document.getElementById('admin-content');
+  if (tab === 'trainings') {
+    ADMIN_TRAININGS.render(contentEl);
+  } else {
+    SETTINGS.render(contentEl);
+  }
+}
+
+function navigateAdmin(subTab) {
+  location.hash = '#admin/' + subTab;
 }
 
 // ============================================================

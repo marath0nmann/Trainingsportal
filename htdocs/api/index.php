@@ -707,6 +707,55 @@ function handleAdmin(string $method, string $sub): void {
         return;
     }
 
+    // ── Alle Einheiten (Admin-Liste, ohne Datumfilter) ──
+    if ($sub === 'einheiten' && $method === 'GET') {
+        $limit  = min(max(1, (int)($_GET['limit']  ?? 2000)), 5000);
+        $offset = max(0, (int)($_GET['offset'] ?? 0));
+        $total  = (int)(DB::fetchOne('SELECT COUNT(*) AS n FROM ' . DB::tbl('training_einheiten'))['n'] ?? 0);
+        $rows   = DB::fetchAll(
+            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.sichtbarkeit, e.status,
+                    t.name AS tp_name
+               FROM ' . DB::tbl('training_einheiten') . ' e
+               LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
+              ORDER BY e.datum DESC, e.uhrzeit DESC
+              LIMIT ? OFFSET ?',
+            [$limit, $offset]
+        );
+        echo json_encode([
+            'ok'        => true,
+            'einheiten' => array_map(fn($r) => [
+                'id'           => (int)$r['id'],
+                'datum'        => $r['datum'],
+                'uhrzeit'      => $r['uhrzeit'],
+                'typ'          => $r['typ'],
+                'titel'        => $r['titel'],
+                'sichtbarkeit' => $r['sichtbarkeit'],
+                'status'       => $r['status'],
+                'treffpunkt'   => $r['tp_name'],
+            ], $rows),
+            'total'  => $total,
+            'limit'  => $limit,
+            'offset' => $offset,
+        ]);
+        return;
+    }
+
+    // ── Mehrere Einheiten auf einmal löschen ──
+    if ($sub === 'einheiten/bulk_delete' && $method === 'POST') {
+        $in  = readJsonBody();
+        $ids = is_array($in['ids'] ?? null) ? $in['ids'] : [];
+        $ids = array_values(array_filter(array_map('intval', $ids), fn($id) => $id > 0));
+        if (!$ids) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine gültigen IDs']);
+            return;
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        DB::query('DELETE FROM ' . DB::tbl('training_einheiten') . ' WHERE id IN (' . $ph . ')', $ids);
+        echo json_encode(['ok' => true, 'geloescht' => count($ids)]);
+        return;
+    }
+
     if ($sub !== 'settings') {
         http_response_code(404);
         echo json_encode(['ok' => false, 'fehler' => 'Admin-Endpoint nicht gefunden']);
