@@ -416,6 +416,9 @@ async function ladHeuteDetails(items) {
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
       }
+      if (einheit.komoot_url) {
+        actions.push(`<a class="btn btn-ghost btn-sm" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>`);
+      }
       if (state.user) {
         actions.push(`<button class="btn btn-ghost btn-sm" onclick="bearbeiteHeuteEinheit(${einheit.id})">Bearbeiten</button>`);
       }
@@ -429,13 +432,10 @@ async function ladHeuteDetails(items) {
       const komootEl = document.getElementById(`heute-komoot-${einheit.id}`);
       if (komootEl && einheit.komoot_url) {
         const embedUrl = komootEmbedUrl(einheit.komoot_url);
-        let komootHtml = '';
         if (embedUrl) {
-          komootHtml += `<iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe>`;
+          komootEl.innerHTML = `<iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe>`;
+          komootEl.closest('.heute-card').classList.add('heute-card-split');
         }
-        komootHtml += `<a class="tp-link tp-link-komoot heute-komoot-link" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a>`;
-        komootEl.innerHTML = komootHtml;
-        komootEl.closest('.heute-card').classList.add('heute-card-split');
       }
     } catch (_) {
       // Segmente bleiben leer bei Fehler
@@ -479,19 +479,29 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
     }
   });
 
+  const PAUSE_LBL = { TP: 'Trabpause', GP: 'Gehpause', BP: 'Blockpause', frei: 'Pause' };
   const summaryHtml = seg.map(s => {
-    const wdh = s.wiederholungen || 1;
+    const wdh     = s.wiederholungen || 1;
     const distStr = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
-    let line = (wdh > 1 ? wdh + ' × ' : '') + distStr;
-    if (s.pause_m) {
-      const pLbl = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' }[s.pause_typ] || 'Pause';
-      line += ` · ${s.pause_m} m ${pLbl}`;
-    }
-    if (s.pace_referenz) line += ` · ${escapeHtml(s.pace_referenz)}`;
+    let line = (wdh > 1 ? wdh + ' × ' : '') + distStr;
+
+    // Pace: entweder berechnete Pace oder Referenz-Label
     const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
-    const splitSek = sekProKm != null ? sekProKm * (s.distanz_m / 1000) : null;
-    if (splitSek != null) line += ` · ${PACE.formatTime(splitSek)} / Wdh`;
-    if (sekProKm  != null) line += ` · ${PACE.formatPace(sekProKm)}`;
+    if (sekProKm != null) {
+      const m  = Math.floor(sekProKm / 60);
+      const sc = String(Math.round(sekProKm % 60)).padStart(2, '0');
+      line += ` (@ ${m}:${sc}min/km)`;
+    } else if (s.pace_referenz) {
+      const refLabel = PACE.fmtDistLabel(s.pace_referenz);
+      line += ` (@ ${escapeHtml(refLabel)}-Pace)`;
+    }
+
+    // Pause
+    if (s.pause_m) {
+      const pLbl = PAUSE_LBL[s.pause_typ] || 'Pause';
+      line += ` · ${s.pause_m} m ${pLbl}`;
+    }
+
     return `<div class="seg-blk-sum-row">${line}</div>`;
   }).join('');
 
@@ -722,10 +732,10 @@ async function zeigeEinheit(id) {
             ${(() => {
               if (!e.komoot_url) return '';
               const embedUrl = komootEmbedUrl(e.komoot_url);
+              if (!embedUrl) return '';
               return `<div class="modal-row modal-row-block">
                 <span class="modal-label">Strecke</span>
-                ${embedUrl ? `<div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>` : ''}
-                <a class="tp-link tp-link-komoot" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ansehen ↗</a>
+                <div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>
               </div>`;
             })()}
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
@@ -734,6 +744,7 @@ async function zeigeEinheit(id) {
             ${segHtml}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
+              ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
               ${state.user ? `<button class="btn btn-ghost" onclick="EDITOR.open(state._lastEinheit)">Bearbeiten</button>` : ''}
             </div>
           </div>
@@ -754,7 +765,11 @@ function schliesseModal(ev) {
 function komootEmbedUrl(url) {
   if (!url) return null;
   const m = String(url).match(/\/tour\/(\d+)/);
-  return m ? 'https://www.komoot.com/de-de/tour/' + m[1] + '/embed?profile=1' : null;
+  if (!m) return null;
+  let token = null;
+  try { token = new URL(url).searchParams.get('share_token'); } catch (_) {}
+  const qs = token ? '?share_token=' + encodeURIComponent(token) : '';
+  return 'https://www.komoot.com/tour/' + m[1] + '/embed' + qs;
 }
 
 function escapeHtml(s) {

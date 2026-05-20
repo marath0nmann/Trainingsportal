@@ -369,6 +369,15 @@ const SETTINGS = (() => {
   }
 
   async function speichern() {
+    // Offenen Typ-Edit automatisch mitspeichern
+    if (typenBearbeitet !== null) {
+      const editIdx = typen.findIndex(t => t.slug === typenBearbeitet);
+      if (editIdx >= 0) {
+        const ok = await typSpeichern(typenBearbeitet, editIdx, { silent: true });
+        if (!ok) return; // Fehler im Typ-Save → nicht weitermachen
+      }
+    }
+
     const liste = feiertage
       .map(f => ({ url: (f.url || '').trim(), label: (f.label || '').trim(), farbe: (f.farbe || '').trim() }))
       .filter(f => f.url !== '');
@@ -500,42 +509,74 @@ const SETTINGS = (() => {
       return;
     }
 
+    // Compute CSS fallback colors once (temporarily hide injected overrides)
+    const cssDefaults = {};
+    const _styleEl = document.getElementById('typen-farben-style');
+    const _savedStyle = _styleEl ? _styleEl.textContent : '';
+    if (_styleEl) _styleEl.textContent = '';
+    typen.forEach(function(t) { cssDefaults[t.slug] = getTypDefaultFarbe(t.slug) || '#888888'; });
+    if (_styleEl) _styleEl.textContent = _savedStyle;
+
     const zeilen = typen.map((t, i) => {
       const bearbeite = typenBearbeitet === t.slug;
       const gesperrt  = t.block_count > 0;
       const inaktivStil = !t.aktiv ? 'opacity:0.5;' : '';
+      const defaultFarbe = cssDefaults[t.slug];
 
       if (bearbeite) {
         return `
           <tr data-slug="${escapeHtml(t.slug)}" style="background:var(--panel-bg,var(--bg2))">
-            <td style="padding:6px 4px">
-              <input type="text" id="typ-bez-${i}" value="${escapeHtml(t.bezeichnung)}"
-                class="settings-input" style="width:100%;min-width:120px">
-            </td>
-            <td style="padding:6px 4px;text-align:center">
-              <input type="color" id="typ-farbe-${i}" value="${escapeHtml(t.farbe || '#888888')}"
-                style="width:36px;height:32px;border:none;background:none;cursor:pointer;padding:0">
-            </td>
-            <td style="padding:6px 4px;text-align:center">
-              <input type="number" id="typ-reihenfolge-${i}" value="${t.reihenfolge}"
-                min="0" max="999" class="settings-input" style="width:60px;text-align:center">
-            </td>
-            <td style="padding:6px 4px;text-align:center">
-              <label style="cursor:pointer;font-size:12px">
-                <input type="checkbox" id="typ-aktiv-${i}" ${t.aktiv ? 'checked' : ''}> aktiv
-              </label>
-            </td>
-            <td style="padding:6px 4px;text-align:right;white-space:nowrap">
-              <button class="btn btn-primary btn-sm" onclick="SETTINGS.typSpeichern('${escapeHtml(t.slug)}', ${i})">✓</button>
-              <button class="btn btn-ghost btn-sm" onclick="SETTINGS.typAbbrechen()">✗</button>
+            <td colspan="5" style="padding:10px 8px">
+              <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">
+                <div style="flex:2;min-width:130px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Bezeichnung</div>
+                  <input type="text" id="typ-bez-${i}" value="${escapeHtml(t.bezeichnung)}"
+                    class="settings-input" style="width:100%">
+                </div>
+                <div style="min-width:160px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Farbe</div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+                      <input type="checkbox" id="typ-farbe-aktiv-${i}" ${t.farbe ? 'checked' : ''}>
+                      Eigene Farbe
+                    </label>
+                    <input type="color" id="typ-farbe-${i}" value="${escapeHtml(t.farbe || defaultFarbe)}"
+                      style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0">
+                  </div>
+                  <div style="margin-top:4px;display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2)">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${escapeHtml(defaultFarbe)};border:1px solid var(--border)"></span>
+                    CSS-Standard: <code style="font-size:10px">${escapeHtml(defaultFarbe)}</code>
+                  </div>
+                </div>
+                <div style="min-width:80px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Reihenfolge</div>
+                  <input type="number" id="typ-reihenfolge-${i}" value="${t.reihenfolge}"
+                    min="0" max="999" class="settings-input" style="width:70px;text-align:center">
+                </div>
+                <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+                  <label style="cursor:pointer;font-size:12px">
+                    <input type="checkbox" id="typ-aktiv-${i}" ${t.aktiv ? 'checked' : ''}> aktiv
+                  </label>
+                </div>
+              </div>
+              <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">
+                <button class="btn btn-ghost btn-sm" onclick="SETTINGS.typAbbrechen()">Abbrechen</button>
+                <button class="btn btn-primary btn-sm" onclick="SETTINGS.typSpeichern('${escapeHtml(t.slug)}', ${i})">Speichern</button>
+              </div>
             </td>
           </tr>`;
       }
 
+      // View row: show custom color or CSS default (dashed border = CSS fallback)
+      const swatchFarbe = t.farbe || defaultFarbe;
+      const swatchStyle = t.farbe
+        ? `background:${escapeHtml(swatchFarbe)}`
+        : `background:${escapeHtml(swatchFarbe)};border:1.5px dashed var(--border)`;
+
       return `
         <tr style="${inaktivStil}">
           <td style="padding:6px 8px;font-weight:600">
-            ${t.farbe ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeHtml(t.farbe)};margin-right:6px;vertical-align:middle"></span>` : ''}
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;${swatchStyle};margin-right:6px;vertical-align:middle"></span>
             ${escapeHtml(t.bezeichnung)}
             <code style="font-size:11px;color:var(--text2);margin-left:6px">${escapeHtml(t.slug)}</code>
           </td>
@@ -576,23 +617,26 @@ const SETTINGS = (() => {
     rendereTypen();
   }
 
-  async function typSpeichern(slug, idx) {
+  async function typSpeichern(slug, idx, opts) {
     const bez = (document.getElementById(`typ-bez-${idx}`)?.value || '').trim();
-    if (!bez) { benachrichtigen('Bezeichnung darf nicht leer sein.', 'err'); return; }
-    const farbe       = document.getElementById(`typ-farbe-${idx}`)?.value || null;
+    if (!bez) { benachrichtigen('Bezeichnung darf nicht leer sein.', 'err'); return false; }
+    const farbeAktiv  = document.getElementById(`typ-farbe-aktiv-${idx}`)?.checked;
+    const farbe       = farbeAktiv ? (document.getElementById(`typ-farbe-${idx}`)?.value || null) : null;
     const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
     const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
     try {
       await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv });
-      benachrichtigen('Typ gespeichert.', 'ok');
+      if (!opts || !opts.silent) benachrichtigen('Typ gespeichert.', 'ok');
       typenBearbeitet = null;
       const r = await apiGet('admin/typen', { silent: true });
       typen = r.typen || [];
       rendereTypen();
       CONFIG.clear();
       await CONFIG.load();
+      return true;
     } catch (e) {
       benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      return false;
     }
   }
 
