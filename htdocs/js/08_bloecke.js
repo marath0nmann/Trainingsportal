@@ -336,11 +336,17 @@ const BLOECKE = (() => {
     aktualisiereBlockTitelFeld();
   }
 
-  function neuerBlock() { openBlockEditor(null, []); }
+  async function neuerBlock() {
+    await PACE.load();
+    openBlockEditor(null, []);
+  }
 
   async function bearbeiten(blockId) {
     try {
-      const data = await apiGet(`bloecke/${blockId}`, { silent: true });
+      const [data] = await Promise.all([
+        apiGet(`bloecke/${blockId}`, { silent: true }),
+        PACE.load(),
+      ]);
       openBlockEditor(data.block, data.segmente || []);
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
