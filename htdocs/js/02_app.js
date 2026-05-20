@@ -231,6 +231,7 @@ async function renderKalender(main, monthArg) {
   const todayKey = ymd(new Date());
 
   main.innerHTML = `
+    <div id="pace-warn-sektion"></div>
     <div id="heute-sektion"></div>
     <div class="kal-wrap">
       <div class="kal-toolbar">
@@ -271,7 +272,8 @@ async function renderKalender(main, monthArg) {
     (byDate[e.datum] = byDate[e.datum] || []).push(e);
   });
 
-  // Heute-Sektion immer unabhängig nachladen
+  // Pace-Warnung und Heute-Sektion immer unabhängig nachladen
+  ladeGlobalePaceWarnung('pace-warn-sektion');
   ladeHeuteSektionInto('heute-sektion');
 
   // Feiertage über Datum spreizen (mehrtägige Ferien)
@@ -367,6 +369,23 @@ function renderHeuteSektionHtml(items) {
   return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
 }
 
+async function ladeGlobalePaceWarnung(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el || !state.user) return;
+  try {
+    const paceData = await PACE.load();
+    const hatKeinePace = !paceData || !paceData.distanzen || Object.keys(paceData.distanzen).length === 0;
+    el.innerHTML = hatKeinePace
+      ? `<div class="pace-warn-global">
+           ⚠ Persönliche Pace noch nicht konfiguriert –
+           <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
+         </div>`
+      : '';
+  } catch (e) {
+    el.innerHTML = '';
+  }
+}
+
 async function ladeHeuteSektionInto(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
@@ -399,16 +418,7 @@ async function ladHeuteDetails(items) {
         paceData = await PACE.load();
       }
 
-      const hatUnresolvedPace = state.user && hatPaceRef &&
-        seg.filter(s => s.pace_referenz).some(s => PACE.paceSekProKm(paceData, s.pace_referenz) == null);
-
       let html = '';
-      if (hatUnresolvedPace) {
-        html += `<div class="heute-pace-warn">
-          Persönliche Pace noch nicht konfiguriert –
-          <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
-        </div>`;
-      }
       if (seg.length) {
         html += renderSegmentBlocksHtml(seg, paceData, einheit.typ);
       }
@@ -568,6 +578,7 @@ async function renderListe(main, quarterArg) {
   const moKalStart = `${year}-${String((quarter - 1) * 3 + 1).padStart(2, '0')}`;
 
   main.innerHTML = `
+    <div id="pace-warn-sektion"></div>
     <div id="heute-sektion"></div>
     <div class="liste-wrap">
       <div class="liste-toolbar">
@@ -588,6 +599,7 @@ async function renderListe(main, quarterArg) {
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
     </div>`;
 
+  ladeGlobalePaceWarnung('pace-warn-sektion');
   ladeHeuteSektionInto('heute-sektion');
 
   let einheiten = [];
