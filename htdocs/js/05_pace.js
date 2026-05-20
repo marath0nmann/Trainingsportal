@@ -97,15 +97,11 @@ const PACE = (() => {
     return sekProKm * (seg.distanz_m / 1000);
   }
 
-  // Options für Editor-Dropdowns (aus Cache oder Defaults)
+  // Options für Editor-Dropdowns (nur konfigurierte Distanzen, kein Fallback)
   function getOptions() {
-    const DEFAULTS = ['5000', '10000', '21098', '42195'];
-    let distKeys;
-    if (cache.data && cache.data.distanzen && Object.keys(cache.data.distanzen).length) {
-      distKeys = Object.keys(cache.data.distanzen).sort((a, b) => parseFloat(a) - parseFloat(b));
-    } else {
-      distKeys = DEFAULTS;
-    }
+    const distKeys = (cache.data && cache.data.distanzen)
+      ? Object.keys(cache.data.distanzen).sort((a, b) => parseFloat(a) - parseFloat(b))
+      : [];
     return [
       { value: '',   label: '— frei —' },
       ...distKeys.map(ref => ({ value: ref, label: fmtDistLabel(ref) })),

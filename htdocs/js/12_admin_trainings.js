@@ -28,18 +28,18 @@ const ADMIN_TRAININGS = (() => {
 
   async function render(el) {
     container = el;
-    el.innerHTML = '<div class="loading"><div class="spinner"></div>Lade Trainings…</div>';
+    if (!container) return;
+    container.innerHTML = '<div class="loading"><div class="spinner"></div>Lade Trainings…</div>';
     try {
-      [{ einheiten: einheiten }, treffpunkte] = await Promise.all([
-        apiGet('admin/einheiten?limit=2000', { silent: true }).then(r => r),
-        TREFFPUNKTE.laden().catch(() => []),
-      ]);
-      einheiten  = einheiten || [];
-      treffpunkte = treffpunkte || [];
+      const resp = await apiGet('admin/einheiten?limit=2000', { silent: true });
+      einheiten   = resp.einheiten || [];
+      treffpunkte = await TREFFPUNKTE.laden().catch(() => []);
       selected.clear();
       rendereTabelle();
     } catch (e) {
-      el.innerHTML = '<div class="empty">Fehler: ' + escapeHtml(e.message || '') + '</div>';
+      if (container) {
+        container.innerHTML = '<div style="padding:20px;color:var(--primary)">Fehler: ' + escapeHtml(e.message || String(e)) + '</div>';
+      }
     }
   }
 
@@ -68,7 +68,7 @@ const ADMIN_TRAININGS = (() => {
   }
 
   function rendereTabelle() {
-    if (!container) return;
+    if (!container || !container.isConnected) return;
     const data = getSortiert();
     const allChecked = data.length > 0 && data.every(e => selected.has(e.id));
     const selCount   = selected.size;
@@ -204,7 +204,7 @@ const ADMIN_TRAININGS = (() => {
   }
 
   async function reload() {
-    if (!container) return;
+    if (!container || !container.isConnected) return;
     try {
       const r = await apiGet('admin/einheiten?limit=2000', { silent: true });
       einheiten = r.einheiten || [];
