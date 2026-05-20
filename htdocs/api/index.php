@@ -1809,6 +1809,7 @@ function ensureBloeckeTabellen(): void {
           id              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
           block_id        INT UNSIGNED    NOT NULL,
           reihenfolge     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+          abschnitt_typ   ENUM('work','pause') NOT NULL DEFAULT 'work',
           gruppen_id      SMALLINT UNSIGNED NULL,
           wiederholungen  SMALLINT UNSIGNED NOT NULL DEFAULT 1,
           distanz_m       INT UNSIGNED    NOT NULL,
@@ -1830,6 +1831,16 @@ function ensureBloeckeTabellen(): void {
         DB::query(
             "ALTER TABLE " . DB::tbl('training_bloecke') . "
              ADD COLUMN komoot_url VARCHAR(500) NULL AFTER typ"
+        );
+    }
+    // Migration: abschnitt_typ zu training_block_segmente hinzufügen
+    $bsCols = DB::fetchAll(
+        "SHOW COLUMNS FROM " . DB::tbl('training_block_segmente') . " LIKE 'abschnitt_typ'"
+    );
+    if (empty($bsCols)) {
+        DB::query(
+            "ALTER TABLE " . DB::tbl('training_block_segmente') . "
+             ADD COLUMN abschnitt_typ ENUM('work','pause') NOT NULL DEFAULT 'work' AFTER reihenfolge"
         );
     }
     // Trainer- und Editor-Rolle anlegen, falls noch nicht vorhanden
@@ -2132,6 +2143,7 @@ function mapBlockSegment(array $r): array {
     return [
         'id'             => (int)$r['id'],
         'reihenfolge'    => (int)$r['reihenfolge'],
+        'abschnitt_typ'  => $r['abschnitt_typ'] ?? 'work',
         'gruppen_id'     => $r['gruppen_id'] !== null ? (int)$r['gruppen_id'] : null,
         'wiederholungen' => (int)$r['wiederholungen'],
         'distanz_m'      => (int)$r['distanz_m'],
@@ -2158,11 +2170,12 @@ function replaceBlockSegmente(int $blockId, $segmente): void {
         }
         DB::query(
             'INSERT INTO ' . DB::tbl('training_block_segmente') . '
-             (block_id, reihenfolge, gruppen_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
-             VALUES (?,?,?,?,?,?,?,?,?)',
+             (block_id, reihenfolge, abschnitt_typ, gruppen_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
+             VALUES (?,?,?,?,?,?,?,?,?,?)',
             [
                 $blockId,
                 $i++,
+                in_array($s['abschnitt_typ'] ?? '', ['work','pause'], true) ? $s['abschnitt_typ'] : 'work',
                 isset($s['gruppen_id']) && $s['gruppen_id'] !== '' ? (int)$s['gruppen_id'] : null,
                 isset($s['wiederholungen']) ? max(1, (int)$s['wiederholungen']) : 1,
                 $dist,

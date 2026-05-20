@@ -265,22 +265,68 @@ const BLOECKE = (() => {
   }
 
   // ── Block-Editor ──────────────────────────────────────────
-  let editorSegmente = [];
+  let editorBloecke = [];
   let titelManuellBearbeitet = false;
 
-  function generiereBlockTitel(segs) {
-    if (!segs || !segs.length) return '';
-    return segs.map(s => {
-      const wdh  = (s.wiederholungen && s.wiederholungen > 1) ? `${s.wiederholungen} × ` : '';
-      const dist = s.distanz_m != null ? String(s.distanz_m) : '?';
-      return `${wdh}${dist}`;
-    }).join(' / ');
+  function segmenteZuBloecke(segmente) {
+    if (!segmente || !segmente.length) return [];
+    const blocksMap = new Map();
+    segmente.forEach(s => {
+      const gid = s.gruppen_id != null ? s.gruppen_id : ('solo_' + s.id);
+      if (!blocksMap.has(gid)) {
+        blocksMap.set(gid, { gruppen_id: gid, wiederholungen: s.wiederholungen || 1, abschnitte: [] });
+      }
+      const block = blocksMap.get(gid);
+      if (s.abschnitt_typ === 'pause') {
+        block.abschnitte.push({ typ: 'pause', distanz_m: s.distanz_m, pause_typ: s.pause_typ || 'TP' });
+      } else {
+        block.abschnitte.push({ typ: 'work', distanz_m: s.distanz_m, pace_referenz: s.pace_referenz || null });
+        // Altes Format: pause_m als eigenen Pause-Abschnitt anhängen
+        if (s.pause_m) {
+          block.abschnitte.push({ typ: 'pause', distanz_m: s.pause_m, pause_typ: s.pause_typ || 'TP' });
+        }
+      }
+    });
+    return [...blocksMap.values()];
+  }
+
+  function bloeckeZuSegmente(bloecke, globalPauseTyp, globalPaceRef) {
+    const segs = [];
+    let gid = 1;
+    bloecke.forEach(block => {
+      block.abschnitte.forEach(a => {
+        segs.push({
+          gruppen_id:     block.abschnitte.length > 1 ? gid : null,
+          wiederholungen: block.wiederholungen,
+          abschnitt_typ:  a.typ,
+          distanz_m:      a.distanz_m,
+          pause_m:        null,
+          pause_typ:      a.typ === 'pause' ? (a.pause_typ || globalPauseTyp) : null,
+          pace_referenz:  a.typ === 'work'  ? (a.pace_referenz || globalPaceRef || null) : null,
+          notiz:          null,
+        });
+      });
+      gid++;
+    });
+    return segs;
+  }
+
+  function generiereBlockTitel(bloecke) {
+    if (!bloecke || !bloecke.length) return '';
+    return bloecke.map(block => {
+      const works = block.abschnitte.filter(a => a.typ === 'work');
+      if (!works.length) return null;
+      const wdh = block.wiederholungen || 1;
+      const distTeile = works.map(a => a.distanz_m != null ? String(a.distanz_m) : '?');
+      const distStr = works.length > 1 ? '(' + distTeile.join(' + ') + ')' : distTeile[0];
+      return wdh > 1 ? `${wdh} × ${distStr}` : distStr;
+    }).filter(Boolean).join(' / ');
   }
 
   function aktualisiereBlockTitelFeld() {
     if (!titelManuellBearbeitet) {
       const el = document.getElementById('be-titel');
-      if (el) el.value = generiereBlockTitel(editorSegmente);
+      if (el) el.value = generiereBlockTitel(editorBloecke);
     }
     aktualisiereGesamtdistanz();
   }
@@ -303,11 +349,11 @@ const BLOECKE = (() => {
 
   function openBlockEditor(block, segmente) {
     const istNeu = !block;
-    editorSegmente = (segmente || []).map(s => ({ ...s }));
+    editorBloecke = segmenteZuBloecke((segmente || []).map(s => ({ ...s })));
     // Segmente aus Titel parsen falls noch keine vorhanden
-    if (!editorSegmente.length && block && block.titel) {
+    if (!editorBloecke.length && block && block.titel) {
       const parsed = PARSER.parse(block.titel);
-      if (parsed.length) editorSegmente = parsed;
+      if (parsed.length) editorBloecke = segmenteZuBloecke(parsed);
     }
     // Titel für bestehende Blöcke schützen; für neue Blöcke auto-generieren
     titelManuellBearbeitet = !istNeu;
@@ -316,9 +362,12 @@ const BLOECKE = (() => {
       id: null, titel: '', typ: 'intervall',
       komoot_url: '', bemerkung: '', sichtbarkeit: 'global',
     };
-    // Globale Pause-Typ / Pace-Referenz aus erstem Segment lesen
-    const initPauseTyp = editorSegmente.length ? (editorSegmente[0].pause_typ || 'TP') : 'TP';
-    const initPaceRef  = editorSegmente.length ? (editorSegmente[0].pace_referenz || '5000') : '5000';
+    // Globale Pause-Typ / Pace-Referenz aus erstem Block/Abschnitt lesen
+    const erstesBlock = editorBloecke.length ? editorBloecke[0] : null;
+    const ersterPause = erstesBlock ? erstesBlock.abschnitte.find(a => a.typ === 'pause') : null;
+    const ersterWork  = erstesBlock ? erstesBlock.abschnitte.find(a => a.typ === 'work')  : null;
+    const initPauseTyp = ersterPause ? (ersterPause.pause_typ || 'TP') : 'TP';
+    const initPaceRef  = ersterWork  ? (ersterWork.pace_referenz  || '5000') : '5000';
 
     const typenOptionen = getTypen()
       .map(t => `<option value="${escapeHtml(t.slug)}"${t.slug === b.typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`)
@@ -371,7 +420,7 @@ const BLOECKE = (() => {
               <div class="ed-segheader">
                 <h3>Segmente</h3>
                 <div class="ed-segactions">
-                  <button class="btn btn-ghost" onclick="BLOECKE.segmentHinzufuegen()">+ Segment</button>
+                  <button class="btn btn-ghost" onclick="BLOECKE.blockHinzufuegen()">+ Block</button>
                 </div>
               </div>
               <div class="ed-seg-globals">
@@ -391,7 +440,7 @@ const BLOECKE = (() => {
               <div id="be-segmente-tabelle"></div>
               <div id="be-gesamtdistanz" class="be-gesamtdistanz"></div>
               <div class="ed-seghint">
-                Pause in Metern · TP/GP/BP = Trab-/Geh-/Blockpause · Pace-Referenz für persönliche Pace im Athleten-View
+                Distanz in Metern · TP/GP/BP = Trab-/Geh-/Blockpause · Pace-Referenz für persönliche Pace
               </div>
             </div>
 
@@ -437,7 +486,7 @@ const BLOECKE = (() => {
       });
     }
 
-    rendereBlockSegmente();
+    rendereBlockEditor();
   }
 
   function onTypChange() {
@@ -459,10 +508,11 @@ const BLOECKE = (() => {
     }
   }
 
-  function berechneGesamtdistanz(segs) {
-    return (segs || []).reduce((sum, s) => {
-      const wdh = (s.wiederholungen > 0) ? s.wiederholungen : 1;
-      return sum + wdh * ((s.distanz_m || 0) + (s.pause_m || 0));
+  function berechneGesamtdistanz(bloecke) {
+    return (bloecke || []).reduce((sum, block) => {
+      const wdh = (block.wiederholungen > 0) ? block.wiederholungen : 1;
+      const blockDist = (block.abschnitte || []).reduce((s, a) => s + (a.distanz_m || 0), 0);
+      return sum + wdh * blockDist;
     }, 0);
   }
 
@@ -476,74 +526,144 @@ const BLOECKE = (() => {
   function aktualisiereGesamtdistanz() {
     const el = document.getElementById('be-gesamtdistanz');
     if (!el) return;
-    const gesamt = berechneGesamtdistanz(editorSegmente);
+    const gesamt = berechneGesamtdistanz(editorBloecke);
     const text = formatDistanz(gesamt);
     el.textContent = text ? 'Gesamtdistanz: ' + text : '';
   }
 
-  function rendereBlockSegmente() {
+  function rendereBlockEditor() {
     const wrap = document.getElementById('be-segmente-tabelle');
     if (!wrap) return;
-    if (!editorSegmente.length) {
-      wrap.innerHTML = `<div class="ed-segleer">Keine Segmente. Klick „Aus Titel parsen" oder „+ Segment".</div>`;
+    if (!editorBloecke.length) {
+      wrap.innerHTML = `<div class="ed-segleer">Kein Block. Klick „+ Block" um einen Block hinzuzufügen.</div>`;
+      aktualisiereBlockTitelFeld();
       return;
     }
-    const rows = editorSegmente.map((s, i) => `
-      <tr>
-        <td><input type="number" min="1" value="${s.wiederholungen ?? 1}" data-i="${i}" data-f="wiederholungen" class="ed-seg-input ed-seg-num"></td>
-        <td><input type="number" min="50" step="50" value="${s.distanz_m ?? ''}" data-i="${i}" data-f="distanz_m" class="ed-seg-input ed-seg-dist"></td>
-        <td><input type="number" min="0" step="50" value="${s.pause_m ?? ''}" data-i="${i}" data-f="pause_m" class="ed-seg-input ed-seg-dist"></td>
-        <td><button class="btn-icon" title="Segment löschen" onclick="BLOECKE.segmentLoeschen(${i})">×</button></td>
-      </tr>`).join('');
 
-    wrap.innerHTML = `
-      <table class="ed-seg-table">
-        <thead>
-          <tr><th>Wdh</th><th>Distanz (m)</th><th>Pause (m)</th><th></th></tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+    wrap.innerHTML = editorBloecke.map((block, bi) => {
+      const abschnitteRows = block.abschnitte.map((a, ai) => `
+        <tr data-b="${bi}" data-a="${ai}">
+          <td>
+            <button class="ed-typ-btn ${a.typ === 'pause' ? 'ed-typ-pause' : 'ed-typ-work'}"
+              data-b="${bi}" data-a="${ai}"
+              onclick="BLOECKE.toggleAbschnittTyp(${bi},${ai})">${a.typ === 'pause' ? 'Pause' : 'Tempo'}</button>
+          </td>
+          <td><input type="number" min="50" step="50" value="${a.distanz_m ?? ''}"
+            class="ed-seg-input ed-seg-dist" data-b="${bi}" data-a="${ai}" data-f="distanz_m"></td>
+          <td><button class="btn-icon" onclick="BLOECKE.abschnittLoeschen(${bi},${ai})" title="Abschnitt löschen">×</button></td>
+        </tr>`).join('');
+
+      return `
+        <div class="ed-block" data-block="${bi}">
+          <div class="ed-block-head">
+            <div class="ed-block-wdh">
+              <label>Wdh</label>
+              <input type="number" min="1" value="${block.wiederholungen ?? 1}"
+                class="ed-seg-input ed-seg-num" data-b="${bi}" data-f="wiederholungen">
+            </div>
+            <div class="ed-block-abschnitte">
+              <table class="ed-seg-table">
+                <thead><tr><th>Typ</th><th>Distanz (m)</th><th></th></tr></thead>
+                <tbody>${abschnitteRows}</tbody>
+              </table>
+              <div class="ed-block-actions">
+                <button class="btn btn-ghost btn-sm" onclick="BLOECKE.abschnittHinzufuegen(${bi},'work')">+ Tempo</button>
+                <button class="btn btn-ghost btn-sm" onclick="BLOECKE.abschnittHinzufuegen(${bi},'pause')">+ Pause</button>
+              </div>
+            </div>
+            <button class="btn-icon ed-block-del" onclick="BLOECKE.blockLoeschen(${bi})" title="Block löschen">×</button>
+          </div>
+        </div>`;
+    }).join('');
 
     wrap.querySelectorAll('.ed-seg-input').forEach(el => {
-      el.addEventListener('change', onSegEdit);
-      el.addEventListener('input',  onSegEdit);
+      el.addEventListener('change', onBlockEdit);
+      el.addEventListener('input',  onBlockEdit);
     });
 
     aktualisiereBlockTitelFeld();
   }
 
-  function onSegEdit(ev) {
+  function onBlockEdit(ev) {
     const t = ev.target;
-    const i = parseInt(t.dataset.i, 10);
-    const f = t.dataset.f;
-    if (!editorSegmente[i]) return;
-    let v = t.value;
-    if (['wiederholungen', 'distanz_m', 'pause_m'].includes(f)) {
-      v = v === '' ? null : parseInt(v, 10);
+    const bi = parseInt(t.dataset.b, 10);
+    const ai = t.dataset.a !== undefined ? parseInt(t.dataset.a, 10) : undefined;
+    const f  = t.dataset.f;
+    const v  = t.value === '' ? null : parseInt(t.value, 10);
+    if (!editorBloecke[bi]) return;
+    if (ai !== undefined && !isNaN(ai)) {
+      if (editorBloecke[bi].abschnitte[ai]) {
+        editorBloecke[bi].abschnitte[ai][f] = v;
+      }
+    } else {
+      editorBloecke[bi][f] = v;
     }
-    if (f === 'pace_referenz' && v === '') v = null;
-    editorSegmente[i][f] = v;
     aktualisiereBlockTitelFeld();
+  }
+
+  function blockHinzufuegen() {
+    const pauseTyp = val('be-pause-typ') || 'TP';
+    const paceRef  = val('be-pace-ref')  || null;
+    editorBloecke.push({
+      gruppen_id: null,
+      wiederholungen: 1,
+      abschnitte: [
+        { typ: 'work',  distanz_m: 400, pace_referenz: paceRef },
+        { typ: 'pause', distanz_m: 100, pause_typ: pauseTyp },
+      ],
+    });
+    rendereBlockEditor();
+  }
+
+  function blockLoeschen(bi) {
+    editorBloecke.splice(bi, 1);
+    rendereBlockEditor();
+  }
+
+  function abschnittHinzufuegen(bi, typ) {
+    if (!editorBloecke[bi]) return;
+    const pauseTyp = val('be-pause-typ') || 'TP';
+    const paceRef  = val('be-pace-ref')  || null;
+    if (typ === 'pause') {
+      editorBloecke[bi].abschnitte.push({ typ: 'pause', distanz_m: 100, pause_typ: pauseTyp });
+    } else {
+      editorBloecke[bi].abschnitte.push({ typ: 'work', distanz_m: 300, pace_referenz: paceRef });
+    }
+    rendereBlockEditor();
+  }
+
+  function abschnittLoeschen(bi, ai) {
+    if (!editorBloecke[bi]) return;
+    editorBloecke[bi].abschnitte.splice(ai, 1);
+    if (!editorBloecke[bi].abschnitte.length) {
+      editorBloecke.splice(bi, 1);
+    }
+    rendereBlockEditor();
+  }
+
+  function toggleAbschnittTyp(bi, ai) {
+    if (!editorBloecke[bi] || !editorBloecke[bi].abschnitte[ai]) return;
+    const a = editorBloecke[bi].abschnitte[ai];
+    const pauseTyp = val('be-pause-typ') || 'TP';
+    const paceRef  = val('be-pace-ref')  || null;
+    if (a.typ === 'work') {
+      a.typ = 'pause';
+      a.pause_typ = a.pause_typ || pauseTyp;
+      delete a.pace_referenz;
+    } else {
+      a.typ = 'work';
+      a.pace_referenz = a.pace_referenz || paceRef;
+      delete a.pause_typ;
+    }
+    rendereBlockEditor();
   }
 
   function parsenAusTitel() {
     const titel = val('be-titel');
     const segs = PARSER.parse(titel);
     if (!segs.length) { notify('Konnte keine Segmente aus dem Titel erkennen.', 'warn'); return; }
-    editorSegmente = segs;
-    rendereBlockSegmente();
-  }
-
-  function segmentHinzufuegen() {
-    const pauseTyp = val('be-pause-typ') || 'TP';
-    const paceRef  = val('be-pace-ref')  || null;
-    editorSegmente.push({ wiederholungen: 1, distanz_m: 400, pause_m: 100, pause_typ: pauseTyp, pace_referenz: paceRef, notiz: null });
-    rendereBlockSegmente();
-  }
-
-  function segmentLoeschen(i) {
-    editorSegmente.splice(i, 1);
-    rendereBlockSegmente();
+    editorBloecke = segmenteZuBloecke(segs);
+    rendereBlockEditor();
   }
 
   async function speichern(blockId) {
@@ -557,7 +677,7 @@ const BLOECKE = (() => {
       komoot_url:   istRunde ? (val('be-komoot-url') || null) : null,
       bemerkung:    val('be-bemerkung') || null,
       sichtbarkeit: val('be-sichtbarkeit'),
-      segmente:     istRunde ? [] : editorSegmente.map(s => ({ ...s, pause_typ: pauseTyp, pace_referenz: paceRef })),
+      segmente:     istRunde ? [] : bloeckeZuSegmente(editorBloecke, pauseTyp, paceRef),
     };
     if (!payload.titel) { notify('Titel fehlt.', 'err'); return; }
     try {
@@ -607,7 +727,9 @@ const BLOECKE = (() => {
 
   return {
     render, neuerBlock, bearbeiten, anwenden, anwendenSpeichern,
-    parsenAusTitel, segmentHinzufuegen, segmentLoeschen, speichern, loeschen,
+    parsenAusTitel, blockHinzufuegen, blockLoeschen,
+    abschnittHinzufuegen, abschnittLoeschen, toggleAbschnittTyp,
+    speichern, loeschen,
     titelNeuGenerieren, onTypChange,
   };
 })();

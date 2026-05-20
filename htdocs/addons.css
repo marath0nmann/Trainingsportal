@@ -1205,3 +1205,41 @@ body.planung-active #app-footer    { display: none; }
   }
 }
 
+
+/* ── Block-Editor ──────────────────────────────────────────────────── */
+.ed-block {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--surf2);
+}
+.ed-block-head {
+  display: flex; gap: 12px; align-items: flex-start;
+}
+.ed-block-wdh {
+  display: flex; flex-direction: column; gap: 4px;
+  flex-shrink: 0; min-width: 72px;
+}
+.ed-block-wdh label {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text2);
+}
+.ed-block-abschnitte { flex: 1; min-width: 0; }
+.ed-block-del { margin-left: 4px; flex-shrink: 0; }
+.ed-block-actions { display: flex; gap: 6px; margin-top: 6px; }
+
+/* Typ-Button (Tempo/Pause Toggle) */
+.ed-typ-btn {
+  padding: 4px 8px; border-radius: 5px; font-size: 11px; font-weight: 700;
+  cursor: pointer; border: 1.5px solid transparent; font-family: inherit;
+  white-space: nowrap; min-width: 58px;
+}
+.ed-typ-work {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary); border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+}
+.ed-typ-pause {
+  background: color-mix(in srgb, var(--text2) 12%, transparent);
+  color: var(--text2); border-color: color-mix(in srgb, var(--text2) 25%, transparent);
+}
