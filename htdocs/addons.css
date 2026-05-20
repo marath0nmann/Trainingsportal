@@ -485,17 +485,7 @@
 }
 .ed-segactions { display: flex; gap: 6px; flex-wrap: wrap; }
 
-.ed-seg-globals {
-  display: flex; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; align-items: flex-end;
-}
-.ed-seg-global-fg {
-  display: flex; flex-direction: column; gap: 4px;
-}
-.ed-seg-global-fg label {
-  font-size: 10px; font-weight: 700; letter-spacing: .5px;
-  text-transform: uppercase; color: var(--text2);
-}
-.ed-seg-global-fg select { width: auto; min-width: 160px; }
+/* ed-seg-globals entfernt (Pace-Referenz / Pause-Typ jetzt pro Abschnitt) */
 
 .ed-segleer {
   padding: 18px; text-align: center; color: var(--text2);
@@ -1225,9 +1215,13 @@ body.planung-active #app-footer    { display: none; }
   font-size: 10px; font-weight: 700; letter-spacing: .5px;
   text-transform: uppercase; color: var(--text2);
 }
-.ed-block-abschnitte { flex: 1; min-width: 0; }
+.ed-block-abschnitte { flex: 1; min-width: 0; overflow-x: auto; }
 .ed-block-del { margin-left: 4px; flex-shrink: 0; }
 .ed-block-actions { display: flex; gap: 6px; margin-top: 6px; }
+
+/* Pace/Pause-Spalte in der Abschnitte-Tabelle */
+.ed-seg-table td:nth-child(3) select,
+.ed-seg-table th:nth-child(3) { min-width: 140px; }
 
 /* Typ-Button (Tempo/Pause Toggle) */
 .ed-typ-btn {

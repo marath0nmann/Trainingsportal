@@ -290,7 +290,7 @@ const BLOECKE = (() => {
     return [...blocksMap.values()];
   }
 
-  function bloeckeZuSegmente(bloecke, globalPauseTyp, globalPaceRef) {
+  function bloeckeZuSegmente(bloecke) {
     const segs = [];
     let gid = 1;
     bloecke.forEach(block => {
@@ -301,8 +301,8 @@ const BLOECKE = (() => {
           abschnitt_typ:  a.typ,
           distanz_m:      a.distanz_m,
           pause_m:        null,
-          pause_typ:      a.typ === 'pause' ? (a.pause_typ || globalPauseTyp) : null,
-          pace_referenz:  a.typ === 'work'  ? (a.pace_referenz || globalPaceRef || null) : null,
+          pause_typ:      a.typ === 'pause' ? (a.pause_typ || 'TP') : null,
+          pace_referenz:  a.typ === 'work'  ? (a.pace_referenz || null) : null,
           notiz:          null,
         });
       });
@@ -336,11 +336,17 @@ const BLOECKE = (() => {
     aktualisiereBlockTitelFeld();
   }
 
-  function neuerBlock() { openBlockEditor(null, []); }
+  async function neuerBlock() {
+    await PACE.load();
+    openBlockEditor(null, []);
+  }
 
   async function bearbeiten(blockId) {
     try {
-      const data = await apiGet(`bloecke/${blockId}`, { silent: true });
+      const [data] = await Promise.all([
+        apiGet(`bloecke/${blockId}`, { silent: true }),
+        PACE.load(),
+      ]);
       openBlockEditor(data.block, data.segmente || []);
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
@@ -362,13 +368,6 @@ const BLOECKE = (() => {
       id: null, titel: '', typ: 'intervall',
       komoot_url: '', bemerkung: '', sichtbarkeit: 'global',
     };
-    // Globale Pause-Typ / Pace-Referenz aus erstem Block/Abschnitt lesen
-    const erstesBlock = editorBloecke.length ? editorBloecke[0] : null;
-    const ersterPause = erstesBlock ? erstesBlock.abschnitte.find(a => a.typ === 'pause') : null;
-    const ersterWork  = erstesBlock ? erstesBlock.abschnitte.find(a => a.typ === 'work')  : null;
-    const initPauseTyp = ersterPause ? (ersterPause.pause_typ || 'TP') : 'TP';
-    const initPaceRef  = ersterWork  ? (ersterWork.pace_referenz  || '5000') : '5000';
-
     const typenOptionen = getTypen()
       .map(t => `<option value="${escapeHtml(t.slug)}"${t.slug === b.typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`)
       .join('');
@@ -421,20 +420,6 @@ const BLOECKE = (() => {
                 <h3>Segmente</h3>
                 <div class="ed-segactions">
                   <button class="btn btn-ghost" onclick="BLOECKE.blockHinzufuegen()">+ Block</button>
-                </div>
-              </div>
-              <div class="ed-seg-globals">
-                <div class="ed-seg-global-fg">
-                  <label>Pause-Typ</label>
-                  <select id="be-pause-typ" class="ed-seg-input">
-                    ${PAUSE_OPTIONS.map(o => `<option value="${o.value}"${o.value === initPauseTyp ? ' selected' : ''}>${o.label}</option>`).join('')}
-                  </select>
-                </div>
-                <div class="ed-seg-global-fg">
-                  <label>Pace-Referenz</label>
-                  <select id="be-pace-ref" class="ed-seg-input">
-                    ${PACE.getOptions().map(o => `<option value="${o.value}"${o.value === initPaceRef ? ' selected' : ''}>${o.label}</option>`).join('')}
-                  </select>
                 </div>
               </div>
               <div id="be-segmente-tabelle"></div>
@@ -541,7 +526,15 @@ const BLOECKE = (() => {
     }
 
     wrap.innerHTML = editorBloecke.map((block, bi) => {
-      const abschnitteRows = block.abschnitte.map((a, ai) => `
+      const abschnitteRows = block.abschnitte.map((a, ai) => {
+        const detailSel = a.typ === 'work'
+          ? `<select data-b="${bi}" data-a="${ai}" data-f="pace_referenz" class="ed-seg-input">
+               ${PACE.getOptions().map(o => `<option value="${o.value}"${o.value === (a.pace_referenz || '') ? ' selected' : ''}>${o.label}</option>`).join('')}
+             </select>`
+          : `<select data-b="${bi}" data-a="${ai}" data-f="pause_typ" class="ed-seg-input">
+               ${PAUSE_OPTIONS.map(o => `<option value="${o.value}"${o.value === (a.pause_typ || 'TP') ? ' selected' : ''}>${o.label}</option>`).join('')}
+             </select>`;
+        return `
         <tr data-b="${bi}" data-a="${ai}">
           <td>
             <button class="ed-typ-btn ${a.typ === 'pause' ? 'ed-typ-pause' : 'ed-typ-work'}"
@@ -550,8 +543,10 @@ const BLOECKE = (() => {
           </td>
           <td><input type="number" min="50" step="50" value="${a.distanz_m ?? ''}"
             class="ed-seg-input ed-seg-dist" data-b="${bi}" data-a="${ai}" data-f="distanz_m"></td>
+          <td>${detailSel}</td>
           <td><button class="btn-icon" onclick="BLOECKE.abschnittLoeschen(${bi},${ai})" title="Abschnitt löschen">×</button></td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
 
       return `
         <div class="ed-block" data-block="${bi}">
@@ -563,7 +558,7 @@ const BLOECKE = (() => {
             </div>
             <div class="ed-block-abschnitte">
               <table class="ed-seg-table">
-                <thead><tr><th>Typ</th><th>Distanz (m)</th><th></th></tr></thead>
+                <thead><tr><th>Typ</th><th>Distanz (m)</th><th>Pace / Pause-Typ</th><th></th></tr></thead>
                 <tbody>${abschnitteRows}</tbody>
               </table>
               <div class="ed-block-actions">
@@ -585,11 +580,12 @@ const BLOECKE = (() => {
   }
 
   function onBlockEdit(ev) {
-    const t = ev.target;
+    const t  = ev.target;
     const bi = parseInt(t.dataset.b, 10);
     const ai = t.dataset.a !== undefined ? parseInt(t.dataset.a, 10) : undefined;
     const f  = t.dataset.f;
-    const v  = t.value === '' ? null : parseInt(t.value, 10);
+    const numFelder = ['distanz_m', 'wiederholungen'];
+    let v = t.value === '' ? null : (numFelder.includes(f) ? parseInt(t.value, 10) : t.value);
     if (!editorBloecke[bi]) return;
     if (ai !== undefined && !isNaN(ai)) {
       if (editorBloecke[bi].abschnitte[ai]) {
@@ -602,14 +598,15 @@ const BLOECKE = (() => {
   }
 
   function blockHinzufuegen() {
-    const pauseTyp = val('be-pause-typ') || 'TP';
-    const paceRef  = val('be-pace-ref')  || null;
+    const letzter   = editorBloecke.length ? editorBloecke[editorBloecke.length - 1] : null;
+    const letzteW   = letzter ? letzter.abschnitte.find(a => a.typ === 'work')  : null;
+    const letzteP   = letzter ? letzter.abschnitte.find(a => a.typ === 'pause') : null;
     editorBloecke.push({
       gruppen_id: null,
       wiederholungen: 1,
       abschnitte: [
-        { typ: 'work',  distanz_m: 400, pace_referenz: paceRef },
-        { typ: 'pause', distanz_m: 100, pause_typ: pauseTyp },
+        { typ: 'work',  distanz_m: 400, pace_referenz: letzteW ? letzteW.pace_referenz : null },
+        { typ: 'pause', distanz_m: 100, pause_typ: letzteP ? letzteP.pause_typ : 'TP' },
       ],
     });
     rendereBlockEditor();
@@ -622,12 +619,13 @@ const BLOECKE = (() => {
 
   function abschnittHinzufuegen(bi, typ) {
     if (!editorBloecke[bi]) return;
-    const pauseTyp = val('be-pause-typ') || 'TP';
-    const paceRef  = val('be-pace-ref')  || null;
+    const block = editorBloecke[bi];
     if (typ === 'pause') {
-      editorBloecke[bi].abschnitte.push({ typ: 'pause', distanz_m: 100, pause_typ: pauseTyp });
+      const ref = [...block.abschnitte].reverse().find(a => a.typ === 'pause');
+      block.abschnitte.push({ typ: 'pause', distanz_m: 100, pause_typ: ref ? ref.pause_typ : 'TP' });
     } else {
-      editorBloecke[bi].abschnitte.push({ typ: 'work', distanz_m: 300, pace_referenz: paceRef });
+      const ref = [...block.abschnitte].reverse().find(a => a.typ === 'work');
+      block.abschnitte.push({ typ: 'work', distanz_m: 300, pace_referenz: ref ? ref.pace_referenz : null });
     }
     rendereBlockEditor();
   }
@@ -644,15 +642,20 @@ const BLOECKE = (() => {
   function toggleAbschnittTyp(bi, ai) {
     if (!editorBloecke[bi] || !editorBloecke[bi].abschnitte[ai]) return;
     const a = editorBloecke[bi].abschnitte[ai];
-    const pauseTyp = val('be-pause-typ') || 'TP';
-    const paceRef  = val('be-pace-ref')  || null;
+    const block = editorBloecke[bi];
     if (a.typ === 'work') {
       a.typ = 'pause';
-      a.pause_typ = a.pause_typ || pauseTyp;
+      if (!a.pause_typ) {
+        const andereP = block.abschnitte.find((x, i) => i !== ai && x.typ === 'pause');
+        a.pause_typ = andereP ? andereP.pause_typ : 'TP';
+      }
       delete a.pace_referenz;
     } else {
       a.typ = 'work';
-      a.pace_referenz = a.pace_referenz || paceRef;
+      if (!a.pace_referenz) {
+        const andereW = block.abschnitte.find((x, i) => i !== ai && x.typ === 'work');
+        a.pace_referenz = andereW ? andereW.pace_referenz : null;
+      }
       delete a.pause_typ;
     }
     rendereBlockEditor();
@@ -667,8 +670,6 @@ const BLOECKE = (() => {
   }
 
   async function speichern(blockId) {
-    const pauseTyp = val('be-pause-typ') || 'TP';
-    const paceRef  = val('be-pace-ref')  || null;
     const typ      = val('be-typ');
     const istRunde = typ === 'runde';
     const payload = {
@@ -677,7 +678,7 @@ const BLOECKE = (() => {
       komoot_url:   istRunde ? (val('be-komoot-url') || null) : null,
       bemerkung:    val('be-bemerkung') || null,
       sichtbarkeit: val('be-sichtbarkeit'),
-      segmente:     istRunde ? [] : bloeckeZuSegmente(editorBloecke, pauseTyp, paceRef),
+      segmente:     istRunde ? [] : bloeckeZuSegmente(editorBloecke),
     };
     if (!payload.titel) { notify('Titel fehlt.', 'err'); return; }
     try {
