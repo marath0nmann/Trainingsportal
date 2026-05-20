@@ -1,5 +1,8 @@
 # Changelog
 
+## v57
+- Heute-Sektion wird oberhalb der gesamten Kalender-/Listenansicht angezeigt (über Toolbar und Date-Picker)
+
 ## v56
 - „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
 

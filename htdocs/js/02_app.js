@@ -231,6 +231,7 @@ async function renderKalender(main, monthArg) {
   const todayKey = ymd(new Date());
 
   main.innerHTML = `
+    <div id="heute-sektion"></div>
     <div class="kal-wrap">
       <div class="kal-toolbar">
         <div class="kal-nav">
@@ -247,7 +248,6 @@ async function renderKalender(main, monthArg) {
           </div>
         </div>
       </div>
-      <div id="heute-sektion"></div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
     </div>`;
 
@@ -558,6 +558,7 @@ async function renderListe(main, quarterArg) {
   const moKalStart = `${year}-${String((quarter - 1) * 3 + 1).padStart(2, '0')}`;
 
   main.innerHTML = `
+    <div id="heute-sektion"></div>
     <div class="liste-wrap">
       <div class="liste-toolbar">
         <div class="liste-nav">
@@ -574,7 +575,6 @@ async function renderListe(main, quarterArg) {
           </div>
         </div>
       </div>
-      <div id="heute-sektion"></div>
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
     </div>`;
 
