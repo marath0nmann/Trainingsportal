@@ -479,19 +479,29 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
     }
   });
 
+  const PAUSE_LBL = { TP: 'Trabpause', GP: 'Gehpause', BP: 'Blockpause', frei: 'Pause' };
   const summaryHtml = seg.map(s => {
-    const wdh = s.wiederholungen || 1;
+    const wdh     = s.wiederholungen || 1;
     const distStr = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
-    let line = (wdh > 1 ? wdh + ' × ' : '') + distStr;
-    if (s.pause_m) {
-      const pLbl = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' }[s.pause_typ] || 'Pause';
-      line += ` · ${s.pause_m} m ${pLbl}`;
-    }
-    if (s.pace_referenz) line += ` · ${escapeHtml(s.pace_referenz)}`;
+    let line = (wdh > 1 ? wdh + ' × ' : '') + distStr;
+
+    // Pace: entweder berechnete Pace oder Referenz-Label
     const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
-    const splitSek = sekProKm != null ? sekProKm * (s.distanz_m / 1000) : null;
-    if (splitSek != null) line += ` · ${PACE.formatTime(splitSek)} / Wdh`;
-    if (sekProKm  != null) line += ` · ${PACE.formatPace(sekProKm)}`;
+    if (sekProKm != null) {
+      const m  = Math.floor(sekProKm / 60);
+      const sc = String(Math.round(sekProKm % 60)).padStart(2, '0');
+      line += ` (@ ${m}:${sc}min/km)`;
+    } else if (s.pace_referenz) {
+      const refLabel = PACE.fmtDistLabel(s.pace_referenz);
+      line += ` (@ ${escapeHtml(refLabel)}-Pace)`;
+    }
+
+    // Pause
+    if (s.pause_m) {
+      const pLbl = PAUSE_LBL[s.pause_typ] || 'Pause';
+      line += ` · ${s.pause_m} m ${pLbl}`;
+    }
+
     return `<div class="seg-blk-sum-row">${line}</div>`;
   }).join('');
 

@@ -1,40 +1,13 @@
 # Changelog
 
-## v72
-- Planung-Kalender: Grid füllt exakt die verfügbare Höhe – die 4–6 Wochenzeilen teilen sich den Platz gleichmäßig (flex statt fixer 120px-Zellen); passt jetzt immer komplett ins Bild ohne Scroll
-
-## v70
-- Fix: Planung kein Seiten-Scroll – Layout-Lock via JS `style.setProperty(..., 'important')` direkt auf body/#app-screen/#main-content; schlägt zuverlässig jedes shared-CSS `!important`
-
-## v68
-- Fix: Typ-Farben aus den Einstellungen werden jetzt überall angewendet – applyTypenFarben() injiziert dynamisch CSS fuer Block-Karten, Bloecke-Gruppen-Titel, Kalender-Einheiten und Planung-Karten
-- CSS: .bloecke-gruppe-titel mit .bloecke-gruppe-typ-Badge und .bloecke-gruppe-count-Chip
-
-## v67
-- Fix: Planung-Seite ohne Scrollbalken – Layout via `body.planung-active` (Flex-Spalte 100vh), statt fragiler `calc(100vh - 76px)`; Footer und Main-Padding werden korrekt neutralisiert
-
-## v66
-- Komoot-Embed Darkmode: Filter `invert+hue-rotate` nur wenn App dunkel ist aber OS hell (Komoot rendert dann hell); bei dunklem OS übernimmt Komoot selbst
-
-## v65
-- Hover-Popover jetzt auch auf dem Haupt-Kalender (Startseite) aktiv
-- Planung: Trainingsblöcke-Sidebar zurück auf die rechte Seite
-- Planung: Bearbeiten-Dialog aktualisiert nach Speichern den jeweils aktiven Kalender
-
-## v56
-- „Planung"-Button aus Kalender-Toolbar entfernt (Planung ist über die Navigation erreichbar)
-
-## v55
-- Heute-Sektion: zweispaltiges Layout – Trainingsinfos links, Komoot-Strecken-iFrame rechts (nur wenn Strecke hinterlegt); Komoot-Embed-URL auf `de-de`-Locale korrigiert; auf Mobile einspaltig gestapelt
-
-## v54
-- Heute-Sektion erscheint in Kalender- und Listenansicht gleichermaßen, unabhängig vom angezeigten Monat/Quartal (eigener API-Call für heute)
-
-
-## v53
-- Quartalsplan (Listenansicht): neue Ansicht `#liste/YYYY-QN` zeigt alle Einheiten eines Quartals nach Kalenderwochen gruppiert; Typ-Farbakzente, Heute-Markierung, Kein-Training-Styling; View-Toggle-Buttons in Kalender- und Listenansicht; auf Mobilgeräten ist Listenansicht Standard-Ansicht beim ersten Aufruf
-
-## v52
+## v60
+- Eingebauter Feiertags-Rechner: `builtin://feiertage/NRW` (und andere Bundesländer) berechnet gesetzliche Feiertage direkt in PHP – kein externer Dienst nötig
+- Beispiel-URL „Feiertage NRW" nutzt jetzt den eingebauten Rechner statt schulferien.org (das HTML statt ICS lieferte)
+- Fix: Erkennung wenn Server HTML statt ICS antwortet (Fehlermeldung im Diagnose-Tool)
+- Beispiel-URLs in Einstellungen auf neues schulferien.org-Format aktualisiert
+- Feiertage/Ferien werden jetzt auch im Planungskalender angezeigt (Farbmarkierung + Label)
+- ICS-Fetch: SSL-Fallback wenn Peer-Verifikation auf Server schlägt (Shared-Hosting-CA-Bundle)
+- Diagnose-Tool: zeigt jetzt Events-Gesamt + 3 Beispiel-Events pro Feed
 - Fix: Pace-Warnhinweis erscheint jetzt korrekt, wenn Segmente Pace-Referenzen enthalten, die nicht konfiguriert sind (prüft `paceSekProKm` statt `!paceData`)
 
 ## v51
