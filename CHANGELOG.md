@@ -1,5 +1,8 @@
 # Changelog
 
+## v61
+- Flexibler Block-Editor: Jeder Block kann beliebig viele Tempo- und Pausen-Abschnitte enthalten; Abschnitt-Typ (work/pause) pro Segment in DB; Konvertierung alter Segmente automatisch
+
 ## v73
 - Versionsnummer korrigiert: Sprung auf v73 nach Versions-Regression durch fehlerhafte Squash-Merges (main war zwischenzeitlich bei v71, dann auf v60 zurückgefallen)
 
