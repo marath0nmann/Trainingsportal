@@ -7,7 +7,28 @@
 
 const MEINPLAN = (() => {
 
-  // ── Neue private Einheit ─────────────────────────────────
+  // Abo-Status: wird von renderKalender() gesetzt (aus GET-Antwort)
+  let _aboAktiv = false;
+
+  function setAbo(val) { _aboAktiv = !!val; }
+  function istAboAktiv() { return _aboAktiv; }
+
+  // ── km-Berechnung ────────────────────────────────────────
+  // Wenn Segmente vorhanden: Summe aller Wiederholungen × Distanz.
+  // Sonst: Fallback-km aus der Typen-Konfiguration.
+  function _berechneKm(e, segs) {
+    if (Array.isArray(segs) && segs.length) {
+      const total = segs.reduce((s, seg) =>
+        s + (seg.wiederholungen || 1) * ((seg.distanz_m || 0) / 1000), 0);
+      return total > 0 ? Math.round(total * 100) / 100 : null;
+    }
+    const typen = (window.appConfig && Array.isArray(window.appConfig.typen))
+      ? window.appConfig.typen : [];
+    const t = typen.find(x => x.slug === e.typ);
+    return (t && t.fallback_km != null) ? t.fallback_km : null;
+  }
+
+  // ── Neue private Einheit (per Modal) ─────────────────────
   function neuePrivatEinheit(datum) {
     _openModal(null, datum);
   }
@@ -35,12 +56,47 @@ const MEINPLAN = (() => {
     renderPage();
   }
 
-  async function uebernehmenVonOeffentlich(einheitId) {
+  // ── Direkt übernehmen (ohne Modal) ──────────────────────
+  async function uebernehmenVonOeffentlich(einheitId, einheitData, segmente) {
+    KAL_POPOVER.hide();
+    const km = _berechneKm(einheitData, segmente);
+    try {
+      await apiPost('mein-plan/einheiten', {
+        datum:          einheitData.datum,
+        typ:            einheitData.typ,
+        titel:          einheitData.titel,
+        distanz_km:     km,
+        ref_einheit_id: einheitData.id,
+      });
+      _notify('In deinen Plan übernommen.', 'ok');
+      renderPage();
+    } catch (err) {
+      _notify('Fehler: ' + (err.message || ''), 'err');
+    }
+  }
+
+  // ── Abo aktivieren ───────────────────────────────────────
+  async function aboAktivieren() {
     KAL_POPOVER.hide();
     try {
-      const data = await apiGet(`einheiten/${einheitId}`, { silent: true });
-      const e = data.einheit;
-      _openModal(null, e.datum, { titel: e.titel, typ: e.typ, ref_einheit_id: e.id });
+      await apiPost('mein-plan/abo', {});
+      _aboAktiv = true;
+      _notify('Alle künftigen Einheiten wurden übernommen.', 'ok');
+      renderPage();
+    } catch (err) {
+      _notify('Fehler: ' + (err.message || ''), 'err');
+    }
+  }
+
+  // ── Abo deaktivieren ─────────────────────────────────────
+  async function aboDeaktivieren() {
+    if (!confirm('Abo beenden? Bereits übernommene Einheiten bleiben erhalten.')) return;
+    KAL_POPOVER.hide();
+    try {
+      await apiDel('mein-plan/abo');
+      _aboAktiv = false;
+      _notify('Abo beendet.', 'ok');
+      renderPage();
     } catch (err) {
       _notify('Fehler: ' + (err.message || ''), 'err');
     }
@@ -163,7 +219,9 @@ const MEINPLAN = (() => {
   }
 
   return {
+    setAbo, istAboAktiv,
     neuePrivatEinheit, bearbeitePrivat, loeschePrivat,
     uebernehmenVonOeffentlich, speichern,
+    aboAktivieren, aboDeaktivieren,
   };
 })();

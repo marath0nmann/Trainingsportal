@@ -1,5 +1,9 @@
 # Changelog
 
+## v87
+- „In meinen Plan" übernimmt Einheiten direkt ohne Zwischendialog; km wird automatisch aus Segmenten berechnet oder aus der Typ-Fallback-Distanz (konfigurierbar unter Admin → Einstellungen → Trainingstypen) übernommen
+- „Alle künftigen in meinen Plan": Abo-Button im Hover-Popover übernimmt alle künftigen öffentlichen Einheiten sofort und hält den Plan per Auto-Sync aktuell; einzelne Einheiten lassen sich trotzdem entfernen (werden beim nächsten Sync übersprungen); Abo-Beenden-Button erscheint, wenn Abo bereits aktiv
+
 ## v86
 - Mein Plan in Hauptkalender integriert: separate Ansicht entfernt; öffentliche und private Einheiten werden direkt im Monatskalender angezeigt; KW-Spalte und „In meinen Plan"-Button im Hover-Popover erscheinen auf der Startseite
 

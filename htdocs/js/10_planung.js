@@ -63,7 +63,7 @@ const KAL_POPOVER = (() => {
           }).join('')}</div>`
         : '';
 
-      // Bearbeiten-Button nur auf der Planung-Seite für Trainer/Admin
+      // Kontext-Buttons
       const hash           = location.hash || '';
       const onPlanung      = hash.startsWith('#planung');
       const onKalender     = hash === '' || hash === '#' || hash.startsWith('#kalender');
@@ -71,14 +71,30 @@ const KAL_POPOVER = (() => {
         && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
       const kannUebernehmen = onKalender && state.user;
 
+      // Daten für direktes Übernehmen serialisieren (kein zweiter API-Call nötig)
+      const eJson = kannUebernehmen
+        ? escapeHtml(JSON.stringify({ id: e.id, datum: e.datum, typ: e.typ, titel: e.titel }))
+        : '';
+      const segsJson = kannUebernehmen
+        ? escapeHtml(JSON.stringify(segs.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m }))))
+        : '';
+
+      const aboAktiv = kannUebernehmen && MEINPLAN.istAboAktiv();
+
       pop.innerHTML = `
         <div class="kal-pop-typ kal-typ-${escapeHtml(e.typ)}">${escapeHtml(typLabel)}</div>
         <div class="kal-pop-titel">${escapeHtml(e.titel)}</div>
         ${metaParts.length ? `<div class="kal-pop-meta">${metaParts.map(escapeHtml).join(' · ')}</div>` : ''}
         ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
         ${segsHtml}
-        ${kannUebernehmen ? `<div class="kal-pop-actions">
-          <button class="btn btn-primary btn-sm" onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId})">In meinen Plan</button>
+        ${kannUebernehmen ? `<div class="kal-pop-actions kal-pop-actions-col">
+          <button class="btn btn-primary btn-sm"
+            onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"
+            data-e="${eJson}" data-s="${segsJson}">In meinen Plan</button>
+          ${aboAktiv
+            ? `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboDeaktivieren()">✓ Abo beenden</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboAktivieren()">Alle künftigen in meinen Plan</button>`
+          }
         </div>` : ''}
         ${kannEdit ? `<div class="kal-pop-actions">
           <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeiten(${einheitId})">Bearbeiten</button>
