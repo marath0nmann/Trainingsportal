@@ -226,6 +226,16 @@ const TYP_LABEL = {
   kein_training:'Kein Training',
 };
 
+// Effektive Distanz einer privaten Einheit:
+// - expliziter Wert (inkl. 0) wird direkt genutzt
+// - null → Fallback-km aus der Typen-Konfiguration (oder null wenn kein Fallback)
+function _effektivKm(e) {
+  if (e.distanz_km !== null && e.distanz_km !== undefined) return parseFloat(e.distanz_km);
+  const typen = (window.appConfig && Array.isArray(window.appConfig.typen)) ? window.appConfig.typen : [];
+  const t = typen.find(x => x.slug === e.typ);
+  return (t && t.fallback_km != null) ? parseFloat(t.fallback_km) : null;
+}
+
 function ymd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -347,8 +357,8 @@ async function renderKalender(main, monthArg) {
       for (let i = 0; i < 7; i++) { dates.push(ymd(new Date(cur))); cur.setDate(cur.getDate() + 1); }
       const kw = _isoWeek(ws);
       const kmSum = Math.round(dates.reduce((s, d) =>
-        s + (byDate[d] || []).filter(e => e._privat && e.distanz_km != null)
-                              .reduce((ss, e) => ss + parseFloat(e.distanz_km), 0), 0) * 10) / 10;
+        s + (byDate[d] || []).filter(e => e._privat)
+                              .reduce((ss, e) => { const km = _effektivKm(e); return ss + (km !== null ? km : 0); }, 0), 0) * 10) / 10;
       weeks.push({ dates, kw, kmSum });
     }
   }
@@ -389,8 +399,10 @@ async function renderKalender(main, monthArg) {
       const itemsHtml = items.map(e => {
         if (e._privat) {
           const cls = `kal-item kal-typ-${e.typ} is-privat`;
-          const kmBadge = e.distanz_km != null
-            ? `<span class="kal-item-km">${+e.distanz_km % 1 === 0 ? +e.distanz_km : (+e.distanz_km).toFixed(1)}&thinsp;km</span>`
+          const _ekm = _effektivKm(e);
+          const _isFallback = _ekm !== null && (e.distanz_km === null || e.distanz_km === undefined);
+          const kmBadge = _ekm !== null
+            ? `<span class="kal-item-km${_isFallback ? ' is-fallback-km' : ''}">${_ekm % 1 === 0 ? _ekm : _ekm.toFixed(1)}&thinsp;km</span>`
             : '';
           // Aus Team-Eintrag übernommen → normales Detail-Modal; eigener Eintrag → Edit-Modal
           const clickFn = e.ref_einheit_id

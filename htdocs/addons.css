@@ -1260,6 +1260,10 @@ body.planung-active #app-footer    { display: none; }
   font-size: 10px; font-weight: 700; color: var(--text2);
   opacity: .85; line-height: 1;
 }
+/* Fallback-km (kein expliziter Wert, aus Typ-Konfiguration) */
+.kal-item-km.is-fallback-km {
+  opacity: .55; font-style: italic;
+}
 
 /* Legende in der Toolbar */
 .meinplan-legend {

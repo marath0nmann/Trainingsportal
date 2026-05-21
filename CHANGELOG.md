@@ -1,5 +1,8 @@
 # Changelog
 
+## v92
+- Fallback-km aus der Typ-Konfiguration wird bei privaten Einheiten ohne Distanzangabe angezeigt (kursiv/gedimmt) und in die Wochenkilometer aufaddiert; explizit auf 0 km gesetzte Einheiten sind davon ausgenommen
+
 ## v91
 - Fix: Uhrzeit bei abonnierten Trainings (DB-Migration #7 füllt uhrzeit für bestehende Abo-Einheiten nach, die vor Migration #6 angelegt wurden)
 
