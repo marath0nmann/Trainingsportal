@@ -247,6 +247,8 @@ function _migrationStmts(): array
         ],
 
         // ── 5: Abos werden typ-spezifisch ────────────────────────────────
+        // Hinweis: Kommentar aus #4 korrigiert – Abos waren von Anfang an global
+
         5 => [
             // typ-Spalte hinzufügen (bestehende globale Abos erhalten typ='', werden ignoriert)
             "ALTER TABLE $ta ADD COLUMN IF NOT EXISTS typ VARCHAR(40) NOT NULL DEFAULT ''",
@@ -254,6 +256,11 @@ function _migrationStmts(): array
             "ALTER TABLE $ta DROP INDEX uk_benutzer",
             // Neuer Unique-Key: pro Nutzer + Typ ein Eintrag
             "ALTER TABLE $ta ADD UNIQUE KEY uk_benutzer_typ (benutzer_id, typ)",
+        ],
+
+        // ── 6: Uhrzeit in privaten Einheiten ─────────────────────────────
+        6 => [
+            "ALTER TABLE $tp ADD COLUMN IF NOT EXISTS uhrzeit TIME NULL AFTER datum",
         ],
     ];
 }
@@ -2808,13 +2815,16 @@ function handleMeinPlan(string $method, string $tail): void
                 [$userId, $refId]
             );
         }
+        $uhrzeitIn = isset($in['uhrzeit']) && preg_match('/^\d{2}:\d{2}$/', (string)$in['uhrzeit'])
+            ? (string)$in['uhrzeit'] : null;
         DB::query(
             'INSERT INTO ' . DB::tbl('training_privat_einheiten') . '
-             (benutzer_id, datum, typ, titel, distanz_km, bemerkung, ref_einheit_id)
-             VALUES (?,?,?,?,?,?,?)',
+             (benutzer_id, datum, uhrzeit, typ, titel, distanz_km, bemerkung, ref_einheit_id)
+             VALUES (?,?,?,?,?,?,?,?)',
             [
                 $userId,
                 $in['datum'],
+                $uhrzeitIn,
                 isset($in['typ']) && $in['typ'] !== '' ? substr((string)$in['typ'], 0, 40) : 'dauerlauf',
                 substr((string)$in['titel'], 0, 200),
                 $km,
@@ -2853,12 +2863,15 @@ function handleMeinPlan(string $method, string $tail): void
         if (isset($in['distanz_km']) && $in['distanz_km'] !== null && $in['distanz_km'] !== '') {
             $km = round(max(0.0, min(99999.0, (float)$in['distanz_km'])), 2);
         }
+        $uhrzeitPut = isset($in['uhrzeit']) && preg_match('/^\d{2}:\d{2}$/', (string)$in['uhrzeit'])
+            ? (string)$in['uhrzeit'] : null;
         DB::query(
             'UPDATE ' . DB::tbl('training_privat_einheiten') . '
-             SET datum=?, typ=?, titel=?, distanz_km=?, bemerkung=?, ref_einheit_id=?
+             SET datum=?, uhrzeit=?, typ=?, titel=?, distanz_km=?, bemerkung=?, ref_einheit_id=?
              WHERE id=? AND benutzer_id=?',
             [
                 $in['datum'],
+                $uhrzeitPut,
                 isset($in['typ']) && $in['typ'] !== '' ? substr((string)$in['typ'], 0, 40) : 'dauerlauf',
                 substr((string)$in['titel'], 0, 200),
                 $km,
@@ -2915,7 +2928,7 @@ function _aboSync(int $userId, string $von, string $bis, string $typ = ''): void
         : [$von, $bis, $userId, $userId];
 
     $toSync = DB::fetchAll(
-        "SELECT e.id, e.datum, e.typ, e.titel
+        "SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel
            FROM $te e
           WHERE e.datum BETWEEN ? AND ?
             AND e.sichtbarkeit = 'oeffentlich'
@@ -2941,19 +2954,31 @@ function _aboSync(int $userId, string $von, string $bis, string $typ = ''): void
 
     foreach ($toSync as $e) {
         $km = $typKm[$e['typ']] ?? null;
+        // uhrzeit auf HH:MM normieren
+        $uhrzeitSync = null;
+        if (!empty($e['uhrzeit']) && preg_match('/^(\d{2}:\d{2})/', $e['uhrzeit'], $um)) {
+            $uhrzeitSync = $um[1];
+        }
         DB::query(
-            "INSERT INTO $tp (benutzer_id, datum, typ, titel, distanz_km, ref_einheit_id)
-             VALUES (?, ?, ?, ?, ?, ?)",
-            [$userId, $e['datum'], $e['typ'], $e['titel'], $km, (int)$e['id']]
+            "INSERT INTO $tp (benutzer_id, datum, uhrzeit, typ, titel, distanz_km, ref_einheit_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [$userId, $e['datum'], $uhrzeitSync, $e['typ'], $e['titel'], $km, (int)$e['id']]
         );
     }
 }
 
 function mapPrivatEinheit(array $r): array
 {
+    // uhrzeit auf HH:MM kürzen (DB liefert ggf. HH:MM:SS)
+    $uhrzeitRaw = $r['uhrzeit'] ?? null;
+    $uhrzeit = null;
+    if ($uhrzeitRaw && preg_match('/^(\d{2}:\d{2})/', $uhrzeitRaw, $m)) {
+        $uhrzeit = $m[1];
+    }
     return [
         'id'             => (int)$r['id'],
         'datum'          => $r['datum'],
+        'uhrzeit'        => $uhrzeit,
         'typ'            => $r['typ'],
         'titel'          => $r['titel'],
         'distanz_km'     => $r['distanz_km'] !== null ? (float)$r['distanz_km'] : null,

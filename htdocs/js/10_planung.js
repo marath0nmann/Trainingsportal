@@ -73,7 +73,7 @@ const KAL_POPOVER = (() => {
 
       // Daten für direktes Übernehmen serialisieren (kein zweiter API-Call nötig)
       const eJson = kannUebernehmen
-        ? escapeHtml(JSON.stringify({ id: e.id, datum: e.datum, typ: e.typ, titel: e.titel }))
+        ? escapeHtml(JSON.stringify({ id: e.id, datum: e.datum, uhrzeit: e.uhrzeit || null, typ: e.typ, titel: e.titel }))
         : '';
       const segsJson = kannUebernehmen
         ? escapeHtml(JSON.stringify(segs.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m }))))

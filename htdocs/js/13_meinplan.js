@@ -63,6 +63,7 @@ const MEINPLAN = (() => {
     try {
       await apiPost('mein-plan/einheiten', {
         datum:          einheitData.datum,
+        uhrzeit:        einheitData.uhrzeit || null,
         typ:            einheitData.typ,
         titel:          einheitData.titel,
         distanz_km:     km,
@@ -115,14 +116,15 @@ const MEINPLAN = (() => {
           { slug: 'kein_training', bezeichnung: 'Kein Training' },
         ];
 
-    const isNew   = !einheit;
-    const e       = einheit || {};
-    const d_datum = datum || e.datum || ymd(new Date());
-    const d_typ   = prefill?.typ   || e.typ   || 'dauerlauf';
-    const d_titel = prefill?.titel || e.titel || '';
-    const d_km    = e.distanz_km != null ? e.distanz_km : '';
-    const d_bem   = e.bemerkung   || '';
-    const d_ref   = prefill?.ref_einheit_id || e.ref_einheit_id || '';
+    const isNew    = !einheit;
+    const e        = einheit || {};
+    const d_datum  = datum || e.datum || ymd(new Date());
+    const d_uhr    = e.uhrzeit || '';
+    const d_typ    = prefill?.typ   || e.typ   || 'dauerlauf';
+    const d_titel  = prefill?.titel || e.titel || '';
+    const d_km     = e.distanz_km != null ? e.distanz_km : '';
+    const d_bem    = e.bemerkung   || '';
+    const d_ref    = prefill?.ref_einheit_id || e.ref_einheit_id || '';
 
     const typOptionen = typenCfg.map(t =>
       `<option value="${escapeHtml(t.slug)}"${t.slug === d_typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`
@@ -145,6 +147,10 @@ const MEINPLAN = (() => {
               <div class="ed-fg">
                 <label>Datum *</label>
                 <input type="date" id="mp-datum" value="${escapeHtml(d_datum)}">
+              </div>
+              <div class="ed-fg">
+                <label>Uhrzeit</label>
+                <input type="time" id="mp-uhrzeit" value="${escapeHtml(d_uhr)}">
               </div>
               <div class="ed-fg">
                 <label>Typ</label>
@@ -182,10 +188,12 @@ const MEINPLAN = (() => {
     if (!datum) { _notify('Bitte Datum angeben.', 'err'); return; }
     if (!titel) { _notify('Bitte Bezeichnung angeben.', 'err'); return; }
 
-    const kmStr  = (document.getElementById('mp-km')?.value  || '').trim();
-    const refStr = (document.getElementById('mp-ref')?.value || '').trim();
+    const kmStr   = (document.getElementById('mp-km')?.value      || '').trim();
+    const refStr  = (document.getElementById('mp-ref')?.value     || '').trim();
+    const uhrzeitV = (document.getElementById('mp-uhrzeit')?.value || '').trim();
     const body = {
       datum,
+      uhrzeit:        uhrzeitV || null,
       typ:            document.getElementById('mp-typ')?.value || 'dauerlauf',
       titel,
       distanz_km:     kmStr !== '' ? parseFloat(kmStr) : null,

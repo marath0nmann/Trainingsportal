@@ -1,5 +1,8 @@
 # Changelog
 
+## v90
+- Uhrzeit wird beim Übernehmen in den privaten Plan gespeichert und im Kalender angezeigt (sowohl bei „In meinen Plan" als auch beim Abo-Sync); Edit-Modal zeigt Uhrzeit-Feld
+
 ## v89
 - Abo ist jetzt typ-spezifisch: „Alle künftigen in meinen Plan" abonniert nur Einheiten des gleichen Trainingstyps; „Alle künftigen aus meinem Plan entfernen" löscht alle künftigen Abo-Einheiten dieses Typs (vergangene bleiben erhalten) und beendet das Abo für diesen Typ
 

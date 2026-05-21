@@ -396,10 +396,11 @@ async function renderKalender(main, monthArg) {
           const clickFn = e.ref_einheit_id
             ? `zeigeEinheit(${e.ref_einheit_id})`
             : `MEINPLAN.bearbeitePrivat(${e.id})`;
+          const timeHtml = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
           return `<div class="${cls}" data-privat-id="${e.id}"
                        onclick="${clickFn}"
                        title="${escapeHtml(e.titel)}">
-            <span class="kal-item-title">${escapeHtml(e.titel)}</span>
+            ${timeHtml}<span class="kal-item-title">${escapeHtml(e.titel)}</span>
             ${kmBadge}
             <button class="kal-item-del" onclick="event.stopPropagation();MEINPLAN.loeschePrivat(${e.id})" title="Löschen">×</button>
           </div>`;
