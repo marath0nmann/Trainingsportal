@@ -7,11 +7,11 @@
 
 const MEINPLAN = (() => {
 
-  // Abo-Status: wird von renderKalender() gesetzt (aus GET-Antwort)
-  let _aboAktiv = false;
+  // Abo-Status: Menge der abonnierten Typen, gesetzt aus GET-Antwort
+  let _aboTypen = new Set();
 
-  function setAbo(val) { _aboAktiv = !!val; }
-  function istAboAktiv() { return _aboAktiv; }
+  function setAbo(typen) { _aboTypen = new Set(Array.isArray(typen) ? typen : []); }
+  function istAboAktivFuerTyp(typ) { return _aboTypen.has(typ); }
 
   // ── km-Berechnung ────────────────────────────────────────
   // Wenn Segmente vorhanden: Summe aller Wiederholungen × Distanz.
@@ -75,27 +75,27 @@ const MEINPLAN = (() => {
     }
   }
 
-  // ── Abo aktivieren ───────────────────────────────────────
-  async function aboAktivieren() {
+  // ── Abo aktivieren (für einen Typ) ──────────────────────
+  async function aboAktivieren(typ) {
     KAL_POPOVER.hide();
     try {
-      await apiPost('mein-plan/abo', {});
-      _aboAktiv = true;
-      _notify('Alle künftigen Einheiten wurden übernommen.', 'ok');
+      await apiPost('mein-plan/abo', { typ });
+      _aboTypen.add(typ);
+      _notify('Alle künftigen Einheiten dieses Typs wurden übernommen.', 'ok');
       renderPage();
     } catch (err) {
       _notify('Fehler: ' + (err.message || ''), 'err');
     }
   }
 
-  // ── Abo deaktivieren ─────────────────────────────────────
-  async function aboDeaktivieren() {
-    if (!confirm('Abo beenden? Bereits übernommene Einheiten bleiben erhalten.')) return;
+  // ── Abo beenden + alle künftigen Einheiten dieses Typs entfernen ─
+  async function aboDeaktivieren(typ) {
+    if (!confirm('Alle künftigen Einheiten dieses Typs aus deinem Plan entfernen? Vergangene Einheiten bleiben erhalten.')) return;
     KAL_POPOVER.hide();
     try {
-      await apiDel('mein-plan/abo');
-      _aboAktiv = false;
-      _notify('Abo beendet.', 'ok');
+      await apiCall('DELETE', 'mein-plan/abo', { typ });
+      _aboTypen.delete(typ);
+      _notify('Einheiten entfernt.', 'ok');
       renderPage();
     } catch (err) {
       _notify('Fehler: ' + (err.message || ''), 'err');
@@ -219,7 +219,7 @@ const MEINPLAN = (() => {
   }
 
   return {
-    setAbo, istAboAktiv,
+    setAbo, istAboAktivFuerTyp,
     neuePrivatEinheit, bearbeitePrivat, loeschePrivat,
     uebernehmenVonOeffentlich, speichern,
     aboAktivieren, aboDeaktivieren,

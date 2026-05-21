@@ -79,10 +79,11 @@ const KAL_POPOVER = (() => {
         ? escapeHtml(JSON.stringify(segs.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m }))))
         : '';
 
-      const aboAktiv = kannUebernehmen && MEINPLAN.istAboAktiv();
+      const aboAktiv = kannUebernehmen && MEINPLAN.istAboAktivFuerTyp(e.typ);
+      const typEsc   = escapeHtml(e.typ);
 
       pop.innerHTML = `
-        <div class="kal-pop-typ kal-typ-${escapeHtml(e.typ)}">${escapeHtml(typLabel)}</div>
+        <div class="kal-pop-typ kal-typ-${typEsc}">${escapeHtml(typLabel)}</div>
         <div class="kal-pop-titel">${escapeHtml(e.titel)}</div>
         ${metaParts.length ? `<div class="kal-pop-meta">${metaParts.map(escapeHtml).join(' · ')}</div>` : ''}
         ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
@@ -92,8 +93,8 @@ const KAL_POPOVER = (() => {
             onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"
             data-e="${eJson}" data-s="${segsJson}">In meinen Plan</button>
           ${aboAktiv
-            ? `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboDeaktivieren()">✓ Abo beenden</button>`
-            : `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboAktivieren()">Alle künftigen in meinen Plan</button>`
+            ? `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboDeaktivieren('${typEsc}')">Alle künftigen aus meinem Plan entfernen</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboAktivieren('${typEsc}')">Alle künftigen in meinen Plan</button>`
           }
         </div>` : ''}
         ${kannEdit ? `<div class="kal-pop-actions">

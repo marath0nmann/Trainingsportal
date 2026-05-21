@@ -305,7 +305,7 @@ async function renderKalender(main, monthArg) {
     oeffentlich = d1.einheiten || [];
     privat      = angemeldet ? (d1.privat || []) : [];
     feiertage   = d2.feiertage || [];
-    if (angemeldet) MEINPLAN.setAbo(d1.abo || false);
+    if (angemeldet) MEINPLAN.setAbo(d1.abo_typen || []);
   } catch (e) {
     const g = document.getElementById('kal-grid');
     if (g) g.innerHTML = `<div class="kal-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;

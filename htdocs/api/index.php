@@ -222,6 +222,8 @@ function _migrationStmts(): array
 
         // ── 4: Abo-Funktion + Fallback-km pro Typ ────────────────────────
         4 => [
+            // Abonnements waren global (wird in #5 auf per-Typ umgebaut)
+
             // Fallback-Distanz je Trainingstyp (für „In meinen Plan" ohne Dialog)
             "ALTER TABLE $tt ADD COLUMN IF NOT EXISTS fallback_km DECIMAL(6,2) NULL",
 
@@ -242,6 +244,16 @@ function _migrationStmts(): array
               erstellt_am TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (benutzer_id, einheit_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ],
+
+        // ── 5: Abos werden typ-spezifisch ────────────────────────────────
+        5 => [
+            // typ-Spalte hinzufügen (bestehende globale Abos erhalten typ='', werden ignoriert)
+            "ALTER TABLE $ta ADD COLUMN IF NOT EXISTS typ VARCHAR(40) NOT NULL DEFAULT ''",
+            // Alten globalen Unique-Key entfernen (schlägt harmlos fehl, wenn er nicht existiert)
+            "ALTER TABLE $ta DROP INDEX uk_benutzer",
+            // Neuer Unique-Key: pro Nutzer + Typ ein Eintrag
+            "ALTER TABLE $ta ADD UNIQUE KEY uk_benutzer_typ (benutzer_id, typ)",
         ],
     ];
 }
@@ -2645,34 +2657,55 @@ function handleMeinPlan(string $method, string $tail): void
 
     // ── Abo-Status ──────────────────────────────────────────
     if ($tail === 'abo' && $method === 'GET') {
-        $row = DB::fetchOne(
-            'SELECT aktiv FROM ' . DB::tbl('training_abos') . ' WHERE benutzer_id = ?',
+        $rows = DB::fetchAll(
+            'SELECT typ FROM ' . DB::tbl('training_abos') . ' WHERE benutzer_id = ? AND aktiv = 1 AND typ != \'\'',
             [$userId]
         );
-        echo json_encode(['ok' => true, 'abo' => $row && (bool)$row['aktiv']]);
+        echo json_encode(['ok' => true, 'abo_typen' => array_column($rows, 'typ')]);
         return;
     }
 
-    // ── Abo aktivieren ──────────────────────────────────────
+    // ── Abo aktivieren (für einen Typ) ──────────────────────
     if ($tail === 'abo' && $method === 'POST') {
+        $in  = readJsonBody();
+        $typ = substr(preg_replace('/[^a-z0-9_]/', '_', strtolower(trim((string)($in['typ'] ?? '')))), 0, 40);
+        if ($typ === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "typ" erforderlich']);
+            return;
+        }
         DB::query(
-            'INSERT INTO ' . DB::tbl('training_abos') . ' (benutzer_id, aktiv)
-             VALUES (?, 1)
+            'INSERT INTO ' . DB::tbl('training_abos') . ' (benutzer_id, typ, aktiv)
+             VALUES (?, ?, 1)
              ON DUPLICATE KEY UPDATE aktiv = 1',
-            [$userId]
+            [$userId, $typ]
         );
-        // Alle künftigen öffentlichen Einheiten direkt einpflegen (die noch keine
-        // private Kopie haben und nicht in abo_skips stehen)
-        _aboSync($userId, date('Y-m-d'), '2099-12-31');
+        // Alle künftigen öffentlichen Einheiten dieses Typs direkt einpflegen
+        _aboSync($userId, date('Y-m-d'), '2099-12-31', $typ);
         echo json_encode(['ok' => true]);
         return;
     }
 
-    // ── Abo deaktivieren ────────────────────────────────────
+    // ── Abo beenden + künftige Einheiten entfernen (für einen Typ) ──
     if ($tail === 'abo' && $method === 'DELETE') {
+        $in  = readJsonBody();
+        $typ = substr(preg_replace('/[^a-z0-9_]/', '_', strtolower(trim((string)($in['typ'] ?? '')))), 0, 40);
+        if ($typ === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "typ" erforderlich']);
+            return;
+        }
+        // Abo-Eintrag deaktivieren
         DB::query(
-            'UPDATE ' . DB::tbl('training_abos') . ' SET aktiv = 0 WHERE benutzer_id = ?',
-            [$userId]
+            'UPDATE ' . DB::tbl('training_abos') . ' SET aktiv = 0 WHERE benutzer_id = ? AND typ = ?',
+            [$userId, $typ]
+        );
+        // Alle künftigen privaten Abo-Einheiten dieses Typs löschen (vergangene bleiben)
+        $today = date('Y-m-d');
+        DB::query(
+            'DELETE FROM ' . DB::tbl('training_privat_einheiten') . '
+             WHERE benutzer_id = ? AND typ = ? AND datum >= ? AND ref_einheit_id IS NOT NULL',
+            [$userId, $typ, $today]
         );
         echo json_encode(['ok' => true]);
         return;
@@ -2690,16 +2723,21 @@ function handleMeinPlan(string $method, string $tail): void
             return;
         }
 
-        // Abo-Auto-Sync: neue öffentliche Einheiten ab heute einpflegen
-        $aboRow = DB::fetchOne(
-            'SELECT aktiv FROM ' . DB::tbl('training_abos') . ' WHERE benutzer_id = ?',
+        // Aktive Abos des Nutzers laden
+        $aboRows = DB::fetchAll(
+            'SELECT typ FROM ' . DB::tbl('training_abos') . ' WHERE benutzer_id = ? AND aktiv = 1 AND typ != \'\'',
             [$userId]
         );
-        if ($aboRow && (bool)$aboRow['aktiv']) {
-            $today = date('Y-m-d');
+        $aboTypen = array_column($aboRows, 'typ');
+
+        // Abo-Auto-Sync: für jeden abonnierten Typ neue öffentliche Einheiten einpflegen
+        if ($aboTypen) {
+            $today    = date('Y-m-d');
             $syncFrom = $von > $today ? $von : $today;
             if ($syncFrom <= $bis) {
-                _aboSync($userId, $syncFrom, $bis);
+                foreach ($aboTypen as $aboTyp) {
+                    _aboSync($userId, $syncFrom, $bis, $aboTyp);
+                }
             }
         }
 
@@ -2724,7 +2762,7 @@ function handleMeinPlan(string $method, string $tail): void
             'ok'        => true,
             'einheiten' => array_map('mapEinheit', $rows),
             'privat'    => array_map('mapPrivatEinheit', $privatRows),
-            'abo'       => $aboRow && (bool)$aboRow['aktiv'],
+            'abo_typen' => $aboTypen,
         ]);
         return;
     }
@@ -2863,7 +2901,7 @@ function handleMeinPlan(string $method, string $tail): void
 }
 
 /** Synct öffentliche Einheiten in den privaten Plan eines Abo-Nutzers. */
-function _aboSync(int $userId, string $von, string $bis): void
+function _aboSync(int $userId, string $von, string $bis, string $typ = ''): void
 {
     $te  = DB::tbl('training_einheiten');
     $tp  = DB::tbl('training_privat_einheiten');
@@ -2871,12 +2909,18 @@ function _aboSync(int $userId, string $von, string $bis): void
     $tt  = DB::tbl('training_typen');
 
     // Öffentliche Einheiten die noch nicht kopiert wurden und nicht übersprungen werden
+    $typFilter = $typ !== '' ? "AND e.typ = ?" : '';
+    $params    = $typ !== ''
+        ? [$von, $bis, $typ, $userId, $userId]
+        : [$von, $bis, $userId, $userId];
+
     $toSync = DB::fetchAll(
         "SELECT e.id, e.datum, e.typ, e.titel
            FROM $te e
           WHERE e.datum BETWEEN ? AND ?
             AND e.sichtbarkeit = 'oeffentlich'
             AND e.status != 'abgesagt'
+            $typFilter
             AND e.id NOT IN (
                 SELECT ref_einheit_id FROM $tp
                  WHERE benutzer_id = ? AND ref_einheit_id IS NOT NULL
@@ -2884,7 +2928,7 @@ function _aboSync(int $userId, string $von, string $bis): void
             AND e.id NOT IN (
                 SELECT einheit_id FROM $tas WHERE benutzer_id = ?
             )",
-        [$von, $bis, $userId, $userId]
+        $params
     );
     if (!$toSync) return;
 
