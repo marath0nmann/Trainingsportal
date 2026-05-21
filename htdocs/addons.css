@@ -1345,3 +1345,20 @@ body.planung-active #app-footer    { display: none; }
   .meinplan-kal-grid .kal-head,
   .meinplan-kal-grid .kal-row { grid-template-columns: 48px repeat(7, 1fr); }
 }
+
+/* ── Mobile Nav Drawer Items ─────────────────────────────── */
+.mobile-nav-item {
+  display: block; width: 100%; text-align: left;
+  padding: 15px 20px;
+  background: none; border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Barlow', sans-serif; font-size: 16px; font-weight: 500;
+  cursor: pointer; transition: background .12s;
+}
+.mobile-nav-item:hover,
+.mobile-nav-item:focus-visible { background: var(--surf2); outline: none; }
+.mobile-nav-item.active { color: var(--accent); font-weight: 700; }
+.mobile-nav-item:last-child { border-bottom: none; }
+.mobile-nav-profil { color: var(--text2); }
+.mobile-nav-logout { color: var(--primary); border-top: 2px solid var(--border); border-bottom: none; margin-top: 8px; }

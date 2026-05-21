@@ -61,6 +61,7 @@ function fillUserBadge() {
       userBtn.style.display = 'flex';
       userBtn.innerHTML = `<button class="btn-login-header" onclick="goToLoginPortal()">Anmelden</button>`;
     }
+    _fillMobileNav(false, false);
     return;
   }
 
@@ -87,17 +88,38 @@ function fillUserBadge() {
     avatarEl.style.cursor = 'pointer';
   }
 
+  const isAdmin   = u.rolle === 'admin';
+  const isTrainer = isAdmin || u.rolle === 'trainer';
+
   // Hauptnavigation abhängig von der Rolle
   const nav = document.getElementById('main-nav');
-  if (nav && u) {
-    const isAdmin   = u.rolle === 'admin';
-    const isTrainer = isAdmin || u.rolle === 'trainer';
+  if (nav) {
     nav.innerHTML = `
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
       ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
       ${isTrainer ? `<button onclick="navigate('treffpunkte')"${state.tab === 'treffpunkte' ? ' class="active"' : ''}>Treffpunkte</button>` : ''}
       ${isAdmin ? `<button onclick="navigate('admin')"${state.tab === 'admin' ? ' class="active"' : ''}>Admin</button>` : ''}`;
   }
+
+  _fillMobileNav(isTrainer, isAdmin);
+}
+
+function _fillMobileNav(isTrainer, isAdmin) {
+  const mobileNav = document.getElementById('mobile-nav-items');
+  if (!mobileNav) return;
+  const u = state.user;
+  const act = (tab) => state.tab === tab ? ' active' : '';
+  let html = `<button class="mobile-nav-item${act('kalender')}" onclick="navigate('kalender');closeBurgerMenu()">Kalender</button>`;
+  if (isTrainer) html += `<button class="mobile-nav-item${act('planung')}" onclick="navigate('planung');closeBurgerMenu()">Planung</button>`;
+  if (isTrainer) html += `<button class="mobile-nav-item${act('treffpunkte')}" onclick="navigate('treffpunkte');closeBurgerMenu()">Treffpunkte</button>`;
+  if (isAdmin)   html += `<button class="mobile-nav-item${act('admin')}" onclick="navigate('admin');closeBurgerMenu()">Admin</button>`;
+  if (u) {
+    html += `<button class="mobile-nav-item mobile-nav-profil" onclick="PROFIL.open();closeBurgerMenu()">Profil</button>`;
+    html += `<button class="mobile-nav-item mobile-nav-logout" onclick="logout()">Abmelden</button>`;
+  } else {
+    html += `<button class="mobile-nav-item" onclick="goToLoginPortal()">Anmelden</button>`;
+  }
+  mobileNav.innerHTML = html;
 }
 
 // ── Routing ─────────────────────────────────────────────────
