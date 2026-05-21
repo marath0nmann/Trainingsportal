@@ -4,7 +4,47 @@
 - Hinweis-Toasts erscheinen jetzt am unteren Bildschirmrand (statt oben rechts)
 
 ## v100
+- Weg zum Training: Eingabe einfache Strecke, Hin+Rückweg wird × 2 berechnet; „Kein Training" aus Typ-Auswahl ausgeblendet; Text auf „Anreisekilometer" korrigiert
 - Fix: „Alle Künftigen in meinen Plan" übernimmt jetzt die angeklickte Einheit sofort und abonniert dann den Trainingstyp – zuvor wurde die konkret angezeigte Einheit nicht hinzugefügt
+
+## v95
+- Hover-Popover für abonnierte Einheiten identisch zum Team-Eintrag (gleicher Popover über ref_einheit_id); „In meinen Plan"-Buttons werden dabei ausgeblendet
+- Segmente im Popover als grafische Blöcke (TrainingPeaks-Stil) statt Text-Chips
+
+## v94
+- Seitenstreifen privater Kalendereinträge ist jetzt durchgehend (nicht mehr gestrichelt)
+
+## v93
+- Fix: km-Badge bei privaten Einheiten wird ausgeblendet, wenn der Wert 0 km beträgt
+
+## v92
+- Fallback-km aus der Typ-Konfiguration wird bei privaten Einheiten ohne Distanzangabe angezeigt (kursiv/gedimmt) und in die Wochenkilometer aufaddiert; explizit auf 0 km gesetzte Einheiten sind davon ausgenommen
+
+## v91
+- Fix: Uhrzeit bei abonnierten Trainings (DB-Migration #7 füllt uhrzeit für bestehende Abo-Einheiten nach, die vor Migration #6 angelegt wurden)
+
+## v90
+- Uhrzeit wird beim Übernehmen in den privaten Plan gespeichert und im Kalender angezeigt (sowohl bei „In meinen Plan" als auch beim Abo-Sync); Edit-Modal zeigt Uhrzeit-Feld
+
+## v89
+- Abo ist jetzt typ-spezifisch: „Alle künftigen in meinen Plan" abonniert nur Einheiten des gleichen Trainingstyps; „Alle künftigen aus meinem Plan entfernen" löscht alle künftigen Abo-Einheiten dieses Typs (vergangene bleiben erhalten) und beendet das Abo für diesen Typ
+
+## v88
+- Übernommene Team-Einheiten werden im Kalender ausgeblendet – nur die private Kopie (gestrichelt) bleibt sichtbar; Klick darauf öffnet das normale Detail-Modal
+- Legende „Teamplan / Mein Plan" unter den Kalender verschoben (auf Mobilgeräten ausgeblendet)
+
+## v87
+- „In meinen Plan" übernimmt Einheiten direkt ohne Zwischendialog; km wird automatisch aus Segmenten berechnet oder aus der Typ-Fallback-Distanz (konfigurierbar unter Admin → Einstellungen → Trainingstypen) übernommen
+- „Alle künftigen in meinen Plan": Abo-Button im Hover-Popover übernimmt alle künftigen öffentlichen Einheiten sofort und hält den Plan per Auto-Sync aktuell; einzelne Einheiten lassen sich trotzdem entfernen (werden beim nächsten Sync übersprungen); Abo-Beenden-Button erscheint, wenn Abo bereits aktiv
+
+## v86
+- Mein Plan in Hauptkalender integriert: separate Ansicht entfernt; öffentliche und private Einheiten werden direkt im Monatskalender angezeigt; KW-Spalte und „In meinen Plan"-Button im Hover-Popover erscheinen auf der Startseite
+
+## v85
+- Auto-Migration: DB-Migrationen werden beim ersten API-Aufruf automatisch ausgeführt (training_db_version in einstellungen); manuelle SQL-Skripte auf dem Server entfallen
+
+## v84
+- Mein Plan: privater Trainingskalender für jeden eingeloggten Nutzer; öffentliche Einheiten per Hover-Popover mit einem Klick übernehmen; private Einheiten farblich invertiert (getönter Hintergrund + gestrichelter Rahmen); Wochenkilometer-Spalte (KW-Nummer + km-Summe) direkt im Kalender
 
 ## v83
 - Kalender-Detail-Modal: „Bearbeiten"-Button öffnet ebenfalls das schlanke Modal „Kalendereintrag bearbeiten" (Datum, Uhrzeit, Treffpunkt, Sichtbarkeit) – gilt jetzt im gesamten Kalenderbereich, nicht nur in der Heute-Sektion
@@ -12,7 +52,7 @@
 ## v82
 - Heute-Sektion: „Bearbeiten"-Button öffnet schlankes Modal „Kalendereintrag bearbeiten" mit nur Datum, Uhrzeit, Treffpunkt und Sichtbarkeit (kein Trainingsblock-Editor)
 
-## v80
+## v81
 - Kalender: heutiger Tag ohne farbige Zellhinterlegung – nur der Kreis um die Tageszahl bleibt farbig
 
 ## v75
@@ -22,7 +62,7 @@
 - Pace-Warnung „Persönliche Pace noch nicht konfiguriert" wird über der Heute-Sektion angezeigt, unabhängig vom heutigen Training; per-Einheit-Warnung entfernt
 - Fix: Link-Farbe in Warnhinweisen nutzt jetzt `color: inherit` – immer lesbar unabhängig von der Theme-Farbe
 
-## v80
+## v81
 - Versionsnummer korrigiert: Sprung auf v73 nach Versions-Regression durch fehlerhafte Squash-Merges (main war zwischenzeitlich bei v71, dann auf v60 zurückgefallen)
 
 ## v57

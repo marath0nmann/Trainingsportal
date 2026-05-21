@@ -959,7 +959,7 @@ async function zeigeEinheit(id) {
           <div class="modal-km-row">
             <div class="modal-km-chip"><span class="modal-km-chip-val">${fmtKm(trainingsKm)}</span><span class="modal-km-chip-lbl">Training</span></div>
             <span class="modal-km-plus">+</span>
-            <div class="modal-km-chip"><span class="modal-km-chip-val">${fmtKm(wegKm)}</span><span class="modal-km-chip-lbl">Anfahrt</span></div>
+            <div class="modal-km-chip"><span class="modal-km-chip-val">${fmtKm(wegKm)}</span><span class="modal-km-chip-lbl">Weg hin+zurück</span></div>
             <span class="modal-km-plus">=</span>
             <div class="modal-km-chip is-total"><span class="modal-km-chip-val">${fmtKm(total)}</span><span class="modal-km-chip-lbl">Gesamt</span></div>
           </div></div>`;

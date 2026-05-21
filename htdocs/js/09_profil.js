@@ -25,8 +25,11 @@ const PROFIL = (() => {
   ];
   function _typOptions() {
     const t = typeof appConfig !== 'undefined' && appConfig && appConfig.typen;
-    if (Array.isArray(t) && t.length) return t.map(x => ({ value: x.slug, label: x.bezeichnung }));
-    return FALLBACK_TYPEN;
+    const src = (Array.isArray(t) && t.length)
+      ? t.map(x => ({ value: x.slug, label: x.bezeichnung }))
+      : FALLBACK_TYPEN;
+    // "Kein Training" macht für Anreise keinen Sinn → ausblenden
+    return src.filter(x => x.value !== 'kein_training');
   }
 
   async function open() {
@@ -192,10 +195,9 @@ const PROFIL = (() => {
         <select class="settings-input weg-typ-sel" data-i="${safeI}">${typOpts}</select>
         <select class="settings-input weg-tp-sel"  data-i="${safeI}">${tpOpts}</select>
         <div class="weg-km-wrap">
-          <input type="number" class="settings-input weg-km-inp" data-i="${safeI}"
-                 placeholder="km" min="0.1" max="500" step="0.1"
-                 value="${escapeHtml(kmVal)}" style="width:80px">
-          <span class="profil-hint" style="white-space:nowrap">km hin &amp; zurück</span>
+          <input type="text" inputmode="decimal" class="settings-input weg-km-inp" data-i="${safeI}"
+                 placeholder="z.B. 1,5" value="${escapeHtml(kmVal)}" style="width:80px">
+          <span class="weg-km-label">km einfach</span>
         </div>
         <button class="btn-icon weg-del-btn" onclick="PROFIL._wegEntfernen(${safeI})" title="Entfernen">×</button>
       </div>`;
@@ -210,7 +212,20 @@ const PROFIL = (() => {
       </div>`;
   }
 
+  // DOM → _localWeg synchronisieren (vor jedem Re-Render aufrufen)
+  function _syncWegFromDom() {
+    _localWeg.forEach((entry, i) => {
+      const typEl = document.querySelector(`.weg-typ-sel[data-i="${i}"]`);
+      const tpEl  = document.querySelector(`.weg-tp-sel[data-i="${i}"]`);
+      const kmEl  = document.querySelector(`.weg-km-inp[data-i="${i}"]`);
+      if (typEl) entry.typ          = typEl.value;
+      if (tpEl)  entry.treffpunkt_id = tpEl.value ? parseInt(tpEl.value, 10) : null;
+      if (kmEl)  entry.km           = parseFloat((kmEl.value || '').replace(',', '.')) || null;
+    });
+  }
+
   function _rendereWegListe() {
+    _syncWegFromDom();
     const el = document.getElementById('weg-liste');
     if (!el) return;
     if (!_localWeg.length) {
@@ -250,8 +265,8 @@ const PROFIL = (() => {
 
             <div class="profil-section-title" style="margin-top:28px">Weg zum Training</div>
             <p class="profil-hint-global">
-              Definiere für welche Kombinationen aus Trainingstyp und Treffpunkt
-              Fahrtkilometer anfallen. Diese werden automatisch zu den Trainingskilometern addiert.
+              Trage ein, wie viele Kilometer du zum Startpunkt läufst (einfache Strecke).
+              Hin- und Rückweg werden automatisch zu den Trainingskilometern addiert.
             </p>
             ${_buildWegSection()}
 
@@ -327,6 +342,14 @@ const PROFIL = (() => {
       if (!typ || !km || km <= 0) return;
       newWeg.push({ typ, treffpunkt_id: tpId, km });
     });
+
+    // Doppelte Typ+Treffpunkt-Kombinationen prüfen
+    const wegKeys = newWeg.map(e => `${e.typ}|${e.treffpunkt_id ?? ''}`);
+    const doppelt = wegKeys.find((k, i) => wegKeys.indexOf(k) !== i);
+    if (doppelt) {
+      _notify('Doppelte Kombination aus Trainingstyp und Treffpunkt – bitte korrigieren.', 'err');
+      return;
+    }
 
     try {
       await Promise.all([

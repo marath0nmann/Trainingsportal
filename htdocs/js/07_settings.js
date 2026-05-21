@@ -596,12 +596,15 @@ const SETTINGS = (() => {
           <td style="padding:6px 8px;text-align:center;font-size:12px;color:var(--text2)">${t.aktiv ? '✓' : '—'}</td>
           <td style="padding:6px 8px;text-align:right;white-space:nowrap">
             <button class="btn btn-ghost btn-sm" onclick="SETTINGS.typBearbeiten('${escapeHtml(t.slug)}')">Bearbeiten</button>
-            <button class="btn btn-danger btn-sm" onclick="SETTINGS.typLoeschen('${escapeHtml(t.slug)}')" ${gesperrt ? 'disabled title="Typ wird von Blöcken verwendet"' : ''}>Löschen</button>
+            <button class="btn btn-danger btn-sm" style="padding:2px 7px"
+              onclick="SETTINGS.typLoeschen('${escapeHtml(t.slug)}')"
+              ${gesperrt ? `disabled title="Wird von ${t.block_count} Block/Blöcken verwendet"` : 'title="Typ löschen"'}>✕</button>
           </td>
         </tr>`;
     }).join('');
 
     wrap.innerHTML = `
+      <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
           <tr style="border-bottom:2px solid var(--border)">
@@ -614,7 +617,8 @@ const SETTINGS = (() => {
           </tr>
         </thead>
         <tbody>${zeilen}</tbody>
-      </table>`;
+      </table>
+      </div>`;
   }
 
   function typBearbeiten(slug) {
