@@ -1,6 +1,6 @@
 # Changelog
 
-## v96
+## v97
 - Fix: Pace-Anzeige im Popover zeigt jetzt berechnete min/km statt fehlerhaftem Pace-Referenz-Label (Pace-Daten werden im Popover geladen)
 
 ## v95
