@@ -21,6 +21,13 @@
 //   POST treffpunkte                → Neu (Recht: training_bloecke_verwalten)
 //   PUT  treffpunkte/{id}           → Update (Recht: training_bloecke_verwalten)
 //   DEL  treffpunkte/{id}           → Löschen (Recht: training_bloecke_verwalten)
+//   GET  mein-plan/einheiten?von=&bis= → öffentl. + eigene private Einheiten (auth)
+//   POST mein-plan/einheiten           → neue private Einheit (auth)
+//   PUT  mein-plan/einheiten/{id}      → eigene private Einheit bearbeiten (auth)
+//   DEL  mein-plan/einheiten/{id}      → eigene private Einheit löschen (auth)
+//
+// Beim ersten Aufruf werden ausstehende DB-Migrationen automatisch
+// ausgeführt (training_db_version in einstellungen).
 // ============================================================
 
 declare(strict_types=1);
@@ -32,7 +39,189 @@ require_once __DIR__ . '/../../includes/settings.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+// ============================================================
+// Auto-Migrationen – werden beim ersten API-Aufruf ausgeführt.
+// Jede Migration ist idempotent (CREATE TABLE IF NOT EXISTS u.ä.),
+// sodass sie auch auf einer bereits teilweise migrierten DB sicher ist.
+// Der aktuelle Stand wird als „training_db_version" in einstellungen
+// gespeichert; bereits erledigte Migrationen werden übersprungen.
+// ============================================================
+
+function runPendingMigrations(): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+
+    // Aktuelle DB-Version lesen (0 = noch keine Migration gelaufen)
+    $current = (int) Settings::get('training_db_version', '0');
+    $migs    = _migrationStmts();
+    if ($current >= max(array_keys($migs))) return; // Fast-Path: alles aktuell
+
+    foreach ($migs as $num => $stmts) {
+        if ($num <= $current) continue;
+        foreach ($stmts as $sql) {
+            try {
+                DB::query($sql);
+            } catch (Throwable $e) {
+                // DDL-Fehler ("already exists", "duplicate key name" …) sicher ignorieren;
+                // echte Fehler werden ins PHP-Error-Log geschrieben.
+                error_log("[migration {$num}] " . $e->getMessage());
+            }
+        }
+        Settings::set('training_db_version', (string) $num);
+        $current = $num;
+    }
+}
+
+/** Gibt alle Migrationen als [versionsnummer => [sql, ...]] zurück. */
+function _migrationStmts(): array
+{
+    // Tabellennamen mit konfiguriertem Prefix
+    $tr  = DB::tbl('training_treffpunkte');
+    $te  = DB::tbl('training_einheiten');
+    $ts  = DB::tbl('training_segmente');
+    $tb  = DB::tbl('training_bloecke');
+    $tbs = DB::tbl('training_block_segmente');
+    $tt  = DB::tbl('training_typen');
+    $tp  = DB::tbl('training_privat_einheiten');
+    $ro  = DB::tbl('rollen');
+
+    return [
+        // ── 1: Grundschema + Trainer-Rollen ─────────────────────────────
+        1 => [
+            "CREATE TABLE IF NOT EXISTS $tr (
+              id           INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+              name         VARCHAR(200)  NOT NULL,
+              lat          DECIMAL(10,7) NULL,
+              lng          DECIMAL(10,7) NULL,
+              erstellt_von INT UNSIGNED  NULL,
+              erstellt_am  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            // Typ, Sichtbarkeit und Status direkt als VARCHAR – umgeht spätere ENUM→VARCHAR-Migrationen
+            "CREATE TABLE IF NOT EXISTS $te (
+              id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              datum         DATE         NOT NULL,
+              uhrzeit       TIME         NULL,
+              typ           VARCHAR(40)  NOT NULL DEFAULT 'frei',
+              titel         VARCHAR(200) NOT NULL,
+              treffpunkt_id INT UNSIGNED NULL,
+              komoot_url    VARCHAR(500) NULL,
+              bemerkung     TEXT         NULL,
+              sichtbarkeit  VARCHAR(20)  NOT NULL DEFAULT 'oeffentlich',
+              status        VARCHAR(20)  NOT NULL DEFAULT 'geplant',
+              erstellt_von  INT UNSIGNED NULL,
+              erstellt_am   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              KEY idx_datum (datum),
+              KEY idx_sichtbarkeit (sichtbarkeit, datum)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS $ts (
+              id             INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+              einheit_id     INT UNSIGNED      NOT NULL,
+              reihenfolge    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+              block_id       SMALLINT UNSIGNED NULL,
+              wiederholungen SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+              distanz_m      INT UNSIGNED      NOT NULL,
+              pause_m        INT UNSIGNED      NULL,
+              pause_typ      VARCHAR(10)       NULL,
+              pace_referenz  VARCHAR(40)       NULL,
+              notiz          VARCHAR(200)      NULL,
+              PRIMARY KEY (id),
+              KEY idx_einheit (einheit_id, reihenfolge),
+              CONSTRAINT fk_segm_einheit FOREIGN KEY (einheit_id)
+                REFERENCES $te (id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS $tb (
+              id            INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+              titel         VARCHAR(200)      NOT NULL,
+              typ           VARCHAR(40)       NOT NULL DEFAULT 'intervall',
+              komoot_url    VARCHAR(500)      NULL,
+              bemerkung     TEXT              NULL,
+              sichtbarkeit  VARCHAR(20)       NOT NULL DEFAULT 'global',
+              erstellt_von  INT UNSIGNED      NULL,
+              erstellt_am   TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am  TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              KEY idx_sichtbarkeit (sichtbarkeit)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS $tbs (
+              id             INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+              block_id       INT UNSIGNED      NOT NULL,
+              reihenfolge    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+              gruppen_id     SMALLINT UNSIGNED NULL,
+              wiederholungen SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+              distanz_m      INT UNSIGNED      NOT NULL,
+              pause_m        INT UNSIGNED      NULL,
+              pause_typ      VARCHAR(10)       NULL,
+              pace_referenz  VARCHAR(40)       NULL,
+              notiz          VARCHAR(200)      NULL,
+              PRIMARY KEY (id),
+              KEY idx_block (block_id, reihenfolge),
+              CONSTRAINT fk_bsegm_block FOREIGN KEY (block_id)
+                REFERENCES $tb (id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "INSERT IGNORE INTO $ro (name, rechte) VALUES
+              ('trainer', '[\"training_bloecke_verwalten\",\"training_bearbeiten\"]'),
+              ('editor',  '[\"training_bearbeiten\"]')",
+        ],
+
+        // ── 2: Trainingstypen-Tabelle + ENUM→VARCHAR ─────────────────────
+        2 => [
+            "CREATE TABLE IF NOT EXISTS $tt (
+              slug        VARCHAR(40)       NOT NULL,
+              bezeichnung VARCHAR(100)      NOT NULL,
+              farbe       VARCHAR(20)       NULL,
+              reihenfolge SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+              aktiv       TINYINT(1)        NOT NULL DEFAULT 1,
+              PRIMARY KEY (slug)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "INSERT IGNORE INTO $tt (slug, bezeichnung, reihenfolge) VALUES
+              ('intervall',     'Intervall',              1),
+              ('dauerlauf',     'Dauerlauf',              2),
+              ('funktionell',   'Funktionelles Training', 3),
+              ('runde',         'Runde / Strecke',        4),
+              ('event',         'Event / Wettkampf',      5),
+              ('frei',          'Sonstiges',              6),
+              ('kein_training', 'Kein Training',          7)",
+
+            // MODIFY COLUMN ist idempotent (VARCHAR → VARCHAR ist keine Änderung);
+            // auf bestehenden ENUM-Spalten migriert es die Definition sicher zu VARCHAR.
+            "ALTER TABLE $te MODIFY COLUMN typ VARCHAR(40) NOT NULL DEFAULT 'frei'",
+            "ALTER TABLE $tb MODIFY COLUMN typ VARCHAR(40) NOT NULL DEFAULT 'intervall'",
+        ],
+
+        // ── 3: Privater Trainingsplan ────────────────────────────────────
+        3 => [
+            "CREATE TABLE IF NOT EXISTS $tp (
+              id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              benutzer_id    INT UNSIGNED NOT NULL,
+              datum          DATE         NOT NULL,
+              typ            VARCHAR(40)  NOT NULL DEFAULT 'dauerlauf',
+              titel          VARCHAR(200) NOT NULL,
+              distanz_km     DECIMAL(6,2) NULL,
+              bemerkung      TEXT         NULL,
+              ref_einheit_id INT UNSIGNED NULL,
+              erstellt_am    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              KEY idx_benutzer_datum (benutzer_id, datum)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ],
+    ];
+}
+
 Auth::startSession();
+runPendingMigrations();
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path   = trim((string)($_GET['p'] ?? ''), '/');

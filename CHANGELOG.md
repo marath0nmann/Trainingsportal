@@ -1,5 +1,8 @@
 # Changelog
 
+## v85
+- Auto-Migration: DB-Migrationen werden beim ersten API-Aufruf automatisch ausgeführt (training_db_version in einstellungen); manuelle SQL-Skripte auf dem Server entfallen
+
 ## v84
 - Mein Plan: privater Trainingskalender für jeden eingeloggten Nutzer; öffentliche Einheiten per Hover-Popover mit einem Klick übernehmen; private Einheiten farblich invertiert (getönter Hintergrund + gestrichelter Rahmen); Wochenkilometer-Spalte (KW-Nummer + km-Summe) direkt im Kalender
 
