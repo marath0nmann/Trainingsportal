@@ -61,7 +61,7 @@ const apiDel  = (path, opts)        => apiCall('DELETE', path, undefined, opts);
 function handleUnauthorized(data) {
   if (data && data.login_portal_aktiv && data.login_portal_url) {
     const ret = encodeURIComponent(window.location.href);
-    window.location.href = data.login_portal_url.replace(/\/$/, '') + '/?return=' + ret;
+    window.location.href = data.login_portal_url.replace(/\/$/, '') + '/?redirect=' + ret;
     return;
   }
   // Standalone-Fallback
