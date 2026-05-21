@@ -77,12 +77,28 @@ const MEINPLAN = (() => {
   }
 
   // ── Abo aktivieren (für einen Typ) ──────────────────────
-  async function aboAktivieren(typ) {
+  // einheitId / einheitData / segmente: die konkret angeklickte Einheit,
+  // damit sie unabhängig vom Datum sofort übernommen wird.
+  async function aboAktivieren(typ, einheitId, einheitData, segmente) {
     KAL_POPOVER.hide();
     try {
+      // 1. Diese spezifische Einheit direkt übernehmen (setzt ref_einheit_id)
+      if (einheitId && einheitData) {
+        const km = _berechneKm(einheitData, segmente || []);
+        await apiPost('mein-plan/einheiten', {
+          datum:          einheitData.datum,
+          uhrzeit:        einheitData.uhrzeit || null,
+          typ:            einheitData.typ,
+          titel:          einheitData.titel,
+          distanz_km:     km,
+          ref_einheit_id: einheitData.id,
+        });
+      }
+      // 2. Typ abonnieren → Backend-Sync fügt alle künftigen Einheiten dieses Typs hinzu
+      //    (bereits über ref_einheit_id vorhandene werden vom Sync übersprungen)
       await apiPost('mein-plan/abo', { typ });
       _aboTypen.add(typ);
-      _notify('Alle künftigen Einheiten dieses Typs wurden übernommen.', 'ok');
+      _notify('Diese und alle künftigen Einheiten dieses Typs übernommen.', 'ok');
       renderPage();
     } catch (err) {
       _notify('Fehler: ' + (err.message || ''), 'err');
