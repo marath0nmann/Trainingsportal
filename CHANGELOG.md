@@ -1,5 +1,8 @@
 # Changelog
 
+## v94
+- Seitenstreifen privater Kalendereinträge ist jetzt durchgehend (nicht mehr gestrichelt)
+
 ## v93
 - Fix: km-Badge bei privaten Einheiten wird ausgeblendet, wenn der Wert 0 km beträgt
 

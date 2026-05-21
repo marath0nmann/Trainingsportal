@@ -1245,7 +1245,7 @@ body.planung-active #app-footer    { display: none; }
 
 /* Private Kalender-Einträge: invertierter Hintergrund (Typ-Farbe als Füllung) */
 .kal-item.is-privat {
-  border-left-style: dashed;
+  border-left-style: solid;
 }
 .kal-item.is-privat.kal-typ-intervall    { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); }
 .kal-item.is-privat.kal-typ-dauerlauf    { background: color-mix(in srgb, var(--green, #1a8a3a) 14%, var(--surface)); }
