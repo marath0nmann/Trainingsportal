@@ -1,5 +1,8 @@
 # Changelog
 
+## v107
+- Fix: Pausendistanzen (GP/TP/BP) werden zur Trainingsdistanz addiert (z. B. 10 × 500 m + 100 m GP = 6 km statt 5 km)
+
 ## v106
 - Fix: Anreise-km im Kalender werden jetzt auch für übernommene private Einheiten berücksichtigt (API liefert treffpunkt_id via JOIN; WEG-Matching nutzt jetzt auch treffpunkt_id direkt)
 

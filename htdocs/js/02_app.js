@@ -962,7 +962,10 @@ async function zeigeEinheit(id) {
       </div>` : '';
 
     // km-Zeile: Trainings-km aus Segmenten + Anfahrt-km
-    const trainingsKm = seg.reduce((s, b) => s + (parseFloat(b.distanz_m) || 0) * (parseInt(b.wiederholungen) || 1), 0) / 1000;
+    const trainingsKm = seg.reduce((s, b) => {
+      const wdh = parseInt(b.wiederholungen) || 1;
+      return s + ((parseFloat(b.distanz_m) || 0) + (parseFloat(b.pause_m) || 0)) * wdh;
+    }, 0) / 1000;
     let kmHtml = '';
     if (trainingsKm > 0 || wegKm != null) {
       const fmtKm = km => km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' km';
