@@ -63,7 +63,7 @@ Identisches Setup wie das Statistikportal.
 - `COOKIE_DOMAIN='.tus-oedt.de'` in `includes/config.php`
 
 **Flow (im Frontend implementiert in `js/01_api.js`):**
-1. `apiGet('auth/me')` → 401 + `login_portal_aktiv=1` → Redirect zu `login_portal_url?return=…`
+1. `apiGet('auth/me')` → 401 + `login_portal_aktiv=1` → Redirect zu `login_portal_url?redirect=…`
 2. Login-Portal: Login → Session-Cookie mit `domain=.tus-oedt.de`
 3. Redirect zurück → `auth/me` erkennt Session → `showApp()`
 
