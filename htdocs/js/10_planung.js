@@ -51,6 +51,13 @@ const KAL_POPOVER = (() => {
       const e    = data.einheit;
       const segs = data.segmente || [];
 
+      // Pace-Daten laden (gecacht via PACE.load – kein spürbarer Overhead)
+      let popPaceData = null;
+      if (state.user && segs.some(s => s.pace_referenz)) {
+        try { popPaceData = await PACE.load(); } catch (_) {}
+      }
+      if (currentId !== einheitId) return; // Maus bereits woanders (nach async)
+
       const typLabel  = _getTypLabel(e.typ);
       const metaParts = [];
       if (e.uhrzeit) metaParts.push(e.uhrzeit + ' Uhr');
@@ -59,7 +66,7 @@ const KAL_POPOVER = (() => {
       // Segmente: grafische Blöcke (renderSegmentBlocksHtml aus 02_app.js) statt Chips
       const segsHtml = segs.length
         ? (typeof renderSegmentBlocksHtml === 'function'
-            ? `<div class="kal-pop-segs-blocks">${renderSegmentBlocksHtml(segs, null, e.typ)}</div>`
+            ? `<div class="kal-pop-segs-blocks">${renderSegmentBlocksHtml(segs, popPaceData, e.typ)}</div>`
             : `<div class="kal-pop-segs">${segs.map(s => {
                 const wdh = s.wiederholungen > 1 ? s.wiederholungen + '×' : '';
                 return `<span class="kal-pop-seg">${wdh}${s.distanz_m} m</span>`;

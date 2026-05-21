@@ -1,5 +1,8 @@
 # Changelog
 
+## v96
+- Fix: Pace-Anzeige im Popover zeigt jetzt berechnete min/km statt fehlerhaftem Pace-Referenz-Label (Pace-Daten werden im Popover geladen)
+
 ## v95
 - Hover-Popover für abonnierte Einheiten identisch zum Team-Eintrag (gleicher Popover über ref_einheit_id); „In meinen Plan"-Buttons werden dabei ausgeblendet
 - Segmente im Popover als grafische Blöcke (TrainingPeaks-Stil) statt Text-Chips
