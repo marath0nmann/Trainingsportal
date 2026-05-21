@@ -21,6 +21,13 @@
 //   POST treffpunkte                → Neu (Recht: training_bloecke_verwalten)
 //   PUT  treffpunkte/{id}           → Update (Recht: training_bloecke_verwalten)
 //   DEL  treffpunkte/{id}           → Löschen (Recht: training_bloecke_verwalten)
+//   GET  mein-plan/einheiten?von=&bis= → öffentl. + eigene private Einheiten (auth)
+//   POST mein-plan/einheiten           → neue private Einheit (auth)
+//   PUT  mein-plan/einheiten/{id}      → eigene private Einheit bearbeiten (auth)
+//   DEL  mein-plan/einheiten/{id}      → eigene private Einheit löschen (auth)
+//
+// Beim ersten Aufruf werden ausstehende DB-Migrationen automatisch
+// ausgeführt (training_db_version in einstellungen).
 // ============================================================
 
 declare(strict_types=1);
@@ -32,7 +39,244 @@ require_once __DIR__ . '/../../includes/settings.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+// ============================================================
+// Auto-Migrationen – werden beim ersten API-Aufruf ausgeführt.
+// Jede Migration ist idempotent (CREATE TABLE IF NOT EXISTS u.ä.),
+// sodass sie auch auf einer bereits teilweise migrierten DB sicher ist.
+// Der aktuelle Stand wird als „training_db_version" in einstellungen
+// gespeichert; bereits erledigte Migrationen werden übersprungen.
+// ============================================================
+
+function runPendingMigrations(): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+
+    // Aktuelle DB-Version lesen (0 = noch keine Migration gelaufen)
+    $current = (int) Settings::get('training_db_version', '0');
+    $migs    = _migrationStmts();
+    if ($current >= max(array_keys($migs))) return; // Fast-Path: alles aktuell
+
+    foreach ($migs as $num => $stmts) {
+        if ($num <= $current) continue;
+        foreach ($stmts as $sql) {
+            try {
+                DB::query($sql);
+            } catch (Throwable $e) {
+                // DDL-Fehler ("already exists", "duplicate key name" …) sicher ignorieren;
+                // echte Fehler werden ins PHP-Error-Log geschrieben.
+                error_log("[migration {$num}] " . $e->getMessage());
+            }
+        }
+        Settings::set('training_db_version', (string) $num);
+        $current = $num;
+    }
+}
+
+/** Gibt alle Migrationen als [versionsnummer => [sql, ...]] zurück. */
+function _migrationStmts(): array
+{
+    // Tabellennamen mit konfiguriertem Prefix
+    $tr  = DB::tbl('training_treffpunkte');
+    $te  = DB::tbl('training_einheiten');
+    $ts  = DB::tbl('training_segmente');
+    $tb  = DB::tbl('training_bloecke');
+    $tbs = DB::tbl('training_block_segmente');
+    $tt  = DB::tbl('training_typen');
+    $tp  = DB::tbl('training_privat_einheiten');
+    $ta  = DB::tbl('training_abos');
+    $tas = DB::tbl('training_abo_skips');
+    $ro  = DB::tbl('rollen');
+
+    return [
+        // ── 1: Grundschema + Trainer-Rollen ─────────────────────────────
+        1 => [
+            "CREATE TABLE IF NOT EXISTS $tr (
+              id           INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+              name         VARCHAR(200)  NOT NULL,
+              lat          DECIMAL(10,7) NULL,
+              lng          DECIMAL(10,7) NULL,
+              erstellt_von INT UNSIGNED  NULL,
+              erstellt_am  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            // Typ, Sichtbarkeit und Status direkt als VARCHAR – umgeht spätere ENUM→VARCHAR-Migrationen
+            "CREATE TABLE IF NOT EXISTS $te (
+              id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              datum         DATE         NOT NULL,
+              uhrzeit       TIME         NULL,
+              typ           VARCHAR(40)  NOT NULL DEFAULT 'frei',
+              titel         VARCHAR(200) NOT NULL,
+              treffpunkt_id INT UNSIGNED NULL,
+              komoot_url    VARCHAR(500) NULL,
+              bemerkung     TEXT         NULL,
+              sichtbarkeit  VARCHAR(20)  NOT NULL DEFAULT 'oeffentlich',
+              status        VARCHAR(20)  NOT NULL DEFAULT 'geplant',
+              erstellt_von  INT UNSIGNED NULL,
+              erstellt_am   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              KEY idx_datum (datum),
+              KEY idx_sichtbarkeit (sichtbarkeit, datum)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS $ts (
+              id             INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+              einheit_id     INT UNSIGNED      NOT NULL,
+              reihenfolge    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+              block_id       SMALLINT UNSIGNED NULL,
+              wiederholungen SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+              distanz_m      INT UNSIGNED      NOT NULL,
+              pause_m        INT UNSIGNED      NULL,
+              pause_typ      VARCHAR(10)       NULL,
+              pace_referenz  VARCHAR(40)       NULL,
+              notiz          VARCHAR(200)      NULL,
+              PRIMARY KEY (id),
+              KEY idx_einheit (einheit_id, reihenfolge),
+              CONSTRAINT fk_segm_einheit FOREIGN KEY (einheit_id)
+                REFERENCES $te (id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS $tb (
+              id            INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+              titel         VARCHAR(200)      NOT NULL,
+              typ           VARCHAR(40)       NOT NULL DEFAULT 'intervall',
+              komoot_url    VARCHAR(500)      NULL,
+              bemerkung     TEXT              NULL,
+              sichtbarkeit  VARCHAR(20)       NOT NULL DEFAULT 'global',
+              erstellt_von  INT UNSIGNED      NULL,
+              erstellt_am   TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am  TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              KEY idx_sichtbarkeit (sichtbarkeit)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS $tbs (
+              id             INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+              block_id       INT UNSIGNED      NOT NULL,
+              reihenfolge    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+              gruppen_id     SMALLINT UNSIGNED NULL,
+              wiederholungen SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+              distanz_m      INT UNSIGNED      NOT NULL,
+              pause_m        INT UNSIGNED      NULL,
+              pause_typ      VARCHAR(10)       NULL,
+              pace_referenz  VARCHAR(40)       NULL,
+              notiz          VARCHAR(200)      NULL,
+              PRIMARY KEY (id),
+              KEY idx_block (block_id, reihenfolge),
+              CONSTRAINT fk_bsegm_block FOREIGN KEY (block_id)
+                REFERENCES $tb (id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "INSERT IGNORE INTO $ro (name, rechte) VALUES
+              ('trainer', '[\"training_bloecke_verwalten\",\"training_bearbeiten\"]'),
+              ('editor',  '[\"training_bearbeiten\"]')",
+        ],
+
+        // ── 2: Trainingstypen-Tabelle + ENUM→VARCHAR ─────────────────────
+        2 => [
+            "CREATE TABLE IF NOT EXISTS $tt (
+              slug        VARCHAR(40)       NOT NULL,
+              bezeichnung VARCHAR(100)      NOT NULL,
+              farbe       VARCHAR(20)       NULL,
+              reihenfolge SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+              aktiv       TINYINT(1)        NOT NULL DEFAULT 1,
+              PRIMARY KEY (slug)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "INSERT IGNORE INTO $tt (slug, bezeichnung, reihenfolge) VALUES
+              ('intervall',     'Intervall',              1),
+              ('dauerlauf',     'Dauerlauf',              2),
+              ('funktionell',   'Funktionelles Training', 3),
+              ('runde',         'Runde / Strecke',        4),
+              ('event',         'Event / Wettkampf',      5),
+              ('frei',          'Sonstiges',              6),
+              ('kein_training', 'Kein Training',          7)",
+
+            // MODIFY COLUMN ist idempotent (VARCHAR → VARCHAR ist keine Änderung);
+            // auf bestehenden ENUM-Spalten migriert es die Definition sicher zu VARCHAR.
+            "ALTER TABLE $te MODIFY COLUMN typ VARCHAR(40) NOT NULL DEFAULT 'frei'",
+            "ALTER TABLE $tb MODIFY COLUMN typ VARCHAR(40) NOT NULL DEFAULT 'intervall'",
+        ],
+
+        // ── 3: Privater Trainingsplan ────────────────────────────────────
+        3 => [
+            "CREATE TABLE IF NOT EXISTS $tp (
+              id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              benutzer_id    INT UNSIGNED NOT NULL,
+              datum          DATE         NOT NULL,
+              typ            VARCHAR(40)  NOT NULL DEFAULT 'dauerlauf',
+              titel          VARCHAR(200) NOT NULL,
+              distanz_km     DECIMAL(6,2) NULL,
+              bemerkung      TEXT         NULL,
+              ref_einheit_id INT UNSIGNED NULL,
+              erstellt_am    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              KEY idx_benutzer_datum (benutzer_id, datum)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ],
+
+        // ── 4: Abo-Funktion + Fallback-km pro Typ ────────────────────────
+        4 => [
+            // Abonnements waren global (wird in #5 auf per-Typ umgebaut)
+
+            // Fallback-Distanz je Trainingstyp (für „In meinen Plan" ohne Dialog)
+            "ALTER TABLE $tt ADD COLUMN IF NOT EXISTS fallback_km DECIMAL(6,2) NULL",
+
+            // Abonnements: ein Nutzer abonniert den gesamten Teamplan
+            "CREATE TABLE IF NOT EXISTS $ta (
+              id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              benutzer_id  INT UNSIGNED NOT NULL,
+              aktiv        TINYINT(1)   NOT NULL DEFAULT 1,
+              erstellt_am  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              UNIQUE KEY uk_benutzer (benutzer_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            // Ausnahmen: Einheiten, die trotz Abo nicht (mehr) im privaten Plan stehen sollen
+            "CREATE TABLE IF NOT EXISTS $tas (
+              benutzer_id INT UNSIGNED NOT NULL,
+              einheit_id  INT UNSIGNED NOT NULL,
+              erstellt_am TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (benutzer_id, einheit_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ],
+
+        // ── 5: Abos werden typ-spezifisch ────────────────────────────────
+        // Hinweis: Kommentar aus #4 korrigiert – Abos waren von Anfang an global
+
+        5 => [
+            // typ-Spalte hinzufügen (bestehende globale Abos erhalten typ='', werden ignoriert)
+            "ALTER TABLE $ta ADD COLUMN IF NOT EXISTS typ VARCHAR(40) NOT NULL DEFAULT ''",
+            // Alten globalen Unique-Key entfernen (schlägt harmlos fehl, wenn er nicht existiert)
+            "ALTER TABLE $ta DROP INDEX uk_benutzer",
+            // Neuer Unique-Key: pro Nutzer + Typ ein Eintrag
+            "ALTER TABLE $ta ADD UNIQUE KEY uk_benutzer_typ (benutzer_id, typ)",
+        ],
+
+        // ── 6: Uhrzeit in privaten Einheiten ─────────────────────────────
+        6 => [
+            "ALTER TABLE $tp ADD COLUMN IF NOT EXISTS uhrzeit TIME NULL AFTER datum",
+        ],
+
+        // ── 7: Uhrzeit-Backfill für bestehende Abo-Einheiten ─────────────
+        // Vor Migration 6 angelegte Zeilen haben uhrzeit=NULL; hier wird
+        // die Uhrzeit aus der zugehörigen öffentlichen Einheit nachgefüllt.
+        7 => [
+            "UPDATE $tp tp
+             JOIN $te te ON te.id = tp.ref_einheit_id
+             SET tp.uhrzeit = te.uhrzeit
+             WHERE tp.uhrzeit IS NULL AND tp.ref_einheit_id IS NOT NULL",
+        ],
+    ];
+}
+
 Auth::startSession();
+runPendingMigrations();
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path   = trim((string)($_GET['p'] ?? ''), '/');
@@ -88,8 +332,20 @@ try {
         handleTreffpunkte($method, $tail);
         exit;
     }
+    if ($head === 'weg') {
+        handleWeg($method, $tail);
+        exit;
+    }
+    if ($head === 'admin-dashboard') {
+        handleAdminDashboard($method);
+        exit;
+    }
     if ($head === 'admin') {
         handleAdmin($method, $tail);
+        exit;
+    }
+    if ($head === 'mein-plan') {
+        handleMeinPlan($method, $tail);
         exit;
     }
 
@@ -538,6 +794,156 @@ function ladeAdminPaceDistanzen(): array
     return ['5000', '10000', '21098', '42195']; // Fallback-Defaults
 }
 
+function handleAdminDashboard(string $method): void {
+    if ($method !== 'GET') { http_response_code(405); echo json_encode(['ok'=>false]); return; }
+    $user = Auth::check();
+    if (!$user) { http_response_code(401); echo json_encode(['ok'=>false,'fehler'=>'Nicht angemeldet']); return; }
+    if (($user['rolle'] ?? '') !== 'admin') { http_response_code(403); echo json_encode(['ok'=>false,'fehler'=>'Nur Admins']); return; }
+
+    // 1. System-Info
+    $phpVersion = PHP_VERSION;
+    $dbVersion  = 'unbekannt';
+    try { $dbVersion = DB::fetchOne('SELECT VERSION() AS v')['v'] ?? 'unbekannt'; } catch (\Exception $e) {}
+
+    $dbSize = null;
+    try {
+        $dbName = DB::fetchOne('SELECT DATABASE() AS d')['d'] ?? null;
+        if ($dbName) {
+            $row    = DB::fetchOne("SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS mb FROM information_schema.tables WHERE table_schema = ?", [$dbName]);
+            $dbSize = (float)($row['mb'] ?? 0);
+        }
+    } catch (\Exception $e) {}
+
+    // 2. Aktive Benutzer (aktuell eingeloggter Admin + seitenaufrufe letzte 10 Min)
+    $aktiveBenutzer = [];
+    $geseheneIds    = [];
+    $myUid          = (int)($user['id'] ?? 0);
+    if ($myUid) {
+        try {
+            $meRow = DB::fetchOne('SELECT id, benutzername, email, rolle FROM ' . DB::tbl('benutzer') . ' WHERE id=? AND aktiv=1', [$myUid]);
+            if ($meRow) {
+                $aktiveBenutzer[] = ['id'=>(int)$meRow['id'], 'name'=>$meRow['email']??$meRow['benutzername'], 'rolle'=>$meRow['rolle'], 'seit'=>date('Y-m-d H:i:s')];
+                $geseheneIds[$myUid] = true;
+            }
+        } catch (\Exception $e) {}
+    }
+    try {
+        $rows = DB::fetchAll(
+            "SELECT b.id, b.benutzername, b.email, b.rolle, MAX(s.erstellt_am) AS letzter_aktivitaet
+             FROM " . DB::tbl('seitenaufrufe') . " s
+             JOIN " . DB::tbl('benutzer') . " b ON b.id = s.benutzer_id
+             WHERE s.erstellt_am >= DATE_SUB(NOW(), INTERVAL 10 MINUTE) AND b.aktiv = 1
+             GROUP BY b.id ORDER BY letzter_aktivitaet DESC"
+        );
+        foreach ($rows as $r) {
+            if (!empty($geseheneIds[(int)$r['id']])) continue;
+            $aktiveBenutzer[] = ['id'=>(int)$r['id'], 'name'=>$r['email']??$r['benutzername'], 'rolle'=>$r['rolle'], 'seit'=>$r['letzter_aktivitaet']];
+        }
+    } catch (\Exception $e) {}
+
+    // 3. Gäste (seitenaufrufe ohne benutzer_id, letzte 15 Min)
+    $gaeste = [];
+    try {
+        $gRows = DB::fetchAll(
+            "SELECT ip, user_agent, MAX(erstellt_am) AS zuletzt, COUNT(*) AS aufrufe
+             FROM " . DB::tbl('seitenaufrufe') . "
+             WHERE benutzer_id IS NULL AND erstellt_am >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+             GROUP BY ip, user_agent ORDER BY zuletzt DESC LIMIT 50"
+        );
+        $geoCache = [];
+        foreach ($gRows as $g) {
+            $ip = $g['ip'] ?? null;
+            $country = null; $countryCode = null;
+            if ($ip && !in_array($ip, ['127.0.0.1','::1']) && !str_starts_with($ip,'192.168.') && !str_starts_with($ip,'10.')) {
+                if (!isset($geoCache[$ip])) {
+                    try {
+                        $ctx  = stream_context_create(['http'=>['timeout'=>2,'ignore_errors'=>true]]);
+                        $json = @file_get_contents('http://ip-api.com/json/' . urlencode($ip) . '?fields=country,countryCode,city&lang=de', false, $ctx);
+                        $geo  = $json ? json_decode($json, true) : null;
+                        $geoCache[$ip] = ($geo && ($geo['status'] ?? '') !== 'fail') ? $geo : null;
+                    } catch (\Exception $e) { $geoCache[$ip] = null; }
+                }
+                if ($geoCache[$ip]) {
+                    $country     = trim(($geoCache[$ip]['city'] ?? '') . ($geoCache[$ip]['city'] ? ', ' : '') . ($geoCache[$ip]['country'] ?? ''));
+                    $countryCode = strtoupper($geoCache[$ip]['countryCode'] ?? '');
+                }
+            }
+            $gaeste[] = ['ip'=>$ip, 'country'=>$country, 'countryCode'=>$countryCode, 'user_agent'=>$g['user_agent'], 'zuletzt'=>$g['zuletzt'], 'aufrufe'=>(int)$g['aufrufe']];
+        }
+    } catch (\Exception $e) {}
+
+    // 4. Letzte Login-Versuche (letzte 5 Tage)
+    $letzteLogins = [];
+    try {
+        $lvRows = DB::fetchAll(
+            'SELECT lv.benutzername, lv.ip, lv.erfolg, lv.erstellt_am, COALESCE(lv.methode, NULL) AS methode'
+            . ' FROM ' . DB::tbl('login_versuche') . ' lv'
+            . ' WHERE lv.erstellt_am >= DATE_SUB(NOW(), INTERVAL 5 DAY)'
+            . ' ORDER BY lv.erstellt_am DESC LIMIT 200'
+        );
+        $bNamen = [];
+        try {
+            $bRows = DB::fetchAll('SELECT benutzername, email, rolle FROM ' . DB::tbl('benutzer'));
+            foreach ($bRows as $b) {
+                $entry = ['name'=>$b['email']??$b['benutzername'], 'email'=>$b['email']??null, 'rolle'=>$b['rolle']??null];
+                $bNamen[$b['benutzername']] = $entry;
+                if (!empty($b['email'])) $bNamen[$b['email']] = $entry;
+            }
+        } catch (\Exception $e) {}
+        $loginGeoCache = [];
+        foreach ($lvRows as $l) {
+            $lip = $l['ip'] ?? null;
+            $lcountry = null; $lcountryCode = null;
+            if ($lip && !in_array($lip, ['127.0.0.1','::1']) && !str_starts_with($lip,'192.168.') && !str_starts_with($lip,'10.')) {
+                if (!isset($loginGeoCache[$lip])) {
+                    try { $ctx=stream_context_create(['http'=>['timeout'=>2,'ignore_errors'=>true]]); $gj=@file_get_contents('http://ip-api.com/json/'.urlencode($lip).'?fields=country,countryCode&lang=de',false,$ctx); $gg=$gj?json_decode($gj,true):null; $loginGeoCache[$lip]=($gg&&($gg['status']??'')!=='fail')?$gg:null; } catch(\Exception $e){ $loginGeoCache[$lip]=null; }
+                }
+                if ($loginGeoCache[$lip]) { $lcountry=$loginGeoCache[$lip]['country']??null; $lcountryCode=strtoupper($loginGeoCache[$lip]['countryCode']??''); }
+            }
+            $bInfo = $bNamen[$l['benutzername']] ?? null;
+            $letzteLogins[] = [
+                'benutzername' => $l['benutzername'],
+                'anzeigeName'  => $bInfo ? $bInfo['name'] : $l['benutzername'],
+                'rolle'        => $bInfo['rolle'] ?? null,
+                'ip'           => $lip,
+                'country'      => $lcountry,
+                'countryCode'  => $lcountryCode,
+                'erfolg'       => (bool)$l['erfolg'],
+                'methode'      => $l['methode'] ?? null,
+                'datum'        => $l['erstellt_am'],
+            ];
+        }
+    } catch (\Exception $e) {}
+
+    // 5. Zählstatistiken
+    $stats = [
+        'benutzer'=>0,'portalSeit'=>null,'neusterBenutzer'=>null,'neusterBenutzerDatum'=>null,
+        'einheiten'=>0,'einheitenJahr'=>0,'naechsteEinheit'=>null,'abgesagt'=>0,
+        'bloeckeGlobal'=>0,'privatEinheiten'=>0,'abos'=>0,'dbVersion'=>null,
+    ];
+    try { $stats['benutzer'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('benutzer') . " WHERE aktiv=1 AND geloescht_am IS NULL")['c'] ?? 0); } catch(\Exception $e) {}
+    try { $r2 = DB::fetchOne("SELECT MIN(erstellt_am) AS d FROM " . DB::tbl('benutzer')); $stats['portalSeit'] = $r2['d'] ?? null; } catch(\Exception $e) {}
+    try { $nr = DB::fetchOne("SELECT benutzername, email, erstellt_am FROM " . DB::tbl('benutzer') . " WHERE aktiv=1 AND geloescht_am IS NULL ORDER BY erstellt_am DESC LIMIT 1"); $stats['neusterBenutzer'] = $nr ? ($nr['email'] ?: $nr['benutzername']) : null; $stats['neusterBenutzerDatum'] = $nr['erstellt_am'] ?? null; } catch(\Exception $e) {}
+    try { $stats['einheiten'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_einheiten'))['c'] ?? 0); } catch(\Exception $e) {}
+    try { $stats['einheitenJahr'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_einheiten') . " WHERE YEAR(datum)=YEAR(CURDATE())")['c'] ?? 0); } catch(\Exception $e) {}
+    try { $ne = DB::fetchOne("SELECT datum FROM " . DB::tbl('training_einheiten') . " WHERE datum >= CURDATE() AND status='geplant' ORDER BY datum ASC LIMIT 1"); $stats['naechsteEinheit'] = $ne['datum'] ?? null; } catch(\Exception $e) {}
+    try { $stats['abgesagt'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_einheiten') . " WHERE status='abgesagt'")['c'] ?? 0); } catch(\Exception $e) {}
+    try { $stats['bloeckeGlobal'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_bloecke') . " WHERE sichtbarkeit='global'")['c'] ?? 0); } catch(\Exception $e) {}
+    try { $stats['privatEinheiten'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_privat_einheiten'))['c'] ?? 0); } catch(\Exception $e) {}
+    try { $stats['abos'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_abos'))['c'] ?? 0); } catch(\Exception $e) {}
+    try { $dbVRow = DB::fetchOne("SELECT wert FROM " . DB::tbl('einstellungen') . " WHERE schluessel='training_db_version'"); $stats['dbVersion'] = $dbVRow['wert'] ?? null; } catch(\Exception $e) {}
+
+    // 6. Seitenaufrufe
+    $aufrufe = ['heute'=>0,'gestern'=>0,'7tage'=>0];
+    try {
+        $aufrufe['heute']   = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('seitenaufrufe') . " WHERE DATE(erstellt_am)=CURDATE()")['c'] ?? 0);
+        $aufrufe['gestern'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('seitenaufrufe') . " WHERE DATE(erstellt_am)=DATE_SUB(CURDATE(),INTERVAL 1 DAY)")['c'] ?? 0);
+        $aufrufe['7tage']   = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('seitenaufrufe') . " WHERE erstellt_am >= DATE_SUB(NOW(),INTERVAL 7 DAY)")['c'] ?? 0);
+    } catch (\Exception $e) {}
+
+    echo json_encode(['ok'=>true, 'data'=>compact('phpVersion','dbVersion','dbSize','aktiveBenutzer','gaeste','letzteLogins','stats','aufrufe')]);
+}
+
 function handleAdmin(string $method, string $sub): void {
     $user = Auth::check();
     if (!$user) {
@@ -878,12 +1284,20 @@ function handleConfig(): void {
     try {
         ensureTypenTabelle();
         $typenRows = DB::fetchAll(
-            'SELECT slug, bezeichnung, farbe, reihenfolge
+            'SELECT slug, bezeichnung, farbe, reihenfolge, fallback_km
                FROM ' . DB::tbl('training_typen') . '
               WHERE aktiv = 1
               ORDER BY reihenfolge, slug'
         );
-        $cfg['typen'] = $typenRows;
+        $cfg['typen'] = array_map(function($r) {
+            return [
+                'slug'        => $r['slug'],
+                'bezeichnung' => $r['bezeichnung'],
+                'farbe'       => $r['farbe'] ?? '',
+                'reihenfolge' => (int)$r['reihenfolge'],
+                'fallback_km' => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+            ];
+        }, $typenRows);
     } catch (Throwable $_) {
         $cfg['typen'] = [];
     }
@@ -1563,12 +1977,20 @@ function handleTypen(string $method, string $sub): void
     }
     ensureTypenTabelle();
     $rows = DB::fetchAll(
-        'SELECT slug, bezeichnung, farbe, reihenfolge
+        'SELECT slug, bezeichnung, farbe, reihenfolge, fallback_km
            FROM ' . DB::tbl('training_typen') . '
           WHERE aktiv = 1
           ORDER BY reihenfolge, slug'
     );
-    echo json_encode(['ok' => true, 'typen' => $rows]);
+    echo json_encode(['ok' => true, 'typen' => array_map(function($r) {
+        return [
+            'slug'        => $r['slug'],
+            'bezeichnung' => $r['bezeichnung'],
+            'farbe'       => $r['farbe'] ?? '',
+            'reihenfolge' => (int)$r['reihenfolge'],
+            'fallback_km' => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+        ];
+    }, $rows)]);
 }
 
 // ============================================================
@@ -1584,7 +2006,7 @@ function handleAdminTypen(string $method, string $sub): void
 
     if ($sub === '' && $method === 'GET') {
         $rows = DB::fetchAll(
-            'SELECT t.slug, t.bezeichnung, t.farbe, t.reihenfolge, t.aktiv,
+            'SELECT t.slug, t.bezeichnung, t.farbe, t.reihenfolge, t.aktiv, t.fallback_km,
                     COUNT(b.id) AS block_count
                FROM ' . DB::tbl('training_typen') . ' t
                LEFT JOIN ' . DB::tbl('training_bloecke') . ' b ON b.typ = t.slug
@@ -1599,6 +2021,7 @@ function handleAdminTypen(string $method, string $sub): void
                 'reihenfolge' => (int)$r['reihenfolge'],
                 'aktiv'       => (bool)$r['aktiv'],
                 'block_count' => (int)$r['block_count'],
+                'fallback_km' => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
             ];
         }, $rows)]);
         return;
@@ -1654,9 +2077,14 @@ function handleAdminTypen(string $method, string $sub): void
             : $row['farbe'];
         $reihenfolge = isset($in['reihenfolge']) ? max(0, (int)$in['reihenfolge']) : (int)$row['reihenfolge'];
         $aktiv       = isset($in['aktiv']) ? ($in['aktiv'] ? 1 : 0) : (int)$row['aktiv'];
+        $fallbackKm  = array_key_exists('fallback_km', $in)
+            ? ($in['fallback_km'] !== null && $in['fallback_km'] !== ''
+                ? round(max(0.0, min(9999.0, (float)$in['fallback_km'])), 2)
+                : null)
+            : ($row['fallback_km'] !== null ? (float)$row['fallback_km'] : null);
         DB::query(
-            'UPDATE ' . DB::tbl('training_typen') . ' SET bezeichnung=?, farbe=?, reihenfolge=?, aktiv=? WHERE slug=?',
-            [substr($bezeichnung, 0, 100), $farbe, $reihenfolge, $aktiv, $slug]
+            'UPDATE ' . DB::tbl('training_typen') . ' SET bezeichnung=?, farbe=?, reihenfolge=?, aktiv=?, fallback_km=? WHERE slug=?',
+            [substr($bezeichnung, 0, 100), $farbe, $reihenfolge, $aktiv, $fallbackKm, $slug]
         );
         echo json_encode(['ok' => true]);
         return;
@@ -1771,6 +2199,92 @@ function mapTreffpunkt(array $r): array {
             : null,
         'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
     ];
+}
+
+// ============================================================
+// Weg-Präferenzen: Typ + Treffpunkt → km An-/Abreise
+//   GET  weg/prefs   → Konfiguration + verfügbare Treffpunkte
+//   PUT  weg/prefs   → Konfiguration speichern
+// ============================================================
+function handleWeg(string $method, string $sub): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId = (int)$user['id'];
+
+    if ($sub === 'prefs' && $method === 'GET') {
+        handleWegPrefsGet($userId);
+        return;
+    }
+    if ($sub === 'prefs' && $method === 'PUT') {
+        handleWegPrefsSet($userId);
+        return;
+    }
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Weg-Endpoint nicht gefunden']);
+}
+
+function ladeWegPrefs(int $userId): array
+{
+    $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    if (!is_array($prefs)) $prefs = [];
+    $saved = is_array($prefs['training_weg_prefs'] ?? null) ? $prefs['training_weg_prefs'] : [];
+    return array_values($saved);
+}
+
+function speichereWegPrefs(int $userId, array $config): void
+{
+    $row      = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $existing = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    if (!is_array($existing)) $existing = [];
+    $existing['training_weg_prefs'] = $config;
+    DB::query(
+        'UPDATE ' . DB::tbl('benutzer') . ' SET prefs = ? WHERE id = ?',
+        [json_encode($existing, JSON_UNESCAPED_UNICODE), $userId]
+    );
+}
+
+function handleWegPrefsGet(int $userId): void
+{
+    $prefs = ladeWegPrefs($userId);
+    $treffpunkte = DB::fetchAll(
+        'SELECT id, name FROM ' . DB::tbl('training_treffpunkte') . ' ORDER BY name',
+        []
+    );
+    echo json_encode([
+        'ok'          => true,
+        'prefs'       => $prefs,
+        'treffpunkte' => $treffpunkte,
+    ]);
+}
+
+function handleWegPrefsSet(int $userId): void
+{
+    $body = json_decode((string)file_get_contents('php://input'), true);
+    if (!is_array($body) || !array_key_exists('config', $body)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'fehler' => 'Ungültige Daten']);
+        return;
+    }
+    $validated = [];
+    foreach ((array)$body['config'] as $entry) {
+        if (!is_array($entry)) continue;
+        $typ = trim((string)($entry['typ'] ?? ''));
+        if (!preg_match('/^[a-z_]{1,50}$/', $typ)) continue;
+        $tpId = (isset($entry['treffpunkt_id']) && is_numeric($entry['treffpunkt_id']))
+            ? (int)$entry['treffpunkt_id'] : null;
+        $km = (isset($entry['km']) && is_numeric($entry['km']) && (float)$entry['km'] > 0)
+            ? round((float)$entry['km'], 2) : null;
+        if (!$km) continue;
+        $validated[] = ['typ' => $typ, 'treffpunkt_id' => $tpId, 'km' => $km];
+    }
+    speichereWegPrefs($userId, $validated);
+    echo json_encode(['ok' => true]);
 }
 
 function handleTreffpunkte(string $method, string $sub): void
@@ -2379,4 +2893,350 @@ function validateEinheit(array $in): array {
         $errs[] = 'Feld "uhrzeit" muss HH:MM sein';
     }
     return $errs;
+}
+
+// ============================================================
+// Privater Trainingsplan
+//   GET  mein-plan/einheiten?von=&bis=  → öffentl. + eigene private Einheiten
+//   GET  mein-plan/einheiten/{id}       → einzelne private Einheit
+//   POST mein-plan/einheiten            → neue private Einheit anlegen
+//   PUT  mein-plan/einheiten/{id}       → eigene private Einheit bearbeiten
+//   DEL  mein-plan/einheiten/{id}       → eigene private Einheit löschen
+//   GET  mein-plan/abo                  → Abo-Status
+//   POST mein-plan/abo                  → Abo aktivieren + alle Zukunftseinheiten anlegen
+//   DEL  mein-plan/abo                  → Abo deaktivieren
+// ============================================================
+function handleMeinPlan(string $method, string $tail): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId = (int)$user['id'];
+
+    // ── Abo-Status ──────────────────────────────────────────
+    if ($tail === 'abo' && $method === 'GET') {
+        $rows = DB::fetchAll(
+            'SELECT typ FROM ' . DB::tbl('training_abos') . ' WHERE benutzer_id = ? AND aktiv = 1 AND typ != \'\'',
+            [$userId]
+        );
+        echo json_encode(['ok' => true, 'abo_typen' => array_column($rows, 'typ')]);
+        return;
+    }
+
+    // ── Abo aktivieren (für einen Typ) ──────────────────────
+    if ($tail === 'abo' && $method === 'POST') {
+        $in  = readJsonBody();
+        $typ = substr(preg_replace('/[^a-z0-9_]/', '_', strtolower(trim((string)($in['typ'] ?? '')))), 0, 40);
+        if ($typ === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "typ" erforderlich']);
+            return;
+        }
+        DB::query(
+            'INSERT INTO ' . DB::tbl('training_abos') . ' (benutzer_id, typ, aktiv)
+             VALUES (?, ?, 1)
+             ON DUPLICATE KEY UPDATE aktiv = 1',
+            [$userId, $typ]
+        );
+        // Alle künftigen öffentlichen Einheiten dieses Typs direkt einpflegen
+        _aboSync($userId, date('Y-m-d'), '2099-12-31', $typ);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── Abo beenden + künftige Einheiten entfernen (für einen Typ) ──
+    if ($tail === 'abo' && $method === 'DELETE') {
+        $in  = readJsonBody();
+        $typ = substr(preg_replace('/[^a-z0-9_]/', '_', strtolower(trim((string)($in['typ'] ?? '')))), 0, 40);
+        if ($typ === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "typ" erforderlich']);
+            return;
+        }
+        // Abo-Eintrag deaktivieren
+        DB::query(
+            'UPDATE ' . DB::tbl('training_abos') . ' SET aktiv = 0 WHERE benutzer_id = ? AND typ = ?',
+            [$userId, $typ]
+        );
+        // Alle künftigen privaten Abo-Einheiten dieses Typs löschen (vergangene bleiben)
+        $today = date('Y-m-d');
+        DB::query(
+            'DELETE FROM ' . DB::tbl('training_privat_einheiten') . '
+             WHERE benutzer_id = ? AND typ = ? AND datum >= ? AND ref_einheit_id IS NOT NULL',
+            [$userId, $typ, $today]
+        );
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── GET Liste: öffentliche + eigene private Einheiten ───
+    if ($tail === 'einheiten' && $method === 'GET') {
+        $von = $_GET['von'] ?? null;
+        $bis = $_GET['bis'] ?? null;
+        if (!$von || !$bis
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $von)
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $bis)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Parameter von/bis (YYYY-MM-DD) erforderlich']);
+            return;
+        }
+
+        // Aktive Abos des Nutzers laden
+        $aboRows = DB::fetchAll(
+            'SELECT typ FROM ' . DB::tbl('training_abos') . ' WHERE benutzer_id = ? AND aktiv = 1 AND typ != \'\'',
+            [$userId]
+        );
+        $aboTypen = array_column($aboRows, 'typ');
+
+        // Abo-Auto-Sync: für jeden abonnierten Typ neue öffentliche Einheiten einpflegen
+        if ($aboTypen) {
+            $today    = date('Y-m-d');
+            $syncFrom = $von > $today ? $von : $today;
+            if ($syncFrom <= $bis) {
+                foreach ($aboTypen as $aboTyp) {
+                    _aboSync($userId, $syncFrom, $bis, $aboTyp);
+                }
+            }
+        }
+
+        $rows = DB::fetchAll(
+            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
+                    e.bemerkung, e.sichtbarkeit, e.status,
+                    t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
+               FROM ' . DB::tbl('training_einheiten') . ' e
+               LEFT JOIN ' . DB::tbl('training_treffpunkte') . " t ON t.id = e.treffpunkt_id
+              WHERE e.datum BETWEEN ? AND ?
+                AND e.sichtbarkeit IN ('oeffentlich','intern')
+           ORDER BY e.datum, e.uhrzeit",
+            [$von, $bis]
+        );
+        $privatRows = DB::fetchAll(
+            'SELECT * FROM ' . DB::tbl('training_privat_einheiten') . '
+             WHERE benutzer_id = ? AND datum BETWEEN ? AND ?
+             ORDER BY datum',
+            [$userId, $von, $bis]
+        );
+        echo json_encode([
+            'ok'        => true,
+            'einheiten' => array_map('mapEinheit', $rows),
+            'privat'    => array_map('mapPrivatEinheit', $privatRows),
+            'abo_typen' => $aboTypen,
+        ]);
+        return;
+    }
+
+    // ── GET einzelne private Einheit ────────────────────────
+    if (preg_match('/^einheiten\/(\d+)$/', $tail, $m) && $method === 'GET') {
+        $id  = (int)$m[1];
+        $row = DB::fetchOne(
+            'SELECT * FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
+            [$id, $userId]
+        );
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Einheit nicht gefunden']);
+            return;
+        }
+        echo json_encode(['ok' => true, 'einheit' => mapPrivatEinheit($row)]);
+        return;
+    }
+
+    // ── POST neue private Einheit ────────────────────────────
+    if ($tail === 'einheiten' && $method === 'POST') {
+        $in = readJsonBody();
+        if (empty($in['datum']) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $in['datum'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "datum" erforderlich']);
+            return;
+        }
+        if (empty($in['titel']) || !is_string($in['titel'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "titel" erforderlich']);
+            return;
+        }
+        $km = null;
+        if (isset($in['distanz_km']) && $in['distanz_km'] !== null && $in['distanz_km'] !== '') {
+            $km = round(max(0.0, min(99999.0, (float)$in['distanz_km'])), 2);
+        }
+        $refId = (isset($in['ref_einheit_id']) && $in['ref_einheit_id']) ? (int)$in['ref_einheit_id'] : null;
+        // Wenn eine Referenz-Einheit übergeben: skip-Eintrag entfernen (Nutzer hat bewusst übernommen)
+        if ($refId) {
+            DB::query(
+                'DELETE FROM ' . DB::tbl('training_abo_skips') . ' WHERE benutzer_id = ? AND einheit_id = ?',
+                [$userId, $refId]
+            );
+        }
+        $uhrzeitIn = isset($in['uhrzeit']) && preg_match('/^\d{2}:\d{2}$/', (string)$in['uhrzeit'])
+            ? (string)$in['uhrzeit'] : null;
+        DB::query(
+            'INSERT INTO ' . DB::tbl('training_privat_einheiten') . '
+             (benutzer_id, datum, uhrzeit, typ, titel, distanz_km, bemerkung, ref_einheit_id)
+             VALUES (?,?,?,?,?,?,?,?)',
+            [
+                $userId,
+                $in['datum'],
+                $uhrzeitIn,
+                isset($in['typ']) && $in['typ'] !== '' ? substr((string)$in['typ'], 0, 40) : 'dauerlauf',
+                substr((string)$in['titel'], 0, 200),
+                $km,
+                (isset($in['bemerkung']) && $in['bemerkung'] !== '') ? (string)$in['bemerkung'] : null,
+                $refId,
+            ]
+        );
+        echo json_encode(['ok' => true, 'id' => (int)DB::lastInsertId()]);
+        return;
+    }
+
+    // ── PUT eigene private Einheit bearbeiten ────────────────
+    if (preg_match('/^einheiten\/(\d+)$/', $tail, $m) && $method === 'PUT') {
+        $id  = (int)$m[1];
+        $chk = DB::fetchOne(
+            'SELECT id FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
+            [$id, $userId]
+        );
+        if (!$chk) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Einheit nicht gefunden']);
+            return;
+        }
+        $in = readJsonBody();
+        if (empty($in['datum']) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $in['datum'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "datum" erforderlich']);
+            return;
+        }
+        if (empty($in['titel']) || !is_string($in['titel'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "titel" erforderlich']);
+            return;
+        }
+        $km = null;
+        if (isset($in['distanz_km']) && $in['distanz_km'] !== null && $in['distanz_km'] !== '') {
+            $km = round(max(0.0, min(99999.0, (float)$in['distanz_km'])), 2);
+        }
+        $uhrzeitPut = isset($in['uhrzeit']) && preg_match('/^\d{2}:\d{2}$/', (string)$in['uhrzeit'])
+            ? (string)$in['uhrzeit'] : null;
+        DB::query(
+            'UPDATE ' . DB::tbl('training_privat_einheiten') . '
+             SET datum=?, uhrzeit=?, typ=?, titel=?, distanz_km=?, bemerkung=?, ref_einheit_id=?
+             WHERE id=? AND benutzer_id=?',
+            [
+                $in['datum'],
+                $uhrzeitPut,
+                isset($in['typ']) && $in['typ'] !== '' ? substr((string)$in['typ'], 0, 40) : 'dauerlauf',
+                substr((string)$in['titel'], 0, 200),
+                $km,
+                (isset($in['bemerkung']) && $in['bemerkung'] !== '') ? (string)$in['bemerkung'] : null,
+                (isset($in['ref_einheit_id']) && $in['ref_einheit_id']) ? (int)$in['ref_einheit_id'] : null,
+                $id,
+                $userId,
+            ]
+        );
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── DELETE eigene private Einheit löschen ────────────────
+    if (preg_match('/^einheiten\/(\d+)$/', $tail, $m) && $method === 'DELETE') {
+        $id = (int)$m[1];
+        // Wenn diese Einheit aus einem Abo stammt → skip-Eintrag anlegen
+        $privRow = DB::fetchOne(
+            'SELECT ref_einheit_id FROM ' . DB::tbl('training_privat_einheiten') . '
+             WHERE id = ? AND benutzer_id = ?',
+            [$id, $userId]
+        );
+        if ($privRow && $privRow['ref_einheit_id']) {
+            DB::query(
+                'INSERT IGNORE INTO ' . DB::tbl('training_abo_skips') . ' (benutzer_id, einheit_id)
+                 VALUES (?, ?)',
+                [$userId, (int)$privRow['ref_einheit_id']]
+            );
+        }
+        DB::query(
+            'DELETE FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
+            [$id, $userId]
+        );
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Mein-Plan-Endpoint nicht gefunden']);
+}
+
+/** Synct öffentliche Einheiten in den privaten Plan eines Abo-Nutzers. */
+function _aboSync(int $userId, string $von, string $bis, string $typ = ''): void
+{
+    $te  = DB::tbl('training_einheiten');
+    $tp  = DB::tbl('training_privat_einheiten');
+    $tas = DB::tbl('training_abo_skips');
+    $tt  = DB::tbl('training_typen');
+
+    // Öffentliche Einheiten die noch nicht kopiert wurden und nicht übersprungen werden
+    $typFilter = $typ !== '' ? "AND e.typ = ?" : '';
+    $params    = $typ !== ''
+        ? [$von, $bis, $typ, $userId, $userId]
+        : [$von, $bis, $userId, $userId];
+
+    $toSync = DB::fetchAll(
+        "SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel
+           FROM $te e
+          WHERE e.datum BETWEEN ? AND ?
+            AND e.sichtbarkeit = 'oeffentlich'
+            AND e.status != 'abgesagt'
+            $typFilter
+            AND e.id NOT IN (
+                SELECT ref_einheit_id FROM $tp
+                 WHERE benutzer_id = ? AND ref_einheit_id IS NOT NULL
+            )
+            AND e.id NOT IN (
+                SELECT einheit_id FROM $tas WHERE benutzer_id = ?
+            )",
+        $params
+    );
+    if (!$toSync) return;
+
+    // Fallback-km je Typ einmalig laden
+    $typKm = [];
+    $typenRows = DB::fetchAll("SELECT slug, fallback_km FROM $tt");
+    foreach ($typenRows as $r) {
+        $typKm[$r['slug']] = $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null;
+    }
+
+    foreach ($toSync as $e) {
+        $km = $typKm[$e['typ']] ?? null;
+        // uhrzeit auf HH:MM normieren
+        $uhrzeitSync = null;
+        if (!empty($e['uhrzeit']) && preg_match('/^(\d{2}:\d{2})/', $e['uhrzeit'], $um)) {
+            $uhrzeitSync = $um[1];
+        }
+        DB::query(
+            "INSERT INTO $tp (benutzer_id, datum, uhrzeit, typ, titel, distanz_km, ref_einheit_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [$userId, $e['datum'], $uhrzeitSync, $e['typ'], $e['titel'], $km, (int)$e['id']]
+        );
+    }
+}
+
+function mapPrivatEinheit(array $r): array
+{
+    // uhrzeit auf HH:MM kürzen (DB liefert ggf. HH:MM:SS)
+    $uhrzeitRaw = $r['uhrzeit'] ?? null;
+    $uhrzeit = null;
+    if ($uhrzeitRaw && preg_match('/^(\d{2}:\d{2})/', $uhrzeitRaw, $m)) {
+        $uhrzeit = $m[1];
+    }
+    return [
+        'id'             => (int)$r['id'],
+        'datum'          => $r['datum'],
+        'uhrzeit'        => $uhrzeit,
+        'typ'            => $r['typ'],
+        'titel'          => $r['titel'],
+        'distanz_km'     => $r['distanz_km'] !== null ? (float)$r['distanz_km'] : null,
+        'bemerkung'      => $r['bemerkung'],
+        'ref_einheit_id' => $r['ref_einheit_id'] !== null ? (int)$r['ref_einheit_id'] : null,
+    ];
 }

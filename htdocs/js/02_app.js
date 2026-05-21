@@ -61,6 +61,7 @@ function fillUserBadge() {
       userBtn.style.display = 'flex';
       userBtn.innerHTML = `<button class="btn-login-header" onclick="goToLoginPortal()">Anmelden</button>`;
     }
+    _fillMobileNav(false, false);
     return;
   }
 
@@ -87,17 +88,38 @@ function fillUserBadge() {
     avatarEl.style.cursor = 'pointer';
   }
 
+  const isAdmin   = u.rolle === 'admin';
+  const isTrainer = isAdmin || u.rolle === 'trainer';
+
   // Hauptnavigation abhängig von der Rolle
   const nav = document.getElementById('main-nav');
-  if (nav && u) {
-    const isAdmin   = u.rolle === 'admin';
-    const isTrainer = isAdmin || u.rolle === 'trainer';
+  if (nav) {
     nav.innerHTML = `
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
       ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
       ${isTrainer ? `<button onclick="navigate('treffpunkte')"${state.tab === 'treffpunkte' ? ' class="active"' : ''}>Treffpunkte</button>` : ''}
       ${isAdmin ? `<button onclick="navigate('admin')"${state.tab === 'admin' ? ' class="active"' : ''}>Admin</button>` : ''}`;
   }
+
+  _fillMobileNav(isTrainer, isAdmin);
+}
+
+function _fillMobileNav(isTrainer, isAdmin) {
+  const mobileNav = document.getElementById('mobile-nav-items');
+  if (!mobileNav) return;
+  const u = state.user;
+  const act = (tab) => state.tab === tab ? ' active' : '';
+  let html = `<button class="mobile-nav-item${act('kalender')}" onclick="navigate('kalender');closeBurgerMenu()">Kalender</button>`;
+  if (isTrainer) html += `<button class="mobile-nav-item${act('planung')}" onclick="navigate('planung');closeBurgerMenu()">Planung</button>`;
+  if (isTrainer) html += `<button class="mobile-nav-item${act('treffpunkte')}" onclick="navigate('treffpunkte');closeBurgerMenu()">Treffpunkte</button>`;
+  if (isAdmin)   html += `<button class="mobile-nav-item${act('admin')}" onclick="navigate('admin');closeBurgerMenu()">Admin</button>`;
+  if (u) {
+    html += `<button class="mobile-nav-item mobile-nav-profil" onclick="PROFIL.open();closeBurgerMenu()">Profil</button>`;
+    html += `<button class="mobile-nav-item mobile-nav-logout" onclick="logout()">Abmelden</button>`;
+  } else {
+    html += `<button class="mobile-nav-item" onclick="goToLoginPortal()">Anmelden</button>`;
+  }
+  mobileNav.innerHTML = html;
 }
 
 // ── Routing ─────────────────────────────────────────────────
@@ -184,11 +206,14 @@ function closeBurgerMenu() {
 
 // ── Admin-Seite mit Sub-Navigation ──────────────────────────
 function renderAdminPage(main, subTab) {
-  const tab = subTab || 'einstellungen';
+  const tab = subTab || 'system';
+  const wide = tab === 'system';
 
   main.innerHTML = `
-    <div style="max-width:900px;margin:0 auto;padding:16px">
-      <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:10px">
+    <div style="${wide ? '' : 'max-width:900px;'}margin:0 auto;padding:16px">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:10px">
+        <button class="btn btn-ghost${tab === 'system' ? ' active' : ''}"
+          onclick="navigateAdmin('system')">&#x1F5A5;&#xFE0E; System</button>
         <button class="btn btn-ghost${tab === 'einstellungen' ? ' active' : ''}"
           onclick="navigateAdmin('einstellungen')">Einstellungen</button>
         <button class="btn btn-ghost${tab === 'trainings' ? ' active' : ''}"
@@ -198,7 +223,9 @@ function renderAdminPage(main, subTab) {
     </div>`;
 
   const contentEl = document.getElementById('admin-content');
-  if (tab === 'trainings') {
+  if (tab === 'system') {
+    renderAdminSystem(contentEl);
+  } else if (tab === 'trainings') {
     ADMIN_TRAININGS.render(contentEl);
   } else {
     SETTINGS.render(contentEl);
@@ -226,6 +253,16 @@ const TYP_LABEL = {
   kein_training:'Kein Training',
 };
 
+// Effektive Distanz einer privaten Einheit:
+// - expliziter Wert (inkl. 0) wird direkt genutzt
+// - null → Fallback-km aus der Typen-Konfiguration (oder null wenn kein Fallback)
+function _effektivKm(e) {
+  if (e.distanz_km !== null && e.distanz_km !== undefined) return parseFloat(e.distanz_km);
+  const typen = (window.appConfig && Array.isArray(window.appConfig.typen)) ? window.appConfig.typen : [];
+  const t = typen.find(x => x.slug === e.typ);
+  return (t && t.fallback_km != null) ? parseFloat(t.fallback_km) : null;
+}
+
 function ymd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -243,24 +280,29 @@ function parseMonthArg(arg) {
   return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
+function _isoWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
 async function renderKalender(main, monthArg) {
   const monthStart = parseMonthArg(monthArg);
   const y = monthStart.getFullYear();
   const m = monthStart.getMonth();
 
-  // Erster Mo der Anzeige (kann im Vormonat liegen)
-  const firstDay = new Date(y, m, 1);
-  const dow0 = (firstDay.getDay() + 6) % 7; // Mo=0 … So=6
+  const firstDay  = new Date(y, m, 1);
+  const dow0      = (firstDay.getDay() + 6) % 7;
   const gridStart = new Date(y, m, 1 - dow0);
-
-  // Letzter Tag des Monats + Auffüllen bis Sonntag
-  const lastDay = new Date(y, m + 1, 0);
-  const dowLast = (lastDay.getDay() + 6) % 7;
-  const gridEnd = new Date(y, m + 1, (6 - dowLast));
-
-  const prev = new Date(y, m - 1, 1);
-  const next = new Date(y, m + 1, 1);
-  const todayKey = ymd(new Date());
+  const lastDay   = new Date(y, m + 1, 0);
+  const dowLast   = (lastDay.getDay() + 6) % 7;
+  const gridEnd   = new Date(y, m + 1, 6 - dowLast);
+  const prev      = new Date(y, m - 1, 1);
+  const next      = new Date(y, m + 1, 1);
+  const todayKey  = ymd(new Date());
+  const angemeldet = !!state.user;
 
   main.innerHTML = `
     <div class="kal-wrap">
@@ -284,31 +326,44 @@ async function renderKalender(main, monthArg) {
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
     </div>`;
 
-  let einheiten = [], feiertage = [];
-  try {
-    const [d1, d2] = await Promise.all([
-      apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }),
-      apiGet(`feiertage?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }).catch(() => ({ feiertage: [] })),
-    ]);
-    einheiten = d1.einheiten || [];
-    feiertage = d2.feiertage || [];
-  } catch (e) {
-    document.getElementById('kal-grid').innerHTML =
-      `<div class="kal-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
-    return;
-  }
-
-  // Index: datum → [einheiten]
-  const byDate = {};
-  einheiten.forEach(e => {
-    (byDate[e.datum] = byDate[e.datum] || []).push(e);
-  });
-
-  // Pace-Warnung und Heute-Sektion immer unabhängig nachladen
   ladeGlobalePaceWarnung('pace-warn-sektion');
   ladeHeuteSektionInto('heute-sektion');
 
-  // Feiertage über Datum spreizen (mehrtägige Ferien)
+  const von = ymd(gridStart);
+  const bis = ymd(gridEnd);
+  let oeffentlich = [], privat = [], feiertage = [];
+  try {
+    const [d1, d2] = await Promise.all([
+      angemeldet
+        ? apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true })
+        : apiGet(`einheiten?von=${von}&bis=${bis}`, { silent: true }),
+      apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
+    ]);
+    oeffentlich = d1.einheiten || [];
+    privat      = angemeldet ? (d1.privat || []) : [];
+    feiertage   = d2.feiertage || [];
+    if (angemeldet) MEINPLAN.setAbo(d1.abo_typen || []);
+  } catch (e) {
+    const g = document.getElementById('kal-grid');
+    if (g) g.innerHTML = `<div class="kal-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
+    return;
+  }
+
+  // byDate: datum → [ {..., _privat: bool}, ... ]
+  // Bereits übernommene öffentliche Einheiten werden ausgeblendet (die private Kopie vertritt sie)
+  const adoptedIds = new Set(
+    privat.filter(p => p.ref_einheit_id != null).map(p => p.ref_einheit_id)
+  );
+  const byDate = {};
+  oeffentlich.forEach(e => {
+    if (adoptedIds.has(e.id)) return;      // private Kopie vorhanden → Team-Eintrag ausblenden
+    (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: false });
+  });
+  privat.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: true }); });
+  Object.values(byDate).forEach(arr =>
+    arr.sort((a, b) => a._privat !== b._privat ? (a._privat ? 1 : -1) : (a.uhrzeit || '99:99').localeCompare(b.uhrzeit || '99:99'))
+  );
+
   const feiertageByDate = {};
   feiertage.forEach(f => {
     const start = new Date(f.datum + 'T00:00:00');
@@ -319,57 +374,112 @@ async function renderKalender(main, monthArg) {
     }
   });
 
-  // Grid bauen (Wochenzeilen)
-  const head = `<div class="kal-head">${WOCHENTAGE.map(w => `<div class="kal-head-cell">${w}</div>`).join('')}</div>`;
+  // Wochen (für KW-Spalte)
+  const weeks = [];
+  {
+    let cur = new Date(gridStart);
+    while (cur <= gridEnd) {
+      const ws = new Date(cur);
+      const dates = [];
+      for (let i = 0; i < 7; i++) { dates.push(ymd(new Date(cur))); cur.setDate(cur.getDate() + 1); }
+      const kw = _isoWeek(ws);
+      const kmSum = Math.round(dates.reduce((s, d) =>
+        s + (byDate[d] || []).filter(e => e._privat)
+                              .reduce((ss, e) => { const km = _effektivKm(e); return ss + (km !== null ? km : 0); }, 0), 0) * 10) / 10;
+      weeks.push({ dates, kw, kmSum });
+    }
+  }
 
-  const rows = [];
-  let cursor = new Date(gridStart);
-  while (cursor <= gridEnd) {
-    const cells = [];
-    for (let i = 0; i < 7; i++) {
-      const k = ymd(cursor);
-      const inMonth = cursor.getMonth() === m;
+  // Header: KW-Zelle + Wochentage (nur für angemeldete Nutzer)
+  const head = angemeldet
+    ? `<div class="kal-head">
+        <div class="kal-head-cell meinplan-kw-head-cell">KW</div>
+        ${WOCHENTAGE.map(w => `<div class="kal-head-cell">${w}</div>`).join('')}
+       </div>`
+    : `<div class="kal-head">${WOCHENTAGE.map(w => `<div class="kal-head-cell">${w}</div>`).join('')}</div>`;
+
+  const rows = weeks.map(({ dates, kw, kmSum }) => {
+    const kwCell = angemeldet ? `<div class="meinplan-kw-cell">
+      <span class="meinplan-kw-num">KW&nbsp;${kw}</span>
+      <span class="meinplan-kw-km${kmSum > 0 ? ' has-km' : ''}">${kmSum > 0 ? (kmSum % 1 === 0 ? kmSum : kmSum.toFixed(1)) + '&thinsp;km' : '–'}</span>
+    </div>` : '';
+
+    const cells = dates.map(k => {
+      const d = new Date(k + 'T00:00:00');
+      const inMonth = d.getMonth() === m;
       const isToday = k === todayKey;
-      const items = byDate[k] || [];
+      const items   = byDate[k] || [];
+      const ferien  = feiertageByDate[k] || [];
 
-      const ferien = feiertageByDate[k] || [];
-
-      const dayCls = [
-        'kal-cell',
+      const dayCls = ['kal-cell',
         inMonth ? 'in-month' : 'out-month',
         isToday ? 'is-today' : '',
-        (cursor.getDay() === 0 || cursor.getDay() === 6) ? 'weekend' : '',
+        (d.getDay() === 0 || d.getDay() === 6) ? 'weekend' : '',
         ferien.length ? 'is-feiertag' : '',
       ].filter(Boolean).join(' ');
 
       const ferienHtml = ferien.map(f => {
-        const farbeStyle = f.farbe ? ` style="background:${escapeHtml(f.farbe)};color:#fff"` : '';
-        return `<div class="kal-feiertag" title="${escapeHtml(f.titel)}"${farbeStyle}>${escapeHtml(f.titel)}</div>`;
+        const s = f.farbe ? ` style="background:${escapeHtml(f.farbe)};color:#fff"` : '';
+        return `<div class="kal-feiertag" title="${escapeHtml(f.titel)}"${s}>${escapeHtml(f.titel)}</div>`;
       }).join('');
 
       const itemsHtml = items.map(e => {
-        const cls = `kal-item kal-typ-${e.typ}` + (e.status === 'abgesagt' ? ' is-cancelled' : '');
+        if (e._privat) {
+          const cls = `kal-item kal-typ-${e.typ} is-privat`;
+          const _ekm = _effektivKm(e);
+          const _isFallback = _ekm !== null && (e.distanz_km === null || e.distanz_km === undefined);
+          const kmBadge = (_ekm !== null && _ekm > 0)
+            ? `<span class="kal-item-km${_isFallback ? ' is-fallback-km' : ''}">${_ekm % 1 === 0 ? _ekm : _ekm.toFixed(1)}&thinsp;km</span>`
+            : '';
+          // Aus Team-Eintrag übernommen → normales Detail-Modal; eigener Eintrag → Edit-Modal
+          const clickFn = e.ref_einheit_id
+            ? `zeigeEinheit(${e.ref_einheit_id})`
+            : `MEINPLAN.bearbeitePrivat(${e.id})`;
+          const timeHtml = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
+          // Übernommene Einheiten bekommen data-einheit-id (ref) → Popover wie beim Team-Eintrag
+          const adoptedAttr = e.ref_einheit_id
+            ? `data-einheit-id="${e.ref_einheit_id}" data-is-adopted="1"`
+            : '';
+          return `<div class="${cls}" data-privat-id="${e.id}" ${adoptedAttr}
+                       onclick="${clickFn}"
+                       title="${escapeHtml(e.titel)}">
+            ${timeHtml}<span class="kal-item-title">${escapeHtml(e.titel)}</span>
+            ${kmBadge}
+            <button class="kal-item-del" onclick="event.stopPropagation();MEINPLAN.loeschePrivat(${e.id})" title="Löschen">×</button>
+          </div>`;
+        }
+        const cls = `kal-item kal-typ-${e.typ}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
         const time = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
         return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
       }).join('');
 
-      const addBtn = '';
-      cells.push(`
-        <div class="${dayCls}">
-          <div class="kal-cell-head">
-            <span class="kal-day-num">${cursor.getDate()}</span>
-            ${addBtn}
-          </div>
-          ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
-          <div class="kal-cell-items">${itemsHtml}</div>
-        </div>`);
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    rows.push(`<div class="kal-row">${cells.join('')}</div>`);
-  }
+      const addBtn = (angemeldet && inMonth)
+        ? `<button class="kal-add-btn" onclick="MEINPLAN.neuePrivatEinheit('${k}')" title="Private Einheit hinzufügen">+</button>`
+        : '';
 
+      return `<div class="${dayCls}" data-datum="${k}">
+        <div class="kal-cell-head">
+          <span class="kal-day-num">${d.getDate()}</span>
+          ${addBtn}
+        </div>
+        ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
+        <div class="kal-cell-items">${itemsHtml}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="kal-row">${kwCell}${cells}</div>`;
+  }).join('');
+
+  const gridCls = angemeldet ? 'kal-grid meinplan-kal-grid' : 'kal-grid';
+  const legendHtml = angemeldet
+    ? `<div class="meinplan-legend meinplan-legend-below">
+        <span class="meinplan-legend-pub">Teamplan</span>
+        <span class="meinplan-legend-priv">Mein Plan</span>
+       </div>`
+    : '';
   document.getElementById('kal-grid').outerHTML =
-    `<div id="kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
+    `<div id="kal-grid" class="${gridCls}">${head}${rows}</div>${legendHtml}`;
+
   if (typeof KAL_POPOVER !== 'undefined') {
     KAL_POPOVER.initItems(document.querySelectorAll('#kal-grid .kal-item[data-einheit-id]'));
   }
@@ -817,11 +927,16 @@ async function zeigeEinheit(id) {
     const seg = data.segmente || [];
     state._lastEinheit = { einheit: e, segmente: seg };
 
-    // Pace laden wenn eingeloggt und Segmente mit Pace-Referenz vorhanden
+    // Pace und Weg laden wenn eingeloggt
     let paceData = null;
     const hatPaceRef = seg.some(s => s.pace_referenz);
     if (state.user && hatPaceRef) {
       paceData = await PACE.load();
+    }
+    let wegKm = null;
+    if (state.user && typeof WEG !== 'undefined') {
+      await WEG.load();
+      wegKm = WEG.wegKm(e);
     }
     const datum = new Date(e.datum + 'T00:00:00');
     const wochentag = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][datum.getDay()];
@@ -832,6 +947,26 @@ async function zeigeEinheit(id) {
         <span class="modal-label">Segmente</span>
         ${renderSegmentBlocksHtml(seg, paceData, e.typ)}
       </div>` : '';
+
+    // km-Zeile: Trainings-km aus Segmenten + Anfahrt-km
+    const trainingsKm = seg.reduce((s, b) => s + (parseFloat(b.distanz_m) || 0), 0) / 1000;
+    let kmHtml = '';
+    if (trainingsKm > 0 || wegKm != null) {
+      const fmtKm = km => km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' km';
+      if (wegKm != null && trainingsKm > 0) {
+        const total = trainingsKm + wegKm;
+        kmHtml = `<div class="modal-row"><span class="modal-label">Kilometer</span>
+          <div class="modal-km-row">
+            <div class="modal-km-chip"><span class="modal-km-chip-val">${fmtKm(trainingsKm)}</span><span class="modal-km-chip-lbl">Training</span></div>
+            <span class="modal-km-plus">+</span>
+            <div class="modal-km-chip"><span class="modal-km-chip-val">${fmtKm(wegKm)}</span><span class="modal-km-chip-lbl">Anfahrt</span></div>
+            <span class="modal-km-plus">=</span>
+            <div class="modal-km-chip is-total"><span class="modal-km-chip-val">${fmtKm(total)}</span><span class="modal-km-chip-lbl">Gesamt</span></div>
+          </div></div>`;
+      } else if (trainingsKm > 0) {
+        kmHtml = `<div class="modal-row"><span class="modal-label">Kilometer</span><span>${fmtKm(trainingsKm)}</span></div>`;
+      }
+    }
 
     cont.innerHTML = `
       <div class="modal-overlay" onclick="schliesseModal(event)">
@@ -863,6 +998,7 @@ async function zeigeEinheit(id) {
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
             ${e.sichtbarkeit === 'intern' ? `<div class="modal-row"><span class="modal-label">Sichtbarkeit</span><span>Nur intern</span></div>` : ''}
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
+            ${kmHtml}
             ${segHtml}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}

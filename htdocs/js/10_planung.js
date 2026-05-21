@@ -51,29 +51,63 @@ const KAL_POPOVER = (() => {
       const e    = data.einheit;
       const segs = data.segmente || [];
 
+      // Pace-Daten laden (gecacht via PACE.load – kein spürbarer Overhead)
+      let popPaceData = null;
+      if (state.user && segs.some(s => s.pace_referenz)) {
+        try { popPaceData = await PACE.load(); } catch (_) {}
+      }
+      if (currentId !== einheitId) return; // Maus bereits woanders (nach async)
+
       const typLabel  = _getTypLabel(e.typ);
       const metaParts = [];
       if (e.uhrzeit) metaParts.push(e.uhrzeit + ' Uhr');
       if (e.treffpunkt && e.treffpunkt.name) metaParts.push(e.treffpunkt.name);
 
+      // Segmente: grafische Blöcke (renderSegmentBlocksHtml aus 02_app.js) statt Chips
       const segsHtml = segs.length
-        ? `<div class="kal-pop-segs">${segs.map(s => {
-            const wdh = s.wiederholungen > 1 ? s.wiederholungen + '×' : '';
-            return `<span class="kal-pop-seg">${wdh}${s.distanz_m} m</span>`;
-          }).join('')}</div>`
+        ? (typeof renderSegmentBlocksHtml === 'function'
+            ? `<div class="kal-pop-segs-blocks">${renderSegmentBlocksHtml(segs, popPaceData, e.typ)}</div>`
+            : `<div class="kal-pop-segs">${segs.map(s => {
+                const wdh = s.wiederholungen > 1 ? s.wiederholungen + '×' : '';
+                return `<span class="kal-pop-seg">${wdh}${s.distanz_m} m</span>`;
+              }).join('')}</div>`)
         : '';
 
-      // Bearbeiten-Button nur auf der Planung-Seite für Trainer/Admin
-      const onPlanung = (location.hash || '').startsWith('#planung');
-      const kannEdit  = onPlanung && state.user
+      // Kontext-Buttons
+      const hash           = location.hash || '';
+      const onPlanung      = hash.startsWith('#planung');
+      const onKalender     = hash === '' || hash === '#' || hash.startsWith('#kalender');
+      const kannEdit       = onPlanung && state.user
         && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
+      // Bereits übernommene Einheiten (data-is-adopted) zeigen keine Übernahme-Buttons
+      const kannUebernehmen = onKalender && state.user && !anchorEl.dataset.isAdopted;
+
+      // Daten für direktes Übernehmen serialisieren (kein zweiter API-Call nötig)
+      const eJson = kannUebernehmen
+        ? escapeHtml(JSON.stringify({ id: e.id, datum: e.datum, uhrzeit: e.uhrzeit || null, typ: e.typ, titel: e.titel }))
+        : '';
+      const segsJson = kannUebernehmen
+        ? escapeHtml(JSON.stringify(segs.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m }))))
+        : '';
+
+      const aboAktiv = kannUebernehmen && MEINPLAN.istAboAktivFuerTyp(e.typ);
+      const typEsc   = escapeHtml(e.typ);
 
       pop.innerHTML = `
-        <div class="kal-pop-typ kal-typ-${escapeHtml(e.typ)}">${escapeHtml(typLabel)}</div>
+        <div class="kal-pop-typ kal-typ-${typEsc}">${escapeHtml(typLabel)}</div>
         <div class="kal-pop-titel">${escapeHtml(e.titel)}</div>
         ${metaParts.length ? `<div class="kal-pop-meta">${metaParts.map(escapeHtml).join(' · ')}</div>` : ''}
         ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
         ${segsHtml}
+        ${kannUebernehmen ? `<div class="kal-pop-actions kal-pop-actions-col">
+          <button class="btn btn-primary btn-sm"
+            onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"
+            data-e="${eJson}" data-s="${segsJson}">In meinen Plan</button>
+          ${aboAktiv
+            ? `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboDeaktivieren('${typEsc}')">Alle künftigen aus meinem Plan entfernen</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboAktivieren('${typEsc}')">Alle künftigen in meinen Plan</button>`
+          }
+        </div>` : ''}
         ${kannEdit ? `<div class="kal-pop-actions">
           <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeiten(${einheitId})">Bearbeiten</button>
         </div>` : ''}`;

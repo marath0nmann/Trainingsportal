@@ -869,6 +869,53 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 }
 .profil-new-dist-input { flex: 1; max-width: 280px; }
 
+/* Weg-zum-Training Section */
+.profil-weg-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.weg-row {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid var(--border);
+}
+.weg-row select { flex: 1; min-width: 110px; }
+.weg-km-wrap {
+  display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
+}
+.weg-km-wrap input[type="number"] { width: 80px !important; }
+.weg-km-label { font-size: 13px; color: var(--text2); white-space: nowrap; }
+.weg-del-btn {
+  flex: 0 0 auto; font-size: 18px; line-height: 1;
+  color: var(--text2); background: none; border: none; cursor: pointer;
+  padding: 2px 4px; border-radius: 4px;
+}
+.weg-del-btn:hover { color: var(--primary); }
+.weg-add-row {
+  display: flex; align-items: center; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* km-Zeile im Einheit-Detail-Modal */
+.modal-km-row {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding: 8px 0;
+}
+.modal-km-chip {
+  display: flex; flex-direction: column; align-items: center;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 8px; padding: 6px 14px; min-width: 80px;
+}
+.modal-km-chip-val {
+  font-size: 15px; font-weight: 700; color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.modal-km-chip-lbl { font-size: 11px; color: var(--text2); margin-top: 1px; }
+.modal-km-plus { font-size: 16px; color: var(--text2); font-weight: 600; }
+.modal-km-chip.is-total {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.modal-km-chip.is-total .modal-km-chip-val { font-size: 17px; }
+
 /* Error-Notification (fehlte bisher) */
 .notif-err { background: var(--primary); color: white; }
 
@@ -1063,7 +1110,7 @@ body.planung-active #app-footer    { display: none; }
 /* ── Hover-Popover auf Kalender-Einträge ── */
 .kal-popover {
   position: fixed; z-index: 1200;
-  width: 244px;
+  width: 280px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1100,10 +1147,20 @@ body.planung-active #app-footer    { display: none; }
   font-size: 11px; background: var(--surf2); border-radius: 4px;
   padding: 2px 6px; color: var(--text);
 }
+/* Segment-Block-Visualisierung im Popover: kompakter als im Modal */
+.kal-pop-segs-blocks .seg-blocks-wrap { margin: 6px 0 0; }
+.kal-pop-segs-blocks .seg-blocks { gap: 3px; }
+.kal-pop-segs-blocks .seg-blk { min-width: 6px; border-radius: 3px; }
+.kal-pop-segs-blocks .seg-blk-sep { width: 4px; }
+.kal-pop-segs-blocks .seg-blk-sum-row {
+  font-size: 11px; color: var(--text2); margin-top: 4px;
+}
+
 .kal-pop-actions {
   margin-top: 10px; border-top: 1px solid var(--border);
   padding-top: 8px; display: flex; gap: 6px;
 }
+.kal-pop-actions.kal-pop-actions-col { flex-direction: column; }
 
 /* Responsive */
 @media (max-width: 900px) {
@@ -1237,3 +1294,118 @@ body.planung-active #app-footer    { display: none; }
   background: color-mix(in srgb, var(--text2) 12%, transparent);
   color: var(--text2); border-color: color-mix(in srgb, var(--text2) 25%, transparent);
 }
+
+/* ============================================================
+   Mein Plan – privater Trainingsplan
+   ============================================================ */
+
+/* Private Kalender-Einträge: invertierter Hintergrund (Typ-Farbe als Füllung) */
+.kal-item.is-privat {
+  border-left-style: solid;
+}
+.kal-item.is-privat.kal-typ-intervall    { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-dauerlauf    { background: color-mix(in srgb, var(--green, #1a8a3a) 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-funktionell  { background: color-mix(in srgb, #c08010 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-runde        { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-event        { background: color-mix(in srgb, #8845c0 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-frei         { background: color-mix(in srgb, var(--text2) 10%, var(--surface)); }
+.kal-item.is-privat.kal-typ-kein_training { background: none; }
+
+/* Km-Badge auf privaten Einträgen */
+.kal-item-km {
+  font-size: 10px; font-weight: 700; color: var(--text2);
+  opacity: .85; line-height: 1;
+}
+/* Fallback-km (kein expliziter Wert, aus Typ-Konfiguration) */
+.kal-item-km.is-fallback-km {
+  opacity: .55; font-style: italic;
+}
+
+/* Legende in der Toolbar */
+.meinplan-legend {
+  display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600;
+  color: var(--text2);
+}
+.meinplan-legend-below {
+  margin-top: 10px; justify-content: flex-end;
+}
+.meinplan-legend-pub,
+.meinplan-legend-priv {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 4px;
+}
+.meinplan-legend-pub  { background: var(--surf2); border-left: 3px solid var(--accent); }
+.meinplan-legend-priv { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-left: 3px dashed var(--accent); }
+
+/* Wrapper */
+.meinplan-wrap { padding: 24px 28px 48px; max-width: 1400px; margin: 0 auto; }
+.meinplan-kal-container { margin-top: 0; }
+
+/* Kalender-Grid mit eingebetteter KW-Spalte */
+.meinplan-kal-grid .kal-head,
+.meinplan-kal-grid .kal-row {
+  grid-template-columns: 68px repeat(7, 1fr);
+}
+
+/* KW-Kopfzelle */
+.meinplan-kw-head-cell {
+  background: var(--surf2);
+  color: var(--text2);
+  border-right: 1px solid var(--border);
+}
+
+/* KW-Datenzelle (erste Spalte jeder Zeile) */
+.meinplan-kw-cell {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 6px 4px; gap: 3px; text-align: center;
+  background: var(--surf2);
+  border-right: 1px solid var(--border);
+}
+.meinplan-kw-num {
+  font-size: 10px; font-weight: 700; letter-spacing: .3px;
+  text-transform: uppercase; color: var(--text2);
+  white-space: nowrap;
+}
+.meinplan-kw-km {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 15px; color: var(--text2);
+  line-height: 1; white-space: nowrap;
+}
+.meinplan-kw-km.has-km { color: var(--accent); }
+
+/* Hinweis "Aus dem Teamplan übernommen" */
+.meinplan-ref-hint {
+  font-size: 12px; color: var(--text2);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 6px; padding: 6px 10px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 720px) {
+  .meinplan-wrap { padding: 12px 8px 32px; }
+  .meinplan-legend-below { display: none; }
+  .meinplan-kw-cell { padding: 4px 2px; }
+  .meinplan-kw-num  { font-size: 9px; }
+  .meinplan-kw-km   { font-size: 12px; }
+  .meinplan-kal-grid .kal-head,
+  .meinplan-kal-grid .kal-row { grid-template-columns: 48px repeat(7, 1fr); }
+}
+
+/* ── Mobile Nav Drawer Items ─────────────────────────────── */
+.mobile-nav-item {
+  display: block; width: 100%; text-align: left;
+  padding: 15px 20px;
+  background: none; border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Barlow', sans-serif; font-size: 16px; font-weight: 500;
+  cursor: pointer; transition: background .12s;
+}
+.mobile-nav-item:hover,
+.mobile-nav-item:focus-visible { background: var(--surf2); outline: none; }
+.mobile-nav-item.active { color: var(--accent); font-weight: 700; }
+.mobile-nav-item:last-child { border-bottom: none; }
+.mobile-nav-profil { color: var(--text2); }
+.mobile-nav-logout { color: var(--primary); border-top: 2px solid var(--border); border-bottom: none; margin-top: 8px; }

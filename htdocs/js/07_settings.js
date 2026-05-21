@@ -549,6 +549,12 @@ const SETTINGS = (() => {
                   </div>
                 </div>
                 <div style="min-width:80px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Fallback km</div>
+                  <input type="number" id="typ-fallback-km-${i}" value="${t.fallback_km != null ? t.fallback_km : ''}"
+                    min="0" max="9999" step="0.1" placeholder="–" class="settings-input" style="width:80px;text-align:center"
+                    title="Standard-Distanz für „In meinen Plan" wenn keine Segmente vorhanden">
+                </div>
+                <div style="min-width:80px">
                   <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Reihenfolge</div>
                   <input type="number" id="typ-reihenfolge-${i}" value="${t.reihenfolge}"
                     min="0" max="999" class="settings-input" style="width:70px;text-align:center">
@@ -583,6 +589,9 @@ const SETTINGS = (() => {
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
             ${t.block_count} ${t.block_count === 1 ? 'Block' : 'Blöcke'}
           </td>
+          <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
+            ${t.fallback_km != null ? t.fallback_km + '&thinsp;km' : '–'}
+          </td>
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">#${t.reihenfolge}</td>
           <td style="padding:6px 8px;text-align:center;font-size:12px;color:var(--text2)">${t.aktiv ? '✓' : '—'}</td>
           <td style="padding:6px 8px;text-align:right;white-space:nowrap">
@@ -598,6 +607,7 @@ const SETTINGS = (() => {
           <tr style="border-bottom:2px solid var(--border)">
             <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Bezeichnung / Slug</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Blöcke</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Fallback km</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Reihenfolge</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Aktiv</th>
             <th></th>
@@ -624,8 +634,10 @@ const SETTINGS = (() => {
     const farbe       = farbeAktiv ? (document.getElementById(`typ-farbe-${idx}`)?.value || null) : null;
     const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
     const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
+    const fkRaw       = (document.getElementById(`typ-fallback-km-${idx}`)?.value || '').trim();
+    const fallback_km = fkRaw !== '' ? parseFloat(fkRaw) : null;
     try {
-      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv });
+      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv, fallback_km });
       if (!opts || !opts.silent) benachrichtigen('Typ gespeichert.', 'ok');
       typenBearbeitet = null;
       const r = await apiGet('admin/typen', { silent: true });
