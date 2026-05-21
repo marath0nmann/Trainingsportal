@@ -927,11 +927,16 @@ async function zeigeEinheit(id) {
     const seg = data.segmente || [];
     state._lastEinheit = { einheit: e, segmente: seg };
 
-    // Pace laden wenn eingeloggt und Segmente mit Pace-Referenz vorhanden
+    // Pace und Weg laden wenn eingeloggt
     let paceData = null;
     const hatPaceRef = seg.some(s => s.pace_referenz);
     if (state.user && hatPaceRef) {
       paceData = await PACE.load();
+    }
+    let wegKm = null;
+    if (state.user && typeof WEG !== 'undefined') {
+      await WEG.load();
+      wegKm = WEG.wegKm(e);
     }
     const datum = new Date(e.datum + 'T00:00:00');
     const wochentag = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][datum.getDay()];
@@ -942,6 +947,26 @@ async function zeigeEinheit(id) {
         <span class="modal-label">Segmente</span>
         ${renderSegmentBlocksHtml(seg, paceData, e.typ)}
       </div>` : '';
+
+    // km-Zeile: Trainings-km aus Segmenten + Anfahrt-km
+    const trainingsKm = seg.reduce((s, b) => s + (parseFloat(b.distanz_m) || 0), 0) / 1000;
+    let kmHtml = '';
+    if (trainingsKm > 0 || wegKm != null) {
+      const fmtKm = km => km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' km';
+      if (wegKm != null && trainingsKm > 0) {
+        const total = trainingsKm + wegKm;
+        kmHtml = `<div class="modal-row"><span class="modal-label">Kilometer</span>
+          <div class="modal-km-row">
+            <div class="modal-km-chip"><span class="modal-km-chip-val">${fmtKm(trainingsKm)}</span><span class="modal-km-chip-lbl">Training</span></div>
+            <span class="modal-km-plus">+</span>
+            <div class="modal-km-chip"><span class="modal-km-chip-val">${fmtKm(wegKm)}</span><span class="modal-km-chip-lbl">Anfahrt</span></div>
+            <span class="modal-km-plus">=</span>
+            <div class="modal-km-chip is-total"><span class="modal-km-chip-val">${fmtKm(total)}</span><span class="modal-km-chip-lbl">Gesamt</span></div>
+          </div></div>`;
+      } else if (trainingsKm > 0) {
+        kmHtml = `<div class="modal-row"><span class="modal-label">Kilometer</span><span>${fmtKm(trainingsKm)}</span></div>`;
+      }
+    }
 
     cont.innerHTML = `
       <div class="modal-overlay" onclick="schliesseModal(event)">
@@ -973,6 +998,7 @@ async function zeigeEinheit(id) {
             ${e.bemerkung ? `<div class="modal-row"><span class="modal-label">Bemerkung</span><span>${escapeHtml(e.bemerkung)}</span></div>` : ''}
             ${e.sichtbarkeit === 'intern' ? `<div class="modal-row"><span class="modal-label">Sichtbarkeit</span><span>Nur intern</span></div>` : ''}
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
+            ${kmHtml}
             ${segHtml}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}

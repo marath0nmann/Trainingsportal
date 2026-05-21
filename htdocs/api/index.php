@@ -332,6 +332,10 @@ try {
         handleTreffpunkte($method, $tail);
         exit;
     }
+    if ($head === 'weg') {
+        handleWeg($method, $tail);
+        exit;
+    }
     if ($head === 'admin-dashboard') {
         handleAdminDashboard($method);
         exit;
@@ -2195,6 +2199,92 @@ function mapTreffpunkt(array $r): array {
             : null,
         'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
     ];
+}
+
+// ============================================================
+// Weg-Präferenzen: Typ + Treffpunkt → km An-/Abreise
+//   GET  weg/prefs   → Konfiguration + verfügbare Treffpunkte
+//   PUT  weg/prefs   → Konfiguration speichern
+// ============================================================
+function handleWeg(string $method, string $sub): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId = (int)$user['id'];
+
+    if ($sub === 'prefs' && $method === 'GET') {
+        handleWegPrefsGet($userId);
+        return;
+    }
+    if ($sub === 'prefs' && $method === 'PUT') {
+        handleWegPrefsSet($userId);
+        return;
+    }
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Weg-Endpoint nicht gefunden']);
+}
+
+function ladeWegPrefs(int $userId): array
+{
+    $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    if (!is_array($prefs)) $prefs = [];
+    $saved = is_array($prefs['training_weg_prefs'] ?? null) ? $prefs['training_weg_prefs'] : [];
+    return array_values($saved);
+}
+
+function speichereWegPrefs(int $userId, array $config): void
+{
+    $row      = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $existing = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    if (!is_array($existing)) $existing = [];
+    $existing['training_weg_prefs'] = $config;
+    DB::query(
+        'UPDATE ' . DB::tbl('benutzer') . ' SET prefs = ? WHERE id = ?',
+        [json_encode($existing, JSON_UNESCAPED_UNICODE), $userId]
+    );
+}
+
+function handleWegPrefsGet(int $userId): void
+{
+    $prefs = ladeWegPrefs($userId);
+    $treffpunkte = DB::fetchAll(
+        'SELECT id, name FROM ' . DB::tbl('training_treffpunkte') . ' ORDER BY name',
+        []
+    );
+    echo json_encode([
+        'ok'          => true,
+        'prefs'       => $prefs,
+        'treffpunkte' => $treffpunkte,
+    ]);
+}
+
+function handleWegPrefsSet(int $userId): void
+{
+    $body = json_decode((string)file_get_contents('php://input'), true);
+    if (!is_array($body) || !array_key_exists('config', $body)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'fehler' => 'Ungültige Daten']);
+        return;
+    }
+    $validated = [];
+    foreach ((array)$body['config'] as $entry) {
+        if (!is_array($entry)) continue;
+        $typ = trim((string)($entry['typ'] ?? ''));
+        if (!preg_match('/^[a-z_]{1,50}$/', $typ)) continue;
+        $tpId = (isset($entry['treffpunkt_id']) && is_numeric($entry['treffpunkt_id']))
+            ? (int)$entry['treffpunkt_id'] : null;
+        $km = (isset($entry['km']) && is_numeric($entry['km']) && (float)$entry['km'] > 0)
+            ? round((float)$entry['km'], 2) : null;
+        if (!$km) continue;
+        $validated[] = ['typ' => $typ, 'treffpunkt_id' => $tpId, 'km' => $km];
+    }
+    speichereWegPrefs($userId, $validated);
+    echo json_encode(['ok' => true]);
 }
 
 function handleTreffpunkte(string $method, string $sub): void

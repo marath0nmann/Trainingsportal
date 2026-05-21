@@ -1,17 +1,33 @@
 // ============================================================
-// Trainingsportal – Profil-Modal (Pace-Referenzen)
+// Trainingsportal – Profil-Modal
 // ============================================================
 // Öffnet sich per Klick auf den Avatar (oben rechts).
-// Zeigt Pace-Referenzkonfiguration für die vom Admin definierten Distanzen.
-// Athleten wählen pro Distanz nur den Modus (Bestzeit / 12 Monate / manuell)
-// und sehen sofort die resultierende Pace.
-// Welche Distanzen verfügbar sind, bestimmt ausschließlich der Admin
-// über Einstellungen → Pace-Referenz-Distanzen.
+// Zwei Sektionen:
+//   1. Pace-Referenzen – Bestzeit/manuell pro Distanz (Admin gibt Distanzen vor)
+//   2. Weg zum Training – Typ+Treffpunkt-Kombis mit An-/Abreise-km
 // ============================================================
 
 const PROFIL = (() => {
 
-  let _prefsData = null;
+  let _prefsData = null; // pace/prefs response
+  let _wegData   = null; // weg/prefs response
+  let _localWeg  = [];   // Arbeitskopie der Weg-Einträge
+
+  // Fallback-Typen (analog 04_editor.js)
+  const FALLBACK_TYPEN = [
+    { value: 'intervall',     label: 'Intervall' },
+    { value: 'dauerlauf',     label: 'Dauerlauf' },
+    { value: 'funktionell',   label: 'Funktionelles Training' },
+    { value: 'runde',         label: 'Runde / Strecke' },
+    { value: 'event',         label: 'Event / Wettkampf' },
+    { value: 'frei',          label: 'Sonstiges' },
+    { value: 'kein_training', label: 'Kein Training' },
+  ];
+  function _typOptions() {
+    const t = typeof appConfig !== 'undefined' && appConfig && appConfig.typen;
+    if (Array.isArray(t) && t.length) return t.map(x => ({ value: x.slug, label: x.bezeichnung }));
+    return FALLBACK_TYPEN;
+  }
 
   async function open() {
     if (!state.user) return;
@@ -26,7 +42,10 @@ const PROFIL = (() => {
       '</div>';
 
     try {
-      _prefsData = await apiGet('pace/prefs', { silent: true });
+      [_prefsData, _wegData] = await Promise.all([
+        apiGet('pace/prefs', { silent: true }),
+        apiGet('weg/prefs',  { silent: true }),
+      ]);
     } catch (e) {
       cont.innerHTML =
         '<div class="modal-overlay" onclick="schliesseModal(event)">' +
@@ -34,6 +53,7 @@ const PROFIL = (() => {
         '</div>';
       return;
     }
+    _localWeg = JSON.parse(JSON.stringify((_wegData && _wegData.prefs) || []));
     renderModal(cont);
   }
 
@@ -43,28 +63,26 @@ const PROFIL = (() => {
     return `${day}.${m}.${y}`;
   }
 
-  // Pace in sek/km für eine Distanz berechnen (null wenn nicht ermittelbar)
+  // ── Pace-Referenzen ──────────────────────────────────────
+
   function _paceForRef(ref, modus, manInput) {
     const distPb  = (_prefsData.distanzen && _prefsData.distanzen.pb)    || {};
     const dist12m = (_prefsData.distanzen && _prefsData.distanzen['12m']) || {};
     const distM   = parseFloat(ref);
     if (!distM) return null;
-
     let sek = null;
     if (modus === 'pb') {
       sek = distPb[ref]  ? distPb[ref].sekunden
-          : dist12m[ref] ? dist12m[ref].sekunden : null; // Fallback auf 12m
+          : dist12m[ref] ? dist12m[ref].sekunden : null;
     } else if (modus === '12m') {
       sek = dist12m[ref] ? dist12m[ref].sekunden : null;
     } else if (modus === 'manual') {
       sek = _parseZeit(manInput || '');
     }
-
     if (!sek || !distM) return null;
     return sek / (distM / 1000);
   }
 
-  // Pace-Chip für eine Distanz aktuell halten
   function _updatePaceChip(ref) {
     const chip = document.getElementById('profil-pace-' + ref);
     if (!chip) return;
@@ -76,18 +94,16 @@ const PROFIL = (() => {
     chip.textContent = sekProKm ? PACE.formatPace(sekProKm) : '–';
   }
 
-  function renderModal(cont) {
-    const u         = state.user;
+  function _buildPaceSection() {
     const prefs     = _prefsData.prefs    || {};
     const distPb    = (_prefsData.distanzen && _prefsData.distanzen.pb)    || {};
     const dist12m   = (_prefsData.distanzen && _prefsData.distanzen['12m']) || {};
     const hatAthlet = !!_prefsData.hat_athlet;
     const refs      = _prefsData.dist_admin || Object.keys(prefs);
 
-    // Name + Rolle identisch wie Header
-    const displayName  = u.vorname || u.name || u.benutzername || '';
-    const displayRolle = (typeof ROLLE_LABEL !== 'undefined' && ROLLE_LABEL[u.rolle])
-      || u.rolle || '';
+    if (!refs.length) {
+      return '<div class="profil-hint">Keine Pace-Referenz-Distanzen konfiguriert (Admin-Einstellungen).</div>';
+    }
 
     const refRows = refs.map(ref => {
       const p      = prefs[ref] || { modus: 'pb', manual_sek: null };
@@ -95,15 +111,14 @@ const PROFIL = (() => {
       const m12    = dist12m[ref];
       const manSek = p.manual_sek || null;
 
-      // Effektiven Modus bestimmen – explizit 'manual' wird immer respektiert
       let selVal;
       if (p.modus === 'manual') {
-        selVal = 'manual';                              // explizite Wahl → nie überschreiben
+        selVal = 'manual';
       } else if (p.modus === 'pb'  && pb)  { selVal = 'pb';     }
       else if   (p.modus === '12m' && m12) { selVal = '12m';    }
-      else if   (p.modus === 'pb'  && m12) { selVal = '12m';    } // pb gewünscht, nur 12m da
-      else if   (p.modus === '12m' && pb)  { selVal = 'pb';     } // 12m gewünscht, nur pb da
-      else if   (pb)                        { selVal = 'pb';     } // kein Modus → best available
+      else if   (p.modus === 'pb'  && m12) { selVal = '12m';    }
+      else if   (p.modus === '12m' && pb)  { selVal = 'pb';     }
+      else if   (pb)                        { selVal = 'pb';     }
       else if   (m12)                       { selVal = '12m';    }
       else                                  { selVal = 'manual'; }
 
@@ -118,18 +133,15 @@ const PROFIL = (() => {
       }
       opts += `<option value="manual"${selVal === 'manual' ? ' selected' : ''}>Manuelle Eingabe</option>`;
 
-      const manVisible = selVal === 'manual';
-      const manVal     = manSek ? PACE.formatTime(manSek) : '';
-
-      // Initiale Pace berechnen
-      const initManInput = manVal;
-      const initPaceSekKm = _paceForRef(ref, selVal, initManInput);
+      const manVisible    = selVal === 'manual';
+      const manVal        = manSek ? PACE.formatTime(manSek) : '';
+      const initPaceSekKm = _paceForRef(ref, selVal, manVal);
       const initPaceStr   = initPaceSekKm ? PACE.formatPace(initPaceSekKm) : '–';
 
       const noDataHint = !hatAthlet
         ? '<div class="profil-hint">Kein Athletenprofil verknüpft – nur manuelle Eingabe möglich.</div>'
         : (!pb && !m12
-            ? '<div class="profil-hint">Keine Ergebnisse für diese Distanz im Statistikportal gefunden.</div>'
+            ? '<div class="profil-hint">Keine Ergebnisse für diese Distanz im Statistikportal.</div>'
             : '');
 
       const safeRef = escapeHtml(ref);
@@ -154,6 +166,68 @@ const PROFIL = (() => {
         </div>`;
     }).join('');
 
+    return `<div class="profil-refs">${refRows}</div>`;
+  }
+
+  // ── Weg zum Training ──────────────────────────────────────
+
+  function _buildWegRow(entry, i) {
+    const typen       = _typOptions();
+    const treffpunkte = (_wegData && _wegData.treffpunkte) || [];
+    const safeI       = parseInt(i, 10);
+
+    const typOpts = typen.map(t =>
+      `<option value="${escapeHtml(t.value)}"${t.value === entry.typ ? ' selected' : ''}>${escapeHtml(t.label)}</option>`
+    ).join('');
+
+    const tpOpts = `<option value="">— kein Treffpunkt —</option>` +
+      treffpunkte.map(tp =>
+        `<option value="${tp.id}"${entry.treffpunkt_id === tp.id ? ' selected' : ''}>${escapeHtml(tp.name)}</option>`
+      ).join('');
+
+    const kmVal = entry.km != null ? String(entry.km).replace('.', ',') : '';
+
+    return `
+      <div class="weg-row" id="weg-row-${safeI}">
+        <select class="settings-input weg-typ-sel" data-i="${safeI}">${typOpts}</select>
+        <select class="settings-input weg-tp-sel"  data-i="${safeI}">${tpOpts}</select>
+        <div class="weg-km-wrap">
+          <input type="number" class="settings-input weg-km-inp" data-i="${safeI}"
+                 placeholder="km" min="0.1" max="500" step="0.1"
+                 value="${escapeHtml(kmVal)}" style="width:80px">
+          <span class="profil-hint" style="white-space:nowrap">km hin &amp; zurück</span>
+        </div>
+        <button class="btn-icon weg-del-btn" onclick="PROFIL._wegEntfernen(${safeI})" title="Entfernen">×</button>
+      </div>`;
+  }
+
+  function _buildWegSection() {
+    const rows = _localWeg.map((entry, i) => _buildWegRow(entry, i)).join('');
+    return `
+      <div id="weg-liste">${rows || '<div class="profil-hint" style="padding:8px 0">Noch keine Einträge. Klick „+ Hinzufügen".</div>'}</div>
+      <div class="weg-add-row">
+        <button class="btn btn-ghost btn-sm" onclick="PROFIL._wegHinzufuegen()">+ Hinzufügen</button>
+      </div>`;
+  }
+
+  function _rendereWegListe() {
+    const el = document.getElementById('weg-liste');
+    if (!el) return;
+    if (!_localWeg.length) {
+      el.innerHTML = '<div class="profil-hint" style="padding:8px 0">Noch keine Einträge. Klick „+ Hinzufügen".</div>';
+      return;
+    }
+    el.innerHTML = _localWeg.map((entry, i) => _buildWegRow(entry, i)).join('');
+  }
+
+  // ── Modal aufbauen ────────────────────────────────────────
+
+  function renderModal(cont) {
+    const u = state.user;
+    const displayName  = u.vorname || u.name || u.benutzername || '';
+    const displayRolle = (typeof ROLLE_LABEL !== 'undefined' && ROLLE_LABEL[u.rolle])
+      || u.rolle || '';
+
     cont.innerHTML = `
       <div class="modal-overlay" onclick="schliesseModal(event)">
         <div class="modal-card" onclick="event.stopPropagation()">
@@ -166,12 +240,21 @@ const PROFIL = (() => {
             <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
           </div>
           <div class="modal-body">
+
             <div class="profil-section-title">Pace-Referenzen</div>
             <p class="profil-hint-global">
               Wähle pro Distanz, welche Zeit als Referenz für die Pace-Berechnung im Trainingsplan verwendet wird.
               Bestzeiten werden automatisch aus dem Statistikportal übernommen.
             </p>
-            <div class="profil-refs">${refRows}</div>
+            ${_buildPaceSection()}
+
+            <div class="profil-section-title" style="margin-top:28px">Weg zum Training</div>
+            <p class="profil-hint-global">
+              Definiere für welche Kombinationen aus Trainingstyp und Treffpunkt
+              Fahrtkilometer anfallen. Diese werden automatisch zu den Trainingskilometern addiert.
+            </p>
+            ${_buildWegSection()}
+
             <div class="modal-actions">
               <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
               <button class="btn btn-primary" onclick="PROFIL.speichern()">Speichern</button>
@@ -180,6 +263,8 @@ const PROFIL = (() => {
         </div>
       </div>`;
   }
+
+  // ── Event-Handler ─────────────────────────────────────────
 
   function _onModusChange(ref, val) {
     const wrap = document.getElementById('profil-manual-' + ref);
@@ -191,6 +276,19 @@ const PROFIL = (() => {
     _updatePaceChip(ref);
   }
 
+  function _wegHinzufuegen() {
+    const typen = _typOptions();
+    _localWeg.push({ typ: typen[0]?.value || 'intervall', treffpunkt_id: null, km: null });
+    _rendereWegListe();
+  }
+
+  function _wegEntfernen(i) {
+    _localWeg.splice(i, 1);
+    _rendereWegListe();
+  }
+
+  // ── Speichern ─────────────────────────────────────────────
+
   function _parseZeit(s) {
     if (!s || !s.trim()) return null;
     const parts = s.trim().split(':').map(p => parseInt(p, 10));
@@ -201,6 +299,7 @@ const PROFIL = (() => {
   }
 
   async function speichern() {
+    // Pace prefs
     const refs = _prefsData.dist_admin || Object.keys(_prefsData.prefs || {});
     const newPrefs = {};
     for (const ref of refs) {
@@ -211,13 +310,31 @@ const PROFIL = (() => {
       if (modus === 'manual') {
         const inp = document.getElementById('profil-manual-input-' + ref);
         manualSek = inp ? _parseZeit(inp.value) : null;
-        // Leere Eingabe ist erlaubt → manualSek bleibt null
       }
       newPrefs[ref] = { modus, manual_sek: manualSek };
     }
+
+    // Weg config: Formulardaten auslesen
+    const newWeg = [];
+    _localWeg.forEach((_, i) => {
+      const typEl = document.querySelector(`.weg-typ-sel[data-i="${i}"]`);
+      const tpEl  = document.querySelector(`.weg-tp-sel[data-i="${i}"]`);
+      const kmEl  = document.querySelector(`.weg-km-inp[data-i="${i}"]`);
+      if (!typEl || !kmEl) return;
+      const typ  = typEl.value;
+      const tpId = tpEl && tpEl.value ? parseInt(tpEl.value, 10) : null;
+      const km   = parseFloat((kmEl.value || '').replace(',', '.'));
+      if (!typ || !km || km <= 0) return;
+      newWeg.push({ typ, treffpunkt_id: tpId, km });
+    });
+
     try {
-      await apiPut('pace/prefs', { prefs: newPrefs });
+      await Promise.all([
+        apiPut('pace/prefs', { prefs: newPrefs }),
+        apiPut('weg/prefs',  { config: newWeg }),
+      ]);
       PACE.invalidate();
+      WEG.invalidate();
       schliesseModal();
       _notify('Profil gespeichert.', 'ok');
     } catch (e) {
@@ -236,5 +353,5 @@ const PROFIL = (() => {
     setTimeout(() => div.remove(), 3500);
   }
 
-  return { open, speichern, _onModusChange, _onManualInput };
+  return { open, speichern, _onModusChange, _onManualInput, _wegHinzufuegen, _wegEntfernen };
 })();

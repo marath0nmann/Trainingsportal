@@ -869,6 +869,53 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 }
 .profil-new-dist-input { flex: 1; max-width: 280px; }
 
+/* Weg-zum-Training Section */
+.profil-weg-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.weg-row {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid var(--border);
+}
+.weg-row select { flex: 1; min-width: 110px; }
+.weg-km-wrap {
+  display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
+}
+.weg-km-wrap input[type="number"] { width: 80px !important; }
+.weg-km-label { font-size: 13px; color: var(--text2); white-space: nowrap; }
+.weg-del-btn {
+  flex: 0 0 auto; font-size: 18px; line-height: 1;
+  color: var(--text2); background: none; border: none; cursor: pointer;
+  padding: 2px 4px; border-radius: 4px;
+}
+.weg-del-btn:hover { color: var(--primary); }
+.weg-add-row {
+  display: flex; align-items: center; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* km-Zeile im Einheit-Detail-Modal */
+.modal-km-row {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding: 8px 0;
+}
+.modal-km-chip {
+  display: flex; flex-direction: column; align-items: center;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 8px; padding: 6px 14px; min-width: 80px;
+}
+.modal-km-chip-val {
+  font-size: 15px; font-weight: 700; color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.modal-km-chip-lbl { font-size: 11px; color: var(--text2); margin-top: 1px; }
+.modal-km-plus { font-size: 16px; color: var(--text2); font-weight: 600; }
+.modal-km-chip.is-total {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.modal-km-chip.is-total .modal-km-chip-val { font-size: 17px; }
+
 /* Error-Notification (fehlte bisher) */
 .notif-err { background: var(--primary); color: white; }
 

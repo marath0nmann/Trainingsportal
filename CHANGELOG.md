@@ -1,6 +1,7 @@
 # Changelog
 
 ## v98
+- Weg zum Training: Anfahrt-km pro Typ+Treffpunkt im Profil konfigurierbar; km-Aufschlüsselung im Einheit-Detail-Modal (Training + Anfahrt = Gesamt)
 - Fix: Pace-Anzeige im Popover zeigt jetzt berechnete min/km statt fehlerhaftem Pace-Referenz-Label (Pace-Daten werden im Popover geladen)
 
 ## v95
