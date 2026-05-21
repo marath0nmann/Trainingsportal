@@ -64,11 +64,12 @@ const KAL_POPOVER = (() => {
         : '';
 
       // Bearbeiten-Button nur auf der Planung-Seite für Trainer/Admin
-      const onPlanung      = (location.hash || '').startsWith('#planung');
-      const onMeinPlan     = (location.hash || '').startsWith('#mein-plan');
+      const hash           = location.hash || '';
+      const onPlanung      = hash.startsWith('#planung');
+      const onKalender     = hash === '' || hash === '#' || hash.startsWith('#kalender');
       const kannEdit       = onPlanung && state.user
         && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
-      const kannUebernehmen = onMeinPlan && state.user;
+      const kannUebernehmen = onKalender && state.user;
 
       pop.innerHTML = `
         <div class="kal-pop-typ kal-typ-${escapeHtml(e.typ)}">${escapeHtml(typLabel)}</div>
