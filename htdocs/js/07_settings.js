@@ -21,13 +21,13 @@ const SETTINGS = (() => {
 
   async function render(main) {
     if (!state.user || state.user.rolle !== 'admin') {
-      main.innerHTML = '<div style="max-width:680px;margin:24px auto;padding:0 16px">' +
+      main.innerHTML = '<div style="max-width:900px;margin:24px auto;padding:0 16px">' +
         '<div class="panel"><div class="panel-header"><div class="panel-title">Einstellungen</div></div>' +
         '<div class="settings-panel-body"><div class="empty">Diese Seite ist nur für Admins zugänglich.</div></div></div></div>';
       return;
     }
 
-    main.innerHTML = '<div style="max-width:680px;margin:24px auto;padding:0 16px">' +
+    main.innerHTML = '<div style="max-width:900px;margin:24px auto;padding:0 16px">' +
       '<div class="loading"><div class="spinner"></div>Laden…</div></div>';
 
     try {
@@ -44,7 +44,7 @@ const SETTINGS = (() => {
       typen         = typenR.typen || [];
       rendereForm(main);
     } catch (e) {
-      main.innerHTML = '<div style="max-width:680px;margin:24px auto;padding:0 16px">' +
+      main.innerHTML = '<div style="max-width:900px;margin:24px auto;padding:0 16px">' +
         '<div class="panel"><div class="panel-header"><div class="panel-title">Einstellungen</div></div>' +
         '<div class="settings-panel-body"><div class="empty">Fehler: ' + escapeHtml(e.message || '') + '</div></div></div></div>';
     }
@@ -94,7 +94,7 @@ const SETTINGS = (() => {
     const dauerMin = getWert('training_default_dauer_min') || '90';
 
     main.innerHTML =
-      '<div style="max-width:680px;margin:24px auto;padding:0 16px;display:flex;flex-direction:column;gap:20px">' +
+      '<div style="max-width:900px;margin:24px auto;padding:0 16px;display:flex;flex-direction:column;gap:20px">' +
 
       // ── Externe Kalender ──
       '<div class="panel">' +
@@ -595,7 +595,7 @@ const SETTINGS = (() => {
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">#${t.reihenfolge}</td>
           <td style="padding:6px 8px;text-align:center;font-size:12px;color:var(--text2)">${t.aktiv ? '✓' : '—'}</td>
           <td style="padding:6px 8px;text-align:right;white-space:nowrap">
-            <button class="btn btn-ghost btn-sm" onclick="SETTINGS.typBearbeiten('${escapeHtml(t.slug)}')">Bearbeiten</button>
+            <button class="btn btn-ghost btn-sm" style="padding:2px 7px" onclick="SETTINGS.typBearbeiten('${escapeHtml(t.slug)}')" title="Bearbeiten">✎</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 7px"
               onclick="SETTINGS.typLoeschen('${escapeHtml(t.slug)}')"
               ${gesperrt ? `disabled title="Wird von ${t.block_count} Block/Blöcken verwendet"` : 'title="Typ löschen"'}>✕</button>

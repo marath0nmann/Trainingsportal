@@ -1,5 +1,8 @@
 # Changelog
 
+## v105
+- Fix: Trainingstypen – Bearbeiten als ✒-Icon + Settings-Breite 680→900px
+
 ## v104
 - Hinweis-Toasts erscheinen jetzt am unteren Bildschirmrand (statt oben rechts)
 
