@@ -1,6 +1,7 @@
 # Changelog
 
 ## v101
+- Fix: km-Eingabe im Weg-zum-Training-Profil akzeptiert jetzt Komma als Dezimaltrennzeichen (type="text" statt type="number")
 - Fix: Trainingstypen – Löschen-Button als ✕-Icon + overflow-x:auto-Wrapper
 
 ## v100
@@ -52,7 +53,7 @@
 ## v82
 - Heute-Sektion: „Bearbeiten"-Button öffnet schlankes Modal „Kalendereintrag bearbeiten" mit nur Datum, Uhrzeit, Treffpunkt und Sichtbarkeit (kein Trainingsblock-Editor)
 
-## v80
+## v81
 - Kalender: heutiger Tag ohne farbige Zellhinterlegung – nur der Kreis um die Tageszahl bleibt farbig
 
 ## v75
@@ -62,7 +63,7 @@
 - Pace-Warnung „Persönliche Pace noch nicht konfiguriert" wird über der Heute-Sektion angezeigt, unabhängig vom heutigen Training; per-Einheit-Warnung entfernt
 - Fix: Link-Farbe in Warnhinweisen nutzt jetzt `color: inherit` – immer lesbar unabhängig von der Theme-Farbe
 
-## v80
+## v81
 - Versionsnummer korrigiert: Sprung auf v73 nach Versions-Regression durch fehlerhafte Squash-Merges (main war zwischenzeitlich bei v71, dann auf v60 zurückgefallen)
 
 ## v57

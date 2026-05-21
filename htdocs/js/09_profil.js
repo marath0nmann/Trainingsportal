@@ -195,9 +195,8 @@ const PROFIL = (() => {
         <select class="settings-input weg-typ-sel" data-i="${safeI}">${typOpts}</select>
         <select class="settings-input weg-tp-sel"  data-i="${safeI}">${tpOpts}</select>
         <div class="weg-km-wrap">
-          <input type="number" class="settings-input weg-km-inp" data-i="${safeI}"
-                 placeholder="km" min="0.1" max="500" step="0.1"
-                 value="${escapeHtml(kmVal)}" style="width:80px">
+          <input type="text" inputmode="decimal" class="settings-input weg-km-inp" data-i="${safeI}"
+                 placeholder="z.B. 1,5" value="${escapeHtml(kmVal)}" style="width:80px">
           <span class="weg-km-label">km einfach</span>
         </div>
         <button class="btn-icon weg-del-btn" onclick="PROFIL._wegEntfernen(${safeI})" title="Entfernen">×</button>
