@@ -343,6 +343,14 @@ const PROFIL = (() => {
       newWeg.push({ typ, treffpunkt_id: tpId, km });
     });
 
+    // Doppelte Typ+Treffpunkt-Kombinationen prüfen
+    const wegKeys = newWeg.map(e => `${e.typ}|${e.treffpunkt_id ?? ''}`);
+    const doppelt = wegKeys.find((k, i) => wegKeys.indexOf(k) !== i);
+    if (doppelt) {
+      _notify('Doppelte Kombination aus Trainingstyp und Treffpunkt – bitte korrigieren.', 'err');
+      return;
+    }
+
     try {
       await Promise.all([
         apiPut('pace/prefs', { prefs: newPrefs }),

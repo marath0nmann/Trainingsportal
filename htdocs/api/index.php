@@ -2272,6 +2272,7 @@ function handleWegPrefsSet(int $userId): void
         return;
     }
     $validated = [];
+    $seen = [];
     foreach ((array)$body['config'] as $entry) {
         if (!is_array($entry)) continue;
         $typ = trim((string)($entry['typ'] ?? ''));
@@ -2281,6 +2282,9 @@ function handleWegPrefsSet(int $userId): void
         $km = (isset($entry['km']) && is_numeric($entry['km']) && (float)$entry['km'] > 0)
             ? round((float)$entry['km'], 2) : null;
         if (!$km) continue;
+        $key = $typ . '|' . ($tpId ?? '');
+        if (isset($seen[$key])) continue; // Duplikate überspringen
+        $seen[$key] = true;
         $validated[] = ['typ' => $typ, 'treffpunkt_id' => $tpId, 'km' => $km];
     }
     speichereWegPrefs($userId, $validated);
