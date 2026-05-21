@@ -1,8 +1,7 @@
 # Changelog
 
-## v101
-- Fix: km-Eingabe im Weg-zum-Training-Profil akzeptiert jetzt Komma als Dezimaltrennzeichen (type="text" statt type="number")
-- Fix: Trainingstypen – Löschen-Button als ✕-Icon + overflow-x:auto-Wrapper
+## v104
+- Hinweis-Toasts erscheinen jetzt am unteren Bildschirmrand (statt oben rechts)
 
 ## v100
 - Weg zum Training: Eingabe einfache Strecke, Hin+Rückweg wird × 2 berechnet; „Kein Training" aus Typ-Auswahl ausgeblendet; Text auf „Anreisekilometer" korrigiert
