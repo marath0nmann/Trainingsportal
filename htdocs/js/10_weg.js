@@ -35,7 +35,8 @@ const WEG = (() => {
       if (p.treffpunkt_id == null) return tpId == null; // null passt nur auf "kein Treffpunkt"
       return p.treffpunkt_id === tpId;
     });
-    return match ? match.km : null;
+    // Gespeichert ist die einfache Strecke → × 2 für Hin- + Rückweg
+    return match ? match.km * 2 : null;
   }
 
   // km-Zahl formatieren: 5.5 → "5,5 km"
