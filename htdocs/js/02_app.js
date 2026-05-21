@@ -278,10 +278,6 @@ async function renderKalender(main, monthArg) {
           <button class="btn btn-ghost" onclick="navigateKalender('${ymd(next).slice(0,7)}')" aria-label="Nächster Monat">›</button>
         </div>
         <div class="kal-nav-right">
-          ${angemeldet ? `<span class="meinplan-legend">
-            <span class="meinplan-legend-pub">Teamplan</span>
-            <span class="meinplan-legend-priv">Mein Plan</span>
-          </span>` : ''}
           <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
           <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
           <div class="view-toggle">
@@ -317,9 +313,16 @@ async function renderKalender(main, monthArg) {
   }
 
   // byDate: datum → [ {..., _privat: bool}, ... ]
+  // Bereits übernommene öffentliche Einheiten werden ausgeblendet (die private Kopie vertritt sie)
+  const adoptedIds = new Set(
+    privat.filter(p => p.ref_einheit_id != null).map(p => p.ref_einheit_id)
+  );
   const byDate = {};
-  oeffentlich.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: false }); });
-  privat.forEach(e =>      { (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: true  }); });
+  oeffentlich.forEach(e => {
+    if (adoptedIds.has(e.id)) return;      // private Kopie vorhanden → Team-Eintrag ausblenden
+    (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: false });
+  });
+  privat.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: true }); });
   Object.values(byDate).forEach(arr =>
     arr.sort((a, b) => a._privat !== b._privat ? (a._privat ? 1 : -1) : (a.uhrzeit || '99:99').localeCompare(b.uhrzeit || '99:99'))
   );
@@ -389,8 +392,12 @@ async function renderKalender(main, monthArg) {
           const kmBadge = e.distanz_km != null
             ? `<span class="kal-item-km">${+e.distanz_km % 1 === 0 ? +e.distanz_km : (+e.distanz_km).toFixed(1)}&thinsp;km</span>`
             : '';
+          // Aus Team-Eintrag übernommen → normales Detail-Modal; eigener Eintrag → Edit-Modal
+          const clickFn = e.ref_einheit_id
+            ? `zeigeEinheit(${e.ref_einheit_id})`
+            : `MEINPLAN.bearbeitePrivat(${e.id})`;
           return `<div class="${cls}" data-privat-id="${e.id}"
-                       onclick="MEINPLAN.bearbeitePrivat(${e.id})"
+                       onclick="${clickFn}"
                        title="${escapeHtml(e.titel)}">
             <span class="kal-item-title">${escapeHtml(e.titel)}</span>
             ${kmBadge}
@@ -420,8 +427,14 @@ async function renderKalender(main, monthArg) {
   }).join('');
 
   const gridCls = angemeldet ? 'kal-grid meinplan-kal-grid' : 'kal-grid';
+  const legendHtml = angemeldet
+    ? `<div class="meinplan-legend meinplan-legend-below">
+        <span class="meinplan-legend-pub">Teamplan</span>
+        <span class="meinplan-legend-priv">Mein Plan</span>
+       </div>`
+    : '';
   document.getElementById('kal-grid').outerHTML =
-    `<div id="kal-grid" class="${gridCls}">${head}${rows}</div>`;
+    `<div id="kal-grid" class="${gridCls}">${head}${rows}</div>${legendHtml}`;
 
   if (typeof KAL_POPOVER !== 'undefined') {
     KAL_POPOVER.initItems(document.querySelectorAll('#kal-grid .kal-item[data-einheit-id]'));

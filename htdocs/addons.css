@@ -1266,6 +1266,9 @@ body.planung-active #app-footer    { display: none; }
   display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600;
   color: var(--text2);
 }
+.meinplan-legend-below {
+  margin-top: 10px; justify-content: flex-end;
+}
 .meinplan-legend-pub,
 .meinplan-legend-priv {
   display: flex; align-items: center; gap: 4px;
@@ -1322,7 +1325,7 @@ body.planung-active #app-footer    { display: none; }
 
 @media (max-width: 720px) {
   .meinplan-wrap { padding: 12px 8px 32px; }
-  .meinplan-legend { display: none; }
+  .meinplan-legend-below { display: none; }
   .meinplan-kw-cell { padding: 4px 2px; }
   .meinplan-kw-num  { font-size: 9px; }
   .meinplan-kw-km   { font-size: 12px; }

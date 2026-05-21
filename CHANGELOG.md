@@ -1,5 +1,9 @@
 # Changelog
 
+## v88
+- Übernommene Team-Einheiten werden im Kalender ausgeblendet – nur die private Kopie (gestrichelt) bleibt sichtbar; Klick darauf öffnet das normale Detail-Modal
+- Legende „Teamplan / Mein Plan" unter den Kalender verschoben (auf Mobilgeräten ausgeblendet)
+
 ## v87
 - „In meinen Plan" übernimmt Einheiten direkt ohne Zwischendialog; km wird automatisch aus Segmenten berechnet oder aus der Typ-Fallback-Distanz (konfigurierbar unter Admin → Einstellungen → Trainingstypen) übernommen
 - „Alle künftigen in meinen Plan": Abo-Button im Hover-Popover übernimmt alle künftigen öffentlichen Einheiten sofort und hält den Plan per Auto-Sync aktuell; einzelne Einheiten lassen sich trotzdem entfernen (werden beim nächsten Sync übersprungen); Abo-Beenden-Button erscheint, wenn Abo bereits aktiv
