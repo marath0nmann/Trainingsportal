@@ -262,6 +262,16 @@ function _migrationStmts(): array
         6 => [
             "ALTER TABLE $tp ADD COLUMN IF NOT EXISTS uhrzeit TIME NULL AFTER datum",
         ],
+
+        // ── 7: Uhrzeit-Backfill für bestehende Abo-Einheiten ─────────────
+        // Vor Migration 6 angelegte Zeilen haben uhrzeit=NULL; hier wird
+        // die Uhrzeit aus der zugehörigen öffentlichen Einheit nachgefüllt.
+        7 => [
+            "UPDATE $tp tp
+             JOIN $te te ON te.id = tp.ref_einheit_id
+             SET tp.uhrzeit = te.uhrzeit
+             WHERE tp.uhrzeit IS NULL AND tp.ref_einheit_id IS NOT NULL",
+        ],
     ];
 }
 
