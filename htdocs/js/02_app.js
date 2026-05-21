@@ -401,7 +401,7 @@ async function renderKalender(main, monthArg) {
           const cls = `kal-item kal-typ-${e.typ} is-privat`;
           const _ekm = _effektivKm(e);
           const _isFallback = _ekm !== null && (e.distanz_km === null || e.distanz_km === undefined);
-          const kmBadge = _ekm !== null
+          const kmBadge = (_ekm !== null && _ekm > 0)
             ? `<span class="kal-item-km${_isFallback ? ' is-fallback-km' : ''}">${_ekm % 1 === 0 ? _ekm : _ekm.toFixed(1)}&thinsp;km</span>`
             : '';
           // Aus Team-Eintrag übernommen → normales Detail-Modal; eigener Eintrag → Edit-Modal

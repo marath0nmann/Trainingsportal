@@ -1,5 +1,8 @@
 # Changelog
 
+## v93
+- Fix: km-Badge bei privaten Einheiten wird ausgeblendet, wenn der Wert 0 km beträgt
+
 ## v92
 - Fallback-km aus der Typ-Konfiguration wird bei privaten Einheiten ohne Distanzangabe angezeigt (kursiv/gedimmt) und in die Wochenkilometer aufaddiert; explizit auf 0 km gesetzte Einheiten sind davon ausgenommen
 
