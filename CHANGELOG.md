@@ -1,5 +1,8 @@
 # Changelog
 
+## v104
+- Hinweis-Toasts erscheinen jetzt am unteren Bildschirmrand (statt oben rechts)
+
 ## v100
 - Fix: „Alle Künftigen in meinen Plan" übernimmt jetzt die angeklickte Einheit sofort und abonniert dann den Trainingstyp – zuvor wurde die konkret angezeigte Einheit nicht hinzugefügt
 
