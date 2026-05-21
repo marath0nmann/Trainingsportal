@@ -409,7 +409,11 @@ async function renderKalender(main, monthArg) {
             ? `zeigeEinheit(${e.ref_einheit_id})`
             : `MEINPLAN.bearbeitePrivat(${e.id})`;
           const timeHtml = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
-          return `<div class="${cls}" data-privat-id="${e.id}"
+          // Übernommene Einheiten bekommen data-einheit-id (ref) → Popover wie beim Team-Eintrag
+          const adoptedAttr = e.ref_einheit_id
+            ? `data-einheit-id="${e.ref_einheit_id}" data-is-adopted="1"`
+            : '';
+          return `<div class="${cls}" data-privat-id="${e.id}" ${adoptedAttr}
                        onclick="${clickFn}"
                        title="${escapeHtml(e.titel)}">
             ${timeHtml}<span class="kal-item-title">${escapeHtml(e.titel)}</span>

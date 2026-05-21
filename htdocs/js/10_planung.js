@@ -56,11 +56,14 @@ const KAL_POPOVER = (() => {
       if (e.uhrzeit) metaParts.push(e.uhrzeit + ' Uhr');
       if (e.treffpunkt && e.treffpunkt.name) metaParts.push(e.treffpunkt.name);
 
+      // Segmente: grafische Blöcke (renderSegmentBlocksHtml aus 02_app.js) statt Chips
       const segsHtml = segs.length
-        ? `<div class="kal-pop-segs">${segs.map(s => {
-            const wdh = s.wiederholungen > 1 ? s.wiederholungen + '×' : '';
-            return `<span class="kal-pop-seg">${wdh}${s.distanz_m} m</span>`;
-          }).join('')}</div>`
+        ? (typeof renderSegmentBlocksHtml === 'function'
+            ? `<div class="kal-pop-segs-blocks">${renderSegmentBlocksHtml(segs, null, e.typ)}</div>`
+            : `<div class="kal-pop-segs">${segs.map(s => {
+                const wdh = s.wiederholungen > 1 ? s.wiederholungen + '×' : '';
+                return `<span class="kal-pop-seg">${wdh}${s.distanz_m} m</span>`;
+              }).join('')}</div>`)
         : '';
 
       // Kontext-Buttons
@@ -69,7 +72,8 @@ const KAL_POPOVER = (() => {
       const onKalender     = hash === '' || hash === '#' || hash.startsWith('#kalender');
       const kannEdit       = onPlanung && state.user
         && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
-      const kannUebernehmen = onKalender && state.user;
+      // Bereits übernommene Einheiten (data-is-adopted) zeigen keine Übernahme-Buttons
+      const kannUebernehmen = onKalender && state.user && !anchorEl.dataset.isAdopted;
 
       // Daten für direktes Übernehmen serialisieren (kein zweiter API-Call nötig)
       const eJson = kannUebernehmen

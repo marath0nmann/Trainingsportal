@@ -1063,7 +1063,7 @@ body.planung-active #app-footer    { display: none; }
 /* ── Hover-Popover auf Kalender-Einträge ── */
 .kal-popover {
   position: fixed; z-index: 1200;
-  width: 244px;
+  width: 280px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1100,6 +1100,15 @@ body.planung-active #app-footer    { display: none; }
   font-size: 11px; background: var(--surf2); border-radius: 4px;
   padding: 2px 6px; color: var(--text);
 }
+/* Segment-Block-Visualisierung im Popover: kompakter als im Modal */
+.kal-pop-segs-blocks .seg-blocks-wrap { margin: 6px 0 0; }
+.kal-pop-segs-blocks .seg-blocks { gap: 3px; }
+.kal-pop-segs-blocks .seg-blk { min-width: 6px; border-radius: 3px; }
+.kal-pop-segs-blocks .seg-blk-sep { width: 4px; }
+.kal-pop-segs-blocks .seg-blk-sum-row {
+  font-size: 11px; color: var(--text2); margin-top: 4px;
+}
+
 .kal-pop-actions {
   margin-top: 10px; border-top: 1px solid var(--border);
   padding-top: 8px; display: flex; gap: 6px;

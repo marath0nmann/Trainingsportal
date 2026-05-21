@@ -1,5 +1,9 @@
 # Changelog
 
+## v95
+- Hover-Popover für abonnierte Einheiten identisch zum Team-Eintrag (gleicher Popover über ref_einheit_id); „In meinen Plan"-Buttons werden dabei ausgeblendet
+- Segmente im Popover als grafische Blöcke (TrainingPeaks-Stil) statt Text-Chips
+
 ## v94
 - Seitenstreifen privater Kalendereinträge ist jetzt durchgehend (nicht mehr gestrichelt)
 
