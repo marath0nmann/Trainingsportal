@@ -19,7 +19,7 @@ const MEINPLAN = (() => {
   function _berechneKm(e, segs) {
     if (Array.isArray(segs) && segs.length) {
       const total = segs.reduce((s, seg) =>
-        s + (seg.wiederholungen || 1) * ((seg.distanz_m || 0) / 1000), 0);
+        s + (seg.wiederholungen || 1) * (((seg.distanz_m || 0) + (seg.pause_m || 0)) / 1000), 0);
       return total > 0 ? Math.round(total * 100) / 100 : null;
     }
     const typen = (window.appConfig && Array.isArray(window.appConfig.typen))
