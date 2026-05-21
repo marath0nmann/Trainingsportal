@@ -105,7 +105,9 @@ const KAL_POPOVER = (() => {
             data-e="${eJson}" data-s="${segsJson}">In meinen Plan</button>
           ${aboAktiv
             ? `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboDeaktivieren('${typEsc}')">Alle künftigen aus meinem Plan entfernen</button>`
-            : `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboAktivieren('${typEsc}')">Alle künftigen in meinen Plan</button>`
+            : `<button class="btn btn-ghost btn-sm"
+                onclick="MEINPLAN.aboAktivieren('${typEsc}', ${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"
+                data-e="${eJson}" data-s="${segsJson}">Alle künftigen in meinen Plan</button>`
           }
         </div>` : ''}
         ${kannEdit ? `<div class="kal-pop-actions">
