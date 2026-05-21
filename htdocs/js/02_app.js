@@ -257,10 +257,20 @@ const TYP_LABEL = {
 // - expliziter Wert (inkl. 0) wird direkt genutzt
 // - null → Fallback-km aus der Typen-Konfiguration (oder null wenn kein Fallback)
 function _effektivKm(e) {
-  if (e.distanz_km !== null && e.distanz_km !== undefined) return parseFloat(e.distanz_km);
-  const typen = (window.appConfig && Array.isArray(window.appConfig.typen)) ? window.appConfig.typen : [];
-  const t = typen.find(x => x.slug === e.typ);
-  return (t && t.fallback_km != null) ? parseFloat(t.fallback_km) : null;
+  let km = null;
+  if (e.distanz_km !== null && e.distanz_km !== undefined) {
+    km = parseFloat(e.distanz_km);
+  } else {
+    const typen = (window.appConfig && Array.isArray(window.appConfig.typen)) ? window.appConfig.typen : [];
+    const t = typen.find(x => x.slug === e.typ);
+    km = (t && t.fallback_km != null) ? parseFloat(t.fallback_km) : null;
+  }
+  // Anreise-km hinzurechnen (sofern WEG-Modul geladen und Präferenz vorhanden)
+  if (km !== null && typeof WEG !== 'undefined') {
+    const wkm = WEG.wegKm(e);
+    if (wkm != null) km += wkm;
+  }
+  return km;
 }
 
 function ymd(d) {
@@ -348,6 +358,9 @@ async function renderKalender(main, monthArg) {
     if (g) g.innerHTML = `<div class="kal-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
     return;
   }
+
+  // WEG vorladen damit _effektivKm die Anreise-km einrechnen kann
+  if (angemeldet && typeof WEG !== 'undefined') await WEG.load();
 
   // byDate: datum → [ {..., _privat: bool}, ... ]
   // Bereits übernommene öffentliche Einheiten werden ausgeblendet (die private Kopie vertritt sie)
@@ -949,7 +962,7 @@ async function zeigeEinheit(id) {
       </div>` : '';
 
     // km-Zeile: Trainings-km aus Segmenten + Anfahrt-km
-    const trainingsKm = seg.reduce((s, b) => s + (parseFloat(b.distanz_m) || 0), 0) / 1000;
+    const trainingsKm = seg.reduce((s, b) => s + (parseFloat(b.distanz_m) || 0) * (parseInt(b.wiederholungen) || 1), 0) / 1000;
     let kmHtml = '';
     if (trainingsKm > 0 || wegKm != null) {
       const fmtKm = km => km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' km';

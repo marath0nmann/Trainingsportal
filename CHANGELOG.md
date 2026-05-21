@@ -1,5 +1,9 @@
 # Changelog
 
+## v105
+- Fix: Trainingsdistanz im Modal korrekt berechnet (Wiederholungen werden jetzt multipliziert, z. B. 12 × 400 m = 4,8 km)
+- Fix: Kalender-KW-Summe und km-Badges berücksichtigen jetzt die Anreise-km aus den Weg-Einstellungen
+
 ## v104
 - Hinweis-Toasts erscheinen jetzt am unteren Bildschirmrand (statt oben rechts)
 
