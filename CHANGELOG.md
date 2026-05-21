@@ -1,5 +1,8 @@
 # Changelog
 
+## v101
+- Fix: Trainingstypen – Löschen-Button als ✕-Icon + overflow-x:auto-Wrapper
+
 ## v100
 - Weg zum Training: Eingabe einfache Strecke, Hin+Rückweg wird × 2 berechnet; „Kein Training" aus Typ-Auswahl ausgeblendet; Text auf „Anreisekilometer" korrigiert
 - Fix: „Alle Künftigen in meinen Plan" übernimmt jetzt die angeklickte Einheit sofort und abonniert dann den Trainingstyp – zuvor wurde die konkret angezeigte Einheit nicht hinzugefügt
@@ -42,7 +45,6 @@
 
 ## v84
 - Mein Plan: privater Trainingskalender für jeden eingeloggten Nutzer; öffentliche Einheiten per Hover-Popover mit einem Klick übernehmen; private Einheiten farblich invertiert (getönter Hintergrund + gestrichelter Rahmen); Wochenkilometer-Spalte (KW-Nummer + km-Summe) direkt im Kalender
->>>>>>> 18fd814 (v100: Weg zum Training – Anreise statt Fahrt, kein_training ausgeblendet, km-Eingabe einfach × 2)
 
 ## v83
 - Kalender-Detail-Modal: „Bearbeiten"-Button öffnet ebenfalls das schlanke Modal „Kalendereintrag bearbeiten" (Datum, Uhrzeit, Treffpunkt, Sichtbarkeit) – gilt jetzt im gesamten Kalenderbereich, nicht nur in der Heute-Sektion
