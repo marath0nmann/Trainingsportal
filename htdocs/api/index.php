@@ -332,6 +332,10 @@ try {
         handleTreffpunkte($method, $tail);
         exit;
     }
+    if ($head === 'admin-dashboard') {
+        handleAdminDashboard($method);
+        exit;
+    }
     if ($head === 'admin') {
         handleAdmin($method, $tail);
         exit;
@@ -784,6 +788,156 @@ function ladeAdminPaceDistanzen(): array
         }
     }
     return ['5000', '10000', '21098', '42195']; // Fallback-Defaults
+}
+
+function handleAdminDashboard(string $method): void {
+    if ($method !== 'GET') { http_response_code(405); echo json_encode(['ok'=>false]); return; }
+    $user = Auth::check();
+    if (!$user) { http_response_code(401); echo json_encode(['ok'=>false,'fehler'=>'Nicht angemeldet']); return; }
+    if (($user['rolle'] ?? '') !== 'admin') { http_response_code(403); echo json_encode(['ok'=>false,'fehler'=>'Nur Admins']); return; }
+
+    // 1. System-Info
+    $phpVersion = PHP_VERSION;
+    $dbVersion  = 'unbekannt';
+    try { $dbVersion = DB::fetchOne('SELECT VERSION() AS v')['v'] ?? 'unbekannt'; } catch (\Exception $e) {}
+
+    $dbSize = null;
+    try {
+        $dbName = DB::fetchOne('SELECT DATABASE() AS d')['d'] ?? null;
+        if ($dbName) {
+            $row    = DB::fetchOne("SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS mb FROM information_schema.tables WHERE table_schema = ?", [$dbName]);
+            $dbSize = (float)($row['mb'] ?? 0);
+        }
+    } catch (\Exception $e) {}
+
+    // 2. Aktive Benutzer (aktuell eingeloggter Admin + seitenaufrufe letzte 10 Min)
+    $aktiveBenutzer = [];
+    $geseheneIds    = [];
+    $myUid          = (int)($user['id'] ?? 0);
+    if ($myUid) {
+        try {
+            $meRow = DB::fetchOne('SELECT id, benutzername, email, rolle FROM ' . DB::tbl('benutzer') . ' WHERE id=? AND aktiv=1', [$myUid]);
+            if ($meRow) {
+                $aktiveBenutzer[] = ['id'=>(int)$meRow['id'], 'name'=>$meRow['email']??$meRow['benutzername'], 'rolle'=>$meRow['rolle'], 'seit'=>date('Y-m-d H:i:s')];
+                $geseheneIds[$myUid] = true;
+            }
+        } catch (\Exception $e) {}
+    }
+    try {
+        $rows = DB::fetchAll(
+            "SELECT b.id, b.benutzername, b.email, b.rolle, MAX(s.erstellt_am) AS letzter_aktivitaet
+             FROM " . DB::tbl('seitenaufrufe') . " s
+             JOIN " . DB::tbl('benutzer') . " b ON b.id = s.benutzer_id
+             WHERE s.erstellt_am >= DATE_SUB(NOW(), INTERVAL 10 MINUTE) AND b.aktiv = 1
+             GROUP BY b.id ORDER BY letzter_aktivitaet DESC"
+        );
+        foreach ($rows as $r) {
+            if (!empty($geseheneIds[(int)$r['id']])) continue;
+            $aktiveBenutzer[] = ['id'=>(int)$r['id'], 'name'=>$r['email']??$r['benutzername'], 'rolle'=>$r['rolle'], 'seit'=>$r['letzter_aktivitaet']];
+        }
+    } catch (\Exception $e) {}
+
+    // 3. Gäste (seitenaufrufe ohne benutzer_id, letzte 15 Min)
+    $gaeste = [];
+    try {
+        $gRows = DB::fetchAll(
+            "SELECT ip, user_agent, MAX(erstellt_am) AS zuletzt, COUNT(*) AS aufrufe
+             FROM " . DB::tbl('seitenaufrufe') . "
+             WHERE benutzer_id IS NULL AND erstellt_am >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+             GROUP BY ip, user_agent ORDER BY zuletzt DESC LIMIT 50"
+        );
+        $geoCache = [];
+        foreach ($gRows as $g) {
+            $ip = $g['ip'] ?? null;
+            $country = null; $countryCode = null;
+            if ($ip && !in_array($ip, ['127.0.0.1','::1']) && !str_starts_with($ip,'192.168.') && !str_starts_with($ip,'10.')) {
+                if (!isset($geoCache[$ip])) {
+                    try {
+                        $ctx  = stream_context_create(['http'=>['timeout'=>2,'ignore_errors'=>true]]);
+                        $json = @file_get_contents('http://ip-api.com/json/' . urlencode($ip) . '?fields=country,countryCode,city&lang=de', false, $ctx);
+                        $geo  = $json ? json_decode($json, true) : null;
+                        $geoCache[$ip] = ($geo && ($geo['status'] ?? '') !== 'fail') ? $geo : null;
+                    } catch (\Exception $e) { $geoCache[$ip] = null; }
+                }
+                if ($geoCache[$ip]) {
+                    $country     = trim(($geoCache[$ip]['city'] ?? '') . ($geoCache[$ip]['city'] ? ', ' : '') . ($geoCache[$ip]['country'] ?? ''));
+                    $countryCode = strtoupper($geoCache[$ip]['countryCode'] ?? '');
+                }
+            }
+            $gaeste[] = ['ip'=>$ip, 'country'=>$country, 'countryCode'=>$countryCode, 'user_agent'=>$g['user_agent'], 'zuletzt'=>$g['zuletzt'], 'aufrufe'=>(int)$g['aufrufe']];
+        }
+    } catch (\Exception $e) {}
+
+    // 4. Letzte Login-Versuche (letzte 5 Tage)
+    $letzteLogins = [];
+    try {
+        $lvRows = DB::fetchAll(
+            'SELECT lv.benutzername, lv.ip, lv.erfolg, lv.erstellt_am, COALESCE(lv.methode, NULL) AS methode'
+            . ' FROM ' . DB::tbl('login_versuche') . ' lv'
+            . ' WHERE lv.erstellt_am >= DATE_SUB(NOW(), INTERVAL 5 DAY)'
+            . ' ORDER BY lv.erstellt_am DESC LIMIT 200'
+        );
+        $bNamen = [];
+        try {
+            $bRows = DB::fetchAll('SELECT benutzername, email, rolle FROM ' . DB::tbl('benutzer'));
+            foreach ($bRows as $b) {
+                $entry = ['name'=>$b['email']??$b['benutzername'], 'email'=>$b['email']??null, 'rolle'=>$b['rolle']??null];
+                $bNamen[$b['benutzername']] = $entry;
+                if (!empty($b['email'])) $bNamen[$b['email']] = $entry;
+            }
+        } catch (\Exception $e) {}
+        $loginGeoCache = [];
+        foreach ($lvRows as $l) {
+            $lip = $l['ip'] ?? null;
+            $lcountry = null; $lcountryCode = null;
+            if ($lip && !in_array($lip, ['127.0.0.1','::1']) && !str_starts_with($lip,'192.168.') && !str_starts_with($lip,'10.')) {
+                if (!isset($loginGeoCache[$lip])) {
+                    try { $ctx=stream_context_create(['http'=>['timeout'=>2,'ignore_errors'=>true]]); $gj=@file_get_contents('http://ip-api.com/json/'.urlencode($lip).'?fields=country,countryCode&lang=de',false,$ctx); $gg=$gj?json_decode($gj,true):null; $loginGeoCache[$lip]=($gg&&($gg['status']??'')!=='fail')?$gg:null; } catch(\Exception $e){ $loginGeoCache[$lip]=null; }
+                }
+                if ($loginGeoCache[$lip]) { $lcountry=$loginGeoCache[$lip]['country']??null; $lcountryCode=strtoupper($loginGeoCache[$lip]['countryCode']??''); }
+            }
+            $bInfo = $bNamen[$l['benutzername']] ?? null;
+            $letzteLogins[] = [
+                'benutzername' => $l['benutzername'],
+                'anzeigeName'  => $bInfo ? $bInfo['name'] : $l['benutzername'],
+                'rolle'        => $bInfo['rolle'] ?? null,
+                'ip'           => $lip,
+                'country'      => $lcountry,
+                'countryCode'  => $lcountryCode,
+                'erfolg'       => (bool)$l['erfolg'],
+                'methode'      => $l['methode'] ?? null,
+                'datum'        => $l['erstellt_am'],
+            ];
+        }
+    } catch (\Exception $e) {}
+
+    // 5. Zählstatistiken
+    $stats = [
+        'benutzer'=>0,'portalSeit'=>null,'neusterBenutzer'=>null,'neusterBenutzerDatum'=>null,
+        'einheiten'=>0,'einheitenJahr'=>0,'naechsteEinheit'=>null,'abgesagt'=>0,
+        'bloeckeGlobal'=>0,'privatEinheiten'=>0,'abos'=>0,'dbVersion'=>null,
+    ];
+    try { $stats['benutzer'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('benutzer') . " WHERE aktiv=1 AND geloescht_am IS NULL")['c'] ?? 0); } catch(\Exception $e) {}
+    try { $r2 = DB::fetchOne("SELECT MIN(erstellt_am) AS d FROM " . DB::tbl('benutzer')); $stats['portalSeit'] = $r2['d'] ?? null; } catch(\Exception $e) {}
+    try { $nr = DB::fetchOne("SELECT benutzername, email, erstellt_am FROM " . DB::tbl('benutzer') . " WHERE aktiv=1 AND geloescht_am IS NULL ORDER BY erstellt_am DESC LIMIT 1"); $stats['neusterBenutzer'] = $nr ? ($nr['email'] ?: $nr['benutzername']) : null; $stats['neusterBenutzerDatum'] = $nr['erstellt_am'] ?? null; } catch(\Exception $e) {}
+    try { $stats['einheiten'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_einheiten'))['c'] ?? 0); } catch(\Exception $e) {}
+    try { $stats['einheitenJahr'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_einheiten') . " WHERE YEAR(datum)=YEAR(CURDATE())")['c'] ?? 0); } catch(\Exception $e) {}
+    try { $ne = DB::fetchOne("SELECT datum FROM " . DB::tbl('training_einheiten') . " WHERE datum >= CURDATE() AND status='geplant' ORDER BY datum ASC LIMIT 1"); $stats['naechsteEinheit'] = $ne['datum'] ?? null; } catch(\Exception $e) {}
+    try { $stats['abgesagt'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_einheiten') . " WHERE status='abgesagt'")['c'] ?? 0); } catch(\Exception $e) {}
+    try { $stats['bloeckeGlobal'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_bloecke') . " WHERE sichtbarkeit='global'")['c'] ?? 0); } catch(\Exception $e) {}
+    try { $stats['privatEinheiten'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_privat_einheiten'))['c'] ?? 0); } catch(\Exception $e) {}
+    try { $stats['abos'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('training_abos'))['c'] ?? 0); } catch(\Exception $e) {}
+    try { $dbVRow = DB::fetchOne("SELECT wert FROM " . DB::tbl('einstellungen') . " WHERE schluessel='training_db_version'"); $stats['dbVersion'] = $dbVRow['wert'] ?? null; } catch(\Exception $e) {}
+
+    // 6. Seitenaufrufe
+    $aufrufe = ['heute'=>0,'gestern'=>0,'7tage'=>0];
+    try {
+        $aufrufe['heute']   = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('seitenaufrufe') . " WHERE DATE(erstellt_am)=CURDATE()")['c'] ?? 0);
+        $aufrufe['gestern'] = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('seitenaufrufe') . " WHERE DATE(erstellt_am)=DATE_SUB(CURDATE(),INTERVAL 1 DAY)")['c'] ?? 0);
+        $aufrufe['7tage']   = (int)(DB::fetchOne("SELECT COUNT(*) c FROM " . DB::tbl('seitenaufrufe') . " WHERE erstellt_am >= DATE_SUB(NOW(),INTERVAL 7 DAY)")['c'] ?? 0);
+    } catch (\Exception $e) {}
+
+    echo json_encode(['ok'=>true, 'data'=>compact('phpVersion','dbVersion','dbSize','aktiveBenutzer','gaeste','letzteLogins','stats','aufrufe')]);
 }
 
 function handleAdmin(string $method, string $sub): void {

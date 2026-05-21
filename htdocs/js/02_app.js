@@ -206,11 +206,14 @@ function closeBurgerMenu() {
 
 // ── Admin-Seite mit Sub-Navigation ──────────────────────────
 function renderAdminPage(main, subTab) {
-  const tab = subTab || 'einstellungen';
+  const tab = subTab || 'system';
+  const wide = tab === 'system';
 
   main.innerHTML = `
-    <div style="max-width:900px;margin:0 auto;padding:16px">
-      <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:10px">
+    <div style="${wide ? '' : 'max-width:900px;'}margin:0 auto;padding:16px">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:10px">
+        <button class="btn btn-ghost${tab === 'system' ? ' active' : ''}"
+          onclick="navigateAdmin('system')">&#x1F5A5;&#xFE0E; System</button>
         <button class="btn btn-ghost${tab === 'einstellungen' ? ' active' : ''}"
           onclick="navigateAdmin('einstellungen')">Einstellungen</button>
         <button class="btn btn-ghost${tab === 'trainings' ? ' active' : ''}"
@@ -220,7 +223,9 @@ function renderAdminPage(main, subTab) {
     </div>`;
 
   const contentEl = document.getElementById('admin-content');
-  if (tab === 'trainings') {
+  if (tab === 'system') {
+    renderAdminSystem(contentEl);
+  } else if (tab === 'trainings') {
     ADMIN_TRAININGS.render(contentEl);
   } else {
     SETTINGS.render(contentEl);
