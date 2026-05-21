@@ -94,6 +94,7 @@ function fillUserBadge() {
     const isTrainer = isAdmin || u.rolle === 'trainer';
     nav.innerHTML = `
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
+      <button onclick="navigate('mein-plan')"${state.tab === 'mein-plan' ? ' class="active"' : ''}>Mein Plan</button>
       ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
       ${isTrainer ? `<button onclick="navigate('treffpunkte')"${state.tab === 'treffpunkte' ? ' class="active"' : ''}>Treffpunkte</button>` : ''}
       ${isAdmin ? `<button onclick="navigate('admin')"${state.tab === 'admin' ? ' class="active"' : ''}>Admin</button>` : ''}`;
@@ -135,6 +136,11 @@ function renderPage() {
   }
   if (state.tab === 'bloecke') {
     location.replace('#planung');
+    return;
+  }
+  if (state.tab === 'mein-plan') {
+    if (!state.user) { location.replace('#kalender'); return; }
+    MEINPLAN.render(main);
     return;
   }
   if (state.tab === 'planung') {

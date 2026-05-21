@@ -92,6 +92,10 @@ try {
         handleAdmin($method, $tail);
         exit;
     }
+    if ($head === 'mein-plan') {
+        handleMeinPlan($method, $tail);
+        exit;
+    }
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden', 'path' => $path]);
@@ -2379,4 +2383,183 @@ function validateEinheit(array $in): array {
         $errs[] = 'Feld "uhrzeit" muss HH:MM sein';
     }
     return $errs;
+}
+
+// ============================================================
+// Privater Trainingsplan
+//   GET  mein-plan/einheiten?von=&bis=  → öffentl. + eigene private Einheiten
+//   GET  mein-plan/einheiten/{id}       → einzelne private Einheit
+//   POST mein-plan/einheiten            → neue private Einheit anlegen
+//   PUT  mein-plan/einheiten/{id}       → eigene private Einheit bearbeiten
+//   DEL  mein-plan/einheiten/{id}       → eigene private Einheit löschen
+// ============================================================
+function handleMeinPlan(string $method, string $tail): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId = (int)$user['id'];
+
+    // GET Liste: öffentliche + eigene private Einheiten
+    if ($tail === 'einheiten' && $method === 'GET') {
+        $von = $_GET['von'] ?? null;
+        $bis = $_GET['bis'] ?? null;
+        if (!$von || !$bis
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $von)
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $bis)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Parameter von/bis (YYYY-MM-DD) erforderlich']);
+            return;
+        }
+        $rows = DB::fetchAll(
+            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
+                    e.bemerkung, e.sichtbarkeit, e.status,
+                    t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
+               FROM ' . DB::tbl('training_einheiten') . ' e
+               LEFT JOIN ' . DB::tbl('training_treffpunkte') . " t ON t.id = e.treffpunkt_id
+              WHERE e.datum BETWEEN ? AND ?
+                AND e.sichtbarkeit IN ('oeffentlich','intern')
+           ORDER BY e.datum, e.uhrzeit",
+            [$von, $bis]
+        );
+        $privatRows = DB::fetchAll(
+            'SELECT * FROM ' . DB::tbl('training_privat_einheiten') . '
+             WHERE benutzer_id = ? AND datum BETWEEN ? AND ?
+             ORDER BY datum',
+            [$userId, $von, $bis]
+        );
+        echo json_encode([
+            'ok'       => true,
+            'einheiten' => array_map('mapEinheit', $rows),
+            'privat'   => array_map('mapPrivatEinheit', $privatRows),
+        ]);
+        return;
+    }
+
+    // GET einzelne private Einheit
+    if (preg_match('/^einheiten\/(\d+)$/', $tail, $m) && $method === 'GET') {
+        $id  = (int)$m[1];
+        $row = DB::fetchOne(
+            'SELECT * FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
+            [$id, $userId]
+        );
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Einheit nicht gefunden']);
+            return;
+        }
+        echo json_encode(['ok' => true, 'einheit' => mapPrivatEinheit($row)]);
+        return;
+    }
+
+    // POST neue private Einheit
+    if ($tail === 'einheiten' && $method === 'POST') {
+        $in = readJsonBody();
+        if (empty($in['datum']) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $in['datum'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "datum" erforderlich']);
+            return;
+        }
+        if (empty($in['titel']) || !is_string($in['titel'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "titel" erforderlich']);
+            return;
+        }
+        $km = null;
+        if (isset($in['distanz_km']) && $in['distanz_km'] !== null && $in['distanz_km'] !== '') {
+            $km = round(max(0.0, min(99999.0, (float)$in['distanz_km'])), 2);
+        }
+        DB::query(
+            'INSERT INTO ' . DB::tbl('training_privat_einheiten') . '
+             (benutzer_id, datum, typ, titel, distanz_km, bemerkung, ref_einheit_id)
+             VALUES (?,?,?,?,?,?,?)',
+            [
+                $userId,
+                $in['datum'],
+                isset($in['typ']) && $in['typ'] !== '' ? substr((string)$in['typ'], 0, 40) : 'dauerlauf',
+                substr((string)$in['titel'], 0, 200),
+                $km,
+                (isset($in['bemerkung']) && $in['bemerkung'] !== '') ? (string)$in['bemerkung'] : null,
+                (isset($in['ref_einheit_id']) && $in['ref_einheit_id']) ? (int)$in['ref_einheit_id'] : null,
+            ]
+        );
+        echo json_encode(['ok' => true, 'id' => (int)DB::lastInsertId()]);
+        return;
+    }
+
+    // PUT eigene private Einheit bearbeiten
+    if (preg_match('/^einheiten\/(\d+)$/', $tail, $m) && $method === 'PUT') {
+        $id  = (int)$m[1];
+        $chk = DB::fetchOne(
+            'SELECT id FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
+            [$id, $userId]
+        );
+        if (!$chk) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Einheit nicht gefunden']);
+            return;
+        }
+        $in = readJsonBody();
+        if (empty($in['datum']) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $in['datum'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "datum" erforderlich']);
+            return;
+        }
+        if (empty($in['titel']) || !is_string($in['titel'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "titel" erforderlich']);
+            return;
+        }
+        $km = null;
+        if (isset($in['distanz_km']) && $in['distanz_km'] !== null && $in['distanz_km'] !== '') {
+            $km = round(max(0.0, min(99999.0, (float)$in['distanz_km'])), 2);
+        }
+        DB::query(
+            'UPDATE ' . DB::tbl('training_privat_einheiten') . '
+             SET datum=?, typ=?, titel=?, distanz_km=?, bemerkung=?, ref_einheit_id=?
+             WHERE id=? AND benutzer_id=?',
+            [
+                $in['datum'],
+                isset($in['typ']) && $in['typ'] !== '' ? substr((string)$in['typ'], 0, 40) : 'dauerlauf',
+                substr((string)$in['titel'], 0, 200),
+                $km,
+                (isset($in['bemerkung']) && $in['bemerkung'] !== '') ? (string)$in['bemerkung'] : null,
+                (isset($in['ref_einheit_id']) && $in['ref_einheit_id']) ? (int)$in['ref_einheit_id'] : null,
+                $id,
+                $userId,
+            ]
+        );
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // DELETE eigene private Einheit löschen
+    if (preg_match('/^einheiten\/(\d+)$/', $tail, $m) && $method === 'DELETE') {
+        $id = (int)$m[1];
+        DB::query(
+            'DELETE FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
+            [$id, $userId]
+        );
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Mein-Plan-Endpoint nicht gefunden']);
+}
+
+function mapPrivatEinheit(array $r): array
+{
+    return [
+        'id'             => (int)$r['id'],
+        'datum'          => $r['datum'],
+        'typ'            => $r['typ'],
+        'titel'          => $r['titel'],
+        'distanz_km'     => $r['distanz_km'] !== null ? (float)$r['distanz_km'] : null,
+        'bemerkung'      => $r['bemerkung'],
+        'ref_einheit_id' => $r['ref_einheit_id'] !== null ? (int)$r['ref_einheit_id'] : null,
+    ];
 }

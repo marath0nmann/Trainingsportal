@@ -64,9 +64,11 @@ const KAL_POPOVER = (() => {
         : '';
 
       // Bearbeiten-Button nur auf der Planung-Seite für Trainer/Admin
-      const onPlanung = (location.hash || '').startsWith('#planung');
-      const kannEdit  = onPlanung && state.user
+      const onPlanung      = (location.hash || '').startsWith('#planung');
+      const onMeinPlan     = (location.hash || '').startsWith('#mein-plan');
+      const kannEdit       = onPlanung && state.user
         && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
+      const kannUebernehmen = onMeinPlan && state.user;
 
       pop.innerHTML = `
         <div class="kal-pop-typ kal-typ-${escapeHtml(e.typ)}">${escapeHtml(typLabel)}</div>
@@ -74,6 +76,9 @@ const KAL_POPOVER = (() => {
         ${metaParts.length ? `<div class="kal-pop-meta">${metaParts.map(escapeHtml).join(' · ')}</div>` : ''}
         ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
         ${segsHtml}
+        ${kannUebernehmen ? `<div class="kal-pop-actions">
+          <button class="btn btn-primary btn-sm" onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId})">In meinen Plan</button>
+        </div>` : ''}
         ${kannEdit ? `<div class="kal-pop-actions">
           <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeiten(${einheitId})">Bearbeiten</button>
         </div>` : ''}`;

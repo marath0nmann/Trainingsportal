@@ -1237,3 +1237,94 @@ body.planung-active #app-footer    { display: none; }
   background: color-mix(in srgb, var(--text2) 12%, transparent);
   color: var(--text2); border-color: color-mix(in srgb, var(--text2) 25%, transparent);
 }
+
+/* ============================================================
+   Mein Plan – privater Trainingsplan
+   ============================================================ */
+
+/* Private Kalender-Einträge: invertierter Hintergrund (Typ-Farbe als Füllung) */
+.kal-item.is-privat {
+  border-left-style: dashed;
+}
+.kal-item.is-privat.kal-typ-intervall    { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-dauerlauf    { background: color-mix(in srgb, var(--green, #1a8a3a) 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-funktionell  { background: color-mix(in srgb, #c08010 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-runde        { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-event        { background: color-mix(in srgb, #8845c0 14%, var(--surface)); }
+.kal-item.is-privat.kal-typ-frei         { background: color-mix(in srgb, var(--text2) 10%, var(--surface)); }
+.kal-item.is-privat.kal-typ-kein_training { background: none; }
+
+/* Km-Badge auf privaten Einträgen */
+.kal-item-km {
+  font-size: 10px; font-weight: 700; color: var(--text2);
+  opacity: .85; line-height: 1;
+}
+
+/* Legende in der Toolbar */
+.meinplan-legend {
+  display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600;
+  color: var(--text2);
+}
+.meinplan-legend-pub,
+.meinplan-legend-priv {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 4px;
+}
+.meinplan-legend-pub  { background: var(--surf2); border-left: 3px solid var(--accent); }
+.meinplan-legend-priv { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-left: 3px dashed var(--accent); }
+
+/* Wrapper */
+.meinplan-wrap { padding: 24px 28px 48px; max-width: 1400px; margin: 0 auto; }
+.meinplan-kal-container { margin-top: 0; }
+
+/* Kalender-Grid mit eingebetteter KW-Spalte */
+.meinplan-kal-grid .kal-head,
+.meinplan-kal-grid .kal-row {
+  grid-template-columns: 68px repeat(7, 1fr);
+}
+
+/* KW-Kopfzelle */
+.meinplan-kw-head-cell {
+  background: var(--surf2);
+  color: var(--text2);
+  border-right: 1px solid var(--border);
+}
+
+/* KW-Datenzelle (erste Spalte jeder Zeile) */
+.meinplan-kw-cell {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 6px 4px; gap: 3px; text-align: center;
+  background: var(--surf2);
+  border-right: 1px solid var(--border);
+}
+.meinplan-kw-num {
+  font-size: 10px; font-weight: 700; letter-spacing: .3px;
+  text-transform: uppercase; color: var(--text2);
+  white-space: nowrap;
+}
+.meinplan-kw-km {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 15px; color: var(--text2);
+  line-height: 1; white-space: nowrap;
+}
+.meinplan-kw-km.has-km { color: var(--accent); }
+
+/* Hinweis "Aus dem Teamplan übernommen" */
+.meinplan-ref-hint {
+  font-size: 12px; color: var(--text2);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 6px; padding: 6px 10px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 720px) {
+  .meinplan-wrap { padding: 12px 8px 32px; }
+  .meinplan-legend { display: none; }
+  .meinplan-kw-cell { padding: 4px 2px; }
+  .meinplan-kw-num  { font-size: 9px; }
+  .meinplan-kw-km   { font-size: 12px; }
+  .meinplan-kal-grid .kal-head,
+  .meinplan-kal-grid .kal-row { grid-template-columns: 48px repeat(7, 1fr); }
+}
