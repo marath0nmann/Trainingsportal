@@ -212,7 +212,20 @@ const PROFIL = (() => {
       </div>`;
   }
 
+  // DOM → _localWeg synchronisieren (vor jedem Re-Render aufrufen)
+  function _syncWegFromDom() {
+    _localWeg.forEach((entry, i) => {
+      const typEl = document.querySelector(`.weg-typ-sel[data-i="${i}"]`);
+      const tpEl  = document.querySelector(`.weg-tp-sel[data-i="${i}"]`);
+      const kmEl  = document.querySelector(`.weg-km-inp[data-i="${i}"]`);
+      if (typEl) entry.typ          = typEl.value;
+      if (tpEl)  entry.treffpunkt_id = tpEl.value ? parseInt(tpEl.value, 10) : null;
+      if (kmEl)  entry.km           = parseFloat((kmEl.value || '').replace(',', '.')) || null;
+    });
+  }
+
   function _rendereWegListe() {
+    _syncWegFromDom();
     const el = document.getElementById('weg-liste');
     if (!el) return;
     if (!_localWeg.length) {
