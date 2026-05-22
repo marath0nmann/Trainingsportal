@@ -1,9 +1,16 @@
 # Changelog
 
 ## v120
-- feat: Standard-Dauer + Standard-Treffpunkt pro Trainingstyp konfigurierbar
+- Trainingsgruppen: Athleten können sich im Profil einer oder mehreren Trainingsgruppen zuordnen; fehlt die Zuordnung, erscheint ein Warnhinweis auf der Startseite (identischer Style wie Pace-Warnung)
+- Planungsansicht: Gruppen-Tabs oben; Trainer wählt über „⚙ Gruppen konfigurieren", welche Gruppen er sieht – Kalender und Block-Sidebar filtern nach aktivem Tab
+- Trainingsblöcke können im Block-Editor einer oder mehreren Trainingsgruppen zugeordnet werden
+- DB-Migration #10: neue Tabellen `training_benutzer_gruppen`, `training_planung_gruppen`, `training_block_gruppen`; Spalte `gruppe_id` in `training_einheiten`; bestehende öffentliche Einheiten werden automatisch der Gruppe „Senioren" zugeordnet
+- Neue API-Endpunkte: `GET /trainingsgruppen`, `GET|PUT /profil/gruppen`, `GET|PUT /planung/gruppen-prefs`
 
 ## v119
+- feat: Standard-Dauer + Standard-Treffpunkt pro Trainingstyp konfigurierbar
+
+## v118
 - „Alle künftigen in meinen Plan" entfernt (war fehlerhaft); ersetzt durch Checkbox „[Typ] abonnieren" im Kalender-Popover – neu erstellte Einheiten dieses Typs werden automatisch in den persönlichen Plan übernommen
 
 ## v117

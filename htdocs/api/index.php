@@ -2378,6 +2378,8 @@ function handleSerien(string $method, string $sub): void
         $tpId      = ($tpIdRaw !== null && $tpIdRaw !== '') ? (int)$tpIdRaw : null;
         $sicht     = in_array($in['sichtbarkeit'] ?? '', ['oeffentlich', 'intern'], true)
                      ? $in['sichtbarkeit'] : 'oeffentlich';
+        $serieGruppeId = isset($in['gruppe_id']) && $in['gruppe_id'] !== '' && $in['gruppe_id'] !== null
+                     ? (int)$in['gruppe_id'] : null;
         $regel     = is_array($in['regel'] ?? null) ? $in['regel'] : [];
 
         if (!$blockId || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $startdatum)) {
@@ -2451,8 +2453,8 @@ function handleSerien(string $method, string $sub): void
                 DB::query(
                     'INSERT INTO ' . DB::tbl('training_einheiten') . '
                      (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, bemerkung,
-                      sichtbarkeit, status, serie_id, erstellt_von)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                      sichtbarkeit, status, serie_id, gruppe_id, erstellt_von)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                     [
                         $datum,
                         $uhrzeit,
@@ -2464,6 +2466,7 @@ function handleSerien(string $method, string $sub): void
                         $sicht,
                         'geplant',
                         $serieId,
+                        $serieGruppeId,
                         (int)$user['id'],
                     ]
                 );
@@ -3804,4 +3807,130 @@ function mapPrivatEinheit(array $r): array
         'treffpunkt_id'  => isset($r['ref_treffpunkt_id']) && $r['ref_treffpunkt_id'] !== null
                                 ? (int)$r['ref_treffpunkt_id'] : null,
     ];
+}
+
+// ============================================================
+// Hilfsfunktion: Block-Gruppen-Zuordnungen ersetzen
+// ============================================================
+function replaceBlockGruppen(int $blockId, array $gruppenIds): void {
+    DB::query('DELETE FROM ' . DB::tbl('training_block_gruppen') . ' WHERE block_id = ?', [$blockId]);
+    foreach ($gruppenIds as $gid) {
+        $gid = (int)$gid;
+        if ($gid <= 0) continue;
+        DB::query(
+            'INSERT IGNORE INTO ' . DB::tbl('training_block_gruppen') . ' (block_id, gruppe_id) VALUES (?,?)',
+            [$blockId, $gid]
+        );
+    }
+}
+
+// ============================================================
+// GET /trainingsgruppen → alle Gruppen aus der gemeinsamen gruppen-Tabelle
+// ============================================================
+function handleTrainingsgruppen(string $method): void {
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    if ($method !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['ok' => false, 'fehler' => 'Nur GET']);
+        return;
+    }
+    try {
+        $rows = DB::fetchAll("SELECT id, name FROM " . DB::tbl('gruppen') . " ORDER BY name");
+        $gruppen = array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name']], $rows);
+    } catch (Throwable $e) {
+        // Tabelle existiert nicht (Statistikportal nicht verknüpft)
+        $gruppen = [];
+    }
+    echo json_encode(['ok' => true, 'gruppen' => $gruppen]);
+}
+
+// ============================================================
+// GET /profil/gruppen  → eigene Gruppenm­it­glied­schaften lesen
+// PUT /profil/gruppen  → Gruppen aktualisieren
+// ============================================================
+function handleProfil(string $method, string $sub): void {
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId = (int)$user['id'];
+
+    if ($sub === 'gruppen' && $method === 'GET') {
+        $rows = DB::fetchAll(
+            "SELECT gruppe_id FROM " . DB::tbl('training_benutzer_gruppen') . " WHERE benutzer_id = ?",
+            [$userId]
+        );
+        $ids = array_map(fn($r) => (int)$r['gruppe_id'], $rows);
+        echo json_encode(['ok' => true, 'gruppen_ids' => $ids]);
+        return;
+    }
+
+    if ($sub === 'gruppen' && $method === 'PUT') {
+        $in  = readJsonBody();
+        $ids = isset($in['gruppen_ids']) && is_array($in['gruppen_ids']) ? $in['gruppen_ids'] : [];
+        DB::query("DELETE FROM " . DB::tbl('training_benutzer_gruppen') . " WHERE benutzer_id = ?", [$userId]);
+        foreach ($ids as $gid) {
+            $gid = (int)$gid;
+            if ($gid <= 0) continue;
+            DB::query(
+                "INSERT IGNORE INTO " . DB::tbl('training_benutzer_gruppen') . " (benutzer_id, gruppe_id) VALUES (?,?)",
+                [$userId, $gid]
+            );
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Profil-Endpoint nicht gefunden']);
+}
+
+// ============================================================
+// GET /planung/gruppen-prefs  → Trainer-Gruppenauswahl für Planungsansicht
+// PUT /planung/gruppen-prefs  → Trainer-Gruppenauswahl speichern
+// ============================================================
+function handlePlanung(string $method, string $sub): void {
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId = (int)$user['id'];
+
+    if ($sub === 'gruppen-prefs' && $method === 'GET') {
+        $rows = DB::fetchAll(
+            "SELECT gruppe_id FROM " . DB::tbl('training_planung_gruppen') . " WHERE benutzer_id = ?",
+            [$userId]
+        );
+        $ids = array_map(fn($r) => (int)$r['gruppe_id'], $rows);
+        echo json_encode(['ok' => true, 'gruppen_ids' => $ids]);
+        return;
+    }
+
+    if ($sub === 'gruppen-prefs' && $method === 'PUT') {
+        $in  = readJsonBody();
+        $ids = isset($in['gruppen_ids']) && is_array($in['gruppen_ids']) ? $in['gruppen_ids'] : [];
+        DB::query("DELETE FROM " . DB::tbl('training_planung_gruppen') . " WHERE benutzer_id = ?", [$userId]);
+        foreach ($ids as $gid) {
+            $gid = (int)$gid;
+            if ($gid <= 0) continue;
+            DB::query(
+                "INSERT IGNORE INTO " . DB::tbl('training_planung_gruppen') . " (benutzer_id, gruppe_id) VALUES (?,?)",
+                [$userId, $gid]
+            );
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Planung-Endpoint nicht gefunden']);
 }

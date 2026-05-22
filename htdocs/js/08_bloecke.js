@@ -147,8 +147,9 @@ const BLOECKE = (() => {
   }
 
   // ── Block auf Kalender anwenden ───────────────────────────
-  // datum: optionales ISO-Datum (YYYY-MM-DD), z. B. vom Planung-DnD gesetzt
-  async function anwenden(blockId, datum) {
+  // datum:    optionales ISO-Datum (YYYY-MM-DD), z. B. vom Planung-DnD gesetzt
+  // gruppeId: optionale Trainingsgruppen-ID aus dem aktiven Planungs-Tab
+  async function anwenden(blockId, datum, gruppeId) {
     let blockData, tpListe;
     try {
       [blockData, tpListe] = await Promise.all([
@@ -160,6 +161,7 @@ const BLOECKE = (() => {
       return;
     }
     const b = blockData.block;
+    _anwendenGruppeId = gruppeId || null;
     const heute = datum || ymd(new Date());
     const stdTpId = String(appConfig && appConfig.training_standard_treffpunkt_id || '');
     const tpOptionen = `<option value=""${stdTpId === '' ? ' selected' : ''}>— kein Treffpunkt —</option>` +
@@ -318,6 +320,7 @@ const BLOECKE = (() => {
         uhrzeit:       val('apply-uhrzeit') || null,
         treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
         sichtbarkeit:  val('apply-sichtbarkeit'),
+        gruppe_id:     _anwendenGruppeId || null,
         regel: { freq, interval, byday: freq === 'weekly' ? byday : [], until, count },
       };
       try {
@@ -340,6 +343,7 @@ const BLOECKE = (() => {
         uhrzeit:       val('apply-uhrzeit') || null,
         treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
         sichtbarkeit:  val('apply-sichtbarkeit'),
+        gruppe_id:     _anwendenGruppeId || null,
       };
       try {
         await apiPost(`bloecke/${blockId}/apply`, payload);
@@ -498,6 +502,7 @@ const BLOECKE = (() => {
   // ── Block-Editor ──────────────────────────────────────────
   let editorBloecke = [];
   let titelManuellBearbeitet = false;
+  let _anwendenGruppeId = null; // Gruppen-ID beim Block-Anwenden (aus Planungs-Tab)
 
   function segmenteZuBloecke(segmente) {
     if (!segmente || !segmente.length) return [];
@@ -568,7 +573,7 @@ const BLOECKE = (() => {
   }
 
   async function neuerBlock() {
-    await PACE.load();
+    await Promise.all([PACE.load(), GRUPPEN.laden()]);
     openBlockEditor(null, []);
   }
 
@@ -577,6 +582,7 @@ const BLOECKE = (() => {
       const [data] = await Promise.all([
         apiGet(`bloecke/${blockId}`, { silent: true }),
         PACE.load(),
+        GRUPPEN.laden(),
       ]);
       openBlockEditor(data.block, data.segmente || []);
     } catch (e) {
@@ -584,7 +590,7 @@ const BLOECKE = (() => {
     }
   }
 
-  function openBlockEditor(block, segmente) {
+  async function openBlockEditor(block, segmente) {
     const istNeu = !block;
     editorBloecke = segmenteZuBloecke((segmente || []).map(s => ({ ...s })));
     // Segmente aus Titel parsen falls noch keine vorhanden
@@ -597,8 +603,11 @@ const BLOECKE = (() => {
 
     const b = block || {
       id: null, titel: '', typ: 'intervall',
-      komoot_url: '', bemerkung: '', sichtbarkeit: 'global',
+      komoot_url: '', bemerkung: '', sichtbarkeit: 'global', gruppen_ids: [],
     };
+    // Gruppen-Checkboxen aufbauen
+    const alleGruppen = await GRUPPEN.laden();
+    const beGrSet = new Set(b.gruppen_ids || []);
     const typenOptionen = getTypen()
       .map(t => `<option value="${escapeHtml(t.slug)}"${t.slug === b.typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`)
       .join('');
@@ -630,6 +639,17 @@ const BLOECKE = (() => {
                   <option value="privat"${b.sichtbarkeit === 'privat' ? ' selected' : ''}>Privat (nur ich)</option>
                 </select>
               </div>
+              ${alleGruppen.length ? `
+              <div class="ed-fg ed-fg-wide">
+                <label>Trainingsgruppen <span class="ed-hint">(Zuordnung für Planungsansicht)</span></label>
+                <div class="be-gruppen-list">
+                  ${alleGruppen.map(g => `
+                    <label class="profil-gruppe-item">
+                      <input type="checkbox" class="be-gruppe-cb" value="${g.id}"${beGrSet.has(g.id) ? ' checked' : ''}>
+                      <span>${escapeHtml(g.name)}</span>
+                    </label>`).join('')}
+                </div>
+              </div>` : ''}
               <div class="ed-fg ed-fg-wide">
                 <label>Bemerkung</label>
                 <textarea id="be-bemerkung" rows="2">${escapeHtml(b.bemerkung || '')}</textarea>
@@ -903,6 +923,8 @@ const BLOECKE = (() => {
   async function speichern(blockId) {
     const typ      = val('be-typ');
     const istRunde = hatStrecke(typ);
+    const gruppenIds = [...document.querySelectorAll('.be-gruppe-cb:checked')]
+      .map(cb => parseInt(cb.value, 10)).filter(id => id > 0);
     const payload = {
       titel:        val('be-titel'),
       typ,
@@ -910,6 +932,7 @@ const BLOECKE = (() => {
       bemerkung:    val('be-bemerkung') || null,
       sichtbarkeit: val('be-sichtbarkeit'),
       segmente:     istRunde ? [] : bloeckeZuSegmente(editorBloecke),
+      gruppen_ids:  gruppenIds,
     };
     if (!payload.titel) { notify('Titel fehlt.', 'err'); return; }
     try {
