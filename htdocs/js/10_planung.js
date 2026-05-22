@@ -79,8 +79,14 @@ const KAL_POPOVER = (() => {
       const onKalender     = hash === '' || hash === '#' || hash.startsWith('#kalender');
       const kannEdit       = onPlanung && state.user
         && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
-      // Bereits übernommene Einheiten (data-is-adopted) zeigen keine Übernahme-Buttons
-      const kannUebernehmen = onKalender && state.user && !anchorEl.dataset.isAdopted;
+
+      const isAdopted       = !!anchorEl.dataset.isAdopted;
+      const privatId        = anchorEl.dataset.privatId ? parseInt(anchorEl.dataset.privatId, 10) : null;
+      // kannUebernehmen: noch nicht übernommen → „In meinen Plan"-Button
+      const kannUebernehmen = onKalender && !!state.user && !isAdopted;
+      // kannEntfernen: bereits übernommen → „Aus meinem Plan entfernen"-Button
+      const kannEntfernen   = onKalender && !!state.user && isAdopted && !!privatId;
+      const zeigeAktionen   = kannUebernehmen || kannEntfernen;
 
       // Daten für direktes Übernehmen serialisieren (kein zweiter API-Call nötig)
       const eJson = kannUebernehmen
@@ -90,7 +96,7 @@ const KAL_POPOVER = (() => {
         ? escapeHtml(JSON.stringify(segs.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m }))))
         : '';
 
-      const aboAktiv = kannUebernehmen && MEINPLAN.istAboAktivFuerTyp(e.typ);
+      const aboAktiv = zeigeAktionen && MEINPLAN.istAboAktivFuerTyp(e.typ);
       const typEsc   = escapeHtml(e.typ);
 
       pop.innerHTML = `
@@ -99,10 +105,12 @@ const KAL_POPOVER = (() => {
         ${metaParts.length ? `<div class="kal-pop-meta">${metaParts.map(escapeHtml).join(' · ')}</div>` : ''}
         ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
         ${segsHtml}
-        ${kannUebernehmen ? `<div class="kal-pop-actions kal-pop-actions-col">
-          <button class="btn btn-primary btn-sm"
+        ${zeigeAktionen ? `<div class="kal-pop-actions kal-pop-actions-col">
+          ${kannUebernehmen ? `<button class="btn btn-primary btn-sm"
             onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"
-            data-e="${eJson}" data-s="${segsJson}">In meinen Plan</button>
+            data-e="${eJson}" data-s="${segsJson}">In meinen Plan</button>` : ''}
+          ${kannEntfernen ? `<button class="btn btn-ghost btn-sm"
+            onclick="KAL_POPOVER.hide(); MEINPLAN.loeschePrivat(${privatId})">Aus meinem Plan entfernen</button>` : ''}
           <label class="kal-pop-abo-label">
             <input type="checkbox" class="kal-pop-abo-cb" ${aboAktiv ? 'checked' : ''}
               onchange="MEINPLAN.aboToggle('${typEsc}', this.checked, this)">

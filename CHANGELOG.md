@@ -1,8 +1,17 @@
 # Changelog
 
-## v136
+## v138
 - Admin → Wettkämpfe: neue Seite zeigt alle regelmäßigen Veranstaltungsserien direkt aus dem Statistikportal; Disziplinen werden aus den Ergebnissen extrahiert; Athleten können sich pro Disziplin anmelden; Admin kann zusätzliche Disziplinen ergänzen, festes Datum setzen oder automatische Prognose (N. Wochentag im Monat) verwenden; Kalender-Eintrag per Knopf anlegbar
 - DB-Migration #12: neue Tabellen `training_wettkampf_planung` + `training_wettkampf_anmeldungen`
+
+## v137
+- Kalender-Popover: Browser-Tooltip (title) auf Kalendereinträgen entfernt – kein doppelter Hinweis mehr wenn Popover sichtbar
+- Kalender-Popover: Bei übernommenen Einheiten (abonniert/manuell) erscheint jetzt „Aus meinem Plan entfernen" + Abo-Checkbox statt gar keiner Aktion
+
+## v136
+- Kalender: Private Einheiten lassen sich per Drag & Drop auf einen anderen Tag verschieben (übernommene Team-Einheiten bleiben fest); Drop-Zelle wird farblich hervorgehoben
+
+## v135
 - Planung: Kein Gruppenfilter aktiv → Kalender zeigt keine Einheiten (erleichtert Prüfung ob alle Einheiten korrekt zugeordnet sind)
 - Planung: Bearbeitungs-Modal zeigt Gruppen-Dropdown – bestehende Einheiten können einer Trainingsgruppe zugeordnet werden
 - Planung: `PUT serien/{id}` und `PUT serien/{id}/ab/{datum}` übernehmen jetzt auch `gruppe_id`-Änderungen
