@@ -549,10 +549,17 @@ async function renderKalender(main, monthArg) {
       const showWk  = !kf || kf.wettkampf !== false;
       const wkHtml  = (showWk && wkItems.length)
         ? wkItems.map(s => {
-            const name = _decodeHtml(s.name || s.kuerzel || '');
-            return `<div class="kal-item" title="${escapeHtml(name)}"
-              style="background:rgba(46,204,113,.15);border-left:3px solid #27ae60;color:var(--text);cursor:default">
-              <span class="kal-item-title">🏆 ${escapeHtml(name)}</span>
+            const name   = _decodeHtml(s.name || s.kuerzel || '');
+            const isFest = !!s.naechstes_datum;
+            const emoji  = isFest ? '🏆' : '🏆?';
+            const hint   = isFest ? ' (fester Termin)' : ' (Prognosedatum – noch nicht bestätigt)';
+            const canAdd = !!state.user;
+            return `<div class="kal-item" data-serie-id="${s.id}"
+              title="${escapeHtml(name + hint)}"
+              style="background:rgba(46,204,113,.15);border-left:3px solid #27ae60;
+                     color:var(--text);cursor:${canAdd ? 'pointer' : 'default'};user-select:none"
+              ${canAdd ? `onclick="_openWettkampfModal(${s.id})"` : ''}>
+              <span class="kal-item-title">${emoji} ${escapeHtml(name)}</span>
             </div>`;
           }).join('')
         : '';
@@ -1525,4 +1532,126 @@ async function _ladeWettkampfDaten() {
   const resp = await apiGet('wettkampf', { silent: true });
   _wettkampfCache = { ts: Date.now(), data: resp.serien || [] };
   return _wettkampfCache.data;
+}
+
+// ── Wettkampf: Modal „In persönlichen Kalender eintragen" ────────────────
+
+function _openWettkampfModal(serieId) {
+  const serien = _wettkampfCache?.data || [];
+  const serie  = serien.find(s => s.id === serieId);
+  if (!serie || !state.user) return;
+
+  const datum = serie.naechstes_datum
+    || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.letztes_datum) : null);
+  if (!datum) { _wkNotify('Kein Termin berechenbar.', false); return; }
+
+  const isFest   = !!serie.naechstes_datum;
+  const name     = _decodeHtml(serie.name || serie.kuerzel || '');
+  const datumFmt = new Date(datum + 'T00:00:00').toLocaleDateString('de-DE',
+    { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
+  // Disziplinen ermitteln (gleiche Logik wie ADMIN_WETTKAMPF.allesDisziplinen)
+  const ausgeschlossen = new Set(serie.disziplinen_ausgeschlossen || []);
+  const diszSet = new Set();
+  (serie.disziplinen || []).forEach(d => { if (!ausgeschlossen.has(d)) diszSet.add(d); });
+  (serie.disziplinen_extra || []).forEach(d => diszSet.add(d));
+  const disziplinen = [...diszSet];
+
+  let diszHtml = '';
+  if (disziplinen.length) {
+    const opts = disziplinen.map(d =>
+      `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`
+    ).join('');
+    diszHtml = `
+      <div class="modal-row">
+        <div class="modal-label">Disziplin</div>
+        <select id="wk-disz-sel"
+          style="flex:1;border:1px solid var(--border);border-radius:6px;
+                 padding:5px 8px;font-size:13px;background:var(--bg);color:var(--text)">
+          <option value="">– keine / allgemein –</option>
+          ${opts}
+        </select>
+      </div>`;
+  } else {
+    diszHtml = `
+      <div class="modal-row">
+        <div class="modal-label">Disziplin</div>
+        <input type="text" id="wk-disz-txt" placeholder="z. B. 10 km, Halbmarathon …" maxlength="100"
+          style="flex:1;border:1px solid var(--border);border-radius:6px;
+                 padding:5px 8px;font-size:13px;background:var(--bg);color:var(--text)">
+      </div>`;
+  }
+
+  const cont = document.getElementById('modal-container');
+  if (!cont) return;
+  cont.innerHTML = `
+    <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-card" onclick="event.stopPropagation()" style="max-width:440px">
+        <div class="modal-head">
+          <div>
+            <div class="modal-eyebrow">In persönlichen Kalender eintragen</div>
+            <div class="modal-title">${escapeHtml(name)}</div>
+          </div>
+          <button class="modal-close" onclick="schliesseModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-row">
+            <div class="modal-label">Datum</div>
+            <div style="flex:1;font-size:13px">
+              ${escapeHtml(datumFmt)}
+              ${!isFest ? `<span style="font-size:11px;padding:1px 6px;border-radius:8px;
+                background:var(--border);color:var(--text2);margin-left:6px">Prognosedatum</span>` : ''}
+            </div>
+          </div>
+          ${diszHtml}
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+          <button class="btn btn-primary" onclick="_saveWettkampfEintrag(${serieId})">🏆 Eintragen</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function _saveWettkampfEintrag(serieId) {
+  const serien = _wettkampfCache?.data || [];
+  const serie  = serien.find(s => s.id === serieId);
+  if (!serie) return;
+
+  const datum = serie.naechstes_datum
+    || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.letztes_datum) : null);
+  if (!datum) return;
+
+  const name      = _decodeHtml(serie.name || serie.kuerzel || '');
+  const disziplin = (document.getElementById('wk-disz-sel')?.value || '').trim()
+                 || (document.getElementById('wk-disz-txt')?.value || '').trim();
+  const titel     = (name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
+
+  const btn = document.querySelector('#modal-container .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+  try {
+    await apiPost('mein-plan/einheiten', {
+      datum,
+      typ:      'event',
+      titel,
+      bemerkung: disziplin || null,
+    });
+    schliesseModal();
+    _wkNotify('Wettkampf in deinen Kalender eingetragen.', true);
+    renderPage();
+  } catch (e) {
+    _wkNotify('Fehler: ' + (e.message || ''), false);
+    if (btn) { btn.disabled = false; btn.textContent = '🏆 Eintragen'; }
+  }
+}
+
+function _wkNotify(text, ok) {
+  const cont = document.getElementById('notification-container');
+  if (!cont) return;
+  const d = document.createElement('div');
+  d.className = 'notif ' + (ok ? 'notif-ok' : 'notif-err');
+  d.textContent = text;
+  cont.appendChild(d);
+  setTimeout(() => d.remove(), 4000);
 }
