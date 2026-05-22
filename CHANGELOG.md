@@ -1,8 +1,12 @@
 # Changelog
 
-## v140
+## v141
 - Fix: Kalender lud nicht mehr (Startseite zeigte dauerhaft „Lade Trainingsplan…"): `d4` war mit `const` im `try`-Block deklariert und außerhalb nicht erreichbar → `ReferenceError`; jetzt als `let wettkampfRaw` außerhalb des Blocks
 - Admin → Wettkämpfe: Disziplinen-Verwaltung überarbeitet – extrahierte Disziplinen als Toggle-Chips (grün = aktiv, gestrichen = ausgeblendet), manuell hinzugefügte als entfernbare Tags, Eingabefeld für neue Disziplinen; ausgeblendete Disziplinen werden als `disziplinen_ausgeschlossen` gespeichert und beim nächsten Laden wiederhergestellt
+- Admin → Wettkämpfe: Termine inline im Detail-Panel editierbar (Datumsfeld + ✓ OK + ↺ Zurücksetzen) – kein Modal mehr nötig
+- Admin → Wettkämpfe: Aktiv/Inaktiv-Toggle (●/◯) pro Serie – inaktive Wettkämpfe erscheinen ausgegraut und werden im Kalender ausgeblendet
+- Planung → neuer Tab „🏆 Wettkämpfe": Monatskalender mit Wettkämpfen auf ihren prognostizierten/manuellen Terminen; Wettkämpfe per Drag & Drop auf anderen Tag verschieben (setzt `naechstes_datum`); × entfernt manuelles Datum (Prognose wird wieder verwendet); Sidebar zeigt alle Serien als Karten mit nächstem Termin
+- API: `wettkampf`-Endpunkt gibt `aktiv`-Feld zurück; PUT-Handler unterstützt `aktiv`-Parameter; DB-Migration #14 für `aktiv`-Spalte in `training_wettkampf_planung`
 - DB-Migration #13: `disziplinen_ausgeschlossen TEXT NULL` in `training_wettkampf_planung`
 
 ## v137

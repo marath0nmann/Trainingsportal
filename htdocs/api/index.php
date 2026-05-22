@@ -4227,6 +4227,10 @@ function handleWettkampf(string $method, string $tail): void
             $sets[]   = 'disziplinen_ausgeschlossen=?';
             $params[] = count($arr) ? json_encode($arr) : null;
         }
+        if (array_key_exists('aktiv', $in)) {
+            $sets[]   = 'aktiv=?';
+            $params[] = $in['aktiv'] ? 1 : 0;
+        }
 
         $planung = DB::fetchOne("SELECT id FROM $twp WHERE serie_id=?", [$serieId]);
         if ($planung) {
@@ -4244,9 +4248,10 @@ function handleWettkampf(string $method, string $tail): void
             $dau = array_key_exists('disziplinen_ausgeschlossen', $in) && is_array($in['disziplinen_ausgeschlossen'])
                 ? json_encode(array_values(array_filter(array_map('trim', $in['disziplinen_ausgeschlossen']))))
                 : null;
+            $ak  = array_key_exists('aktiv', $in) ? ($in['aktiv'] ? 1 : 0) : 1;
             DB::query(
-                "INSERT INTO $twp (serie_id, naechstes_datum, disziplinen_extra, disziplinen_ausgeschlossen) VALUES (?,?,?,?)",
-                [$serieId, $nd, $de, $dau]
+                "INSERT INTO $twp (serie_id, naechstes_datum, disziplinen_extra, disziplinen_ausgeschlossen, aktiv) VALUES (?,?,?,?,?)",
+                [$serieId, $nd, $de, $dau, $ak]
             );
         }
         echo json_encode(['ok' => true]);
@@ -4269,7 +4274,8 @@ function handleWettkampf(string $method, string $tail): void
                         wp.id                     AS planung_id,
                         wp.naechstes_datum,
                         wp.disziplinen_extra,
-                        wp.disziplinen_ausgeschlossen
+                        wp.disziplinen_ausgeschlossen,
+                        wp.aktiv
                  FROM $tws vs
                  LEFT JOIN $tvv v  ON v.serie_id = vs.id
                                    AND v.geloescht_am IS NULL
@@ -4277,7 +4283,7 @@ function handleWettkampf(string $method, string $tail): void
                  LEFT JOIN $twp wp ON wp.serie_id = vs.id
                  GROUP BY vs.id, vs.name, vs.kuerzel,
                           wp.id, wp.naechstes_datum, wp.disziplinen_extra,
-                          wp.disziplinen_ausgeschlossen
+                          wp.disziplinen_ausgeschlossen, wp.aktiv
                  ORDER BY MONTH(MAX(v.datum)) ASC,
                           DAY(MAX(v.datum))   ASC,
                           vs.name             ASC"
@@ -4398,6 +4404,7 @@ function handleWettkampf(string $method, string $tail): void
                 'disziplinen_extra'        => $diszExtra,
                 'disziplinen_ausgeschlossen' => $diszAusgeschlossen,
                 'planung_id'               => $pid,
+                'aktiv'                    => $s['aktiv'] !== null ? (int)$s['aktiv'] : 1,
                 'naechstes_datum'     => $s['naechstes_datum'],
                 'anmeldungen'         => $anmeldungen,
                 'meine_anmeldung_id'  => $meineAnmId,

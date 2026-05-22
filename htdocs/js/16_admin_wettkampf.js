@@ -144,7 +144,7 @@ const ADMIN_WETTKAMPF = (() => {
                      white-space:nowrap">Nächster Termin</th>
           <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;
                      text-transform:uppercase;letter-spacing:.4px;color:var(--text2)">Disziplinen</th>
-          <th style="width:32px"></th>
+          <th style="width:80px"></th>
         </tr>
       </thead>
       <tbody>`;
@@ -183,11 +183,15 @@ const ADMIN_WETTKAMPF = (() => {
         nextCell = `<span style="font-weight:600;font-size:13px">${wt}, ${fmtDate(next.datum)}</span>${badge}`;
       }
 
+      const inaktiv    = s.aktiv === 0;
+      const rowOpacity = inaktiv ? 'opacity:.45' : '';
+
       html += `
-        <tr style="border-bottom:1px solid var(--border);cursor:pointer"
+        <tr style="border-bottom:1px solid var(--border);cursor:pointer;${rowOpacity}"
             onclick="ADMIN_WETTKAMPF.toggleExpand(${s.id})">
           <td style="padding:10px">
             <strong>${safeHtml(s.name || s.kuerzel)}</strong>
+            ${inaktiv ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--border);color:var(--text2);margin-left:6px">Inaktiv</span>' : ''}
             ${s.ort_letzter
               ? `<span style="font-size:12px;color:var(--text2);margin-left:6px">${safeHtml(s.ort_letzter)}</span>`
               : ''}
@@ -205,8 +209,13 @@ const ADMIN_WETTKAMPF = (() => {
           <td style="padding:10px">
             ${chips || '<span style="color:var(--text2);font-size:13px">–</span>'}
           </td>
-          <td style="padding:10px 6px;text-align:center;color:var(--text2)">
-            <span style="display:inline-block;transition:transform .18s;
+          <td style="padding:6px 8px;text-align:right;white-space:nowrap">
+            ${admin ? `<button onclick="event.stopPropagation();ADMIN_WETTKAMPF.toggleAktiv(${s.id})"
+              title="${inaktiv ? 'Aktivieren (erscheint wieder im Kalender)' : 'Deaktivieren (ausblenden im Kalender)'}"
+              style="border:none;background:none;cursor:pointer;font-size:18px;
+                     color:${inaktiv ? 'var(--text2)' : '#27ae60'};padding:0 4px;vertical-align:middle">
+              ${inaktiv ? '◯' : '●'}</button>` : ''}
+            <span style="display:inline-block;transition:transform .18s;color:var(--text2);
               transform:${expanded ? 'rotate(90deg)' : 'rotate(0deg)'}">›</span>
           </td>
         </tr>`;
@@ -249,34 +258,46 @@ const ADMIN_WETTKAMPF = (() => {
 
     // ── Admin: Planung ──────────────────────────────────────
     if (admin) {
-      html += `<div style="flex:0 0 auto;min-width:200px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;
-                    letter-spacing:.5px;color:var(--text2);margin-bottom:10px">Planung</div>
-        <div style="font-size:13px;margin-bottom:12px;line-height:1.6">`;
-
-      if (next) {
-        const nd  = new Date(next.datum + 'T00:00:00');
-        const nth = Math.floor((nd.getDate() - 1) / 7) + 1;
-        const ord = ['', '1.', '2.', '3.', '4.', '5.'][Math.min(nth, 5)];
-        html += `<div><span style="color:var(--text2)">Nächster Termin:</span>
-          <strong style="margin-left:4px">${WT_KURZ[nd.getDay()]}, ${fmtDate(next.datum)}</strong>
-          ${next.modus === 'prognose'
-            ? '<span style="font-size:11px;color:var(--text2);margin-left:4px">(Prognose)</span>' : ''}
-        </div>`;
-        if (serie.letztes_datum) {
-          const ld = new Date(serie.letztes_datum + 'T00:00:00');
-          const nthL = Math.floor((ld.getDate() - 1) / 7) + 1;
-          const ordL = ['', '1.', '2.', '3.', '4.', '5.'][Math.min(nthL, 5)];
-          html += `<div style="font-size:11px;color:var(--text2)">${ordL} ${WT_LANG[ld.getDay()]} im ${MONATE[ld.getMonth()]}</div>`;
-        }
-      } else {
-        html += '<div style="color:var(--text2)">Kein Termin verfügbar.</div>';
+      const prognose = predictNextDate(serie.letztes_datum);
+      let prognoseHint = '';
+      if (serie.letztes_datum) {
+        const ld   = new Date(serie.letztes_datum + 'T00:00:00');
+        const nthL = Math.floor((ld.getDate() - 1) / 7) + 1;
+        const ordL = ['', '1.', '2.', '3.', '4.', '5.'][Math.min(nthL, 5)];
+        const regel = `${ordL} ${WT_LANG[ld.getDay()]} im ${MONATE[ld.getMonth()]}`;
+        prognoseHint = prognose
+          ? `<div style="font-size:11px;color:var(--text2);margin-top:3px">
+              Prognose: ${WT_KURZ[new Date(prognose + 'T00:00:00').getDay()]}, ${fmtDate(prognose)}
+              &bull; ${escapeHtml(regel)}
+             </div>`
+          : '';
       }
 
-      html += `</div>
+      html += `<div style="flex:0 0 auto;min-width:220px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                    letter-spacing:.5px;color:var(--text2);margin-bottom:10px">Planung</div>
+
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:5px">Nächster Termin (manuell festlegen)</div>
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            <input type="date" id="inline-datum-${serie.id}"
+              style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;
+                     font-size:13px;background:var(--bg);color:var(--text);flex:1;min-width:130px"
+              value="${escapeHtml(serie.naechstes_datum || '')}">
+            <button class="btn btn-sm btn-primary"
+              onclick="ADMIN_WETTKAMPF.saveDatumInline(${serie.id})">✓&nbsp;OK</button>
+            ${serie.naechstes_datum
+              ? `<button class="btn btn-sm btn-ghost"
+                  onclick="ADMIN_WETTKAMPF.clearDatumInline(${serie.id})"
+                  title="Manuelles Datum löschen – Prognose wird wieder verwendet">↺</button>`
+              : ''}
+          </div>
+          ${prognoseHint}
+        </div>
+
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="btn btn-sm btn-ghost"
-            onclick="ADMIN_WETTKAMPF.showPlanungModal(${serie.id})">Planung&nbsp;bearbeiten</button>
+            onclick="ADMIN_WETTKAMPF.showPlanungModal(${serie.id})">Disziplinen&nbsp;bearbeiten</button>
           ${next
             ? `<button class="btn btn-sm btn-ghost"
                 onclick="ADMIN_WETTKAMPF.imKalenderEintragen(${serie.id})">Im&nbsp;Kalender&nbsp;eintragen</button>`
@@ -485,6 +506,52 @@ const ADMIN_WETTKAMPF = (() => {
     }
   }
 
+  // ── Aktiv-Status umschalten ───────────────────────────────────
+  async function toggleAktiv(serieId) {
+    const serie = serien.find(s => s.id === serieId);
+    if (!serie) return;
+    const neuAktiv = serie.aktiv === 0 ? 1 : 0;
+    try {
+      await apiPut(`wettkampf/${serieId}/planung`, { aktiv: neuAktiv });
+      serie.aktiv = neuAktiv;
+      renderTabelle();
+      benachrichtigen(neuAktiv ? 'Aktiviert – erscheint wieder im Kalender.' : 'Deaktiviert – ausgeblendet im Kalender.', 'ok');
+      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
+    } catch (e) {
+      benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
+    }
+  }
+
+  // ── Datum inline speichern ────────────────────────────────────
+  async function saveDatumInline(serieId) {
+    const inp = document.getElementById(`inline-datum-${serieId}`);
+    const datum = (inp?.value || '').trim() || null;
+    try {
+      await apiPut(`wettkampf/${serieId}/planung`, { naechstes_datum: datum });
+      const serie = serien.find(s => s.id === serieId);
+      if (serie) serie.naechstes_datum = datum;
+      benachrichtigen('Termin gespeichert.', 'ok');
+      renderTabelle();
+      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
+    } catch (e) {
+      benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
+    }
+  }
+
+  // ── Manuelles Datum löschen (zurück zur Prognose) ─────────────
+  async function clearDatumInline(serieId) {
+    try {
+      await apiPut(`wettkampf/${serieId}/planung`, { naechstes_datum: null });
+      const serie = serien.find(s => s.id === serieId);
+      if (serie) serie.naechstes_datum = null;
+      benachrichtigen('Manuelles Datum entfernt – Prognose wird verwendet.', 'ok');
+      renderTabelle();
+      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
+    } catch (e) {
+      benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
+    }
+  }
+
   // ── Im Kalender eintragen ─────────────────────────────────────
   async function imKalenderEintragen(serieId) {
     const serie = serien.find(s => s.id === serieId);
@@ -521,6 +588,7 @@ const ADMIN_WETTKAMPF = (() => {
     render, toggleExpand,
     showPlanungModal, savePlanung,
     _toggleDisz, _removeExtra, _addExtra,
+    toggleAktiv, saveDatumInline, clearDatumInline,
     imKalenderEintragen, predictNextDate,
   };
 })();

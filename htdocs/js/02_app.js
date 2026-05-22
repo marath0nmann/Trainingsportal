@@ -455,6 +455,7 @@ async function renderKalender(main, monthArg) {
   const wettkampfBeiDatum = {};
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
     wettkampfSerien.forEach(s => {
+      if (s.aktiv === 0) return; // Deaktivierte Wettkämpfe ausblenden
       const datum = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
       if (datum && datum >= von && datum <= bis) {
         (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);

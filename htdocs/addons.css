@@ -1639,6 +1639,11 @@ body.planung-active #app-footer    { display: none; }
 .planung-gruppen-hint {
   font-size: 12px; color: var(--text2, #71717a);
 }
+/* Optischer Trenner zwischen Gruppen-Tabs und Wettkämpfe-Tab */
+.planung-gruppen-sep {
+  flex: 1;          /* schiebt den Wettkämpfe-Tab an den rechten Rand */
+  min-width: 8px;
+}
 
 /* btn-warning (Zwischen ghost und danger) */
 .btn-warning {
