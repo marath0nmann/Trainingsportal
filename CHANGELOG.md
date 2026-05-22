@@ -1,5 +1,8 @@
 # Changelog
 
+## v106
+- Serientermine: Trainingsblöcke als wiederkehrende Termine anlegen (täglich / wöchentlich / 14-tägig / monatlich / benutzerdefiniert), mit Wochentag-Auswahl, Enddatum oder Anzahl Termine und Live-Vorschau; DB-Migration #8 (training_serien + serie_id); Serien komplett, ab Datum oder einzeln löschbar
+
 ## v105
 - Fix: Trainingstypen – Bearbeiten als ✒-Icon + Settings-Breite 680→900px
 

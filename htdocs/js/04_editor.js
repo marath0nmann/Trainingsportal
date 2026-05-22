@@ -12,7 +12,9 @@
 const EDITOR = (() => {
 
   // Aktueller Editor-State (im Modal)
-  let currentId = null;
+  let currentId       = null;
+  let currentSerieId  = null;
+  let currentDatum    = null;
   let currentSegmente = [];
 
   // Typen dynamisch aus appConfig (via GET /config geladen), Fallback hardcodiert
@@ -45,8 +47,11 @@ const EDITOR = (() => {
       uhrzeit: '', typ: 'intervall', titel: '',
       treffpunkt: null, komoot_url: '', bemerkung: '',
       sichtbarkeit: 'oeffentlich', status: 'geplant',
+      serie_id: null,
     };
-    currentId = e.id;
+    currentId      = e.id;
+    currentSerieId = e.serie_id || null;
+    currentDatum   = e.datum || null;
     currentSegmente = (opts.segmente || []).map(s => ({...s}));
 
     // Treffpunkte für Dropdown laden
@@ -64,7 +69,7 @@ const EDITOR = (() => {
         <div class="modal-card modal-wide" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div>
-              <div class="modal-eyebrow">${ist_neu ? 'Neue Einheit' : 'Einheit bearbeiten'}</div>
+              <div class="modal-eyebrow">${ist_neu ? 'Neue Einheit' : 'Einheit bearbeiten'}${!ist_neu && e.serie_id ? ' <span class="serie-badge">↺ Serie</span>' : ''}</div>
               <div class="modal-title">${ist_neu ? 'Training planen' : escapeHtml(e.titel || '')}</div>
             </div>
             <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
@@ -269,6 +274,10 @@ const EDITOR = (() => {
 
   async function loeschen() {
     if (!currentId) return;
+    if (currentSerieId) {
+      _zeigeSerienLoeschenOptionen();
+      return;
+    }
     if (!confirm('Diese Einheit wirklich löschen?')) return;
     try {
       await apiDel(`einheiten/${currentId}`);
@@ -278,6 +287,65 @@ const EDITOR = (() => {
     } catch (e) {
       benachrichtigen('Fehler: ' + (e.message || ''), 'err');
     }
+  }
+
+  function _zeigeSerienLoeschenOptionen() {
+    const footer = document.querySelector('#modal-container .ed-footer');
+    if (!footer) return;
+    footer.innerHTML = `
+      <div class="serie-del-frage">Welche Termine löschen?</div>
+      <div class="serie-del-btns">
+        <button class="btn btn-ghost btn-sm" onclick="EDITOR.loeschenNurDieser()">Nur dieser Termin</button>
+        <button class="btn btn-warning btn-sm" onclick="EDITOR.loeschenAbJetzt()">Dieser und alle folgenden</button>
+        <button class="btn btn-danger btn-sm" onclick="EDITOR.loeschenAlleSerie()">Gesamte Serie</button>
+        <button class="btn btn-ghost btn-sm" onclick="EDITOR.loeschenAbbrechen()">Abbrechen</button>
+      </div>`;
+  }
+
+  async function loeschenNurDieser() {
+    try {
+      await apiDel(`einheiten/${currentId}`);
+      schliesseModal();
+      benachrichtigen('Termin gelöscht.', 'ok');
+      renderPage();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function loeschenAbJetzt() {
+    if (!confirm(`Diesen und alle folgenden Termine der Serie (ab ${currentDatum}) löschen?`)) return;
+    try {
+      await apiDel(`serien/${currentSerieId}/ab/${currentDatum}`);
+      schliesseModal();
+      benachrichtigen('Termine gelöscht.', 'ok');
+      renderPage();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function loeschenAlleSerie() {
+    if (!confirm('Alle Termine dieser Serie löschen?')) return;
+    try {
+      await apiDel(`serien/${currentSerieId}`);
+      schliesseModal();
+      benachrichtigen('Serie gelöscht.', 'ok');
+      renderPage();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  function loeschenAbbrechen() {
+    const footer = document.querySelector('#modal-container .ed-footer');
+    if (!footer) return;
+    footer.innerHTML = `
+      <button class="btn btn-danger" onclick="EDITOR.loeschen()">Löschen</button>
+      <div class="ed-footer-right">
+        <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="EDITOR.speichern()">Speichern</button>
+      </div>`;
   }
 
   function val(id) {
@@ -296,5 +364,9 @@ const EDITOR = (() => {
     setTimeout(() => div.remove(), 4000);
   }
 
-  return { open, parsenAusTitel, segmentHinzufuegen, segmentLoeschen, speichern, loeschen, onTypChange };
+  return {
+    open, parsenAusTitel, segmentHinzufuegen, segmentLoeschen,
+    speichern, loeschen, onTypChange,
+    loeschenNurDieser, loeschenAbJetzt, loeschenAlleSerie, loeschenAbbrechen,
+  };
 })();

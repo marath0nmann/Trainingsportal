@@ -78,16 +78,17 @@ function runPendingMigrations(): void
 function _migrationStmts(): array
 {
     // Tabellennamen mit konfiguriertem Prefix
-    $tr  = DB::tbl('training_treffpunkte');
-    $te  = DB::tbl('training_einheiten');
-    $ts  = DB::tbl('training_segmente');
-    $tb  = DB::tbl('training_bloecke');
-    $tbs = DB::tbl('training_block_segmente');
-    $tt  = DB::tbl('training_typen');
-    $tp  = DB::tbl('training_privat_einheiten');
-    $ta  = DB::tbl('training_abos');
-    $tas = DB::tbl('training_abo_skips');
-    $ro  = DB::tbl('rollen');
+    $tr   = DB::tbl('training_treffpunkte');
+    $te   = DB::tbl('training_einheiten');
+    $ts   = DB::tbl('training_segmente');
+    $tb   = DB::tbl('training_bloecke');
+    $tbs  = DB::tbl('training_block_segmente');
+    $tt   = DB::tbl('training_typen');
+    $tp   = DB::tbl('training_privat_einheiten');
+    $ta   = DB::tbl('training_abos');
+    $tas  = DB::tbl('training_abo_skips');
+    $ro   = DB::tbl('rollen');
+    $tser = DB::tbl('training_serien');
 
     return [
         // ── 1: Grundschema + Trainer-Rollen ─────────────────────────────
@@ -272,6 +273,29 @@ function _migrationStmts(): array
              SET tp.uhrzeit = te.uhrzeit
              WHERE tp.uhrzeit IS NULL AND tp.ref_einheit_id IS NOT NULL",
         ],
+
+        // ── 8: Serientermine ──────────────────────────────────────────────
+        // training_serien speichert die Wiederholungsregel; jede erzeugte
+        // Einheit erhält eine Referenz auf ihre Serie über serie_id.
+        8 => [
+            "CREATE TABLE IF NOT EXISTS $tser (
+              id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              block_id      INT UNSIGNED NULL COMMENT 'Ursprungsblock',
+              titel         VARCHAR(200) NOT NULL,
+              typ           VARCHAR(40)  NOT NULL DEFAULT 'frei',
+              treffpunkt_id INT UNSIGNED NULL,
+              uhrzeit       TIME         NULL,
+              sichtbarkeit  VARCHAR(20)  NOT NULL DEFAULT 'oeffentlich',
+              regel         TEXT         NOT NULL COMMENT 'JSON-Wiederholungsregel',
+              erstellt_von  INT UNSIGNED NULL,
+              erstellt_am   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "ALTER TABLE $te ADD COLUMN IF NOT EXISTS serie_id INT UNSIGNED NULL AFTER status",
+            "ALTER TABLE $te ADD INDEX idx_serie (serie_id)",
+        ],
     ];
 }
 
@@ -326,6 +350,10 @@ try {
     }
     if ($head === 'bloecke') {
         handleBloecke($method, $tail);
+        exit;
+    }
+    if ($head === 'serien') {
+        handleSerien($method, $tail);
         exit;
     }
     if ($head === 'treffpunkte') {
@@ -427,7 +455,7 @@ function handleEinheiten(string $method, string $sub): void
 
         $rows = DB::fetchAll(
             'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
-                    e.bemerkung, e.sichtbarkeit, e.status,
+                    e.bemerkung, e.sichtbarkeit, e.status, e.serie_id,
                     t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
                FROM ' . DB::tbl('training_einheiten') . ' e
                LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
@@ -2202,6 +2230,308 @@ function mapTreffpunkt(array $r): array {
 }
 
 // ============================================================
+// Serientermine
+//   POST serien                      → Serie aus Block anlegen (auth)
+//   GET  serien/{id}                 → Serieninfo + Termine (auth)
+//   DEL  serien/{id}                 → Gesamte Serie löschen (auth + Ersteller/Trainer)
+//   DEL  serien/{id}/ab/{datum}      → Ab Datum löschen (auth + Ersteller/Trainer)
+// ============================================================
+function handleSerien(string $method, string $sub): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $istTrainer = Auth::hasRecht('training_bearbeiten');
+
+    // ── POST / → Neue Serie anlegen ──────────────────────────
+    if ($sub === '' && $method === 'POST') {
+        $in        = readJsonBody();
+        $blockId   = isset($in['block_id']) ? (int)$in['block_id'] : 0;
+        $startdatum = trim((string)($in['startdatum'] ?? ''));
+        $uhrzeit   = isset($in['uhrzeit']) && $in['uhrzeit'] !== '' ? (string)$in['uhrzeit'] : null;
+        $tpIdRaw   = $in['treffpunkt_id'] ?? null;
+        $tpId      = ($tpIdRaw !== null && $tpIdRaw !== '') ? (int)$tpIdRaw : null;
+        $sicht     = in_array($in['sichtbarkeit'] ?? '', ['oeffentlich', 'intern'], true)
+                     ? $in['sichtbarkeit'] : 'oeffentlich';
+        $regel     = is_array($in['regel'] ?? null) ? $in['regel'] : [];
+
+        if (!$blockId || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $startdatum)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => '"block_id" und "startdatum" erforderlich']);
+            return;
+        }
+        if (empty($regel['freq']) || !in_array($regel['freq'], ['daily', 'weekly', 'monthly'], true)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => '"regel.freq" (daily|weekly|monthly) erforderlich']);
+            return;
+        }
+
+        $block = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_bloecke') . ' WHERE id = ?', [$blockId]);
+        if (!$block) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Block nicht gefunden']);
+            return;
+        }
+        if ($block['sichtbarkeit'] === 'privat'
+            && (int)$block['erstellt_von'] !== (int)$user['id']
+            && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+
+        $daten = generiereOccurrences($startdatum, $regel);
+        if (empty($daten)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Termine generiert. Wiederholungsregel prüfen.']);
+            return;
+        }
+
+        $segs = DB::fetchAll(
+            'SELECT * FROM ' . DB::tbl('training_block_segmente') . '
+              WHERE block_id = ? ORDER BY reihenfolge, id',
+            [$blockId]
+        );
+        $segArr = array_map(fn($s) => [
+            'wiederholungen' => $s['wiederholungen'],
+            'distanz_m'      => $s['distanz_m'],
+            'pause_m'        => $s['pause_m'],
+            'pause_typ'      => $s['pause_typ'],
+            'pace_referenz'  => $s['pace_referenz'],
+            'notiz'          => $s['notiz'],
+            'block_id'       => $s['gruppen_id'],
+        ], $segs);
+
+        $pdo = DB::get();
+        $pdo->beginTransaction();
+        try {
+            DB::query(
+                'INSERT INTO ' . DB::tbl('training_serien') . '
+                 (block_id, titel, typ, treffpunkt_id, uhrzeit, sichtbarkeit, regel, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?,?)',
+                [
+                    $blockId,
+                    $block['titel'],
+                    $block['typ'],
+                    $tpId,
+                    $uhrzeit,
+                    $sicht,
+                    json_encode($regel, JSON_UNESCAPED_UNICODE),
+                    (int)$user['id'],
+                ]
+            );
+            $serieId = (int)DB::lastInsertId();
+
+            foreach ($daten as $datum) {
+                DB::query(
+                    'INSERT INTO ' . DB::tbl('training_einheiten') . '
+                     (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, bemerkung,
+                      sichtbarkeit, status, serie_id, erstellt_von)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                    [
+                        $datum,
+                        $uhrzeit,
+                        $block['typ'],
+                        $block['titel'],
+                        $tpId,
+                        $block['komoot_url'] ?? null,
+                        $block['bemerkung'] ?? null,
+                        $sicht,
+                        'geplant',
+                        $serieId,
+                        (int)$user['id'],
+                    ]
+                );
+                replaceSegmente((int)DB::lastInsertId(), $segArr);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        echo json_encode(['ok' => true, 'serie_id' => $serieId, 'count' => count($daten)]);
+        return;
+    }
+
+    // ── GET {id} → Serieninfo ────────────────────────────────
+    if (ctype_digit($sub) && $method === 'GET') {
+        $serieId = (int)$sub;
+        $serie   = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
+        if (!$serie) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Serie nicht gefunden']);
+            return;
+        }
+        $einheiten = DB::fetchAll(
+            'SELECT id, datum, uhrzeit, status FROM ' . DB::tbl('training_einheiten') . '
+              WHERE serie_id = ? ORDER BY datum, uhrzeit',
+            [$serieId]
+        );
+        echo json_encode([
+            'ok'        => true,
+            'serie'     => [
+                'id'          => (int)$serie['id'],
+                'titel'       => $serie['titel'],
+                'typ'         => $serie['typ'],
+                'regel'       => json_decode((string)$serie['regel'], true),
+                'erstellt_am' => $serie['erstellt_am'],
+            ],
+            'einheiten' => array_map(fn($e) => [
+                'id'     => (int)$e['id'],
+                'datum'  => $e['datum'],
+                'status' => $e['status'],
+            ], $einheiten),
+        ]);
+        return;
+    }
+
+    // ── DELETE {id} → Gesamte Serie löschen ─────────────────
+    if (ctype_digit($sub) && $method === 'DELETE') {
+        $serieId = (int)$sub;
+        $serie   = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
+        if (!$serie) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Serie nicht gefunden']);
+            return;
+        }
+        if ((int)$serie['erstellt_von'] !== (int)$user['id'] && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        DB::query('DELETE FROM ' . DB::tbl('training_einheiten') . ' WHERE serie_id = ?', [$serieId]);
+        DB::query('DELETE FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── DELETE {id}/ab/{datum} → Ab Datum löschen ───────────
+    if (preg_match('#^(\d+)/ab/(\d{4}-\d{2}-\d{2})$#', $sub, $m) && $method === 'DELETE') {
+        $serieId = (int)$m[1];
+        $abDatum = $m[2];
+        $serie   = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
+        if (!$serie) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Serie nicht gefunden']);
+            return;
+        }
+        if ((int)$serie['erstellt_von'] !== (int)$user['id'] && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        DB::query(
+            'DELETE FROM ' . DB::tbl('training_einheiten') . ' WHERE serie_id = ? AND datum >= ?',
+            [$serieId, $abDatum]
+        );
+        $rest = DB::fetchOne(
+            'SELECT COUNT(*) AS n FROM ' . DB::tbl('training_einheiten') . ' WHERE serie_id = ?',
+            [$serieId]
+        );
+        if ((int)($rest['n'] ?? 0) === 0) {
+            DB::query('DELETE FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Serien-Endpoint nicht gefunden']);
+}
+
+/**
+ * Erzeugt Datumsliste für eine Wiederholungsregel.
+ * Maximal 200 Termine, maximal 2 Jahre ab Startdatum.
+ *
+ * @param string $startDatum YYYY-MM-DD
+ * @param array  $regel      [freq, interval, byday, until, count]
+ */
+function generiereOccurrences(string $startDatum, array $regel, int $maxTermine = 200): array
+{
+    $freq     = $regel['freq']     ?? 'weekly';
+    $interval = max(1, (int)($regel['interval'] ?? 1));
+    $byday    = is_array($regel['byday'] ?? null) ? $regel['byday'] : [];
+    $until    = (isset($regel['until']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $regel['until']))
+                ? $regel['until'] : null;
+    $count    = (isset($regel['count']) && is_numeric($regel['count']) && (int)$regel['count'] > 0)
+                ? (int)$regel['count'] : null;
+
+    // Safety cap: 2 Jahre ab Startdatum
+    $safeUntil = date('Y-m-d', strtotime($startDatum . ' +2 years'));
+    if (!$until && !$count) $until = $safeUntil;
+    if ($until && $until > $safeUntil) $until = $safeUntil;
+
+    // 0=So, 1=Mo, 2=Di, 3=Mi, 4=Do, 5=Fr, 6=Sa (wie PHP date('w'))
+    $dayMap = ['SU' => 0, 'MO' => 1, 'TU' => 2, 'WE' => 3, 'TH' => 4, 'FR' => 5, 'SA' => 6];
+    $targetDays = [];
+    foreach ($byday as $d) {
+        if (isset($dayMap[strtoupper((string)$d)])) {
+            $targetDays[] = $dayMap[strtoupper((string)$d)];
+        }
+    }
+    sort($targetDays);
+
+    $dates = [];
+    $n     = 0;
+
+    if ($freq === 'daily') {
+        $cur = $startDatum;
+        while ($n < $maxTermine) {
+            if ($until && $cur > $until) break;
+            if ($count && $n >= $count) break;
+            $dates[] = $cur;
+            $n++;
+            $cur = date('Y-m-d', strtotime($cur . " +{$interval} day"));
+        }
+    } elseif ($freq === 'weekly') {
+        if (empty($targetDays)) {
+            $targetDays = [(int)date('w', strtotime($startDatum))];
+        }
+        // Sonntagsanker der Startwoche
+        $startTs  = strtotime($startDatum);
+        $startDow = (int)date('w', $startTs);
+        $sunTs    = $startTs - $startDow * 86400;
+
+        $weekTs = $sunTs;
+        while ($n < $maxTermine) {
+            foreach ($targetDays as $dow) {
+                $dateTs  = $weekTs + $dow * 86400;
+                $dateStr = date('Y-m-d', $dateTs);
+                if ($dateStr < $startDatum) continue;
+                if ($until && $dateStr > $until) break 2;
+                if ($count && $n >= $count) break 2;
+                $dates[] = $dateStr;
+                $n++;
+                if ($n >= $maxTermine) break 2;
+            }
+            $weekTs += $interval * 7 * 86400;
+        }
+    } elseif ($freq === 'monthly') {
+        $parts   = explode('-', $startDatum);
+        $y       = (int)$parts[0];
+        $m       = (int)$parts[1];
+        $origDay = (int)$parts[2];
+
+        while ($n < $maxTermine) {
+            $maxDay  = (int)date('t', mktime(0, 0, 0, $m, 1, $y));
+            $useDay  = min($origDay, $maxDay);
+            $dateStr = sprintf('%04d-%02d-%02d', $y, $m, $useDay);
+            if ($until && $dateStr > $until) break;
+            if ($count && $n >= $count) break;
+            $dates[] = $dateStr;
+            $n++;
+            $m += $interval;
+            while ($m > 12) { $m -= 12; $y++; }
+        }
+    }
+
+    return $dates;
+}
+
+// ============================================================
 // Weg-Präferenzen: Typ + Treffpunkt → km An-/Abreise
 //   GET  weg/prefs   → Konfiguration + verfügbare Treffpunkte
 //   PUT  weg/prefs   → Konfiguration speichern
@@ -2830,6 +3160,7 @@ function mapEinheit(array $r): array {
         'bemerkung'    => $r['bemerkung'],
         'sichtbarkeit' => $r['sichtbarkeit'] ?? 'oeffentlich',
         'status'       => $r['status'] ?? 'geplant',
+        'serie_id'     => isset($r['serie_id']) && $r['serie_id'] !== null ? (int)$r['serie_id'] : null,
     ];
 }
 function mapSegment(array $r): array {
