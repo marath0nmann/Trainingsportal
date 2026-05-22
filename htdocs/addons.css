@@ -1008,7 +1008,7 @@ body.planung-active #app-footer    { display: none; }
 
 /* ── Kalender-Spalte (links) – Grid füllt exakt die Höhe, kein Scroll ── */
 .planung-kal-col {
-  flex: 1 1 0; min-width: 0;
+  flex: 1 1 0; min-width: 560px;
   height: 100%;
   padding: 14px 18px;
   display: flex;
@@ -1202,7 +1202,7 @@ body.planung-active #app-footer    { display: none; }
     border-left: none; border-top: 1px solid var(--border);
     order: 2;
   }
-  .planung-kal-col { height: auto; overflow-y: visible; padding: 12px 8px 24px; order: 1; }
+  .planung-kal-col { height: auto; overflow-y: visible; padding: 12px 8px 24px; order: 1; min-width: 0; }
 }
 
 /* ── Treffpunkte ──────────────────────────────────────────── */
