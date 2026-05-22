@@ -1,5 +1,8 @@
 # Changelog
 
+## v127
+- Fix: Kalender-Legende „Teamplan"-Dot passt jetzt zur tatsächlichen Darstellung der Einträge (Hintergrundfläche + linker Akzentstreifen statt gefülltem Kreis)
+
 ## v126
 - Fix: PHP-Parse-Fehler in `handleGruppen` – schließende `)` des SQL-Subqueries lag außerhalb des PHP-Strings (seit v123, verursachte HTTP 500 bei JEDEM API-Aufruf inkl. /ping)
 
