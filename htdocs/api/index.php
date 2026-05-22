@@ -413,19 +413,6 @@ try {
         handleMeinPlan($method, $tail);
         exit;
     }
-    if ($head === 'trainingsgruppen') {
-        handleTrainingsgruppen($method);
-        exit;
-    }
-    if ($head === 'profil') {
-        handleProfil($method, $tail);
-        exit;
-    }
-    if ($head === 'planung') {
-        handlePlanung($method, $tail);
-        exit;
-    }
-
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden', 'path' => $path]);
 
@@ -3968,7 +3955,7 @@ function handleAdminGruppen(string $method, string $sub): void
     }
 
     // Einzelne Gruppe bearbeiten/löschen
-    if (preg_match('/^(\d+)$/ ', $sub, $m2)) {
+    if (preg_match('/^(\d+)$/', $sub, $m2)) {
         $gid = (int)$m2[1];
         $row = DB::fetchOne('SELECT * FROM ' . $tgr . ' WHERE id = ?', [$gid]);
         if (!$row) {
@@ -3997,7 +3984,7 @@ function handleAdminGruppen(string $method, string $sub): void
     }
 
     // Mitglieder einer Gruppe abrufen
-    if (preg_match('/^(\d+)\/mitglieder$/ ', $sub, $m2) && $method === 'GET') {
+    if (preg_match('/^(\d+)\/mitglieder$/', $sub, $m2) && $method === 'GET') {
         $gid  = (int)$m2[1];
         try {
             $members = DB::fetchAll(
@@ -4016,7 +4003,7 @@ function handleAdminGruppen(string $method, string $sub): void
     }
 
     // Mitgliedschaft setzen (PUT /admin/gruppen/:id/mitglieder body: {benutzer_ids: [...]})
-    if (preg_match('/^(\d+)\/mitglieder$/ ', $sub, $m2) && $method === 'PUT') {
+    if (preg_match('/^(\d+)\/mitglieder$/', $sub, $m2) && $method === 'PUT') {
         $gid = (int)$m2[1];
         $in  = readJsonBody();
         if (!isset($in['benutzer_ids']) || !is_array($in['benutzer_ids'])) {

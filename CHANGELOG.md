@@ -1,7 +1,10 @@
 # Changelog
 
-## v127
-- Fix: Kalender-Legende „Teamplan"-Dot passt jetzt zur tatsächlichen Darstellung der Einträge (Hintergrundfläche + linker Akzentstreifen statt gefülltem Kreis)
+## v128
+- Fix: Trainingsgruppen funktionieren wieder – `GRUPPEN`-Modul ruft jetzt `GET /gruppen` statt nicht mehr vorhandener Endpoints (`/trainingsgruppen`, `/profil/gruppen`) auf; orphaned Routing-Stubs entfernt; Gruppen-Zuordnung im Profil ist jetzt read-only (admin-verwaltet)
+- Fix: Planungs-Gruppenprefs in `kal/prefs.planung_gruppen` gespeichert statt defektem `planung/gruppen-prefs`-Endpoint
+- Fix: Regex-Fehler in `handleAdminGruppen` (trailing space im Delimiter) behoben → Admin kann Gruppen-Mitglieder jetzt korrekt zuweisen
+- Kalender-Legende „Teamplan"-Dot passt jetzt zur tatsächlichen Darstellung der Einträge (Hintergrundfläche + linker Akzentstreifen statt gefülltem Kreis)
 
 ## v126
 - Fix: PHP-Parse-Fehler in `handleGruppen` – schließende `)` des SQL-Subqueries lag außerhalb des PHP-Strings (seit v123, verursachte HTTP 500 bei JEDEM API-Aufruf inkl. /ping)

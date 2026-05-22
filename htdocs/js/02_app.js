@@ -681,8 +681,7 @@ async function ladeGlobalePaceWarnung(containerId) {
       const alleGruppen = await GRUPPEN.laden();
       if (alleGruppen && alleGruppen.length > 0) {
         html += `<div class="pace-warn-global">
-          ⚠ Noch keiner Trainingsgruppe zugeordnet –
-          <button class="btn-link" onclick="PROFIL.open()">jetzt im Profil einrichten</button>
+          ⚠ Noch keiner Trainingsgruppe zugeordnet – bitte Administrator kontaktieren.
         </div>`;
       }
     }

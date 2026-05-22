@@ -214,13 +214,17 @@ const PLANUNG = (() => {
     // Gruppen-Konfiguration laden (nur für eingeloggte Trainer)
     if (istTrainer && !_gruppen.length) {
       try {
-        [_alleGruppen, _gruppen] = await Promise.all([
+        const [alleGs, kalPrefs] = await Promise.all([
           GRUPPEN.laden(),
-          apiGet('planung/gruppen-prefs', { silent: true }).then(d => {
-            const ids = d.gruppen_ids || [];
-            return GRUPPEN.laden().then(alle => alle.filter(g => ids.includes(g.id)));
-          }),
+          apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })),
         ]);
+        _alleGruppen = alleGs;
+        const savedIds = (kalPrefs && kalPrefs.prefs && Array.isArray(kalPrefs.prefs.planung_gruppen))
+          ? kalPrefs.prefs.planung_gruppen
+          : [];
+        _gruppen = savedIds.length
+          ? _alleGruppen.filter(g => savedIds.includes(g.id))
+          : [];
         // Erster Start: falls keine Prefs gesetzt und nur eine Gruppe → diese vorauswählen
         if (!_gruppen.length && _alleGruppen.length === 1) {
           _gruppen = [_alleGruppen[0]];
@@ -346,7 +350,10 @@ const PLANUNG = (() => {
     const ids = [...document.querySelectorAll('.pg-cfg-cb:checked')]
       .map(cb => parseInt(cb.value, 10)).filter(id => id > 0);
     try {
-      await apiPut('planung/gruppen-prefs', { gruppen_ids: ids });
+      // Prefs in kal/prefs.planung_gruppen speichern
+      const prefsNow = await apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null }));
+      const base = (prefsNow && prefsNow.prefs && typeof prefsNow.prefs === 'object') ? prefsNow.prefs : {};
+      await apiPut('kal/prefs', { ...base, planung_gruppen: ids });
       _gruppen = _alleGruppen.filter(g => ids.includes(g.id));
       if (!_gruppen.some(g => aktivGruppe && g.id === aktivGruppe.id)) {
         aktivGruppe = _gruppen[0] || null;
