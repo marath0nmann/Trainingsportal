@@ -595,7 +595,6 @@ const SETTINGS = (() => {
           <td style="padding:6px 8px;font-weight:600">
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;${swatchStyle};margin-right:6px;vertical-align:middle"></span>
             ${escapeHtml(t.bezeichnung)}
-            <code style="font-size:11px;color:var(--text2);margin-left:6px">${escapeHtml(t.slug)}</code>
           </td>
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
             ${t.block_count} ${t.block_count === 1 ? 'Block' : 'Blöcke'}
@@ -619,7 +618,7 @@ const SETTINGS = (() => {
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
           <tr style="border-bottom:2px solid var(--border)">
-            <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Bezeichnung / Slug</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Bezeichnung</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Blöcke</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Fallback km</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Reihenfolge</th>
