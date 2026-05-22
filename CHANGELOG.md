@@ -1,6 +1,6 @@
 # Changelog
 
-## v143
+## v144
 - Planungskalender: Mindestbreite der Kalender-Spalte auf 560px gesetzt, damit der Kalender auch ohne Einträge nicht ungewöhnlich schmal wird; auf mobilen Bildschirmen weiterhin flexibel
 - Fix: Kalender lud nicht mehr (Startseite zeigte dauerhaft „Lade Trainingsplan…"): `d4` war mit `const` im `try`-Block deklariert und außerhalb nicht erreichbar → `ReferenceError`; jetzt als `let wettkampfRaw` außerhalb des Blocks
 - Admin → Wettkämpfe: Disziplinen-Verwaltung überarbeitet – extrahierte Disziplinen als Toggle-Chips (grün = aktiv, gestrichen = ausgeblendet), manuell hinzugefügte als entfernbare Tags, Eingabefeld für neue Disziplinen; ausgeblendete Disziplinen werden als `disziplinen_ausgeschlossen` gespeichert und beim nächsten Laden wiederhergestellt

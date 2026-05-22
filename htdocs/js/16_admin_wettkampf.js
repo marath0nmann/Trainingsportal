@@ -67,7 +67,14 @@ const ADMIN_WETTKAMPF = (() => {
       const tage    = new Date(yr, month + 1, 0).getDate();
       if (tag > tage) tag -= 7;
       const kandidat = new Date(yr, month, tag);
-      if (kandidat >= heute) return kandidat.toISOString().split('T')[0];
+      if (kandidat >= heute) {
+        // toISOString() würde UTC liefern und in UTC+1/+2 einen Tag zurückspringen
+        // → lokale Datumsteile verwenden
+        const yyyy = kandidat.getFullYear();
+        const mm   = String(kandidat.getMonth() + 1).padStart(2, '0');
+        const dd   = String(kandidat.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
     }
     return null;
   }
