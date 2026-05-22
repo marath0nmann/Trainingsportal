@@ -1,6 +1,6 @@
 # Changelog
 
-## v129
+## v130
 - Trainingsgruppen: Gruppen kommen wieder aus dem Statistikportal (`gruppen`-Tabelle); Benutzer können sich im Profil selbst zuordnen (Statistikportal-Gruppen erscheinen read-only mit Badge, eigene Zuordnungen sind per Checkbox wählbar)
 - Admin-verwaltete Trainingsgruppen entfernt (war v123–v128, widerspricht dem Konzept)
 - DB-Migration #11: erstellt `training_benutzer_gruppen`, `training_planung_gruppen`, `training_block_gruppen` (Statistikportal-verknüpfte Tabellen)
