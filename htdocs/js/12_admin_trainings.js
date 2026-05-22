@@ -6,7 +6,7 @@ const ADMIN_TRAININGS = (() => {
   let einheiten   = [];
   let treffpunkte = [];
   let sortKey     = 'datum';
-  let sortDir     = -1;     // -1 = DESC
+  let sortDir     = 1;      //  1 = ASC (aufsteigend = älteste zuerst)
   let selected    = new Set();
   let container   = null;
   let filterTyp   = '';
@@ -45,7 +45,7 @@ const ADMIN_TRAININGS = (() => {
       sortDir *= -1;
     } else {
       sortKey = key;
-      sortDir = key === 'datum' ? -1 : 1;
+      sortDir = 1; // beim Wechsel immer aufsteigend
     }
     rendereTabelle();
   }
@@ -97,7 +97,7 @@ const ADMIN_TRAININGS = (() => {
       const statusSty = abgesagt ? 'color:var(--primary);font-weight:600' : 'color:var(--text2)';
 
       const tdStyle  = 'padding:7px 10px;font-size:13px;border-bottom:1px solid var(--border)';
-      const tdClip   = tdStyle + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      const tdClip   = tdStyle + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0';
 
       return `<tr style="${rowStyle}" onclick="ADMIN_TRAININGS.editRow(event,${e.id})">
         <td style="${tdStyle};width:40px" onclick="event.stopPropagation()">
@@ -105,10 +105,14 @@ const ADMIN_TRAININGS = (() => {
         </td>
         <td style="${tdClip}">${escapeHtml(datStr)}</td>
         <td style="${tdClip}">${escapeHtml(zeitStr)}</td>
-        <td style="${tdClip}"><span class="liste-typ-badge liste-typ-${escapeHtml(e.typ)}">${escapeHtml(typLbl)}</span></td>
+        <td style="${tdStyle};overflow:hidden;max-width:0">
+          <span class="liste-typ-badge liste-typ-${escapeHtml(e.typ)}"
+            style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;white-space:nowrap"
+          >${escapeHtml(typLbl)}</span>
+        </td>
         <td style="${tdClip}" title="${escapeHtml(e.titel)}">${escapeHtml(e.titel)}</td>
-        <td style="${tdClip}">${escapeHtml(e.treffpunkt || '–')}</td>
-        <td style="${tdClip};${statusSty}">${abgesagt ? 'Abgesagt' : 'Geplant'}</td>
+        <td style="${tdClip}" title="${escapeHtml(e.treffpunkt || '')}">${escapeHtml(e.treffpunkt || '–')}</td>
+        <td style="${tdStyle};white-space:nowrap;${statusSty}">${abgesagt ? 'Abgesagt' : 'Geplant'}</td>
       </tr>`;
     }).join('');
 
@@ -164,14 +168,14 @@ const ADMIN_TRAININGS = (() => {
         </div>
         ${aktionsleiste}
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-          <table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:640px">
+          <table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:700px">
             <colgroup>
               <col style="width:40px">
-              <col style="width:150px">
-              <col style="width:65px">
-              <col style="width:115px">
+              <col style="width:155px">
+              <col style="width:60px">
+              <col style="width:180px">
               <col><!-- Titel: Rest -->
-              <col style="width:130px">
+              <col style="width:140px">
               <col style="width:85px">
             </colgroup>
             <thead>
