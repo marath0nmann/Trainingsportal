@@ -560,10 +560,9 @@ async function renderKalender(main, monthArg) {
             const hint   = isFest ? ' (fester Termin)' : ' (Prognosedatum – noch nicht bestätigt)';
             const canAdd = !!state.user;
             return `<div class="kal-item" data-serie-id="${s.id}"
-              title="${escapeHtml(name + hint)}"
               style="background:rgba(46,204,113,.15);border-left:3px solid #27ae60;
-                     color:var(--text);cursor:${canAdd ? 'pointer' : 'default'};user-select:none"
-              ${canAdd ? `onclick="_openWettkampfModal(${s.id})"` : ''}>
+                     color:var(--text);cursor:${canAdd ? 'pointer' : 'default'}"
+              ${canAdd ? `onclick="_wkPopoverShow(${s.id}, this)"` : ''}>
               <span class="kal-item-title">${emoji} ${escapeHtml(name)}</span>
             </div>`;
           }).join('')
@@ -1539,12 +1538,19 @@ async function _ladeWettkampfDaten() {
   return _wettkampfCache.data;
 }
 
-// ── Wettkampf: Modal „In persönlichen Kalender eintragen" ────────────────
+// ── Wettkampf: Schnelleintrag-Popover ────────────────────────────────────
 
-function _openWettkampfModal(serieId) {
+let _wkPopSerie = null; // ID der aktuell geöffneten Serie (für Toggle)
+
+function _wkPopoverShow(serieId, anchorEl) {
   const serien = _wettkampfCache?.data || [];
   const serie  = serien.find(s => s.id === serieId);
   if (!serie || !state.user) return;
+
+  // Gleiche Serie erneut klicken → schließen (Toggle)
+  if (_wkPopSerie === serieId) { _wkPopoverHide(); return; }
+  _wkPopoverHide();
+  _wkPopSerie = serieId;
 
   const datum = serie.naechstes_datum
     || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.letztes_datum) : null);
@@ -1553,72 +1559,101 @@ function _openWettkampfModal(serieId) {
   const isFest   = !!serie.naechstes_datum;
   const name     = _decodeHtml(serie.name || serie.kuerzel || '');
   const datumFmt = new Date(datum + 'T00:00:00').toLocaleDateString('de-DE',
-    { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  // Disziplinen ermitteln (gleiche Logik wie ADMIN_WETTKAMPF.allesDisziplinen)
+  // Disziplinen ermitteln
   const ausgeschlossen = new Set(serie.disziplinen_ausgeschlossen || []);
   const diszSet = new Set();
   (serie.disziplinen || []).forEach(d => { if (!ausgeschlossen.has(d)) diszSet.add(d); });
   (serie.disziplinen_extra || []).forEach(d => diszSet.add(d));
   const disziplinen = [...diszSet];
 
-  let diszHtml = '';
-  if (disziplinen.length) {
-    const opts = disziplinen.map(d =>
-      `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`
-    ).join('');
-    diszHtml = `
-      <div class="modal-row">
-        <div class="modal-label">Disziplin</div>
-        <select id="wk-disz-sel"
-          style="flex:1;border:1px solid var(--border);border-radius:6px;
-                 padding:5px 8px;font-size:13px;background:var(--bg);color:var(--text)">
-          <option value="">– keine / allgemein –</option>
-          ${opts}
-        </select>
-      </div>`;
-  } else {
-    diszHtml = `
-      <div class="modal-row">
-        <div class="modal-label">Disziplin</div>
-        <input type="text" id="wk-disz-txt" placeholder="z. B. 10 km, Halbmarathon …" maxlength="100"
-          style="flex:1;border:1px solid var(--border);border-radius:6px;
-                 padding:5px 8px;font-size:13px;background:var(--bg);color:var(--text)">
-      </div>`;
-  }
+  // Popover-Element aufbauen
+  const pop = document.createElement('div');
+  pop.id        = 'wk-popover';
+  pop.className = 'wk-popover';
 
-  const cont = document.getElementById('modal-container');
-  if (!cont) return;
-  cont.innerHTML = `
-    <div class="modal-overlay" onclick="schliesseModal(event)">
-      <div class="modal-card" onclick="event.stopPropagation()" style="max-width:440px">
-        <div class="modal-head">
-          <div>
-            <div class="modal-eyebrow">In persönlichen Kalender eintragen</div>
-            <div class="modal-title">${escapeHtml(name)}</div>
-          </div>
-          <button class="modal-close" onclick="schliesseModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="modal-row">
-            <div class="modal-label">Datum</div>
-            <div style="flex:1;font-size:13px">
-              ${escapeHtml(datumFmt)}
-              ${!isFest ? `<span style="font-size:11px;padding:1px 6px;border-radius:8px;
-                background:var(--border);color:var(--text2);margin-left:6px">Prognosedatum</span>` : ''}
-            </div>
-          </div>
-          ${diszHtml}
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
-          <button class="btn btn-primary" onclick="_saveWettkampfEintrag(${serieId})">🏆 Eintragen</button>
-        </div>
-      </div>
-    </div>`;
+  const nameEl = document.createElement('div');
+  nameEl.className   = 'wk-pop-name';
+  nameEl.textContent = '🏆 ' + name;
+  pop.appendChild(nameEl);
+
+  const datumEl = document.createElement('div');
+  datumEl.className = 'wk-pop-datum';
+  datumEl.textContent = datumFmt;
+  if (!isFest) {
+    const badge = document.createElement('span');
+    badge.className   = 'wk-pop-badge';
+    badge.textContent = '~ Prognose';
+    datumEl.appendChild(badge);
+  }
+  pop.appendChild(datumEl);
+
+  const diszDiv = document.createElement('div');
+  diszDiv.className = 'wk-pop-disz';
+
+  // Disziplin-Buttons – ein Klick trägt sofort ein
+  const buttons = disziplinen.length ? disziplinen : [null];
+  buttons.forEach(d => {
+    const km  = _disziplinKm(d);
+    const btn = document.createElement('button');
+    btn.className   = 'wk-pop-btn';
+    btn.textContent = d || 'Teilnahme eintragen';
+    if (km !== null) {
+      const kmSpan = document.createElement('span');
+      kmSpan.className   = 'wk-pop-km';
+      kmSpan.textContent = km < 1 ? `${Math.round(km * 1000)} m` : `${km} km`;
+      btn.appendChild(kmSpan);
+    }
+    btn.addEventListener('click', () => _wkEintragen(serieId, d || ''));
+    diszDiv.appendChild(btn);
+  });
+  pop.appendChild(diszDiv);
+
+  // Klicks im Popover nicht ans Dokument durchreichen (würde ihn sofort schließen)
+  pop.addEventListener('click', e => e.stopPropagation());
+
+  document.body.appendChild(pop);
+  _wkPopPosition(pop, anchorEl.getBoundingClientRect());
+
+  // Außen-Klick und Escape schließen den Popover
+  setTimeout(() => {
+    document.addEventListener('click',   _wkPopoverHide, { once: true });
+    document.addEventListener('keydown', _wkEscHide);
+  }, 0);
 }
 
-async function _saveWettkampfEintrag(serieId) {
+function _wkEscHide(e) {
+  if (e.key === 'Escape') _wkPopoverHide();
+}
+
+function _wkPopoverHide() {
+  document.removeEventListener('keydown', _wkEscHide);
+  const pop = document.getElementById('wk-popover');
+  if (pop) pop.remove();
+  _wkPopSerie = null;
+}
+
+function _wkPopPosition(pop, rect) {
+  const popW   = pop.offsetWidth  || 220;
+  const popH   = pop.offsetHeight || 140;
+  const margin = 8;
+  const viewW  = window.innerWidth;
+  const viewH  = window.innerHeight;
+  // Rechts vom Element, falls Platz – sonst links
+  let left = rect.right + margin;
+  if (left + popW > viewW - margin) left = rect.left - popW - margin;
+  if (left < margin) left = margin;
+  // Bündig mit Oberkante des Elements, nach oben klappen falls nötig
+  let top = rect.top;
+  if (top + popH > viewH - margin) top = Math.max(margin, rect.bottom - popH);
+  pop.style.left = left + 'px';
+  pop.style.top  = top  + 'px';
+}
+
+async function _wkEintragen(serieId, disziplin) {
+  _wkPopoverHide();
+
   const serien = _wettkampfCache?.data || [];
   const serie  = serien.find(s => s.id === serieId);
   if (!serie) return;
@@ -1627,28 +1662,38 @@ async function _saveWettkampfEintrag(serieId) {
     || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.letztes_datum) : null);
   if (!datum) return;
 
-  const name      = _decodeHtml(serie.name || serie.kuerzel || '');
-  const disziplin = (document.getElementById('wk-disz-sel')?.value || '').trim()
-                 || (document.getElementById('wk-disz-txt')?.value || '').trim();
-  const titel     = ('🏆 ' + name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
-
-  const btn = document.querySelector('#modal-container .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const name  = _decodeHtml(serie.name || serie.kuerzel || '');
+  const titel = ('🏆 ' + name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
+  const km    = _disziplinKm(disziplin);
 
   try {
     await apiPost('mein-plan/einheiten', {
       datum,
-      typ:      'wettkampf',
+      typ:        'wettkampf',
       titel,
-      bemerkung: disziplin || null,
+      distanz_km: km,
+      bemerkung:  disziplin || null,
     });
-    schliesseModal();
-    _wkNotify('Wettkampf in deinen Kalender eingetragen.', true);
+    _wkNotify('Wettkampfteilnahme eingetragen.', true);
     renderPage();
   } catch (e) {
     _wkNotify('Fehler: ' + (e.message || ''), false);
-    if (btn) { btn.disabled = false; btn.textContent = '🏆 Eintragen'; }
   }
+}
+
+// Wettkampfdistanz aus Disziplinname ableiten (für Wochenkilometer)
+function _disziplinKm(disziplin) {
+  if (!disziplin) return null;
+  const s = disziplin.toLowerCase();
+  if (/marathon/.test(s) && !/halb|half/.test(s)) return 42.195;
+  if (/halb.?marathon|half.?marathon/.test(s))     return 21.098;
+  // "X,X km" oder "X km"
+  const km = s.match(/(\d+(?:[,\.]\d+)?)\s*km/);
+  if (km) return parseFloat(km[1].replace(',', '.'));
+  // Laufdistanzen in Metern: "1500m", "5000 m", "10000m" (mind. 60 m = keine Feldweiten)
+  const m = s.match(/(\d+)\s*m(?![a-z])/);
+  if (m) { const v = parseInt(m[1], 10); return v >= 60 ? Math.round(v) / 1000 : null; }
+  return null;
 }
 
 function _wkNotify(text, ok) {

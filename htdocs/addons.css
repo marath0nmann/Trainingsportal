@@ -1640,6 +1640,41 @@ body.planung-active #app-footer    { display: none; }
 .planung-gruppen-hint {
   font-size: 12px; color: var(--text2, #71717a);
 }
+/* ── Wettkampf-Schnelleintrag-Popover ─────────────────────────────────── */
+.wk-popover {
+  position: fixed; z-index: 600;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  padding: 12px 14px; min-width: 180px; max-width: 300px;
+  pointer-events: auto;
+}
+.wk-pop-name {
+  font-weight: 700; font-size: 13px; color: var(--text);
+  margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wk-pop-datum {
+  font-size: 11px; color: var(--text2); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.wk-pop-badge {
+  font-size: 10px; padding: 1px 5px; border-radius: 8px;
+  background: var(--border); color: var(--text2);
+}
+.wk-pop-disz { display: flex; flex-wrap: wrap; gap: 6px; }
+.wk-pop-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: 16px;
+  border: 1.5px solid #27ae60;
+  background: rgba(46,204,113,.12); color: var(--text);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: background .12s;
+}
+.wk-pop-btn:hover { background: rgba(46,204,113,.28); }
+.wk-pop-km {
+  font-size: 10px; color: var(--text2); font-weight: 400;
+}
+
 /* Optischer Trenner zwischen Gruppen-Tabs und Wettkämpfe-Tab */
 .planung-gruppen-sep {
   flex: 1;          /* schiebt den Wettkämpfe-Tab an den rechten Rand */
