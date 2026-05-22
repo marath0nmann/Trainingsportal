@@ -76,45 +76,25 @@ const MEINPLAN = (() => {
     }
   }
 
-  // ── Abo aktivieren (für einen Typ) ──────────────────────
-  // einheitId / einheitData / segmente: die konkret angeklickte Einheit,
-  // damit sie unabhängig vom Datum sofort übernommen wird.
-  async function aboAktivieren(typ, einheitId, einheitData, segmente) {
-    KAL_POPOVER.hide();
+  // ── Abo-Checkbox: Typ abonnieren oder abbestellen ───────
+  // cb: das Checkbox-Element (für visuellen Rollback bei Abbruch)
+  async function aboToggle(typ, aktiv, cb) {
     try {
-      // 1. Diese spezifische Einheit direkt übernehmen (setzt ref_einheit_id)
-      if (einheitId && einheitData) {
-        const km = _berechneKm(einheitData, segmente || []);
-        await apiPost('mein-plan/einheiten', {
-          datum:          einheitData.datum,
-          uhrzeit:        einheitData.uhrzeit || null,
-          typ:            einheitData.typ,
-          titel:          einheitData.titel,
-          distanz_km:     km,
-          ref_einheit_id: einheitData.id,
-        });
+      if (aktiv) {
+        await apiPost('mein-plan/abo', { typ });
+        _aboTypen.add(typ);
+        _notify('Abonniert – neu erstellte Einheiten dieses Typs werden automatisch übernommen.', 'ok');
+      } else {
+        if (!confirm('Abo beenden? Neu erstellte Einheiten dieses Typs werden nicht mehr automatisch übernommen. Bereits übernommene Einheiten bleiben erhalten.')) {
+          if (cb) cb.checked = true; // visuellen Rollback der Checkbox
+          return;
+        }
+        await apiCall('DELETE', 'mein-plan/abo', { typ });
+        _aboTypen.delete(typ);
+        _notify('Abo beendet.', 'ok');
       }
-      // 2. Typ abonnieren → Backend-Sync fügt alle künftigen Einheiten dieses Typs hinzu
-      //    (bereits über ref_einheit_id vorhandene werden vom Sync übersprungen)
-      await apiPost('mein-plan/abo', { typ });
-      _aboTypen.add(typ);
-      _notify('Diese und alle künftigen Einheiten dieses Typs übernommen.', 'ok');
-      renderPage();
     } catch (err) {
-      _notify('Fehler: ' + (err.message || ''), 'err');
-    }
-  }
-
-  // ── Abo beenden + alle künftigen Einheiten dieses Typs entfernen ─
-  async function aboDeaktivieren(typ) {
-    if (!confirm('Alle künftigen Einheiten dieses Typs aus deinem Plan entfernen? Vergangene Einheiten bleiben erhalten.')) return;
-    KAL_POPOVER.hide();
-    try {
-      await apiCall('DELETE', 'mein-plan/abo', { typ });
-      _aboTypen.delete(typ);
-      _notify('Einheiten entfernt.', 'ok');
-      renderPage();
-    } catch (err) {
+      if (cb) cb.checked = !aktiv; // Rollback bei API-Fehler
       _notify('Fehler: ' + (err.message || ''), 'err');
     }
   }
@@ -236,6 +216,6 @@ const MEINPLAN = (() => {
     setAbo, istAboAktivFuerTyp,
     neuePrivatEinheit, bearbeitePrivat, loeschePrivat,
     uebernehmenVonOeffentlich, speichern,
-    aboAktivieren, aboDeaktivieren,
+    aboToggle,
   };
 })();
