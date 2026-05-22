@@ -8,8 +8,10 @@
 // ============================================================
 
 const state = {
-  user: null,
-  tab:  'kalender',
+  user:         null,
+  tab:          'kalender',
+  kalFilter:    null,   // {gruppen:Set, teamplan:bool, meinPlan:bool} | null
+  meineGruppen: [],     // [{id, name, farbe}]
 };
 
 window.addEventListener('DOMContentLoaded', init);
@@ -369,16 +371,24 @@ async function renderKalender(main, monthArg) {
   const bis = ymd(gridEnd);
   let oeffentlich = [], privat = [], feiertage = [];
   try {
-    const [d1, d2] = await Promise.all([
+    const needPrefs = angemeldet && state.kalFilter === null;
+    const [d1, d2, d3] = await Promise.all([
       angemeldet
         ? apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true })
         : apiGet(`einheiten?von=${von}&bis=${bis}`, { silent: true }),
       apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
+      needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
     ]);
     oeffentlich = d1.einheiten || [];
     privat      = angemeldet ? (d1.privat || []) : [];
     feiertage   = d2.feiertage || [];
-    if (angemeldet) MEINPLAN.setAbo(d1.abo_typen || []);
+    if (angemeldet) {
+      MEINPLAN.setAbo(d1.abo_typen || []);
+      state.meineGruppen = d1.meine_gruppen || [];
+      if (state.kalFilter === null) {
+        state.kalFilter = _initKalFilter(state.meineGruppen.map(g => g.id), d3.prefs);
+      }
+    }
   } catch (e) {
     const g = document.getElementById('kal-grid');
     if (g) g.innerHTML = `<div class="kal-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
@@ -393,12 +403,27 @@ async function renderKalender(main, monthArg) {
   const adoptedIds = new Set(
     privat.filter(p => p.ref_einheit_id != null).map(p => p.ref_einheit_id)
   );
+
+  // Kalender-Filter anwenden
+  const kf = state.kalFilter;
+  const hatGruppen = angemeldet && state.meineGruppen.length > 0;
+  const oeffentlichGefiltert = oeffentlich.filter(e => {
+    if (!angemeldet || !kf) return true;
+    if (hatGruppen) {
+      // Einträge ohne Gruppe → immer sichtbar (allgemein)
+      if (e.gruppe_id == null) return kf.gruppen.size > 0;
+      return kf.gruppen.has(e.gruppe_id);
+    }
+    return kf.teamplan !== false;
+  });
+  const privatGefiltert = (!angemeldet || !kf || kf.meinPlan !== false) ? privat : [];
+
   const byDate = {};
-  oeffentlich.forEach(e => {
+  oeffentlichGefiltert.forEach(e => {
     if (adoptedIds.has(e.id)) return;      // private Kopie vorhanden → Team-Eintrag ausblenden
     (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: false });
   });
-  privat.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: true }); });
+  privatGefiltert.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: true }); });
   Object.values(byDate).forEach(arr =>
     arr.sort((a, b) => a._privat !== b._privat ? (a._privat ? 1 : -1) : (a.uhrzeit || '99:99').localeCompare(b.uhrzeit || '99:99'))
   );
@@ -510,18 +535,98 @@ async function renderKalender(main, monthArg) {
   }).join('');
 
   const gridCls = angemeldet ? 'kal-grid meinplan-kal-grid' : 'kal-grid';
-  const legendHtml = angemeldet
-    ? `<div class="meinplan-legend meinplan-legend-below">
-        <span class="meinplan-legend-pub">Teamplan</span>
-        <span class="meinplan-legend-priv">Mein Plan</span>
-       </div>`
-    : '';
+  const legendHtml = angemeldet ? _renderKalLegend() : '';
   document.getElementById('kal-grid').outerHTML =
     `<div id="kal-grid" class="${gridCls}">${head}${rows}</div>${legendHtml}`;
 
   if (typeof KAL_POPOVER !== 'undefined') {
     KAL_POPOVER.initItems(document.querySelectorAll('#kal-grid .kal-item[data-einheit-id]'));
   }
+}
+
+// ── Kalender-Filter: Initialisierung ───────────────────
+function _initKalFilter(gruppenIds, serverPrefs) {
+  const filter = {
+    gruppen:  new Set(gruppenIds),
+    teamplan: true,
+    meinPlan: true,
+  };
+  if (serverPrefs && typeof serverPrefs === 'object') {
+    if (Array.isArray(serverPrefs.gruppen)) {
+      filter.gruppen = new Set(serverPrefs.gruppen.filter(id => gruppenIds.includes(id)));
+    }
+    if (typeof serverPrefs.teamplan === 'boolean') filter.teamplan = serverPrefs.teamplan;
+    if (typeof serverPrefs.meinPlan === 'boolean') filter.meinPlan = serverPrefs.meinPlan;
+  }
+  return filter;
+}
+
+// ── Kalender-Legend (Checkboxen) ────────────────────────
+function _renderKalLegend() {
+  const kf      = state.kalFilter;
+  const gruppen = state.meineGruppen || [];
+  if (!gruppen.length) {
+    return `<div class="kal-legend">
+      <label class="kal-legend-item">
+        <input type="checkbox" ${kf && kf.teamplan !== false ? 'checked' : ''}
+          onchange="toggleKalPlan('teamplan', this.checked)">
+        <span class="kal-legend-dot kal-legend-dot-pub"></span>Teamplan
+      </label>
+      <label class="kal-legend-item">
+        <input type="checkbox" ${!kf || kf.meinPlan !== false ? 'checked' : ''}
+          onchange="toggleKalPlan('meinPlan', this.checked)">
+        <span class="kal-legend-dot kal-legend-dot-priv"></span>Mein Plan
+      </label>
+    </div>`;
+  }
+  const gruppenItems = gruppen.map(g => {
+    const checked = kf && kf.gruppen.has(g.id);
+    const dotStyle = g.farbe ? ` style="background:${escapeHtml(g.farbe)}"` : '';
+    return `<label class="kal-legend-item">
+      <input type="checkbox" ${checked ? 'checked' : ''}
+        onchange="toggleKalPlan('gruppe', ${g.id}, this.checked)">
+      <span class="kal-legend-dot"${dotStyle}></span>${escapeHtml(g.name)}
+    </label>`;
+  }).join('');
+  return `<div class="kal-legend">
+    ${gruppenItems}
+    <label class="kal-legend-item">
+      <input type="checkbox" ${!kf || kf.meinPlan !== false ? 'checked' : ''}
+        onchange="toggleKalPlan('meinPlan', false, this.checked)">
+      <span class="kal-legend-dot kal-legend-dot-priv"></span>Mein Plan
+    </label>
+  </div>`;
+}
+
+// ── Filter-Toggle (aus Checkbox-onchange aufgerufen) ─────
+let _kalPrefsSaveTimer = null;
+function toggleKalPlan(type, idOrChecked, checkedMaybe) {
+  if (!state.kalFilter) return;
+  if (type === 'teamplan') {
+    state.kalFilter.teamplan = !!idOrChecked;
+  } else if (type === 'gruppe') {
+    const checked = !!checkedMaybe;
+    if (checked) state.kalFilter.gruppen.add(idOrChecked);
+    else         state.kalFilter.gruppen.delete(idOrChecked);
+  } else if (type === 'meinPlan') {
+    const checked = checkedMaybe !== undefined ? !!checkedMaybe : !!idOrChecked;
+    state.kalFilter.meinPlan = checked;
+  }
+  renderPage();
+  clearTimeout(_kalPrefsSaveTimer);
+  _kalPrefsSaveTimer = setTimeout(_saveKalPrefs, 1000);
+}
+
+async function _saveKalPrefs() {
+  if (!state.user || !state.kalFilter) return;
+  try {
+    const f = state.kalFilter;
+    await apiPut('kal/prefs', {
+      gruppen:  [...f.gruppen],
+      teamplan: f.teamplan,
+      meinPlan: f.meinPlan,
+    });
+  } catch (_) {}
 }
 
 function renderHeuteSektionHtml(items) {

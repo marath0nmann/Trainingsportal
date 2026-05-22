@@ -1330,20 +1330,36 @@ body.planung-active #app-footer    { display: none; }
 }
 
 /* Legende in der Toolbar */
-.meinplan-legend {
-  display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600;
-  color: var(--text2);
-}
-.meinplan-legend-below {
+/* Kalender-Legende (Checkbox-Filter) */
+.kal-legend {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px;
   margin-top: 10px; justify-content: flex-end;
+  font-size: 12px; color: var(--text2);
 }
-.meinplan-legend-pub,
-.meinplan-legend-priv {
-  display: flex; align-items: center; gap: 4px;
-  padding: 2px 7px; border-radius: 4px;
+.kal-legend-item {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none; white-space: nowrap;
+  padding: 3px 8px 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surf2);
+  transition: background 0.15s;
 }
-.meinplan-legend-pub  { background: var(--surf2); border-left: 3px solid var(--accent); }
-.meinplan-legend-priv { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-left: 3px dashed var(--accent); }
+.kal-legend-item:hover { background: var(--surf3, var(--bg2)); }
+.kal-legend-item input[type=checkbox] { accent-color: var(--primary); cursor: pointer; }
+.kal-legend-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: var(--text2);
+}
+.kal-legend-dot-pub  { background: var(--accent, #3a6bc9); }
+.kal-legend-dot-priv {
+  background: transparent;
+  border: 2px dashed var(--accent, #3a6bc9);
+  width: 8px; height: 8px;
+}
+
+/* Rückwärtskompatibilität (alte Klassen werden nicht mehr gerendert, aber defensive Keep) */
+.meinplan-legend { display: none; }
 
 /* Wrapper */
 .meinplan-wrap { padding: 24px 28px 48px; max-width: 1400px; margin: 0 auto; }
@@ -1393,7 +1409,7 @@ body.planung-active #app-footer    { display: none; }
 
 @media (max-width: 720px) {
   .meinplan-wrap { padding: 12px 8px 32px; }
-  .meinplan-legend-below { display: none; }
+  .kal-legend { justify-content: flex-start; }
   .meinplan-kw-cell { padding: 4px 2px; }
   .meinplan-kw-num  { font-size: 9px; }
   .meinplan-kw-km   { font-size: 12px; }
