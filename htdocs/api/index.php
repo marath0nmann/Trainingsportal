@@ -89,6 +89,8 @@ function _migrationStmts(): array
     $tas  = DB::tbl('training_abo_skips');
     $ro   = DB::tbl('rollen');
     $tser = DB::tbl('training_serien');
+    $tgr  = DB::tbl('training_gruppen');
+    $tgm  = DB::tbl('training_gruppen_mitglieder');
 
     return [
         // ── 1: Grundschema + Trainer-Rollen ─────────────────────────────
@@ -304,6 +306,25 @@ function _migrationStmts(): array
             "ALTER TABLE $te ADD COLUMN IF NOT EXISTS serie_id INT UNSIGNED NULL AFTER status",
             "ALTER TABLE $te ADD KEY idx_serie (serie_id)",
         ],
+
+        // ── 10: Trainingsgruppen ─────────────────────────────────────────
+        10 => [
+            "CREATE TABLE IF NOT EXISTS $tgr (
+              id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              name         VARCHAR(200) NOT NULL,
+              farbe        VARCHAR(20)  NULL DEFAULT NULL,
+              aktiv        TINYINT(1)   NOT NULL DEFAULT 1,
+              reihenfolge  SMALLINT     NOT NULL DEFAULT 0,
+              erstellt_am  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "CREATE TABLE IF NOT EXISTS $tgm (
+              gruppe_id    INT UNSIGNED NOT NULL,
+              benutzer_id  INT UNSIGNED NOT NULL,
+              PRIMARY KEY (gruppe_id, benutzer_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "ALTER TABLE $te ADD COLUMN IF NOT EXISTS gruppe_id INT UNSIGNED NULL AFTER serie_id",
+        ],
     ];
 }
 
@@ -378,6 +399,14 @@ try {
     }
     if ($head === 'admin') {
         handleAdmin($method, $tail);
+        exit;
+    }
+    if ($head === 'gruppen') {
+        handleGruppen($method, $tail ?? '');
+        exit;
+    }
+    if ($head === 'kal') {
+        handleKalPrefs($method, $tail ?? '');
         exit;
     }
     if ($head === 'mein-plan') {
@@ -997,6 +1026,13 @@ function handleAdmin(string $method, string $sub): void {
     if ($sub === 'typen' || str_starts_with($sub, 'typen/')) {
         $typSub = $sub === 'typen' ? '' : substr($sub, 6);
         handleAdminTypen($method, $typSub);
+        return;
+    }
+
+    // Trainingsgruppen verwalten (Admin)
+    if ($sub === 'gruppen' || str_starts_with($sub, 'gruppen/')) {
+        $grpSub = $sub === 'gruppen' ? '' : substr($sub, 8);
+        handleAdminGruppen($method, $grpSub);
         return;
     }
 
@@ -3268,6 +3304,7 @@ function mapEinheit(array $r): array {
         'sichtbarkeit' => $r['sichtbarkeit'] ?? 'oeffentlich',
         'status'       => $r['status'] ?? 'geplant',
         'serie_id'     => isset($r['serie_id']) && $r['serie_id'] !== null ? (int)$r['serie_id'] : null,
+        'gruppe_id'    => isset($r['gruppe_id']) && $r['gruppe_id'] !== null ? (int)$r['gruppe_id'] : null,
     ];
 }
 function mapSegment(array $r): array {
@@ -3444,9 +3481,27 @@ function handleMeinPlan(string $method, string $tail): void
             }
         }
 
+        // Gruppen des Benutzers laden
+        $gruppenRows = [];
+        try {
+            $gruppenRows = DB::fetchAll(
+                'SELECT g.id, g.name, g.farbe FROM ' . DB::tbl('training_gruppen') . ' g
+                  JOIN ' . DB::tbl('training_gruppen_mitglieder') . ' m ON m.gruppe_id = g.id
+                 WHERE m.benutzer_id = ? AND g.aktiv = 1
+                 ORDER BY g.reihenfolge, g.name',
+                [$userId]
+            );
+        } catch (Throwable $_) {}
+        $meineGruppen = array_map(fn($g) => [
+            'id'    => (int)$g['id'],
+            'name'  => $g['name'],
+            'farbe' => $g['farbe'] ?? null,
+        ], $gruppenRows);
+        $meineGruppenIds = array_column($meineGruppen, 'id');
+
         $rows = DB::fetchAll(
             'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
-                    e.bemerkung, e.sichtbarkeit, e.status,
+                    e.bemerkung, e.sichtbarkeit, e.status, e.serie_id, e.gruppe_id,
                     t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
                FROM ' . DB::tbl('training_einheiten') . ' e
                LEFT JOIN ' . DB::tbl('training_treffpunkte') . " t ON t.id = e.treffpunkt_id
@@ -3464,10 +3519,11 @@ function handleMeinPlan(string $method, string $tail): void
             [$userId, $von, $bis]
         );
         echo json_encode([
-            'ok'        => true,
-            'einheiten' => array_map('mapEinheit', $rows),
-            'privat'    => array_map('mapPrivatEinheit', $privatRows),
-            'abo_typen' => $aboTypen,
+            'ok'           => true,
+            'einheiten'    => array_map('mapEinheit', $rows),
+            'privat'       => array_map('mapPrivatEinheit', $privatRows),
+            'abo_typen'    => $aboTypen,
+            'meine_gruppen'=> $meineGruppen,
         ]);
         return;
     }
@@ -3686,4 +3742,215 @@ function mapPrivatEinheit(array $r): array
         'treffpunkt_id'  => isset($r['ref_treffpunkt_id']) && $r['ref_treffpunkt_id'] !== null
                                 ? (int)$r['ref_treffpunkt_id'] : null,
     ];
+}
+
+
+// ============================================================
+// Trainingsgruppen: GET /gruppen (eigene Gruppen des Users)
+// ============================================================
+function handleGruppen(string $method, string $sub): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId = (int)$user['id'];
+
+    if ($method === 'GET' && $sub === '') {
+        try {
+            $rows = DB::fetchAll(
+                'SELECT g.id, g.name, g.farbe,
+                         (SELECT COUNT(*) FROM ' . DB::tbl('training_gruppen_mitglieder') . ' m WHERE m.gruppe_id = g.id AND m.benutzer_id = ?') AS ist_mitglied
+                    FROM ' . DB::tbl('training_gruppen') . ' g
+                   WHERE g.aktiv = 1
+                   ORDER BY g.reihenfolge, g.name',
+                [$userId]
+            );
+        } catch (Throwable $_) {
+            $rows = [];
+        }
+        $gruppen = array_map(fn($g) => [
+            'id'           => (int)$g['id'],
+            'name'         => $g['name'],
+            'farbe'        => $g['farbe'] ?? null,
+            'ist_mitglied' => (bool)$g['ist_mitglied'],
+        ], $rows);
+        echo json_encode(['ok' => true, 'gruppen' => $gruppen]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
+}
+
+// ============================================================
+// Kalender-Filter-Präferenzen: GET/PUT /kal/prefs
+// ============================================================
+function handleKalPrefs(string $method, string $sub): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId = (int)$user['id'];
+
+    if ($sub !== 'prefs') {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
+        return;
+    }
+
+    if ($method === 'GET') {
+        $row   = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+        $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+        if (!is_array($prefs)) $prefs = [];
+        $kal = is_array($prefs['kal_filter'] ?? null) ? $prefs['kal_filter'] : null;
+        echo json_encode(['ok' => true, 'prefs' => $kal]);
+        return;
+    }
+
+    if ($method === 'PUT') {
+        $in   = readJsonBody();
+        $row  = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+        $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+        if (!is_array($prefs)) $prefs = [];
+        $prefs['kal_filter'] = $in;
+        DB::query('UPDATE ' . DB::tbl('benutzer') . ' SET prefs = ? WHERE id = ?',
+            [json_encode($prefs), $userId]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+}
+
+// ============================================================
+// Admin: Trainingsgruppen CRUD
+// ============================================================
+function handleAdminGruppen(string $method, string $sub): void
+{
+    $tgr = DB::tbl('training_gruppen');
+    $tgm = DB::tbl('training_gruppen_mitglieder');
+    $tbu = DB::tbl('benutzer');
+
+    // Liste aller Gruppen
+    if ($method === 'GET' && $sub === '') {
+        try {
+            $rows = DB::fetchAll(
+                'SELECT g.id, g.name, g.farbe, g.aktiv, g.reihenfolge,
+                         COUNT(m.benutzer_id) AS mitglieder_anzahl
+                    FROM ' . $tgr . ' g
+                    LEFT JOIN ' . $tgm . ' m ON m.gruppe_id = g.id
+                   GROUP BY g.id
+                   ORDER BY g.reihenfolge, g.name'
+            );
+        } catch (Throwable $_) { $rows = []; }
+        echo json_encode(['ok' => true, 'gruppen' => array_map(fn($g) => [
+            'id'                 => (int)$g['id'],
+            'name'              => $g['name'],
+            'farbe'             => $g['farbe'] ?? null,
+            'aktiv'             => (bool)$g['aktiv'],
+            'reihenfolge'       => (int)$g['reihenfolge'],
+            'mitglieder_anzahl' => (int)$g['mitglieder_anzahl'],
+        ], $rows)]);
+        return;
+    }
+
+    // Neue Gruppe erstellen
+    if ($method === 'POST' && $sub === '') {
+        $in   = readJsonBody();
+        $name = trim((string)($in['name'] ?? ''));
+        if ($name === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "name" erforderlich']);
+            return;
+        }
+        $farbe = isset($in['farbe']) && is_string($in['farbe']) ? substr(trim($in['farbe']), 0, 20) : null;
+        $reihenfolge = isset($in['reihenfolge']) ? (int)$in['reihenfolge'] : 0;
+        DB::query(
+            'INSERT INTO ' . $tgr . ' (name, farbe, aktiv, reihenfolge) VALUES (?,?,1,?)',
+            [$name, $farbe, $reihenfolge]
+        );
+        $id = DB::lastInsertId();
+        echo json_encode(['ok' => true, 'id' => $id]);
+        return;
+    }
+
+    // Einzelne Gruppe bearbeiten/löschen
+    if (preg_match('/^(\d+)$/ ', $sub, $m2)) {
+        $gid = (int)$m2[1];
+        $row = DB::fetchOne('SELECT * FROM ' . $tgr . ' WHERE id = ?', [$gid]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Gruppe nicht gefunden']);
+            return;
+        }
+        if ($method === 'PUT') {
+            $in = readJsonBody();
+            $name = isset($in['name']) ? trim((string)$in['name']) : $row['name'];
+            if ($name === '') { http_response_code(400); echo json_encode(['ok' => false, 'fehler' => 'Name darf nicht leer sein']); return; }
+            $farbe       = array_key_exists('farbe', $in) ? (is_string($in['farbe']) ? substr(trim($in['farbe']), 0, 20) : null) : $row['farbe'];
+            $aktiv       = array_key_exists('aktiv', $in) ? (!empty($in['aktiv']) ? 1 : 0) : (int)$row['aktiv'];
+            $reihenfolge = array_key_exists('reihenfolge', $in) ? (int)$in['reihenfolge'] : (int)$row['reihenfolge'];
+            DB::query('UPDATE ' . $tgr . ' SET name=?, farbe=?, aktiv=?, reihenfolge=? WHERE id=?',
+                [$name, $farbe, $aktiv, $reihenfolge, $gid]);
+            echo json_encode(['ok' => true]);
+            return;
+        }
+        if ($method === 'DELETE') {
+            DB::query('DELETE FROM ' . $tgm . ' WHERE gruppe_id = ?', [$gid]);
+            DB::query('DELETE FROM ' . $tgr . ' WHERE id = ?', [$gid]);
+            echo json_encode(['ok' => true]);
+            return;
+        }
+    }
+
+    // Mitglieder einer Gruppe abrufen
+    if (preg_match('/^(\d+)\/mitglieder$/ ', $sub, $m2) && $method === 'GET') {
+        $gid  = (int)$m2[1];
+        try {
+            $members = DB::fetchAll(
+                'SELECT b.id, b.benutzername, b.email,
+                         (SELECT 1 FROM ' . $tgm . ' m WHERE m.gruppe_id = ? AND m.benutzer_id = b.id LIMIT 1) AS ist_mitglied
+                    FROM ' . $tbu . ' b WHERE b.aktiv = 1 ORDER BY b.benutzername',
+                [$gid]
+            );
+        } catch (Throwable $_) { $members = []; }
+        echo json_encode(['ok' => true, 'mitglieder' => array_map(fn($b) => [
+            'id'          => (int)$b['id'],
+            'name'        => $b['email'] ?? $b['benutzername'],
+            'ist_mitglied'=> (bool)$b['ist_mitglied'],
+        ], $members)]);
+        return;
+    }
+
+    // Mitgliedschaft setzen (PUT /admin/gruppen/:id/mitglieder body: {benutzer_ids: [...]})
+    if (preg_match('/^(\d+)\/mitglieder$/ ', $sub, $m2) && $method === 'PUT') {
+        $gid = (int)$m2[1];
+        $in  = readJsonBody();
+        if (!isset($in['benutzer_ids']) || !is_array($in['benutzer_ids'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'benutzer_ids erforderlich']);
+            return;
+        }
+        $ids = array_map('intval', $in['benutzer_ids']);
+        // Alle bisherigen Mitgliedschaften dieser Gruppe löschen
+        DB::query('DELETE FROM ' . $tgm . ' WHERE gruppe_id = ?', [$gid]);
+        // Neue einfügen
+        foreach ($ids as $bid) {
+            if ($bid > 0) {
+                DB::query('INSERT IGNORE INTO ' . $tgm . ' (gruppe_id, benutzer_id) VALUES (?,?)', [$gid, $bid]);
+            }
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
 }

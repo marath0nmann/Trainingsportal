@@ -14,6 +14,8 @@ const SETTINGS = (() => {
   let paceDistanzen = [];
   let uhrzeiten = {};     // { "1": "18:00", ... } – 1=Mo … 7=So
   let typen = [];         // { slug, bezeichnung, farbe, reihenfolge, aktiv, block_count }
+  let gruppen = [];       // { id, name, farbe, aktiv, reihenfolge, mitglieder_anzahl }
+  let gruppenBenutzer = []; // alle Benutzer für Mitglieder-Dialog
   let typenBearbeitet = null; // slug des gerade inline bearbeiteten Typs
   let standardTreffpunktId = '';
 
@@ -31,9 +33,10 @@ const SETTINGS = (() => {
       '<div class="loading"><div class="spinner"></div>Laden…</div></div>';
 
     try {
-      const [settingsR, typenR] = await Promise.all([
+      const [settingsR, typenR, gruppenR] = await Promise.all([
         apiGet('admin/settings', { silent: true }),
         apiGet('admin/typen',    { silent: true }),
+        apiGet('admin/gruppen',  { silent: true }).catch(() => ({ gruppen: [] })),
         TREFFPUNKTE.laden(),
       ]);
       felder        = settingsR.felder || [];
@@ -42,6 +45,7 @@ const SETTINGS = (() => {
       uhrzeiten     = parseUhrzeitenJson(getWert('training_default_uhrzeiten'));
       standardTreffpunktId = getWert('training_standard_treffpunkt_id') || '';
       typen         = typenR.typen || [];
+      gruppen       = gruppenR.gruppen || [];
       rendereForm(main);
     } catch (e) {
       main.innerHTML = '<div style="margin:0 auto">' +
@@ -201,6 +205,20 @@ const SETTINGS = (() => {
         '</div>' +
       '</div>' +
 
+      // ── Trainingsgruppen ──
+      '<div class="panel">' +
+        '<div class="panel-header">' +
+          '<div class="panel-title">👥 Trainingsgruppen</div>' +
+          '<button class="btn btn-primary btn-sm" onclick="SETTINGS.gruppeHinzufuegen()">+ Gruppe</button>' +
+        '</div>' +
+        '<div class="settings-panel-body">' +
+          '<div style="font-size:12px;color:var(--text2);margin-bottom:12px">' +
+            'Benutzer werden Trainingsgruppen zugeordnet. Im Kalender erscheint für jede Gruppe eine eigene Checkbox, sodass Mitglieder mehrerer Gruppen die Pläne einzeln ein- oder ausblenden können.' +
+          '</div>' +
+          '<div id="gruppen-liste"></div>' +
+        '</div>' +
+      '</div>' +
+
       // ── Trainingstypen ──
       '<div class="panel">' +
         '<div class="panel-header">' +
@@ -268,6 +286,7 @@ const SETTINGS = (() => {
     rendereUhrzeiten();
     renderePaceDistanzen();
     rendereTypen();
+    rendereGruppen();
   }
 
   function rendereUhrzeiten() {
@@ -703,7 +722,115 @@ const SETTINGS = (() => {
     }
   }
 
+  // ── Trainingsgruppen ─────────────────────────────────────
+  function rendereGruppen() {
+    const wrap = document.getElementById('gruppen-liste');
+    if (!wrap) return;
+    if (!gruppen.length) {
+      wrap.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0">Noch keine Gruppen angelegt.</div>';
+      return;
+    }
+    wrap.innerHTML = gruppen.map(g =>
+      '<div class="typ-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">' +
+        (g.farbe ? `<span style="width:12px;height:12px;border-radius:50%;background:${escapeHtml(g.farbe)};flex-shrink:0"></span>` : '<span style="width:12px;height:12px;flex-shrink:0"></span>') +
+        '<span style="flex:1;font-size:13px;font-weight:600">' + escapeHtml(g.name) + '</span>' +
+        '<span style="font-size:12px;color:var(--text2);min-width:80px">' + g.mitglieder_anzahl + ' Mitglieder</span>' +
+        '<button class="btn btn-ghost btn-sm" onclick="SETTINGS.gruppen_mitglieder(' + g.id + ')">Mitglieder</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="SETTINGS.gruppen_bearbeiten(' + g.id + ')">✏</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="SETTINGS.gruppen_loeschen(' + g.id + ')">✕</button>' +
+      '</div>'
+    ).join('');
+  }
+
+  async function gruppeHinzufuegen() {
+    const name = prompt('Name der neuen Trainingsgruppe:');
+    if (!name || !name.trim()) return;
+    try {
+      await apiPost('admin/gruppen', { name: name.trim() });
+      benachrichtigen('Gruppe angelegt.', 'ok');
+      const r = await apiGet('admin/gruppen', { silent: true });
+      gruppen = r.gruppen || [];
+      rendereGruppen();
+    } catch (e) { benachrichtigen('Fehler: ' + (e.message || ''), 'err'); }
+  }
+
+  async function gruppen_bearbeiten(id) {
+    const g = gruppen.find(x => x.id === id);
+    if (!g) return;
+    const name = prompt('Name der Gruppe:', g.name);
+    if (name === null) return;
+    if (!name.trim()) { benachrichtigen('Name darf nicht leer sein.', 'err'); return; }
+    const farbe = prompt('Farbe (Hex, z.B. #e05) oder leer:', g.farbe || '');
+    if (farbe === null) return;
+    try {
+      await apiPut(`admin/gruppen/${id}`, { name: name.trim(), farbe: farbe.trim() || null });
+      benachrichtigen('Gruppe gespeichert.', 'ok');
+      const r = await apiGet('admin/gruppen', { silent: true });
+      gruppen = r.gruppen || [];
+      rendereGruppen();
+      // Kalender-Filter zurücksetzen damit neue Gruppenbezeichnung greift
+      if (typeof state !== 'undefined') state.kalFilter = null;
+    } catch (e) { benachrichtigen('Fehler: ' + (e.message || ''), 'err'); }
+  }
+
+  async function gruppen_loeschen(id) {
+    const g = gruppen.find(x => x.id === id);
+    if (!confirm(`Gruppe „${g ? g.name : id}" wirklich löschen? Alle Mitgliedschaften werden entfernt.`)) return;
+    try {
+      await apiDel(`admin/gruppen/${id}`);
+      benachrichtigen('Gruppe gelöscht.', 'ok');
+      const r = await apiGet('admin/gruppen', { silent: true });
+      gruppen = r.gruppen || [];
+      rendereGruppen();
+      if (typeof state !== 'undefined') state.kalFilter = null;
+    } catch (e) { benachrichtigen('Fehler: ' + (e.message || ''), 'err'); }
+  }
+
+  async function gruppen_mitglieder(id) {
+    const g = gruppen.find(x => x.id === id);
+    const titel = g ? g.name : 'Gruppe';
+    const cont = document.getElementById('modal-container');
+    if (!cont) return;
+    cont.innerHTML = '<div class="modal-overlay"><div class="modal-card" style="max-width:460px">' +
+      '<div class="modal-head"><div><div class="modal-eyebrow">Trainingsgruppe</div>' +
+      '<div class="modal-title">' + escapeHtml(titel) + ' – Mitglieder</div></div>' +
+      '<button class="modal-close" onclick="schliesseModal()">×</button></div>' +
+      '<div class="modal-body"><div id="gruppen-mitgl-liste" style="max-height:340px;overflow-y:auto">' +
+      '<div class="loading"><div class="spinner"></div>Lade…</div></div>' +
+      '<div class="ed-footer"><span></span><div class="ed-footer-right">' +
+      '<button class="btn btn-ghost" onclick="schliesseModal()">Schließen</button>' +
+      '<button class="btn btn-primary" onclick="SETTINGS.gruppen_mitglieder_speichern(' + id + ')">Speichern</button>' +
+      '</div></div></div></div></div>';
+    try {
+      const r = await apiGet(`admin/gruppen/${id}/mitglieder`, { silent: true });
+      gruppenBenutzer = r.mitglieder || [];
+      document.getElementById('gruppen-mitgl-liste').innerHTML = gruppenBenutzer.map(b =>
+        '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">' +
+        '<input type="checkbox" data-bid="' + b.id + '" ' + (b.ist_mitglied ? 'checked' : '') + '>' +
+        escapeHtml(b.name) + '</label>'
+      ).join('');
+    } catch (e) {
+      const el = document.getElementById('gruppen-mitgl-liste');
+      if (el) el.innerHTML = '<div style="color:var(--primary)">Fehler: ' + escapeHtml(e.message || '') + '</div>';
+    }
+  }
+
+  async function gruppen_mitglieder_speichern(id) {
+    const checkboxen = document.querySelectorAll('#gruppen-mitgl-liste input[type=checkbox]');
+    const ids = [...checkboxen].filter(cb => cb.checked).map(cb => parseInt(cb.dataset.bid, 10));
+    try {
+      await apiPut(`admin/gruppen/${id}/mitglieder`, { benutzer_ids: ids });
+      benachrichtigen('Mitglieder gespeichert.', 'ok');
+      schliesseModal();
+      const r = await apiGet('admin/gruppen', { silent: true });
+      gruppen = r.gruppen || [];
+      rendereGruppen();
+      if (typeof state !== 'undefined') state.kalFilter = null;
+    } catch (e) { benachrichtigen('Fehler: ' + (e.message || ''), 'err'); }
+  }
+
   return { render, hinzufuegen, entfernen, beispiel, speichern, diagnose, migrieren,
            paceDistanzHinzufuegen, paceDistanzEntfernen, reparseSegmente,
-           typBearbeiten, typAbbrechen, typSpeichern, typHinzufuegen, typLoeschen };
+           typBearbeiten, typAbbrechen, typSpeichern, typHinzufuegen, typLoeschen,
+           gruppeHinzufuegen, gruppen_bearbeiten, gruppen_loeschen, gruppen_mitglieder, gruppen_mitglieder_speichern };
 })();

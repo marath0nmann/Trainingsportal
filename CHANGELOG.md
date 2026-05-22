@@ -1,5 +1,8 @@
 # Changelog
 
+## v123
+- Trainingsgruppen: neue DB-Tabellen, Admin-CRUD und Mitgliederverwaltung; Kalender-Legende zeigt Checkboxen pro Gruppe statt „Teamplan"; Gruppen-Bezeichnung statt Hardcode; Filter-Zustand wird serverseitig pro Benutzer gespeichert
+
 ## v119
 - „Alle künftigen in meinen Plan" entfernt (war fehlerhaft); ersetzt durch Checkbox „[Typ] abonnieren" im Kalender-Popover – neu erstellte Einheiten dieses Typs werden automatisch in den persönlichen Plan übernommen
 
