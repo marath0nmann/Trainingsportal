@@ -15,7 +15,6 @@ const SETTINGS = (() => {
   let uhrzeiten = {};     // { "1": "18:00", ... } – 1=Mo … 7=So
   let typen = [];         // { slug, bezeichnung, farbe, reihenfolge, aktiv, block_count }
   let typenBearbeitet = null; // slug des gerade inline bearbeiteten Typs
-  let standardTreffpunktId = '';
 
   const WOCHENTAGE_LANG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
@@ -40,7 +39,6 @@ const SETTINGS = (() => {
       feiertage     = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
       paceDistanzen = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
       uhrzeiten     = parseUhrzeitenJson(getWert('training_default_uhrzeiten'));
-      standardTreffpunktId = getWert('training_standard_treffpunkt_id') || '';
       typen         = typenR.typen || [];
       rendereForm(main);
     } catch (e) {
@@ -91,8 +89,6 @@ const SETTINGS = (() => {
   }
 
   function rendereForm(main) {
-    const dauerMin = getWert('training_default_dauer_min') || '90';
-
     main.innerHTML =
       '<div style="margin:0 auto;display:flex;flex-direction:column;gap:20px">' +
 
@@ -128,34 +124,6 @@ const SETTINGS = (() => {
             '</div>' +
           '</div>' +
           '<div id="diag-result" style="margin-top:8px"></div>' +
-        '</div>' +
-      '</div>' +
-
-      // ── Standardwerte ──
-      '<div class="panel">' +
-        '<div class="panel-header"><div class="panel-title">⚙️ Standardwerte</div></div>' +
-        '<div class="settings-panel-body">' +
-          '<div class="settings-row">' +
-            '<div class="settings-row-label">' +
-              '<div style="font-size:13px;font-weight:600;color:var(--text)">Standard-Dauer einer Einheit</div>' +
-              '<div style="font-size:12px;color:var(--text2);margin-top:2px">In Minuten. Wird im ICS-Export für DTEND verwendet, wenn eine Uhrzeit gesetzt ist.</div>' +
-            '</div>' +
-            '<div class="settings-row-input">' +
-              '<input type="number" id="set-dauer" min="15" max="600" step="15" value="' + escapeHtml(dauerMin) + '" class="settings-input" style="width:120px">' +
-            '</div>' +
-          '</div>' +
-          '<div class="settings-row">' +
-            '<div class="settings-row-label">' +
-              '<div style="font-size:13px;font-weight:600;color:var(--text)">Standard-Treffpunkt</div>' +
-              '<div style="font-size:12px;color:var(--text2);margin-top:2px">Wird beim Einplanen eines Trainingsblocks vorausgewählt. Kann im Einzelfall überschrieben werden.</div>' +
-            '</div>' +
-            '<div class="settings-row-input">' +
-              '<select id="set-standard-treffpunkt" class="settings-input">' +
-                '<option value="">— kein Standard —</option>' +
-                TREFFPUNKTE.getListe().map(t => `<option value="${t.id}"${String(t.id) === String(standardTreffpunktId) ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('') +
-              '</select>' +
-            '</div>' +
-          '</div>' +
         '</div>' +
       '</div>' +
 
@@ -387,11 +355,9 @@ const SETTINGS = (() => {
 
     const payload = {
       werte: {
-        training_feiertage_ics_urls:      JSON.stringify(liste),
-        training_default_dauer_min:       document.getElementById('set-dauer').value || '90',
-        training_pace_distanzen:          JSON.stringify(paceDistanzen),
-        training_default_uhrzeiten:       JSON.stringify(uhrzeiten),
-        training_standard_treffpunkt_id:  document.getElementById('set-standard-treffpunkt')?.value || '',
+        training_feiertage_ics_urls:  JSON.stringify(liste),
+        training_pace_distanzen:      JSON.stringify(paceDistanzen),
+        training_default_uhrzeiten:   JSON.stringify(uhrzeiten),
       },
     };
     try {
@@ -554,6 +520,19 @@ const SETTINGS = (() => {
                     min="0" max="9999" step="0.1" placeholder="–" class="settings-input" style="width:80px;text-align:center"
                     title="Standard-Distanz für „In meinen Plan" wenn keine Segmente vorhanden">
                 </div>
+                <div style="min-width:90px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Dauer (min)</div>
+                  <input type="number" id="typ-dauer-${i}" value="${t.default_dauer_min != null ? t.default_dauer_min : ''}"
+                    min="1" max="600" step="5" placeholder="–" class="settings-input" style="width:80px;text-align:center"
+                    title="Standard-Dauer für ICS-Export (DTEND)">
+                </div>
+                <div style="min-width:160px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Standard-Treffpunkt</div>
+                  <select id="typ-treffpunkt-${i}" class="settings-input" style="width:100%">
+                    <option value="">— kein Standard —</option>
+                    ${TREFFPUNKTE.getListe().map(tp => `<option value="${tp.id}"${String(tp.id) === String(t.default_treffpunkt_id ?? '') ? ' selected' : ''}>${escapeHtml(tp.name)}</option>`).join('')}
+                  </select>
+                </div>
                 <div style="min-width:80px">
                   <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Reihenfolge</div>
                   <input type="number" id="typ-reihenfolge-${i}" value="${t.reihenfolge}"
@@ -648,12 +627,16 @@ const SETTINGS = (() => {
     const farbe       = farbeAktiv ? (document.getElementById(`typ-farbe-${idx}`)?.value || null) : null;
     const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
     const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
-    const fkRaw       = (document.getElementById(`typ-fallback-km-${idx}`)?.value || '').trim();
-    const fallback_km       = fkRaw !== '' ? parseFloat(fkRaw) : null;
+    const fkRaw         = (document.getElementById(`typ-fallback-km-${idx}`)?.value || '').trim();
+    const fallback_km   = fkRaw !== '' ? parseFloat(fkRaw) : null;
+    const dauerRaw      = (document.getElementById(`typ-dauer-${idx}`)?.value || '').trim();
+    const default_dauer_min = dauerRaw !== '' ? parseInt(dauerRaw, 10) : null;
+    const tpRaw         = document.getElementById(`typ-treffpunkt-${idx}`)?.value || '';
+    const default_treffpunkt_id = tpRaw !== '' ? parseInt(tpRaw, 10) : null;
     const ist_kein_training = document.getElementById(`typ-kein-training-${idx}`)?.checked ? true : false;
     const hat_strecke       = document.getElementById(`typ-hat-strecke-${idx}`)?.checked ? true : false;
     try {
-      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv, fallback_km, ist_kein_training, hat_strecke });
+      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv, fallback_km, default_dauer_min, default_treffpunkt_id, ist_kein_training, hat_strecke });
       if (!opts || !opts.silent) benachrichtigen('Typ gespeichert.', 'ok');
       typenBearbeitet = null;
       const r = await apiGet('admin/typen', { silent: true });

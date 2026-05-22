@@ -1,5 +1,8 @@
 # Changelog
 
+## v120
+- feat: Standard-Dauer + Standard-Treffpunkt pro Trainingstyp konfigurierbar
+
 ## v119
 - „Alle künftigen in meinen Plan" entfernt (war fehlerhaft); ersetzt durch Checkbox „[Typ] abonnieren" im Kalender-Popover – neu erstellte Einheiten dieses Typs werden automatisch in den persönlichen Plan übernommen
 

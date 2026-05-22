@@ -89,6 +89,9 @@ function _migrationStmts(): array
     $tas  = DB::tbl('training_abo_skips');
     $ro   = DB::tbl('rollen');
     $tser = DB::tbl('training_serien');
+    $tbug = DB::tbl('training_benutzer_gruppen');
+    $tpg  = DB::tbl('training_planung_gruppen');
+    $tbgr = DB::tbl('training_block_gruppen');
 
     return [
         // ── 1: Grundschema + Trainer-Rollen ─────────────────────────────
@@ -304,6 +307,35 @@ function _migrationStmts(): array
             "ALTER TABLE $te ADD COLUMN IF NOT EXISTS serie_id INT UNSIGNED NULL AFTER status",
             "ALTER TABLE $te ADD KEY idx_serie (serie_id)",
         ],
+
+        // ── 10: Trainingsgruppen ─────────────────────────────────────────
+        // Gruppen kommen aus der gemeinsamen `gruppen`-Tabelle des Statistikportals.
+        // training_benutzer_gruppen  → Athlet ist Mitglied einer Gruppe (Profil)
+        // training_planung_gruppen   → Trainer sieht diese Gruppen im Planungskalender
+        // training_block_gruppen     → Block-Vorlage ist einer/mehreren Gruppen zugeordnet
+        // training_einheiten.gruppe_id → geplante Einheit gehört zu einer Gruppe
+        10 => [
+            "CREATE TABLE IF NOT EXISTS $tbug (
+              benutzer_id INT UNSIGNED NOT NULL,
+              gruppe_id   INT          NOT NULL,
+              PRIMARY KEY (benutzer_id, gruppe_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "CREATE TABLE IF NOT EXISTS $tpg (
+              benutzer_id INT UNSIGNED NOT NULL,
+              gruppe_id   INT          NOT NULL,
+              PRIMARY KEY (benutzer_id, gruppe_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "CREATE TABLE IF NOT EXISTS $tbgr (
+              block_id  INT UNSIGNED NOT NULL,
+              gruppe_id INT          NOT NULL,
+              PRIMARY KEY (block_id, gruppe_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "ALTER TABLE $te ADD COLUMN IF NOT EXISTS gruppe_id INT NULL AFTER serie_id",
+            "ALTER TABLE $te ADD KEY idx_gruppe (gruppe_id)",
+            // Alle bestehenden öffentlichen Einheiten der Gruppe „Senioren" zuordnen
+            "UPDATE $te SET gruppe_id = (SELECT id FROM " . DB::tbl('gruppen') . " WHERE name = 'Senioren' LIMIT 1)
+              WHERE gruppe_id IS NULL AND sichtbarkeit IN ('oeffentlich','intern')",
+        ],
     ];
 }
 
@@ -384,6 +416,18 @@ try {
         handleMeinPlan($method, $tail);
         exit;
     }
+    if ($head === 'trainingsgruppen') {
+        handleTrainingsgruppen($method);
+        exit;
+    }
+    if ($head === 'profil') {
+        handleProfil($method, $tail);
+        exit;
+    }
+    if ($head === 'planung') {
+        handlePlanung($method, $tail);
+        exit;
+    }
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden', 'path' => $path]);
@@ -455,15 +499,22 @@ function handleEinheiten(string $method, string $sub): void
             return;
         }
 
-        $where = 'datum BETWEEN ? AND ?';
+        $where = 'e.datum BETWEEN ? AND ?';
         $params = [$von, $bis];
         if (!$user) {
-            $where .= " AND sichtbarkeit = 'oeffentlich'";
+            $where .= " AND e.sichtbarkeit = 'oeffentlich'";
+        }
+        // Optionaler Gruppen-Filter für Planungskalender
+        $gruppeId = isset($_GET['gruppe_id']) && ctype_digit((string)$_GET['gruppe_id'])
+            ? (int)$_GET['gruppe_id'] : null;
+        if ($gruppeId !== null) {
+            $where .= ' AND e.gruppe_id = ?';
+            $params[] = $gruppeId;
         }
 
         $rows = DB::fetchAll(
             'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
-                    e.bemerkung, e.sichtbarkeit, e.status, e.serie_id,
+                    e.bemerkung, e.sichtbarkeit, e.status, e.serie_id, e.gruppe_id,
                     t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
                FROM ' . DB::tbl('training_einheiten') . ' e
                LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
@@ -539,7 +590,7 @@ function handleEinheiten(string $method, string $sub): void
         try {
             DB::query(
                 'UPDATE ' . DB::tbl('training_einheiten') . '
-                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, komoot_url=?, bemerkung=?, sichtbarkeit=?, status=?
+                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, komoot_url=?, bemerkung=?, sichtbarkeit=?, status=?, gruppe_id=?
                   WHERE id=?',
                 [
                     $in['datum'],
@@ -552,6 +603,8 @@ function handleEinheiten(string $method, string $sub): void
                     $in['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? 'oeffentlich',
                     $in['status'] ?? 'geplant',
+                    isset($in['gruppe_id']) && $in['gruppe_id'] !== '' && $in['gruppe_id'] !== null
+                        ? (int)$in['gruppe_id'] : null,
                     $id,
                 ]
             );
@@ -1788,6 +1841,7 @@ function sendeIcs(string $body, string $filename): void {
 }
 
 function buildIcsPublic(): string {
+    $typenDauer = ladeTypenDauerMap();
     $rows = DB::fetchAll(
         'SELECT e.*, t.name AS tp_name FROM ' . DB::tbl('training_einheiten') . ' e
          LEFT JOIN ' . DB::tbl('training_treffpunkte') . " t ON t.id = e.treffpunkt_id
@@ -1798,9 +1852,17 @@ function buildIcsPublic(): string {
     );
     $events = [];
     foreach ($rows as $e) {
+        $e['_dauer_min'] = $typenDauer[$e['typ']] ?? null;
         $events[] = bauVevent($e, []);
     }
     return wickleIcs($events, 'TuS Oedt – Trainingsplan');
+}
+
+function ladeTypenDauerMap(): array {
+    $rows = DB::fetchAll('SELECT slug, default_dauer_min FROM ' . DB::tbl('training_typen') . ' WHERE default_dauer_min IS NOT NULL');
+    $map = [];
+    foreach ($rows as $r) { $map[$r['slug']] = (int)$r['default_dauer_min']; }
+    return $map;
 }
 
 function buildIcsForUser(int $userId): string {
@@ -1831,6 +1893,8 @@ function buildIcsForUser(int $userId): string {
         }
     }
 
+    $typenDauer = ladeTypenDauerMap();
+
     // Nur Einheiten aus „Mein Plan" des Nutzers (privat_einheiten)
     $privatRows = DB::fetchAll(
         'SELECT p.id, p.datum, p.uhrzeit, p.typ, p.titel, p.bemerkung,
@@ -1855,6 +1919,7 @@ function buildIcsForUser(int $userId): string {
                 [(int)$p['ref_einheit_id']]
             );
         }
+        $p['_dauer_min'] = $typenDauer[$p['typ']] ?? null;
         $uid = 'privat-' . (int)$p['id'] . '@training.tus-oedt.de';
         $events[] = bauVevent($p, $segs, $bestzeiten, $uid);
     }
@@ -1878,7 +1943,8 @@ function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid =
         $mi = substr($e['uhrzeit'], 3, 2);
         $startBer = $datum . 'T' . $h . $mi . '00';
         $startTs  = mktime((int)$h, (int)$mi, 0, (int)substr($datum,4,2), (int)substr($datum,6,2), (int)substr($datum,0,4));
-        $endTs    = $startTs + 90 * 60; // 90 Min Default
+        $dauerMin = isset($e['_dauer_min']) && $e['_dauer_min'] > 0 ? (int)$e['_dauer_min'] : 90;
+        $endTs    = $startTs + $dauerMin * 60;
         $endBer   = date('Ymd\\THis', $endTs);
         $lines[] = 'DTSTART;TZID=Europe/Berlin:' . $startBer;
         $lines[] = 'DTEND;TZID=Europe/Berlin:'   . $endBer;
@@ -2026,18 +2092,20 @@ function handleTypen(string $method, string $sub): void
     }
     ensureTypenTabelle();
     $rows = DB::fetchAll(
-        'SELECT slug, bezeichnung, farbe, reihenfolge, fallback_km
+        'SELECT slug, bezeichnung, farbe, reihenfolge, fallback_km, default_dauer_min, default_treffpunkt_id
            FROM ' . DB::tbl('training_typen') . '
           WHERE aktiv = 1
           ORDER BY reihenfolge, slug'
     );
     echo json_encode(['ok' => true, 'typen' => array_map(function($r) {
         return [
-            'slug'        => $r['slug'],
-            'bezeichnung' => $r['bezeichnung'],
-            'farbe'       => $r['farbe'] ?? '',
-            'reihenfolge' => (int)$r['reihenfolge'],
-            'fallback_km' => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+            'slug'                 => $r['slug'],
+            'bezeichnung'          => $r['bezeichnung'],
+            'farbe'                => $r['farbe'] ?? '',
+            'reihenfolge'          => (int)$r['reihenfolge'],
+            'fallback_km'          => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+            'default_dauer_min'    => $r['default_dauer_min'] !== null ? (int)$r['default_dauer_min'] : null,
+            'default_treffpunkt_id'=> $r['default_treffpunkt_id'] !== null ? (int)$r['default_treffpunkt_id'] : null,
         ];
     }, $rows)]);
 }
@@ -2055,7 +2123,8 @@ function handleAdminTypen(string $method, string $sub): void
 
     if ($sub === '' && $method === 'GET') {
         $rows = DB::fetchAll(
-            'SELECT t.slug, t.bezeichnung, t.farbe, t.reihenfolge, t.aktiv, t.fallback_km, t.ist_kein_training, t.hat_strecke,
+            'SELECT t.slug, t.bezeichnung, t.farbe, t.reihenfolge, t.aktiv, t.fallback_km,
+                    t.ist_kein_training, t.hat_strecke, t.default_dauer_min, t.default_treffpunkt_id,
                     COUNT(b.id) AS block_count
                FROM ' . DB::tbl('training_typen') . ' t
                LEFT JOIN ' . DB::tbl('training_bloecke') . ' b ON b.typ = t.slug
@@ -2070,9 +2139,11 @@ function handleAdminTypen(string $method, string $sub): void
                 'reihenfolge' => (int)$r['reihenfolge'],
                 'aktiv'       => (bool)$r['aktiv'],
                 'block_count' => (int)$r['block_count'],
-                'fallback_km'       => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
-                'ist_kein_training' => !empty($r['ist_kein_training']),
-                'hat_strecke'       => !empty($r['hat_strecke']),
+                'fallback_km'           => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+                'ist_kein_training'     => !empty($r['ist_kein_training']),
+                'hat_strecke'           => !empty($r['hat_strecke']),
+                'default_dauer_min'     => $r['default_dauer_min'] !== null ? (int)$r['default_dauer_min'] : null,
+                'default_treffpunkt_id' => $r['default_treffpunkt_id'] !== null ? (int)$r['default_treffpunkt_id'] : null,
             ];
         }, $rows)]);
         return;
@@ -2141,9 +2212,17 @@ function handleAdminTypen(string $method, string $sub): void
         $hatStrecke      = array_key_exists('hat_strecke', $in)
             ? (!empty($in['hat_strecke']) ? 1 : 0)
             : (int)$row['hat_strecke'];
+        $defaultDauerMin = array_key_exists('default_dauer_min', $in)
+            ? ($in['default_dauer_min'] !== null && $in['default_dauer_min'] !== ''
+                ? max(1, min(600, (int)$in['default_dauer_min'])) : null)
+            : ($row['default_dauer_min'] !== null ? (int)$row['default_dauer_min'] : null);
+        $defaultTreffpunktId = array_key_exists('default_treffpunkt_id', $in)
+            ? ($in['default_treffpunkt_id'] !== null && $in['default_treffpunkt_id'] !== ''
+                ? (int)$in['default_treffpunkt_id'] : null)
+            : ($row['default_treffpunkt_id'] !== null ? (int)$row['default_treffpunkt_id'] : null);
         DB::query(
-            'UPDATE ' . DB::tbl('training_typen') . ' SET bezeichnung=?, farbe=?, reihenfolge=?, aktiv=?, fallback_km=?, ist_kein_training=?, hat_strecke=? WHERE slug=?',
-            [substr($bezeichnung, 0, 100), $farbe, $reihenfolge, $aktiv, $fallbackKm, $istKeinTraining, $hatStrecke, $slug]
+            'UPDATE ' . DB::tbl('training_typen') . ' SET bezeichnung=?, farbe=?, reihenfolge=?, aktiv=?, fallback_km=?, ist_kein_training=?, hat_strecke=?, default_dauer_min=?, default_treffpunkt_id=? WHERE slug=?',
+            [substr($bezeichnung, 0, 100), $farbe, $reihenfolge, $aktiv, $fallbackKm, $istKeinTraining, $hatStrecke, $defaultDauerMin, $defaultTreffpunktId, $slug]
         );
         echo json_encode(['ok' => true]);
         return;
@@ -2187,6 +2266,16 @@ function ensureTypenTabelle(): void
           PRIMARY KEY (slug)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Migration: default_dauer_min hinzufügen
+    $colDauer = DB::fetchAll("SHOW COLUMNS FROM " . DB::tbl('training_typen') . " LIKE 'default_dauer_min'");
+    if (empty($colDauer)) {
+        DB::query("ALTER TABLE " . DB::tbl('training_typen') . " ADD COLUMN default_dauer_min SMALLINT UNSIGNED NULL AFTER aktiv");
+    }
+    // Migration: default_treffpunkt_id hinzufügen
+    $colTp = DB::fetchAll("SHOW COLUMNS FROM " . DB::tbl('training_typen') . " LIKE 'default_treffpunkt_id'");
+    if (empty($colTp)) {
+        DB::query("ALTER TABLE " . DB::tbl('training_typen') . " ADD COLUMN default_treffpunkt_id INT UNSIGNED NULL AFTER default_dauer_min");
+    }
     // Standard-Typen einspielen, falls noch leer
     $count = (int)(DB::fetchOne('SELECT COUNT(*) AS n FROM ' . DB::tbl('training_typen'))['n'] ?? 0);
     if ($count === 0) {
@@ -2916,7 +3005,26 @@ function handleBloecke(string $method, string $sub): void
                 [(int)$user['id']]
             );
         }
-        echo json_encode(['ok' => true, 'bloecke' => array_map('mapBlock', $rows)]);
+        // Gruppen-Zuordnungen laden und den Blöcken anhängen
+        $blockIds = array_column($rows, 'id');
+        $gruppenMap = [];
+        if (!empty($blockIds)) {
+            $placeholders = implode(',', array_fill(0, count($blockIds), '?'));
+            $grRows = DB::fetchAll(
+                "SELECT block_id, gruppe_id FROM " . DB::tbl('training_block_gruppen') . "
+                  WHERE block_id IN ($placeholders)",
+                array_map('intval', $blockIds)
+            );
+            foreach ($grRows as $gr) {
+                $gruppenMap[(int)$gr['block_id']][] = (int)$gr['gruppe_id'];
+            }
+        }
+        $mapped = array_map(function ($r) use ($gruppenMap) {
+            $b = mapBlock($r);
+            $b['gruppen_ids'] = $gruppenMap[(int)$r['id']] ?? [];
+            return $b;
+        }, $rows);
+        echo json_encode(['ok' => true, 'bloecke' => $mapped]);
         return;
     }
 
@@ -3070,6 +3178,9 @@ function handleBloecke(string $method, string $sub): void
             );
             $id = (int)DB::lastInsertId();
             replaceBlockSegmente($id, $in['segmente'] ?? []);
+            if (isset($in['gruppen_ids'])) {
+                replaceBlockGruppen($id, (array)$in['gruppen_ids']);
+            }
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
@@ -3124,6 +3235,9 @@ function handleBloecke(string $method, string $sub): void
             );
             if (array_key_exists('segmente', $in)) {
                 replaceBlockSegmente($id, $in['segmente'] ?? []);
+            }
+            if (array_key_exists('gruppen_ids', $in)) {
+                replaceBlockGruppen($id, (array)$in['gruppen_ids']);
             }
             $pdo->commit();
         } catch (Throwable $e) {
@@ -3268,6 +3382,7 @@ function mapEinheit(array $r): array {
         'sichtbarkeit' => $r['sichtbarkeit'] ?? 'oeffentlich',
         'status'       => $r['status'] ?? 'geplant',
         'serie_id'     => isset($r['serie_id']) && $r['serie_id'] !== null ? (int)$r['serie_id'] : null,
+        'gruppe_id'    => isset($r['gruppe_id']) && $r['gruppe_id'] !== null ? (int)$r['gruppe_id'] : null,
     ];
 }
 function mapSegment(array $r): array {
