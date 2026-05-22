@@ -696,8 +696,18 @@ async function ladeHeuteSektionInto(containerId) {
   if (!el) return;
   const today = ymd(new Date());
   try {
-    const d = await apiGet(`einheiten?von=${today}&bis=${today}`, { silent: true });
+    const angemeldet = !!state.user;
+    const d = angemeldet
+      ? await apiGet(`mein-plan/einheiten?von=${today}&bis=${today}`, { silent: true })
+      : await apiGet(`einheiten?von=${today}&bis=${today}`, { silent: true });
     const items = (d.einheiten || []).filter(e => !istKeinTraining(e.typ));
+    // Adoptionsstatus: öffentliche EinheitID → private EinheitID
+    if (angemeldet) {
+      state._heuteAdoptedMap = {};
+      (d.privat || []).forEach(p => {
+        if (p.ref_einheit_id) state._heuteAdoptedMap[p.ref_einheit_id] = p.id;
+      });
+    }
     el.innerHTML = items.length ? renderHeuteSektionHtml(items) : '';
     if (items.length) ladHeuteDetails(items);
   } catch (e) {
@@ -728,6 +738,17 @@ async function ladHeuteDetails(items) {
         html += renderSegmentBlocksHtml(seg, paceData, einheit.typ);
       }
       const actions = [];
+      // ── "Ich bin dabei!"-Button ──
+      if (state.user && einheit.status !== 'abgesagt') {
+        const privatId = state._heuteAdoptedMap && state._heuteAdoptedMap[einheit.id];
+        if (privatId) {
+          actions.push(`<button class="btn btn-sm heute-dabei-btn is-dabei" onclick="toggleHeuteDabei(${einheit.id}, ${privatId}, null, null)">☑ Ich bin dabei!</button>`);
+        } else {
+          const eJson = escapeHtml(JSON.stringify({ id: einheit.id, datum: einheit.datum, uhrzeit: einheit.uhrzeit || null, typ: einheit.typ, titel: einheit.titel }));
+          const sJson = escapeHtml(JSON.stringify(seg.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m, pause_m: s.pause_m }))));
+          actions.push(`<button class="btn btn-ghost btn-sm heute-dabei-btn" onclick="toggleHeuteDabei(${einheit.id}, null, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))" data-e="${eJson}" data-s="${sJson}">☐ Ich bin dabei?</button>`);
+        }
+      }
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
       }
@@ -754,6 +775,64 @@ async function ladHeuteDetails(items) {
       }
     } catch (_) {
       // Segmente bleiben leer bei Fehler
+    }
+  }
+}
+
+async function toggleHeuteDabei(einheitId, privatId, einheitData, segmente) {
+  if (privatId) {
+    // Aus persönlichem Plan entfernen (ohne confirm)
+    try {
+      await apiDel(`mein-plan/einheiten/${privatId}`);
+      if (state._heuteAdoptedMap) delete state._heuteAdoptedMap[einheitId];
+      // Button direkt umschalten ohne Seiten-Reload
+      const btn = document.querySelector(`.heute-dabei-btn[onclick*="${einheitId}"]`);
+      if (btn) {
+        // Segment-Daten aus state holen falls vorhanden
+        const cached = state._heuteEinheiten && state._heuteEinheiten[einheitId];
+        const seg = cached ? cached.segmente || [] : [];
+        const e   = cached ? cached.einheit   : { id: einheitId };
+        const eJson = escapeHtml(JSON.stringify({ id: e.id, datum: e.datum, uhrzeit: e.uhrzeit || null, typ: e.typ, titel: e.titel }));
+        const sJson = escapeHtml(JSON.stringify(seg.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m, pause_m: s.pause_m }))));
+        btn.className = 'btn btn-ghost btn-sm heute-dabei-btn';
+        btn.textContent = '☐ Ich bin dabei?';
+        btn.setAttribute('onclick', `toggleHeuteDabei(${einheitId}, null, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))`);
+        btn.dataset.e = eJson;
+        btn.dataset.s = sJson;
+      }
+      renderPage(); // Kalender aktualisieren
+    } catch (err) {
+      benachrichtigen('Fehler: ' + (err.message || ''), 'err');
+    }
+  } else {
+    // In persönlichen Plan übernehmen
+    try {
+      const km = typeof MEINPLAN !== 'undefined'
+        ? MEINPLAN.berechneKm(einheitData, segmente || [])
+        : null;
+      const resp = await apiPost('mein-plan/einheiten', {
+        datum:          einheitData.datum,
+        uhrzeit:        einheitData.uhrzeit || null,
+        typ:            einheitData.typ,
+        titel:          einheitData.titel,
+        distanz_km:     km,
+        ref_einheit_id: einheitData.id,
+      });
+      const neuId = resp && resp.id ? resp.id : null;
+      if (state._heuteAdoptedMap && neuId) state._heuteAdoptedMap[einheitId] = neuId;
+      // Button direkt umschalten
+      const btn = document.querySelector(`.heute-dabei-btn[onclick*="${einheitId}"]`) ||
+                  document.querySelector(`.heute-dabei-btn[data-e*='"id":${einheitId}']`);
+      if (btn && neuId) {
+        btn.className = 'btn btn-sm heute-dabei-btn is-dabei';
+        btn.textContent = '☑ Ich bin dabei!';
+        btn.setAttribute('onclick', `toggleHeuteDabei(${einheitId}, ${neuId}, null, null)`);
+        btn.removeAttribute('data-e');
+        btn.removeAttribute('data-s');
+      }
+      renderPage(); // Kalender aktualisieren
+    } catch (err) {
+      benachrichtigen('Fehler: ' + (err.message || ''), 'err');
     }
   }
 }

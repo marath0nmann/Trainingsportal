@@ -240,7 +240,16 @@
 .heute-seg-list { margin-top: 10px; }
 .heute-card-actions {
   display: flex; gap: 8px; margin-top: 12px; padding-top: 10px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border); flex-wrap: wrap; align-items: center;
+}
+.heute-dabei-btn {
+  display: flex; align-items: center; gap: 5px;
+  font-weight: 700; letter-spacing: .2px; transition: opacity .15s;
+}
+.heute-dabei-btn.is-dabei {
+  background: color-mix(in srgb, var(--green, #1a8a3a) 15%, var(--surface));
+  color: var(--green, #1a8a3a);
+  border: 1px solid color-mix(in srgb, var(--green, #1a8a3a) 40%, transparent);
 }
 
 /* Segment-Blöcke (TrainingPeaks-Stil) */
@@ -1353,9 +1362,10 @@ body.planung-active #app-footer    { display: none; }
 }
 .kal-legend-dot-pub  { background: var(--accent, #3a6bc9); }
 .kal-legend-dot-priv {
-  background: transparent;
-  border: 2px dashed var(--accent, #3a6bc9);
-  width: 8px; height: 8px;
+  background: color-mix(in srgb, var(--accent, #3a6bc9) 18%, var(--surface));
+  border-left: 3px solid var(--accent, #3a6bc9);
+  border-radius: 2px;
+  width: 14px; height: 10px;
 }
 
 /* Rückwärtskompatibilität (alte Klassen werden nicht mehr gerendert, aber defensive Keep) */
