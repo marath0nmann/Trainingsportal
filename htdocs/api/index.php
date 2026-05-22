@@ -1805,9 +1805,9 @@ function buildIcsPublic(): string {
 
 function buildIcsForUser(int $userId): string {
     $user = DB::fetchOne('SELECT id, athlet_id FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
-    if (!$user) return wickleIcs([], 'TuS Oedt – Trainingsplan');
+    if (!$user) return wickleIcs([], 'TuS Oedt – Mein Trainingsplan');
 
-    // Persönliche Bestzeiten je Referenzdistanz (modus=pb)
+    // Persönliche Bestzeiten je Referenzdistanz (für Pace-Berechnung)
     $paceRefs = ['5km' => 5000.0, '10km' => 10000.0, 'HM' => 21097.5, 'M' => 42195.0];
     $bestzeiten = [];
     if (!empty($user['athlet_id'])) {
@@ -1831,27 +1831,38 @@ function buildIcsForUser(int $userId): string {
         }
     }
 
-    $rows = DB::fetchAll(
-        'SELECT e.*, t.name AS tp_name FROM ' . DB::tbl('training_einheiten') . ' e
-         LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
-          WHERE e.datum >= (CURDATE() - INTERVAL 60 DAY)
-            AND e.datum <= (CURDATE() + INTERVAL 365 DAY)
-       ORDER BY e.datum, e.uhrzeit'
+    // Nur Einheiten aus „Mein Plan" des Nutzers (privat_einheiten)
+    $privatRows = DB::fetchAll(
+        'SELECT p.id, p.datum, p.uhrzeit, p.typ, p.titel, p.bemerkung,
+                p.ref_einheit_id, p.erstellt_am, p.geaendert_am,
+                e.status, t.name AS tp_name
+           FROM ' . DB::tbl('training_privat_einheiten') . ' p
+           LEFT JOIN ' . DB::tbl('training_einheiten') . ' e ON e.id = p.ref_einheit_id
+           LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
+          WHERE p.benutzer_id = ?
+            AND p.datum >= (CURDATE() - INTERVAL 60 DAY)
+            AND p.datum <= (CURDATE() + INTERVAL 365 DAY)
+       ORDER BY p.datum, p.uhrzeit',
+        [$userId]
     );
 
     $events = [];
-    foreach ($rows as $e) {
-        $segs = DB::fetchAll(
-            'SELECT * FROM ' . DB::tbl('training_segmente') . ' WHERE einheit_id = ? ORDER BY reihenfolge, id',
-            [(int)$e['id']]
-        );
-        $events[] = bauVevent($e, $segs, $bestzeiten);
+    foreach ($privatRows as $p) {
+        $segs = [];
+        if (!empty($p['ref_einheit_id'])) {
+            $segs = DB::fetchAll(
+                'SELECT * FROM ' . DB::tbl('training_segmente') . ' WHERE einheit_id = ? ORDER BY reihenfolge, id',
+                [(int)$p['ref_einheit_id']]
+            );
+        }
+        $uid = 'privat-' . (int)$p['id'] . '@training.tus-oedt.de';
+        $events[] = bauVevent($p, $segs, $bestzeiten, $uid);
     }
     return wickleIcs($events, 'TuS Oedt – Mein Trainingsplan');
 }
 
-function bauVevent(array $e, array $segs, array $bestzeiten = []): string {
-    $uid = 'einheit-' . (int)$e['id'] . '@training.tus-oedt.de';
+function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid = null): string {
+    $uid = $uid ?? ('einheit-' . (int)$e['id'] . '@training.tus-oedt.de');
     $stamp = gmdate('Ymd\\THis\\Z');
     $datum = preg_replace('/-/', '', $e['datum']);
     $hatZeit = !empty($e['uhrzeit']);

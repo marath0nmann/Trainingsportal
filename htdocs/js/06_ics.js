@@ -45,7 +45,7 @@ const ICS = (() => {
               ${ics_url_block(publicUrl())}
             </div>
             <div class="ics-section" id="ics-me-block">
-              <h4>Persönlicher Plan</h4>
+              <h4>Mein Plan</h4>
               ${state.user
                 ? '<div class="loading">Lade…</div>'
                 : '<p class="ics-hint">Nur eingeloggt verfügbar. <a href="#" onclick="goToLoginPortal();return false;">Anmelden</a></p>'}
@@ -60,13 +60,13 @@ const ICS = (() => {
         const block = document.getElementById('ics-me-block');
         if (!r.token) {
           block.innerHTML = `
-            <h4>Persönlicher Plan</h4>
-            <p class="ics-hint">Mit individueller Pace pro Segment, basierend auf deinen Bestzeiten.</p>
+            <h4>Mein Plan</h4>
+            <p class="ics-hint">Nur deine Einheiten aus „Mein Plan" – mit individueller Pace basierend auf deinen Bestzeiten.</p>
             <button class="btn btn-primary" onclick="ICS.tokenErzeugen()">Persönlichen Link erzeugen</button>`;
         } else {
           block.innerHTML = `
-            <h4>Persönlicher Plan</h4>
-            <p class="ics-hint">Pace pro Segment basierend auf deinen Bestzeiten.</p>
+            <h4>Mein Plan</h4>
+            <p class="ics-hint">Nur deine Einheiten aus „Mein Plan" – mit Pace pro Segment basierend auf deinen Bestzeiten.</p>
             ${ics_url_block(meUrl(r.token))}
             <div class="ics-actions">
               <button class="btn btn-ghost" onclick="ICS.tokenErzeugen()">Token rotieren</button>
