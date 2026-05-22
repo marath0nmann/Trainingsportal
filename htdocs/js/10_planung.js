@@ -395,13 +395,18 @@ const PLANUNG = (() => {
 
     let einheiten = [], feiertage = [];
     try {
-      const gruppeParam = aktivGruppe ? `&gruppe_id=${aktivGruppe.id}` : '';
-      const [d1, d2] = await Promise.all([
-        apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}${gruppeParam}`, { silent: true }),
-        apiGet(`feiertage?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }).catch(() => ({ feiertage: [] })),
-      ]);
-      einheiten = d1.einheiten || [];
-      feiertage = d2.feiertage || [];
+      // Kein Gruppenfilter → keine Einheiten laden (sicherstellen dass alle Einheiten zugeordnet sind)
+      const feiertagePromise = apiGet(`feiertage?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }).catch(() => ({ feiertage: [] }));
+      if (aktivGruppe) {
+        const [d1, d2] = await Promise.all([
+          apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}&gruppe_id=${aktivGruppe.id}`, { silent: true }),
+          feiertagePromise,
+        ]);
+        einheiten = d1.einheiten || [];
+        feiertage = d2.feiertage || [];
+      } else {
+        feiertage = (await feiertagePromise).feiertage || [];
+      }
     } catch (e) {
       // Nicht still verschlucken: leerer Kalender bei API-Fehler ist sonst nicht diagnostizierbar
       console.warn('Planung: Einheiten/Feiertage konnten nicht geladen werden –', e && e.message);
