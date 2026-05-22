@@ -14,6 +14,10 @@ const state = {
   meineGruppen: [],     // [{id, name, farbe}]
 };
 
+// ── Drag & Drop (private Einheiten verschieben) ────────────
+let _dragPrivatId  = null;  // ID der gerade gezogenen Einheit
+let _dragPrivat    = [];    // Referenz auf aktuelle privat[]-Liste (aus renderKalender)
+
 window.addEventListener('DOMContentLoaded', init);
 window.addEventListener('hashchange', renderPage);
 
@@ -379,9 +383,10 @@ async function renderKalender(main, monthArg) {
       apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
       needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
     ]);
-    oeffentlich = d1.einheiten || [];
-    privat      = angemeldet ? (d1.privat || []) : [];
-    feiertage   = d2.feiertage || [];
+    oeffentlich  = d1.einheiten || [];
+    privat       = angemeldet ? (d1.privat || []) : [];
+    _dragPrivat  = privat;   // Referenz für Drag&Drop-Handler
+    feiertage    = d2.feiertage || [];
     if (angemeldet) {
       MEINPLAN.setAbo(d1.abo_typen || []);
       state.meineGruppen = d1.meine_gruppen || [];
@@ -504,7 +509,10 @@ async function renderKalender(main, monthArg) {
           const adoptedAttr = e.ref_einheit_id
             ? `data-einheit-id="${e.ref_einheit_id}" data-is-adopted="1"`
             : '';
-          return `<div class="${cls}" data-privat-id="${e.id}" ${adoptedAttr}
+          const dragAttr = !e.ref_einheit_id
+            ? `draggable="true" ondragstart="_kalDragStart(${e.id},event)" ondragend="_kalDragEnd(event)"`
+            : '';
+          return `<div class="${cls}" data-privat-id="${e.id}" ${adoptedAttr} ${dragAttr}
                        onclick="${clickFn}"
                        title="${escapeHtml(e.titel)}">
             ${timeHtml}<span class="kal-item-title">${escapeHtml(e.titel)}</span>
@@ -521,7 +529,8 @@ async function renderKalender(main, monthArg) {
         ? `<button class="kal-add-btn" onclick="MEINPLAN.neuePrivatEinheit('${k}')" title="Private Einheit hinzufügen">+</button>`
         : '';
 
-      return `<div class="${dayCls}" data-datum="${k}">
+      return `<div class="${dayCls}" data-datum="${k}"
+               ondragover="_kalDragOver(event)" ondragleave="_kalDragLeave(event)" ondrop="_kalDrop(event)">
         <div class="kal-cell-head">
           <span class="kal-day-num">${d.getDate()}</span>
           ${addBtn}
@@ -1345,6 +1354,81 @@ async function zeigeEinheit(id) {
 function schliesseModal(ev) {
   if (ev && ev.target && !ev.target.classList.contains('modal-overlay')) return;
   document.getElementById('modal-container').innerHTML = '';
+}
+
+// ── Drag & Drop Handler (private Einheiten im Kalender verschieben) ────────────
+
+function _kalDragStart(id, evt) {
+  _dragPrivatId = id;
+  evt.dataTransfer.effectAllowed = 'move';
+  evt.dataTransfer.setData('text/plain', String(id));
+  // Dragging-Klasse per rAF setzen, damit das Ghost-Bild die originale Optik zeigt
+  const el = evt.currentTarget;
+  requestAnimationFrame(() => { if (el) el.classList.add('kal-item-dragging'); });
+}
+
+function _kalDragEnd(evt) {
+  evt.currentTarget.classList.remove('kal-item-dragging');
+  document.querySelectorAll('.kal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+  // _dragPrivatId wird beim Drop gecleart; hier nur Fallback (z.B. Abbruch)
+  _dragPrivatId = null;
+}
+
+function _kalDragOver(evt) {
+  if (!_dragPrivatId) return;
+  evt.preventDefault();
+  evt.dataTransfer.dropEffect = 'move';
+  const cell = evt.currentTarget;
+  if (!cell.classList.contains('drag-over')) {
+    document.querySelectorAll('.kal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+    cell.classList.add('drag-over');
+  }
+}
+
+function _kalDragLeave(evt) {
+  // Nur entfernen wenn wir die Zelle wirklich verlassen (nicht in ein Kind-Element)
+  if (!evt.currentTarget.contains(evt.relatedTarget)) {
+    evt.currentTarget.classList.remove('drag-over');
+  }
+}
+
+async function _kalDrop(evt) {
+  evt.preventDefault();
+  const cell = evt.currentTarget;
+  cell.classList.remove('drag-over');
+  document.querySelectorAll('.kal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+
+  const datum = cell.dataset.datum;
+  const id    = _dragPrivatId;
+  _dragPrivatId = null;
+  if (!id || !datum) return;
+
+  const e = _dragPrivat.find(x => x.id === id);
+  if (!e || e.datum === datum) return;
+
+  // DOM-optimistisch: Element sofort in die Zielzelle verschieben
+  const dragEl     = document.querySelector(`.kal-item[data-privat-id="${id}"]`);
+  const targetList = cell.querySelector('.kal-cell-items');
+  if (dragEl && targetList) {
+    dragEl.classList.remove('kal-item-dragging');
+    targetList.appendChild(dragEl);
+  }
+
+  try {
+    await apiPut(`mein-plan/einheiten/${id}`, {
+      datum,
+      uhrzeit:        e.uhrzeit     || null,
+      typ:            e.typ,
+      titel:          e.titel,
+      distanz_km:     e.distanz_km  != null ? e.distanz_km : null,
+      bemerkung:      e.bemerkung   || null,
+      ref_einheit_id: e.ref_einheit_id || null,
+    });
+    renderPage(); // Vollständiges Re-Render (KW-Summen, Filter etc.)
+  } catch (err) {
+    benachrichtigen('Verschieben fehlgeschlagen.', 'err');
+    renderPage(); // Originalzustand wiederherstellen
+  }
 }
 
 // Globale Toast-Benachrichtigung (in 02_app.js verfügbar; Module nutzen eigene IIFE-Variante)

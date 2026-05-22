@@ -1,5 +1,8 @@
 # Changelog
 
+## v136
+- Kalender: Private Einheiten lassen sich per Drag & Drop auf einen anderen Tag verschieben (übernommene Team-Einheiten bleiben fest); Drop-Zelle wird farblich hervorgehoben
+
 ## v135
 - Planung: Kein Gruppenfilter aktiv → Kalender zeigt keine Einheiten (erleichtert Prüfung ob alle Einheiten korrekt zugeordnet sind)
 - Planung: Bearbeitungs-Modal zeigt Gruppen-Dropdown – bestehende Einheiten können einer Trainingsgruppe zugeordnet werden
