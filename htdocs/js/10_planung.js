@@ -652,10 +652,12 @@ const PLANUNG = (() => {
   async function einheitBearbeiten(einheitId) {
     KAL_POPOVER.hide();
     let einheitData, tpListe;
+    let gruppenListe = [];
     try {
-      [einheitData, tpListe] = await Promise.all([
+      [einheitData, tpListe, gruppenListe] = await Promise.all([
         apiGet(`einheiten/${einheitId}`, { silent: true }),
         TREFFPUNKTE.laden(),
+        GRUPPEN.laden(),
       ]);
     } catch (e) { notify('Fehler: ' + (e.message || ''), 'err'); return; }
 
@@ -663,6 +665,10 @@ const PLANUNG = (() => {
     const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
       tpListe.map(t =>
         `<option value="${t.id}"${e.treffpunkt && e.treffpunkt.id === t.id ? ' selected' : ''}>${escapeHtml(t.name)}</option>`
+      ).join('');
+    const grOptionen = `<option value="">— keine Gruppe —</option>` +
+      gruppenListe.map(g =>
+        `<option value="${g.id}"${e.gruppe_id === g.id ? ' selected' : ''}>${escapeHtml(g.name)}</option>`
       ).join('');
 
     const cont = document.getElementById('modal-container');
@@ -697,6 +703,10 @@ const PLANUNG = (() => {
                   <option value="intern"${e.sichtbarkeit === 'intern' ? ' selected' : ''}>Intern</option>
                 </select>
               </div>
+              ${gruppenListe.length ? `<div class="ed-fg">
+                <label>Trainingsgruppe</label>
+                <select id="edit-e-gruppe-id">${grOptionen}</select>
+              </div>` : ''}
             </div>
             <div class="ed-footer">
               <button class="btn btn-danger" onclick="PLANUNG.einheitLoeschenAusEditor(${einheitId})">Löschen</button>
@@ -714,6 +724,7 @@ const PLANUNG = (() => {
     const datum = document.getElementById('edit-e-datum')?.value || '';
     if (!datum) { notify('Datum fehlt.', 'err'); return; }
     const tpIdStr      = document.getElementById('edit-e-treffpunkt-id')?.value || '';
+    const grIdStr      = document.getElementById('edit-e-gruppe-id')?.value ?? '';
     const uhrzeit      = document.getElementById('edit-e-uhrzeit')?.value || null;
     const sichtbarkeit = document.getElementById('edit-e-sichtbarkeit')?.value || 'oeffentlich';
     try {
@@ -734,6 +745,7 @@ const PLANUNG = (() => {
         bemerkung:     e.bemerkung || null,
         sichtbarkeit,
         status:        e.status    || 'geplant',
+        gruppe_id:     grIdStr !== '' ? parseInt(grIdStr, 10) : null,
       };
 
       if (scope === 'alle') {

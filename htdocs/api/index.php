@@ -2597,6 +2597,7 @@ function handleSerien(string $method, string $sub): void
         if (array_key_exists('bemerkung', $in))     { $sets[] = 'bemerkung=?';     $vals[] = ($in['bemerkung'] !== '' ? $in['bemerkung'] : null); }
         if (array_key_exists('sichtbarkeit', $in))  { $sets[] = 'sichtbarkeit=?';  $vals[] = (in_array($in['sichtbarkeit'] ?? '', ['oeffentlich', 'intern'], true) ? $in['sichtbarkeit'] : 'oeffentlich'); }
         if (array_key_exists('status', $in))        { $sets[] = 'status=?';        $vals[] = $in['status'] ?: 'geplant'; }
+        if (array_key_exists('gruppe_id', $in))     { $sets[] = 'gruppe_id=?';     $vals[] = ($in['gruppe_id'] !== '' && $in['gruppe_id'] !== null ? (int)$in['gruppe_id'] : null); }
         $hatSeg = array_key_exists('segmente', $in);
 
         $params = [$serieId];
