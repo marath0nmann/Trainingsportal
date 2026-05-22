@@ -3988,13 +3988,15 @@ function handlePlanung(string $method, string $tail): void
     if ($tail === 'gruppen-prefs') {
         if ($method === 'GET') {
             try {
-                $row   = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
-                $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+                $row          = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+                $prefs        = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
                 if (!is_array($prefs)) $prefs = [];
-                $ids   = isset($prefs['planung_gruppen']) && is_array($prefs['planung_gruppen'])
-                       ? $prefs['planung_gruppen'] : [];
-            } catch (Throwable $e) { $ids = []; }
-            echo json_encode(['ok' => true, 'gruppen_ids' => $ids]);
+                // konfiguriert=false → Schlüssel noch nie gesetzt (Erstbesuch)
+                // konfiguriert=true  → Schlüssel existiert, auch wenn leer (bewusst abgewählt)
+                $konfiguriert = array_key_exists('planung_gruppen', $prefs);
+                $ids          = $konfiguriert ? (array)$prefs['planung_gruppen'] : [];
+            } catch (Throwable $e) { $ids = []; $konfiguriert = false; }
+            echo json_encode(['ok' => true, 'gruppen_ids' => $ids, 'konfiguriert' => $konfiguriert]);
             return;
         }
         if ($method === 'PUT') {

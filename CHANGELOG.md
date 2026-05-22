@@ -2,6 +2,9 @@
 
 ## v132
 - Fix: Gruppen-Legende-Dots (z.B. „Senioren") entsprechen jetzt der tatsächlichen Eintrags-Darstellung (surf2-Hintergrund + linker Farbstreifen in Gruppenfarbe statt gefülltem Kreis)
+- Planung: Gruppen-Konfiguration speichert jetzt korrekt – Abwählen aller Gruppen wird persistiert (kein Re-Select mehr beim Reload)
+- Planung: API `planung/gruppen-prefs` liefert `konfiguriert: bool` – unterscheidet „noch nie eingestellt" (Auto-Select) von „bewusst leer" (kein Filter)
+- Planung: Hinweistext bei leerem Gruppenfilter geändert: „Kein Gruppenfilter aktiv"
 
 ## v131
 - Profil: Trainingsgruppen direkt im Statistikportal änderbar – Auswahl im Profil-Modal schreibt jetzt direkt in `athlet_gruppen` (Statistikportal-Tabelle); für Nutzer ohne Athletenverknüpfung weiterhin `training_benutzer_gruppen`

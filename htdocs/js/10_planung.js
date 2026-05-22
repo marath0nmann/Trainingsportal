@@ -152,10 +152,11 @@ const KAL_POPOVER = (() => {
 // Trainingsportal – Planung (Split-View: Kalender links + Blöcke rechts)
 // ============================================================
 const PLANUNG = (() => {
-  let kalMonth     = null;
-  let aktivGruppe  = null;   // { id, name } oder null (= ungefiltert)
-  let _gruppen     = [];     // konfigurierte Gruppen des Trainers (sichtbar in Tabs)
-  let _alleGruppen = [];     // alle verfügbaren Gruppen (für Konfiguration)
+  let kalMonth        = null;
+  let aktivGruppe     = null;   // { id, name } oder null (= ungefiltert)
+  let _gruppen        = [];     // konfigurierte Gruppen des Trainers (sichtbar in Tabs)
+  let _alleGruppen    = [];     // alle verfügbaren Gruppen (für Konfiguration)
+  let _gruppenGeladen = false;  // true nach erstem Laden – verhindert erneutes Laden nach leerem Speichern
 
   // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
   function _applyPlanungLayout() {
@@ -211,18 +212,20 @@ const PLANUNG = (() => {
 
     const istTrainer = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
 
-    // Gruppen-Konfiguration laden (nur für eingeloggte Trainer)
-    if (istTrainer && !_gruppen.length) {
+    // Gruppen-Konfiguration laden (nur beim ersten Aufruf, nicht nach leerem Speichern)
+    if (istTrainer && !_gruppenGeladen) {
       try {
+        let konfiguriert = false;
         [_alleGruppen, _gruppen] = await Promise.all([
           GRUPPEN.laden(),
           apiGet('planung/gruppen-prefs', { silent: true }).then(d => {
-            const ids = d.gruppen_ids || [];
+            konfiguriert = d.konfiguriert || false;
+            const ids    = d.gruppen_ids || [];
             return GRUPPEN.laden().then(alle => alle.filter(g => ids.includes(g.id)));
           }),
         ]);
-        // Erster Start: falls keine Prefs gesetzt und nur eine Gruppe → diese vorauswählen
-        if (!_gruppen.length && _alleGruppen.length === 1) {
+        // Erster Start (noch nie konfiguriert): falls nur eine Gruppe → vorauswählen
+        if (!konfiguriert && !_gruppen.length && _alleGruppen.length === 1) {
           _gruppen = [_alleGruppen[0]];
         }
         // Aktive Gruppe aus den konfigurierten wählen
@@ -230,6 +233,7 @@ const PLANUNG = (() => {
           aktivGruppe = _gruppen[0];
         }
       } catch (_) {}
+      _gruppenGeladen = true;
     }
 
     main.innerHTML = `
@@ -273,7 +277,7 @@ const PLANUNG = (() => {
   function _renderGruppenTabs() {
     if (!_gruppen.length) {
       return `<div class="planung-gruppen-bar">
-        <span class="planung-gruppen-hint">Keine Trainingsgruppen konfiguriert –</span>
+        <span class="planung-gruppen-hint">Kein Gruppenfilter aktiv –</span>
         <button class="btn btn-ghost btn-sm" onclick="PLANUNG.gruppenKonfigurieren()">Gruppen auswählen</button>
       </div>`;
     }
@@ -351,6 +355,9 @@ const PLANUNG = (() => {
       if (!_gruppen.some(g => aktivGruppe && g.id === aktivGruppe.id)) {
         aktivGruppe = _gruppen[0] || null;
       }
+      // Flag setzen BEVOR render() – sonst würde render() die Prefs neu laden
+      // und die Auto-Select-Logik könnte leere Auswahl überschreiben
+      _gruppenGeladen = true;
       schliesseModal();
       // Komplette Planungsansicht neu rendern (inkl. Tabs)
       const main = document.getElementById('main-content');
