@@ -1,6 +1,6 @@
 # Changelog
 
-## v134
+## v135
 - Planung: Kein Gruppenfilter aktiv → Kalender zeigt keine Einheiten (erleichtert Prüfung ob alle Einheiten korrekt zugeordnet sind)
 - Planung: Bearbeitungs-Modal zeigt Gruppen-Dropdown – bestehende Einheiten können einer Trainingsgruppe zugeordnet werden
 - Planung: `PUT serien/{id}` und `PUT serien/{id}/ab/{datum}` übernehmen jetzt auch `gruppe_id`-Änderungen

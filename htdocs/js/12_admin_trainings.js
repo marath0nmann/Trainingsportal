@@ -5,21 +5,24 @@
 const ADMIN_TRAININGS = (() => {
   let einheiten   = [];
   let treffpunkte = [];
+  let gruppen     = [];
   let sortKey     = 'datum';
   let sortDir     = 1;      //  1 = ASC (aufsteigend = älteste zuerst)
   let selected    = new Set();
   let container   = null;
   let filterTyp   = '';
+  let filterGruppe = '';
 
   const WOCHENTAG = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 
   const COLS = [
-    { key: 'datum',      label: 'Datum'      },
-    { key: 'uhrzeit',    label: 'Zeit'       },
-    { key: 'typ',        label: 'Typ'        },
-    { key: 'titel',      label: 'Titel'      },
-    { key: 'treffpunkt', label: 'Treffpunkt' },
-    { key: 'status',     label: 'Status'     },
+    { key: 'datum',      label: 'Datum'            },
+    { key: 'uhrzeit',    label: 'Zeit'             },
+    { key: 'typ',        label: 'Typ'              },
+    { key: 'gruppe',     label: 'Trainingsgruppe'  },
+    { key: 'titel',      label: 'Titel'            },
+    { key: 'treffpunkt', label: 'Treffpunkt'       },
+    { key: 'status',     label: 'Status'           },
   ];
 
   async function render(el) {
@@ -30,8 +33,10 @@ const ADMIN_TRAININGS = (() => {
       const resp = await apiGet('admin/einheiten?limit=2000', { silent: true });
       einheiten   = resp.einheiten || [];
       treffpunkte = await TREFFPUNKTE.laden().catch(() => []);
+      gruppen     = await GRUPPEN.laden().catch(() => []);
       selected.clear();
-      filterTyp = '';
+      filterTyp    = '';
+      filterGruppe = '';
       rendereTabelle();
     } catch (e) {
       if (container) {
@@ -56,8 +61,19 @@ const ADMIN_TRAININGS = (() => {
     rendereTabelle();
   }
 
+  function setFilterGruppe(val) {
+    filterGruppe = val;
+    selected.clear();
+    rendereTabelle();
+  }
+
   function getSortiert() {
-    const basis = filterTyp ? einheiten.filter(e => e.typ === filterTyp) : einheiten;
+    let basis = filterTyp ? einheiten.filter(e => e.typ === filterTyp) : einheiten;
+    if (filterGruppe === '__keine__') {
+      basis = basis.filter(e => !e.gruppe_id);
+    } else if (filterGruppe) {
+      basis = basis.filter(e => String(e.gruppe_id) === filterGruppe);
+    }
     return basis.slice().sort((a, b) => {
       let av = a[sortKey] ?? '';
       let bv = b[sortKey] ?? '';
@@ -110,6 +126,7 @@ const ADMIN_TRAININGS = (() => {
             style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;white-space:nowrap"
           >${escapeHtml(typLbl)}</span>
         </td>
+        <td style="${tdClip}" title="${escapeHtml(e.gruppe || '')}">${escapeHtml(e.gruppe || '–')}</td>
         <td style="${tdClip}" title="${escapeHtml(e.titel)}">${escapeHtml(e.titel)}</td>
         <td style="${tdClip}" title="${escapeHtml(e.treffpunkt || '')}">${escapeHtml(e.treffpunkt || '–')}</td>
         <td style="${tdStyle};white-space:nowrap;${statusSty}">${abgesagt ? 'Abgesagt' : 'Geplant'}</td>
@@ -121,7 +138,14 @@ const ADMIN_TRAININGS = (() => {
     const typFilterOptionen = vorhandeneTypen.map(t =>
       `<option value="${t}"${filterTyp === t ? ' selected' : ''}>${escapeHtml(getTypLabel(t))}</option>`
     ).join('');
-    const filterAnzeige = filterTyp
+
+    // ── Gruppen-Filter ────────────────────────────────────────
+    const hatGruppenFilter = gruppen.length > 0;
+    const gruppenFilterOptionen = gruppen.map(g =>
+      `<option value="${g.id}"${filterGruppe === String(g.id) ? ' selected' : ''}>${escapeHtml(g.name)}</option>`
+    ).join('');
+
+    const filterAnzeige = (filterTyp || filterGruppe)
       ? `${data.length} von ${einheiten.length}`
       : `${einheiten.length}`;
 
@@ -157,12 +181,18 @@ const ADMIN_TRAININGS = (() => {
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">Alle Trainings (${filterAnzeige})</div>
-          <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select class="settings-input" style="height:30px;font-size:13px;padding:2px 8px"
               onchange="ADMIN_TRAININGS.setFilter(this.value)">
               <option value="">Alle Typen</option>
               ${typFilterOptionen}
             </select>
+            ${hatGruppenFilter ? `<select class="settings-input" style="height:30px;font-size:13px;padding:2px 8px"
+              onchange="ADMIN_TRAININGS.setFilterGruppe(this.value)">
+              <option value="">Alle Gruppen</option>
+              <option value="__keine__"${filterGruppe === '__keine__' ? ' selected' : ''}>— ohne Gruppe —</option>
+              ${gruppenFilterOptionen}
+            </select>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="ADMIN_TRAININGS.reload()" title="Liste neu laden">↻</button>
           </div>
         </div>
@@ -174,6 +204,7 @@ const ADMIN_TRAININGS = (() => {
               <col style="width:155px">
               <col style="width:60px">
               <col style="width:180px">
+              <col style="width:160px">
               <col><!-- Titel: Rest -->
               <col style="width:140px">
               <col style="width:85px">
@@ -186,7 +217,7 @@ const ADMIN_TRAININGS = (() => {
                 ${headerCols}
               </tr>
             </thead>
-            <tbody>${rows || '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text2)">Keine Trainingseinheiten vorhanden.</td></tr>'}</tbody>
+            <tbody>${rows || '<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text2)">Keine Trainingseinheiten vorhanden.</td></tr>'}</tbody>
           </table>
         </div>
       </div>`;
@@ -293,5 +324,5 @@ const ADMIN_TRAININGS = (() => {
     setTimeout(() => d.remove(), 3500);
   }
 
-  return { render, sort, setFilter, toggle, toggleAll, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
+  return { render, sort, setFilter, setFilterGruppe, toggle, toggleAll, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
 })();

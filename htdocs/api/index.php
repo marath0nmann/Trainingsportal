@@ -1210,10 +1210,11 @@ function handleAdmin(string $method, string $sub): void {
         $offset = max(0, (int)($_GET['offset'] ?? 0));
         $total  = (int)(DB::fetchOne('SELECT COUNT(*) AS n FROM ' . DB::tbl('training_einheiten'))['n'] ?? 0);
         $rows   = DB::fetchAll(
-            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.sichtbarkeit, e.status,
-                    t.name AS tp_name
+            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.sichtbarkeit, e.status, e.gruppe_id,
+                    t.name AS tp_name, g.name AS gruppe_name
                FROM ' . DB::tbl('training_einheiten') . ' e
                LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
+               LEFT JOIN ' . DB::tbl('gruppen') . ' g ON g.id = e.gruppe_id
               ORDER BY e.datum DESC, e.uhrzeit DESC
               LIMIT ? OFFSET ?',
             [$limit, $offset]
@@ -1229,6 +1230,8 @@ function handleAdmin(string $method, string $sub): void {
                 'sichtbarkeit' => $r['sichtbarkeit'],
                 'status'       => $r['status'],
                 'treffpunkt'   => $r['tp_name'],
+                'gruppe_id'    => $r['gruppe_id'] !== null ? (int)$r['gruppe_id'] : null,
+                'gruppe'       => $r['gruppe_name'],
             ], $rows),
             'total'  => $total,
             'limit'  => $limit,
