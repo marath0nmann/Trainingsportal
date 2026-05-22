@@ -85,8 +85,8 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   function istAdmin() {
-    return window.state && window.state.user &&
-           ['admin', 'trainer'].includes(window.state.user.rolle);
+    return typeof state !== 'undefined' && state.user &&
+           ['admin', 'trainer'].includes(state.user.rolle);
   }
 
   function allesDisziplinen(serie) {

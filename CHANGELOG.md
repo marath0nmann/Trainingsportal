@@ -1,6 +1,6 @@
 # Changelog
 
-## v141
+## v142
 - Fix: Kalender lud nicht mehr (Startseite zeigte dauerhaft „Lade Trainingsplan…"): `d4` war mit `const` im `try`-Block deklariert und außerhalb nicht erreichbar → `ReferenceError`; jetzt als `let wettkampfRaw` außerhalb des Blocks
 - Admin → Wettkämpfe: Disziplinen-Verwaltung überarbeitet – extrahierte Disziplinen als Toggle-Chips (grün = aktiv, gestrichen = ausgeblendet), manuell hinzugefügte als entfernbare Tags, Eingabefeld für neue Disziplinen; ausgeblendete Disziplinen werden als `disziplinen_ausgeschlossen` gespeichert und beim nächsten Laden wiederhergestellt
 - Admin → Wettkämpfe: Termine inline im Detail-Panel editierbar (Datumsfeld + ✓ OK + ↺ Zurücksetzen) – kein Modal mehr nötig
