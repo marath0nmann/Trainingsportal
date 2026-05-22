@@ -209,9 +209,20 @@ const PROFIL = (() => {
 
   function _buildGruppenSection() {
     if (!_alleGruppen.length) return '<div class="profil-hint">Keine Trainingsgruppen vorhanden.</div>';
-    const meineSet = new Set(Array.isArray(_meineGruppen) ? _meineGruppen : []);
+    const meine  = _meineGruppen || {};
+    const meineSet = new Set(meine.gruppen_ids || []);
+    const statSet  = new Set(meine.stat_ids    || []);
     const checks = _alleGruppen.map(g => {
-      const checked = meineSet.has(g.id) ? ' checked' : '';
+      const checked  = meineSet.has(g.id) ? ' checked' : '';
+      const fromStat = statSet.has(g.id);
+      // Statistikportal-Gruppen: angehakt + deaktiviert (read-only)
+      if (fromStat) {
+        return `<label class="profil-gruppe-item profil-gruppe-stat" title="Zuordnung aus dem Statistikportal">
+          <input type="checkbox" class="profil-gruppe-cb" value="${g.id}" checked disabled>
+          <span>${escapeHtml(g.name)}</span>
+          <span class="profil-gruppe-badge">Statistikportal</span>
+        </label>`;
+      }
       return `<label class="profil-gruppe-item">
         <input type="checkbox" class="profil-gruppe-cb" value="${g.id}"${checked}>
         <span>${escapeHtml(g.name)}</span>
@@ -368,8 +379,8 @@ const PROFIL = (() => {
       return;
     }
 
-    // Gruppen-Auswahl einlesen
-    const gruppenIds = [...document.querySelectorAll('.profil-gruppe-cb:checked')]
+    // Gruppen-Auswahl einlesen (aktivierte, nicht-deaktivierte Checkboxen)
+    const gruppenIds = [...document.querySelectorAll('.profil-gruppe-cb:checked:not(:disabled)')]
       .map(cb => parseInt(cb.value, 10))
       .filter(id => id > 0);
 

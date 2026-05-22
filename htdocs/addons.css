@@ -1538,6 +1538,20 @@ body.planung-active #app-footer    { display: none; }
   font-weight: 600;
 }
 .profil-gruppe-item input[type="checkbox"] { display: none; }
+/* Gruppen aus Statistikportal: immer aktiv, read-only */
+.profil-gruppe-stat {
+  background: var(--accent-light, #e0f2fe);
+  border-color: var(--accent, #0ea5e9);
+  color: var(--accent, #0ea5e9);
+  font-weight: 600;
+  opacity: .85;
+  cursor: default;
+}
+.profil-gruppe-badge {
+  font-size: 10px; font-weight: 500; opacity: .7;
+  padding: 1px 5px; background: rgba(0,0,0,.1);
+  border-radius: 10px; margin-left: 2px;
+}
 
 /* ── Trainingsgruppen – Block-Editor ───────────────────────────────────── */
 .be-gruppen-list {

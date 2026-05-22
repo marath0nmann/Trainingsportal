@@ -1,6 +1,9 @@
 # Changelog
 
-## v121
+## vCUR
+- Fix: Gruppen-Zuordnung aus Statistikportal (`athlet_gruppen`) wird jetzt im Trainingsportal berücksichtigt – wer dort bereits einer Gruppe zugeordnet ist, bekommt keinen Warnhinweis mehr; im Profil-Modal erscheinen Statistikportal-Gruppen als read-only (Badge „Statistikportal"), zusätzliche Gruppen können manuell hinzugefügt werden
+
+## v122
 - Trainingsgruppen: Athleten können sich im Profil einer oder mehreren Trainingsgruppen zuordnen; fehlt die Zuordnung, erscheint ein Warnhinweis auf der Startseite (identischer Style wie Pace-Warnung)
 - Planungsansicht: Gruppen-Tabs oben; Trainer wählt über „⚙ Gruppen konfigurieren", welche Gruppen er sieht – Kalender und Block-Sidebar filtern nach aktivem Tab
 - Trainingsblöcke können im Block-Editor einer oder mehreren Trainingsgruppen zugeordnet werden

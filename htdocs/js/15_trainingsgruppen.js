@@ -23,13 +23,19 @@ const GRUPPEN = (() => {
     return _alle;
   }
 
-  // Eigene Gruppen-IDs laden (gecacht)
+  // Eigene Gruppen laden (gecacht).
+  // Gibt { gruppen_ids: [...], stat_ids: [...] } zurück:
+  //   gruppen_ids = Vereinigung aus Statistikportal (athlet_gruppen) + Trainingsportal (training_benutzer_gruppen)
+  //   stat_ids    = nur die Gruppen aus dem Statistikportal (für read-only-Anzeige im Profil)
   function ladeMeine() {
-    if (!state.user) return Promise.resolve([]);
+    if (!state.user) return Promise.resolve({ gruppen_ids: [], stat_ids: [] });
     if (!_meine) {
       _meine = apiGet('profil/gruppen', { silent: true })
-        .then(d => d.gruppen_ids || [])
-        .catch(() => []);
+        .then(d => ({
+          gruppen_ids: d.gruppen_ids || [],
+          stat_ids:    d.stat_ids    || [],
+        }))
+        .catch(() => ({ gruppen_ids: [], stat_ids: [] }));
     }
     return _meine;
   }

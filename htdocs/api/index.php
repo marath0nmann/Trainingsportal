@@ -3863,22 +3863,57 @@ function handleProfil(string $method, string $sub): void {
     $userId = (int)$user['id'];
 
     if ($sub === 'gruppen' && $method === 'GET') {
-        $rows = DB::fetchAll(
+        // 1) Gruppen aus dem Statistikportal: athlet_gruppen (via benutzer.athlet_id)
+        $statIds = [];
+        $athletId = isset($user['athlet_id']) && $user['athlet_id'] ? (int)$user['athlet_id'] : 0;
+        if ($athletId > 0) {
+            try {
+                $statRows = DB::fetchAll(
+                    "SELECT gruppe_id FROM " . DB::tbl('athlet_gruppen') . " WHERE athlet_id = ?",
+                    [$athletId]
+                );
+                $statIds = array_map(fn($r) => (int)$r['gruppe_id'], $statRows);
+            } catch (Throwable $e) {
+                // athlet_gruppen nicht erreichbar → ignorieren
+            }
+        }
+        // 2) Gruppen die der Nutzer im Trainingsportal manuell hinzugefügt hat
+        $tpRows = DB::fetchAll(
             "SELECT gruppe_id FROM " . DB::tbl('training_benutzer_gruppen') . " WHERE benutzer_id = ?",
             [$userId]
         );
-        $ids = array_map(fn($r) => (int)$r['gruppe_id'], $rows);
-        echo json_encode(['ok' => true, 'gruppen_ids' => $ids]);
+        $tpIds = array_map(fn($r) => (int)$r['gruppe_id'], $tpRows);
+        // Vereinigung beider Quellen, Duplikate entfernen
+        $ids = array_values(array_unique(array_merge($statIds, $tpIds)));
+        echo json_encode([
+            'ok'          => true,
+            'gruppen_ids' => $ids,
+            'stat_ids'    => $statIds,  // für Frontend: welche kommen aus Statistikportal
+        ]);
         return;
     }
 
     if ($sub === 'gruppen' && $method === 'PUT') {
         $in  = readJsonBody();
-        $ids = isset($in['gruppen_ids']) && is_array($in['gruppen_ids']) ? $in['gruppen_ids'] : [];
+        $neu = isset($in['gruppen_ids']) && is_array($in['gruppen_ids']) ? $in['gruppen_ids'] : [];
+        // Statistikportal-Gruppen des Nutzers ermitteln (dürfen nicht in training_benutzer_gruppen
+        // doppelt gespeichert werden – sie kommen ohnehin immer aus athlet_gruppen)
+        $athletId = isset($user['athlet_id']) && $user['athlet_id'] ? (int)$user['athlet_id'] : 0;
+        $statIds  = [];
+        if ($athletId > 0) {
+            try {
+                $sr = DB::fetchAll(
+                    "SELECT gruppe_id FROM " . DB::tbl('athlet_gruppen') . " WHERE athlet_id = ?",
+                    [$athletId]
+                );
+                $statIds = array_map(fn($r) => (int)$r['gruppe_id'], $sr);
+            } catch (Throwable $e) {}
+        }
+        // Nur Gruppen speichern, die NICHT bereits über Statistikportal kommen
         DB::query("DELETE FROM " . DB::tbl('training_benutzer_gruppen') . " WHERE benutzer_id = ?", [$userId]);
-        foreach ($ids as $gid) {
+        foreach ($neu as $gid) {
             $gid = (int)$gid;
-            if ($gid <= 0) continue;
+            if ($gid <= 0 || in_array($gid, $statIds, true)) continue;
             DB::query(
                 "INSERT IGNORE INTO " . DB::tbl('training_benutzer_gruppen') . " (benutzer_id, gruppe_id) VALUES (?,?)",
                 [$userId, $gid]

@@ -571,7 +571,7 @@ async function ladeGlobalePaceWarnung(containerId) {
   // Trainingsgruppen-Warnung
   try {
     const meineGruppen = await GRUPPEN.ladeMeine();
-    if (!meineGruppen || meineGruppen.length === 0) {
+    if (!meineGruppen.gruppen_ids || meineGruppen.gruppen_ids.length === 0) {
       // Nur anzeigen wenn überhaupt Gruppen existieren
       const alleGruppen = await GRUPPEN.laden();
       if (alleGruppen && alleGruppen.length > 0) {
