@@ -3588,9 +3588,7 @@ function handleMeinPlan(string $method, string $tail): void
         $meineGruppenIds = array_column($meineGruppen, 'id');
 
         $rows = DB::fetchAll(
-            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
-                    e.bemerkung, e.sichtbarkeit, e.status, e.serie_id, e.gruppe_id,
-                    t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
+            'SELECT e.*, t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
                FROM ' . DB::tbl('training_einheiten') . ' e
                LEFT JOIN ' . DB::tbl('training_treffpunkte') . " t ON t.id = e.treffpunkt_id
               WHERE e.datum BETWEEN ? AND ?
