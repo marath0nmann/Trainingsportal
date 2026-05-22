@@ -178,6 +178,18 @@ const BLOECKE = (() => {
     } catch (_) {}
     const cont = document.getElementById('modal-container');
 
+    // Standard-Wochentag des Startdatums (für Serienvorbelegung)
+    const startDow = new Date(heute + 'T00:00:00').getDay(); // 0=So..6=Sa
+    const dowMap = ['SU','MO','TU','WE','TH','FR','SA'];
+    const defaultByday = dowMap[startDow];
+
+    // Standardmäßiges Enddatum: 3 Monate nach Startdatum
+    const defaultUntil = (() => {
+      const d = new Date(heute + 'T00:00:00');
+      d.setMonth(d.getMonth() + 3);
+      return d.toISOString().slice(0, 10);
+    })();
+
     cont.innerHTML = `
       <div class="modal-overlay" onclick="schliesseModal(event)">
         <div class="modal-card" onclick="event.stopPropagation()">
@@ -192,7 +204,7 @@ const BLOECKE = (() => {
             <div class="ed-grid">
               <div class="ed-fg">
                 <label>Datum *</label>
-                <input type="date" id="apply-datum" value="${heute}">
+                <input type="date" id="apply-datum" value="${heute}" onchange="BLOECKE.onApplyDatumChange()">
               </div>
               <div class="ed-fg">
                 <label>Uhrzeit</label>
@@ -209,12 +221,60 @@ const BLOECKE = (() => {
                   <option value="intern"${b.sichtbarkeit === 'privat' ? ' selected' : ''}>Intern</option>
                 </select>
               </div>
+              <div class="ed-fg ed-fg-wide serie-toggle-row">
+                <label class="serie-toggle-label">
+                  <input type="checkbox" id="apply-wiederkehrend" onchange="BLOECKE.onWiederkehrendChange()">
+                  Als Serientermin anlegen
+                </label>
+              </div>
             </div>
+
+            <div id="apply-serie-wrap" class="apply-serie-wrap" style="display:none">
+              <div class="apply-serie-inner">
+                <div class="ed-fg">
+                  <label>Wiederholung</label>
+                  <select id="apply-freq" onchange="BLOECKE.onApplyFreqChange()">
+                    <option value="weekly:1">Jede Woche</option>
+                    <option value="weekly:2">Alle 2 Wochen</option>
+                    <option value="weekly:3">Alle 3 Wochen</option>
+                    <option value="weekly:4">Alle 4 Wochen</option>
+                    <option value="monthly:1">Monatlich (gleicher Tag)</option>
+                    <option value="daily:1">Täglich</option>
+                  </select>
+                </div>
+                <div class="ed-fg" id="apply-byday-group">
+                  <label>Wochentage</label>
+                  <div class="byday-row">
+                    ${['MO','TU','WE','TH','FR','SA','SU'].map((d, i) => {
+                      const labels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+                      return `<label class="byday-item"><input type="checkbox" class="apply-byday" value="${d}"${d === defaultByday ? ' checked' : ''}><span>${labels[i]}</span></label>`;
+                    }).join('')}
+                  </div>
+                </div>
+                <div class="ed-fg">
+                  <label>Ende</label>
+                  <select id="apply-ende-typ" onchange="BLOECKE.onApplyEndeTypChange()">
+                    <option value="datum">An Datum</option>
+                    <option value="count">Nach Anzahl Terminen</option>
+                  </select>
+                </div>
+                <div class="ed-fg" id="apply-until-wrap">
+                  <label>Enddatum</label>
+                  <input type="date" id="apply-until" value="${defaultUntil}">
+                </div>
+                <div class="ed-fg" id="apply-count-wrap" style="display:none">
+                  <label>Anzahl Termine</label>
+                  <input type="number" id="apply-count" min="2" max="200" value="10">
+                </div>
+                <div id="apply-vorschau" class="apply-vorschau"></div>
+              </div>
+            </div>
+
             <div class="ed-footer">
               <span></span>
               <div class="ed-footer-right">
                 <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
-                <button class="btn btn-primary" onclick="BLOECKE.anwendenSpeichern(${b.id})">In Kalender eintragen</button>
+                <button class="btn btn-primary" id="apply-submit-btn" onclick="BLOECKE.anwendenSpeichern(${b.id})">In Kalender eintragen</button>
               </div>
             </div>
           </div>
@@ -226,25 +286,213 @@ const BLOECKE = (() => {
     const datum = val('apply-datum');
     if (!datum) { notify('Datum fehlt.', 'err'); return; }
     const tpIdStr = val('apply-treffpunkt-id');
-    const payload = {
-      datum,
-      uhrzeit:       val('apply-uhrzeit') || null,
-      treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
-      sichtbarkeit:  val('apply-sichtbarkeit'),
-    };
-    try {
-      await apiPost(`bloecke/${blockId}/apply`, payload);
-      schliesseModal();
-      notify('Training in den Kalender eingetragen.', 'ok');
-      if ((location.hash || '').startsWith('#planung') && typeof PLANUNG !== 'undefined') {
-        PLANUNG.reloadKal();
-      } else {
+    const istWiederkehrend = document.getElementById('apply-wiederkehrend')?.checked;
+
+    if (istWiederkehrend) {
+      // ── Serientermin anlegen ────────────────────────────────
+      const freqVal  = val('apply-freq'); // z.B. "weekly:2"
+      const [freq, intervalStr] = freqVal.split(':');
+      const interval = parseInt(intervalStr || '1', 10);
+      const byday    = [...document.querySelectorAll('.apply-byday:checked')].map(cb => cb.value);
+      const endTyp   = val('apply-ende-typ');
+      const until    = endTyp === 'datum' ? (val('apply-until') || null) : null;
+      const countRaw = endTyp === 'count' ? parseInt(val('apply-count') || '0', 10) : null;
+      const count    = countRaw && countRaw > 0 ? countRaw : null;
+
+      if (freq === 'weekly' && !byday.length) {
+        notify('Bitte mindestens einen Wochentag auswählen.', 'err'); return;
+      }
+      if (endTyp === 'datum' && !until) {
+        notify('Enddatum fehlt.', 'err'); return;
+      }
+      if (endTyp === 'datum' && until < datum) {
+        notify('Enddatum muss nach dem Startdatum liegen.', 'err'); return;
+      }
+      if (endTyp === 'count' && !count) {
+        notify('Anzahl Termine fehlt.', 'err'); return;
+      }
+
+      const payload = {
+        block_id:      blockId,
+        startdatum:    datum,
+        uhrzeit:       val('apply-uhrzeit') || null,
+        treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
+        sichtbarkeit:  val('apply-sichtbarkeit'),
+        regel: { freq, interval, byday: freq === 'weekly' ? byday : [], until, count },
+      };
+      try {
+        const btn = document.getElementById('apply-submit-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Wird angelegt…'; }
+        const res = await apiPost('serien', payload);
+        schliesseModal();
+        notify(`${res.count} Serientermine angelegt.`, 'ok');
         const [y, m] = datum.split('-');
         location.hash = `#kalender/${y}-${m}`;
+      } catch (e) {
+        const btn = document.getElementById('apply-submit-btn');
+        if (btn) { btn.disabled = false; btn.textContent = 'In Kalender eintragen'; }
+        notify('Fehler: ' + (e.message || ''), 'err');
       }
-    } catch (e) {
-      notify('Fehler: ' + (e.message || ''), 'err');
+    } else {
+      // ── Einzelner Termin ────────────────────────────────────
+      const payload = {
+        datum,
+        uhrzeit:       val('apply-uhrzeit') || null,
+        treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
+        sichtbarkeit:  val('apply-sichtbarkeit'),
+      };
+      try {
+        await apiPost(`bloecke/${blockId}/apply`, payload);
+        schliesseModal();
+        notify('Training in den Kalender eingetragen.', 'ok');
+        if ((location.hash || '').startsWith('#planung') && typeof PLANUNG !== 'undefined') {
+          PLANUNG.reloadKal();
+        } else {
+          const [y, m] = datum.split('-');
+          location.hash = `#kalender/${y}-${m}`;
+        }
+      } catch (e) {
+        notify('Fehler: ' + (e.message || ''), 'err');
+      }
     }
+  }
+
+  // ── Serientermin-UI-Handler ────────────────────────────────
+  function onWiederkehrendChange() {
+    const checked = document.getElementById('apply-wiederkehrend')?.checked;
+    const wrap = document.getElementById('apply-serie-wrap');
+    if (wrap) wrap.style.display = checked ? '' : 'none';
+    const btn = document.getElementById('apply-submit-btn');
+    if (btn) btn.textContent = checked ? 'Serie anlegen' : 'In Kalender eintragen';
+    if (checked) aktualisiereSerieVorschau();
+  }
+
+  function onApplyDatumChange() {
+    // Standard-Wochentag bei Datumsänderung neu setzen (nur wenn kein Tag manuell gewählt)
+    const datum = val('apply-datum');
+    if (!datum) return;
+    const checked = document.getElementById('apply-wiederkehrend')?.checked;
+    if (!checked) return;
+    const manuelleAuswahl = [...document.querySelectorAll('.apply-byday:checked')];
+    if (!manuelleAuswahl.length) {
+      const dow = new Date(datum + 'T00:00:00').getDay();
+      const dowMap = ['SU','MO','TU','WE','TH','FR','SA'];
+      document.querySelectorAll('.apply-byday').forEach(cb => {
+        cb.checked = cb.value === dowMap[dow];
+      });
+    }
+    aktualisiereSerieVorschau();
+  }
+
+  function onApplyFreqChange() {
+    const freq = val('apply-freq').split(':')[0];
+    const bdayGroup = document.getElementById('apply-byday-group');
+    if (bdayGroup) bdayGroup.style.display = freq === 'weekly' ? '' : 'none';
+    aktualisiereSerieVorschau();
+  }
+
+  function onApplyEndeTypChange() {
+    const typ = val('apply-ende-typ');
+    const untilWrap = document.getElementById('apply-until-wrap');
+    const countWrap = document.getElementById('apply-count-wrap');
+    if (untilWrap) untilWrap.style.display = typ === 'datum' ? '' : 'none';
+    if (countWrap) countWrap.style.display = typ === 'count' ? '' : 'none';
+    aktualisiereSerieVorschau();
+  }
+
+  function aktualisiereSerieVorschau() {
+    const vEl = document.getElementById('apply-vorschau');
+    if (!vEl) return;
+    const datum    = val('apply-datum');
+    const freqVal  = val('apply-freq');
+    const [freq, intervalStr] = freqVal.split(':');
+    const interval = parseInt(intervalStr || '1', 10);
+    const byday    = [...document.querySelectorAll('.apply-byday:checked')].map(cb => cb.value);
+    const endTyp   = val('apply-ende-typ');
+    const until    = endTyp === 'datum' ? val('apply-until') : null;
+    const countRaw = endTyp === 'count' ? parseInt(val('apply-count') || '0', 10) : null;
+    if (!datum) { vEl.innerHTML = ''; return; }
+
+    const daten = _generiereVorschauDaten(datum, freq, interval, byday, until, countRaw);
+    if (!daten.length) { vEl.innerHTML = '<span class="vorschau-leer">Keine Termine generiert.</span>'; return; }
+
+    const wdNames = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+    const formatDatum = d => {
+      const dt = new Date(d + 'T00:00:00');
+      return `${wdNames[dt.getDay()]}, ${dt.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' })}`;
+    };
+
+    const anzeige = daten.slice(0, 5).map(d => `<span class="vorschau-datum">${formatDatum(d)}</span>`).join('');
+    const rest = daten.length > 5 ? `<span class="vorschau-mehr">… und ${daten.length - 5} weitere</span>` : '';
+    vEl.innerHTML = `<div class="vorschau-label">Vorschau (${daten.length} Termine)</div><div class="vorschau-liste">${anzeige}${rest}</div>`;
+  }
+
+  function _generiereVorschauDaten(startDatum, freq, interval, byday, until, count) {
+    // Spiegellogik der PHP-Funktion generiereOccurrences (clientseitig)
+    const dayMap = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+    const targetDays = byday.map(d => dayMap[d] ?? -1).filter(d => d >= 0);
+    if (freq === 'weekly') targetDays.sort((a,b) => a-b);
+
+    const maxT  = 200;
+    const safeUntil = (() => {
+      const d = new Date(startDatum + 'T00:00:00');
+      d.setFullYear(d.getFullYear() + 2);
+      return d.toISOString().slice(0, 10);
+    })();
+    const effUntil = (until && until < safeUntil) ? until : (until ? until : safeUntil);
+
+    const dates = [];
+    let n = 0;
+
+    if (freq === 'daily') {
+      let cur = new Date(startDatum + 'T00:00:00');
+      while (n < maxT) {
+        const s = cur.toISOString().slice(0, 10);
+        if (s > effUntil) break;
+        if (count && n >= count) break;
+        dates.push(s);
+        n++;
+        cur.setDate(cur.getDate() + interval);
+      }
+    } else if (freq === 'weekly') {
+      const effDays = targetDays.length ? targetDays : [new Date(startDatum + 'T00:00:00').getDay()];
+      const startTs = new Date(startDatum + 'T00:00:00');
+      const startDow = startTs.getDay();
+      const sunday = new Date(startTs);
+      sunday.setDate(sunday.getDate() - startDow);
+
+      let weekSun = new Date(sunday);
+      outer: while (n < maxT) {
+        for (const dow of effDays) {
+          const d = new Date(weekSun);
+          d.setDate(d.getDate() + dow);
+          const s = d.toISOString().slice(0, 10);
+          if (s < startDatum) continue;
+          if (s > effUntil) break outer;
+          if (count && n >= count) break outer;
+          dates.push(s);
+          n++;
+          if (n >= maxT) break outer;
+        }
+        weekSun.setDate(weekSun.getDate() + interval * 7);
+      }
+    } else if (freq === 'monthly') {
+      const parts = startDatum.split('-');
+      let y = parseInt(parts[0]), m = parseInt(parts[1]);
+      const origDay = parseInt(parts[2]);
+      while (n < maxT) {
+        const lastDay = new Date(y, m, 0).getDate();
+        const useDay  = Math.min(origDay, lastDay);
+        const s = `${y}-${String(m).padStart(2,'0')}-${String(useDay).padStart(2,'0')}`;
+        if (s > effUntil) break;
+        if (count && n >= count) break;
+        dates.push(s);
+        n++;
+        m += interval;
+        while (m > 12) { m -= 12; y++; }
+      }
+    }
+    return dates;
   }
 
   // ── Block-Editor ──────────────────────────────────────────
@@ -715,5 +963,7 @@ const BLOECKE = (() => {
     abschnittHinzufuegen, abschnittLoeschen, toggleAbschnittTyp,
     speichern, loeschen,
     titelNeuGenerieren, onTypChange,
+    onWiederkehrendChange, onApplyDatumChange,
+    onApplyFreqChange, onApplyEndeTypChange,
   };
 })();

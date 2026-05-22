@@ -272,6 +272,14 @@ function istKeinTraining(typ) {
   return t ? !!t.ist_kein_training : typ === 'kein_training';
 }
 
+// Typ-Bezeichnung: zuerst aus appConfig.typen (Admin-konfiguriert), dann TYP_LABEL, dann Slug
+function getTypLabel(typ) {
+  const typen = window.appConfig && Array.isArray(window.appConfig.typen) ? window.appConfig.typen : [];
+  const t = typen.find(x => x.slug === typ);
+  if (t) return t.bezeichnung;
+  return TYP_LABEL[typ] || typ;
+}
+
 // Effektive Distanz einer privaten Einheit:
 // - expliziter Wert (inkl. 0) wird direkt genutzt
 // - null → Fallback-km aus der Typen-Konfiguration (oder null wenn kein Fallback)
