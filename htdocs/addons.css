@@ -1375,6 +1375,12 @@ body.planung-active #app-footer    { display: none; }
   border-radius: 2px;
   width: 14px; height: 10px;
 }
+.kal-legend-dot-gruppe {
+  background: var(--surf2, #e8edf5);
+  border-left: 3px solid var(--accent, #3a6bc9);
+  border-radius: 2px;
+  width: 14px; height: 10px;
+}
 .kal-legend-dot-priv {
   background: color-mix(in srgb, var(--accent, #3a6bc9) 18%, var(--surface));
   border-left: 3px solid var(--accent, #3a6bc9);

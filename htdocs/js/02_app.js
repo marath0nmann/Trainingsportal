@@ -581,11 +581,11 @@ function _renderKalLegend() {
   }
   const gruppenItems = gruppen.map(g => {
     const checked = kf && kf.gruppen.has(g.id);
-    const dotStyle = g.farbe ? ` style="background:${escapeHtml(g.farbe)}"` : '';
+    const dotStyle = g.farbe ? ` style="border-left-color:${escapeHtml(g.farbe)}"` : '';
     return `<label class="kal-legend-item">
       <input type="checkbox" ${checked ? 'checked' : ''}
         onchange="toggleKalPlan('gruppe', ${g.id}, this.checked)">
-      <span class="kal-legend-dot"${dotStyle}></span>${escapeHtml(g.name)}
+      <span class="kal-legend-dot kal-legend-dot-gruppe"${dotStyle}></span>${escapeHtml(g.name)}
     </label>`;
   }).join('');
   return `<div class="kal-legend">
