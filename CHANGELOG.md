@@ -1,5 +1,8 @@
 # Changelog
 
+## v126
+- Fix: PHP-Parse-Fehler in `handleGruppen` – schließende `)` des SQL-Subqueries lag außerhalb des PHP-Strings (seit v123, verursachte HTTP 500 bei JEDEM API-Aufruf inkl. /ping)
+
 ## v125
 - Fix: HTTP 500 in `GET mein-plan/einheiten` behoben – SELECT verwendete `COLUMN_EXISTS()` (nicht in MariaDB verfügbar); ersetzt durch `SELECT e.*`
 - Fix: `15_trainingsgruppen.js` (GRUPPEN-Modul) fehlte in `index.html` und verursachte „GRUPPEN is not defined"-Fehler

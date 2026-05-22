@@ -3848,7 +3848,7 @@ function handleGruppen(string $method, string $sub): void
         try {
             $rows = DB::fetchAll(
                 'SELECT g.id, g.name, g.farbe,
-                         (SELECT COUNT(*) FROM ' . DB::tbl('training_gruppen_mitglieder') . ' m WHERE m.gruppe_id = g.id AND m.benutzer_id = ?') AS ist_mitglied
+                         (SELECT COUNT(*) FROM ' . DB::tbl('training_gruppen_mitglieder') . ' m WHERE m.gruppe_id = g.id AND m.benutzer_id = ?) AS ist_mitglied
                     FROM ' . DB::tbl('training_gruppen') . ' g
                    WHERE g.aktiv = 1
                    ORDER BY g.reihenfolge, g.name',
