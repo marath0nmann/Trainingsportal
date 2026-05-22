@@ -28,19 +28,14 @@ const GRUPPEN = (() => {
   }
 
   // Eigene Gruppen laden (gecacht).
-  // Gibt { gruppen_ids: [...], stat_ids: [...] } zurück:
-  //   gruppen_ids = Vereinigung aus Statistikportal (athlet_gruppen)
-  //                 + Trainingsportal (training_benutzer_gruppen)
-  //   stat_ids    = nur die Gruppen aus dem Statistikportal (read-only im Profil)
+  // Gibt { gruppen_ids: [...] } zurück:
+  //   gruppen_ids = Mitgliedschaften (aus athlet_gruppen oder training_benutzer_gruppen)
   function ladeMeine() {
-    if (!state.user) return Promise.resolve({ gruppen_ids: [], stat_ids: [] });
+    if (!state.user) return Promise.resolve({ gruppen_ids: [] });
     if (!_meine) {
       _meine = apiGet('profil/gruppen', { silent: true })
-        .then(d => ({
-          gruppen_ids: d.gruppen_ids || [],
-          stat_ids:    d.stat_ids    || [],
-        }))
-        .catch(() => ({ gruppen_ids: [], stat_ids: [] }));
+        .then(d => ({ gruppen_ids: d.gruppen_ids || [] }))
+        .catch(() => ({ gruppen_ids: [] }));
     }
     return _meine;
   }

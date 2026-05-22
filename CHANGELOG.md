@@ -1,8 +1,8 @@
 # Changelog
 
-## v130
-- Trainingsgruppen: Gruppen kommen wieder aus dem Statistikportal (`gruppen`-Tabelle); Benutzer können sich im Profil selbst zuordnen (Statistikportal-Gruppen erscheinen read-only mit Badge, eigene Zuordnungen sind per Checkbox wählbar)
-- Admin-verwaltete Trainingsgruppen entfernt (war v123–v128, widerspricht dem Konzept)
+## v131
+- Profil: Trainingsgruppen direkt im Statistikportal änderbar – Auswahl im Profil-Modal schreibt jetzt direkt in `athlet_gruppen` (Statistikportal-Tabelle); für Nutzer ohne Athletenverknüpfung weiterhin `training_benutzer_gruppen`
+- Profil: Gruppen-Checkboxen alle interaktiv (kein read-only-Badge mehr)
 - DB-Migration #11: erstellt `training_benutzer_gruppen`, `training_planung_gruppen`, `training_block_gruppen` (Statistikportal-verknüpfte Tabellen)
 - `mein-plan/einheiten` liefert `meine_gruppen` jetzt aus `athlet_gruppen` + `training_benutzer_gruppen` statt `training_gruppen_mitglieder`
 
