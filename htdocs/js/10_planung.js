@@ -152,7 +152,10 @@ const KAL_POPOVER = (() => {
 // Trainingsportal – Planung (Split-View: Kalender links + Blöcke rechts)
 // ============================================================
 const PLANUNG = (() => {
-  let kalMonth = null;
+  let kalMonth     = null;
+  let aktivGruppe  = null;   // { id, name } oder null (= ungefiltert)
+  let _gruppen     = [];     // konfigurierte Gruppen des Trainers (sichtbar in Tabs)
+  let _alleGruppen = [];     // alle verfügbaren Gruppen (für Konfiguration)
 
   // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
   function _applyPlanungLayout() {
@@ -206,8 +209,32 @@ const PLANUNG = (() => {
       kalMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
+    const istTrainer = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
+
+    // Gruppen-Konfiguration laden (nur für eingeloggte Trainer)
+    if (istTrainer && !_gruppen.length) {
+      try {
+        [_alleGruppen, _gruppen] = await Promise.all([
+          GRUPPEN.laden(),
+          apiGet('planung/gruppen-prefs', { silent: true }).then(d => {
+            const ids = d.gruppen_ids || [];
+            return GRUPPEN.laden().then(alle => alle.filter(g => ids.includes(g.id)));
+          }),
+        ]);
+        // Erster Start: falls keine Prefs gesetzt und nur eine Gruppe → diese vorauswählen
+        if (!_gruppen.length && _alleGruppen.length === 1) {
+          _gruppen = [_alleGruppen[0]];
+        }
+        // Aktive Gruppe aus den konfigurierten wählen
+        if (_gruppen.length && !aktivGruppe) {
+          aktivGruppe = _gruppen[0];
+        }
+      } catch (_) {}
+    }
+
     main.innerHTML = `
       <div class="planung-wrap">
+        ${istTrainer ? _renderGruppenTabs() : ''}
         <div class="planung-split">
           <div class="planung-kal-col" id="planung-kal-col">
             <div class="planung-kal-loading">Lade Kalender…</div>
@@ -216,7 +243,7 @@ const PLANUNG = (() => {
             <div class="planung-sidebar-head">
               <div class="planung-sidebar-head-top">
                 <span class="planung-sidebar-title">Trainingsblöcke</span>
-                ${state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer')
+                ${istTrainer
                   ? `<button class="btn btn-primary btn-sm" onclick="BLOECKE.neuerBlock()">+ Neu</button>`
                   : ''}
               </div>
@@ -240,6 +267,97 @@ const PLANUNG = (() => {
     window.addEventListener('hashchange', _offPlanung);
 
     await Promise.all([renderKal(), ladeBlocke()]);
+  }
+
+  // ── Gruppen-Tabs ──────────────────────────────────────────
+  function _renderGruppenTabs() {
+    if (!_gruppen.length) {
+      return `<div class="planung-gruppen-bar">
+        <span class="planung-gruppen-hint">Keine Trainingsgruppen konfiguriert –</span>
+        <button class="btn btn-ghost btn-sm" onclick="PLANUNG.gruppenKonfigurieren()">Gruppen auswählen</button>
+      </div>`;
+    }
+    const tabs = _gruppen.map(g => {
+      const aktiv = aktivGruppe && aktivGruppe.id === g.id ? ' planung-tab-aktiv' : '';
+      return `<button class="planung-tab${aktiv}" onclick="PLANUNG.gruppeWechseln(${g.id})">${escapeHtml(g.name)}</button>`;
+    }).join('');
+    return `<div class="planung-gruppen-bar">
+      ${tabs}
+      <button class="planung-tab planung-tab-config" onclick="PLANUNG.gruppenKonfigurieren()" title="Gruppen konfigurieren">⚙</button>
+    </div>`;
+  }
+
+  function gruppeWechseln(gruppeId) {
+    const g = _gruppen.find(g => g.id === gruppeId);
+    if (!g) return;
+    aktivGruppe = g;
+    // Tabs neu rendern
+    const bar = document.querySelector('.planung-gruppen-bar');
+    if (bar) bar.outerHTML = _renderGruppenTabs();
+    // Inhalt nach Tab-Neubau aktualisieren (Bar ist jetzt neu im DOM)
+    // Tabs nochmal aktualisieren (outerHTML hat den Inhalt ersetzt)
+    const newBar = document.querySelector('.planung-gruppen-bar');
+    if (newBar) {
+      // nichts weiter nötig, Tabs wurden bereits gerendert
+    }
+    // Kalender und Sidebar neu laden
+    renderKal();
+    ladeBlocke();
+  }
+
+  // Gruppen-Konfiguration: Trainer wählt, welche Gruppen er sieht
+  async function gruppenKonfigurieren() {
+    if (!_alleGruppen.length) {
+      try { _alleGruppen = await GRUPPEN.laden(); } catch (_) { _alleGruppen = []; }
+    }
+    if (!_alleGruppen.length) {
+      alert('Keine Trainingsgruppen im System vorhanden (Statistikportal).');
+      return;
+    }
+    const ausgewaehlt = new Set(_gruppen.map(g => g.id));
+    const cont = document.getElementById('modal-container');
+    const checks = _alleGruppen.map(g => {
+      const chk = ausgewaehlt.has(g.id) ? ' checked' : '';
+      return `<label class="profil-gruppe-item">
+        <input type="checkbox" class="pg-cfg-cb" value="${g.id}"${chk}>
+        <span>${escapeHtml(g.name)}</span>
+      </label>`;
+    }).join('');
+    cont.innerHTML = `
+      <div class="modal-overlay" onclick="schliesseModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+          <div class="modal-head">
+            <div><div class="modal-eyebrow">Planungsansicht</div><div class="modal-title">Trainingsgruppen konfigurieren</div></div>
+            <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
+          </div>
+          <div class="modal-body">
+            <p class="profil-hint-global">Wähle die Gruppen, für die du Trainingspläne erstellst. Nur diese erscheinen als Tabs.</p>
+            <div class="profil-gruppen-list">${checks}</div>
+            <div class="modal-actions">
+              <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+              <button class="btn btn-primary" onclick="PLANUNG.gruppenKonfigSpeichern()">Speichern</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  async function gruppenKonfigSpeichern() {
+    const ids = [...document.querySelectorAll('.pg-cfg-cb:checked')]
+      .map(cb => parseInt(cb.value, 10)).filter(id => id > 0);
+    try {
+      await apiPut('planung/gruppen-prefs', { gruppen_ids: ids });
+      _gruppen = _alleGruppen.filter(g => ids.includes(g.id));
+      if (!_gruppen.some(g => aktivGruppe && g.id === aktivGruppe.id)) {
+        aktivGruppe = _gruppen[0] || null;
+      }
+      schliesseModal();
+      // Komplette Planungsansicht neu rendern (inkl. Tabs)
+      const main = document.getElementById('main-content');
+      if (main) await render(main);
+    } catch (e) {
+      alert('Fehler beim Speichern: ' + (e.message || ''));
+    }
   }
 
   // ── Kalender ─────────────────────────────────────────────
@@ -270,8 +388,9 @@ const PLANUNG = (() => {
 
     let einheiten = [], feiertage = [];
     try {
+      const gruppeParam = aktivGruppe ? `&gruppe_id=${aktivGruppe.id}` : '';
       const [d1, d2] = await Promise.all([
-        apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }),
+        apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}${gruppeParam}`, { silent: true }),
         apiGet(`feiertage?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }).catch(() => ({ feiertage: [] })),
       ]);
       einheiten = d1.einheiten || [];
@@ -380,7 +499,7 @@ const PLANUNG = (() => {
         const einheitId = parseInt(e.dataTransfer.getData('text/x-einheit-id') || '', 10);
         if (einheitId) { verschiebeEinheit(einheitId, datum); return; }
         const blockId = parseInt(e.dataTransfer.getData('text/plain') || '', 10);
-        if (blockId) BLOECKE.anwenden(blockId, datum);
+        if (blockId) BLOECKE.anwenden(blockId, datum, aktivGruppe ? aktivGruppe.id : null);
       });
     });
 
@@ -399,7 +518,15 @@ const PLANUNG = (() => {
     if (!cont) return;
     try {
       const data = await apiGet('bloecke', { silent: true });
-      renderSidebar(data.bloecke || []);
+      let bloecke = data.bloecke || [];
+      // Nach aktiver Gruppe filtern: zeige Blöcke, die der Gruppe zugeordnet sind
+      // ODER keine Gruppe haben (gruppe-unabhängige Blöcke)
+      if (aktivGruppe) {
+        bloecke = bloecke.filter(b =>
+          !b.gruppen_ids || b.gruppen_ids.length === 0 || b.gruppen_ids.includes(aktivGruppe.id)
+        );
+      }
+      renderSidebar(bloecke);
     } catch (e) {
       cont.innerHTML = `<div class="bloecke-leer bloecke-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
     }
@@ -704,10 +831,14 @@ const PLANUNG = (() => {
     setTimeout(() => div.remove(), 4000);
   }
 
+  function getAktivGruppe() { return aktivGruppe; }
+
   return {
     render, navigateMonth, reloadSidebar, loescheEinheit,
     einheitBearbeiten, einheitBearbeitenSpeichern,
     einheitLoeschenAusEditor, editorFooterRestore: _editorFooterStandard,
     reloadKal: renderKal,
+    gruppeWechseln, gruppenKonfigurieren, gruppenKonfigSpeichern,
+    getAktivGruppe,
   };
 })();

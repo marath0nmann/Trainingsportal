@@ -9,9 +9,11 @@
 
 const PROFIL = (() => {
 
-  let _prefsData = null; // pace/prefs response
-  let _wegData   = null; // weg/prefs response
-  let _localWeg  = [];   // Arbeitskopie der Weg-Einträge
+  let _prefsData    = null; // pace/prefs response
+  let _wegData      = null; // weg/prefs response
+  let _localWeg     = [];   // Arbeitskopie der Weg-Einträge
+  let _alleGruppen  = [];   // alle verfügbaren Gruppen
+  let _meineGruppen = [];   // eigene Gruppen-IDs (Set)
 
   // _typOptions nutzt globales getTypen() aus 02_app.js
   function _typOptions() {
@@ -34,9 +36,11 @@ const PROFIL = (() => {
       '</div>';
 
     try {
-      [_prefsData, _wegData] = await Promise.all([
-        apiGet('pace/prefs', { silent: true }),
-        apiGet('weg/prefs',  { silent: true }),
+      [_prefsData, _wegData, _alleGruppen, _meineGruppen] = await Promise.all([
+        apiGet('pace/prefs',    { silent: true }),
+        apiGet('weg/prefs',     { silent: true }),
+        GRUPPEN.laden(),
+        GRUPPEN.ladeMeine(),
       ]);
     } catch (e) {
       cont.innerHTML =
@@ -201,6 +205,32 @@ const PROFIL = (() => {
       </div>`;
   }
 
+  // ── Trainingsgruppen ──────────────────────────────────────
+
+  function _buildGruppenSection() {
+    if (!_alleGruppen.length) return '<div class="profil-hint">Keine Trainingsgruppen vorhanden.</div>';
+    const meine  = _meineGruppen || {};
+    const meineSet = new Set(meine.gruppen_ids || []);
+    const statSet  = new Set(meine.stat_ids    || []);
+    const checks = _alleGruppen.map(g => {
+      const checked  = meineSet.has(g.id) ? ' checked' : '';
+      const fromStat = statSet.has(g.id);
+      // Statistikportal-Gruppen: angehakt + deaktiviert (read-only)
+      if (fromStat) {
+        return `<label class="profil-gruppe-item profil-gruppe-stat" title="Zuordnung aus dem Statistikportal">
+          <input type="checkbox" class="profil-gruppe-cb" value="${g.id}" checked disabled>
+          <span>${escapeHtml(g.name)}</span>
+          <span class="profil-gruppe-badge">Statistikportal</span>
+        </label>`;
+      }
+      return `<label class="profil-gruppe-item">
+        <input type="checkbox" class="profil-gruppe-cb" value="${g.id}"${checked}>
+        <span>${escapeHtml(g.name)}</span>
+      </label>`;
+    }).join('');
+    return `<div class="profil-gruppen-list">${checks}</div>`;
+  }
+
   // DOM → _localWeg synchronisieren (vor jedem Re-Render aufrufen)
   function _syncWegFromDom() {
     _localWeg.forEach((entry, i) => {
@@ -258,6 +288,15 @@ const PROFIL = (() => {
               Hin- und Rückweg werden automatisch zu den Trainingskilometern addiert.
             </p>
             ${_buildWegSection()}
+
+            ${_alleGruppen.length ? `
+            <div class="profil-section-title" style="margin-top:28px">Trainingsgruppen</div>
+            <p class="profil-hint-global">
+              Wähle die Trainingsgruppen, denen du angehörst. Ein fehlender Eintrag erzeugt
+              einen Hinweis auf der Startseite.
+            </p>
+            ${_buildGruppenSection()}
+            ` : ''}
 
             <div class="modal-actions">
               <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
@@ -340,13 +379,20 @@ const PROFIL = (() => {
       return;
     }
 
+    // Gruppen-Auswahl einlesen (aktivierte, nicht-deaktivierte Checkboxen)
+    const gruppenIds = [...document.querySelectorAll('.profil-gruppe-cb:checked:not(:disabled)')]
+      .map(cb => parseInt(cb.value, 10))
+      .filter(id => id > 0);
+
     try {
       await Promise.all([
-        apiPut('pace/prefs', { prefs: newPrefs }),
-        apiPut('weg/prefs',  { config: newWeg }),
+        apiPut('pace/prefs',    { prefs: newPrefs }),
+        apiPut('weg/prefs',     { config: newWeg }),
+        apiPut('profil/gruppen', { gruppen_ids: gruppenIds }),
       ]);
       PACE.invalidate();
       WEG.invalidate();
+      GRUPPEN.invalidate();
       schliesseModal();
       _notify('Profil gespeichert.', 'ok');
     } catch (e) {

@@ -658,18 +658,37 @@ function renderHeuteSektionHtml(items) {
 async function ladeGlobalePaceWarnung(containerId) {
   const el = document.getElementById(containerId);
   if (!el || !state.user) return;
+
+  let html = '';
+
+  // Pace-Warnung
   try {
     const paceData = await PACE.load();
     const hatKeinePace = !paceData || !paceData.distanzen || Object.keys(paceData.distanzen).length === 0;
-    el.innerHTML = hatKeinePace
-      ? `<div class="pace-warn-global">
-           ⚠ Persönliche Pace noch nicht konfiguriert –
-           <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
-         </div>`
-      : '';
-  } catch (e) {
-    el.innerHTML = '';
-  }
+    if (hatKeinePace) {
+      html += `<div class="pace-warn-global">
+        ⚠ Persönliche Pace noch nicht konfiguriert –
+        <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
+      </div>`;
+    }
+  } catch (e) { /* ignorieren */ }
+
+  // Trainingsgruppen-Warnung
+  try {
+    const meineGruppen = await GRUPPEN.ladeMeine();
+    if (!meineGruppen.gruppen_ids || meineGruppen.gruppen_ids.length === 0) {
+      // Nur anzeigen wenn überhaupt Gruppen existieren
+      const alleGruppen = await GRUPPEN.laden();
+      if (alleGruppen && alleGruppen.length > 0) {
+        html += `<div class="pace-warn-global">
+          ⚠ Noch keiner Trainingsgruppe zugeordnet –
+          <button class="btn-link" onclick="PROFIL.open()">jetzt im Profil einrichten</button>
+        </div>`;
+      }
+    }
+  } catch (e) { /* ignorieren */ }
+
+  el.innerHTML = html;
 }
 
 async function ladeHeuteSektionInto(containerId) {

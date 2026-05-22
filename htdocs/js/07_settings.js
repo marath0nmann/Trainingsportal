@@ -17,7 +17,6 @@ const SETTINGS = (() => {
   let gruppen = [];       // { id, name, farbe, aktiv, reihenfolge, mitglieder_anzahl }
   let gruppenBenutzer = []; // alle Benutzer für Mitglieder-Dialog
   let typenBearbeitet = null; // slug des gerade inline bearbeiteten Typs
-  let standardTreffpunktId = '';
 
   const WOCHENTAGE_LANG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
@@ -43,7 +42,6 @@ const SETTINGS = (() => {
       feiertage     = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
       paceDistanzen = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
       uhrzeiten     = parseUhrzeitenJson(getWert('training_default_uhrzeiten'));
-      standardTreffpunktId = getWert('training_standard_treffpunkt_id') || '';
       typen         = typenR.typen || [];
       gruppen       = gruppenR.gruppen || [];
       rendereForm(main);
@@ -95,8 +93,6 @@ const SETTINGS = (() => {
   }
 
   function rendereForm(main) {
-    const dauerMin = getWert('training_default_dauer_min') || '90';
-
     main.innerHTML =
       '<div style="margin:0 auto;display:flex;flex-direction:column;gap:20px">' +
 
@@ -132,34 +128,6 @@ const SETTINGS = (() => {
             '</div>' +
           '</div>' +
           '<div id="diag-result" style="margin-top:8px"></div>' +
-        '</div>' +
-      '</div>' +
-
-      // ── Standardwerte ──
-      '<div class="panel">' +
-        '<div class="panel-header"><div class="panel-title">⚙️ Standardwerte</div></div>' +
-        '<div class="settings-panel-body">' +
-          '<div class="settings-row">' +
-            '<div class="settings-row-label">' +
-              '<div style="font-size:13px;font-weight:600;color:var(--text)">Standard-Dauer einer Einheit</div>' +
-              '<div style="font-size:12px;color:var(--text2);margin-top:2px">In Minuten. Wird im ICS-Export für DTEND verwendet, wenn eine Uhrzeit gesetzt ist.</div>' +
-            '</div>' +
-            '<div class="settings-row-input">' +
-              '<input type="number" id="set-dauer" min="15" max="600" step="15" value="' + escapeHtml(dauerMin) + '" class="settings-input" style="width:120px">' +
-            '</div>' +
-          '</div>' +
-          '<div class="settings-row">' +
-            '<div class="settings-row-label">' +
-              '<div style="font-size:13px;font-weight:600;color:var(--text)">Standard-Treffpunkt</div>' +
-              '<div style="font-size:12px;color:var(--text2);margin-top:2px">Wird beim Einplanen eines Trainingsblocks vorausgewählt. Kann im Einzelfall überschrieben werden.</div>' +
-            '</div>' +
-            '<div class="settings-row-input">' +
-              '<select id="set-standard-treffpunkt" class="settings-input">' +
-                '<option value="">— kein Standard —</option>' +
-                TREFFPUNKTE.getListe().map(t => `<option value="${t.id}"${String(t.id) === String(standardTreffpunktId) ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('') +
-              '</select>' +
-            '</div>' +
-          '</div>' +
         '</div>' +
       '</div>' +
 
@@ -406,11 +374,9 @@ const SETTINGS = (() => {
 
     const payload = {
       werte: {
-        training_feiertage_ics_urls:      JSON.stringify(liste),
-        training_default_dauer_min:       document.getElementById('set-dauer').value || '90',
-        training_pace_distanzen:          JSON.stringify(paceDistanzen),
-        training_default_uhrzeiten:       JSON.stringify(uhrzeiten),
-        training_standard_treffpunkt_id:  document.getElementById('set-standard-treffpunkt')?.value || '',
+        training_feiertage_ics_urls:  JSON.stringify(liste),
+        training_pace_distanzen:      JSON.stringify(paceDistanzen),
+        training_default_uhrzeiten:   JSON.stringify(uhrzeiten),
       },
     };
     try {
@@ -545,7 +511,7 @@ const SETTINGS = (() => {
       if (bearbeite) {
         return `
           <tr data-slug="${escapeHtml(t.slug)}" style="background:var(--panel-bg,var(--bg2))">
-            <td colspan="5" style="padding:10px 8px">
+            <td colspan="8" style="padding:10px 8px">
               <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">
                 <div style="flex:2;min-width:130px">
                   <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Bezeichnung</div>
@@ -572,6 +538,19 @@ const SETTINGS = (() => {
                   <input type="number" id="typ-fallback-km-${i}" value="${t.fallback_km != null ? t.fallback_km : ''}"
                     min="0" max="9999" step="0.1" placeholder="–" class="settings-input" style="width:80px;text-align:center"
                     title="Standard-Distanz für „In meinen Plan" wenn keine Segmente vorhanden">
+                </div>
+                <div style="min-width:90px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Termindauer (min)</div>
+                  <input type="number" id="typ-dauer-${i}" value="${t.default_dauer_min != null ? t.default_dauer_min : ''}"
+                    min="1" max="600" step="5" placeholder="–" class="settings-input" style="width:80px;text-align:center"
+                    title="Standard-Dauer für ICS-Export (DTEND)">
+                </div>
+                <div style="min-width:160px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Standard-Treffpunkt</div>
+                  <select id="typ-treffpunkt-${i}" class="settings-input" style="width:100%">
+                    <option value="">— kein Standard —</option>
+                    ${TREFFPUNKTE.getListe().map(tp => `<option value="${tp.id}"${String(tp.id) === String(t.default_treffpunkt_id ?? '') ? ' selected' : ''}>${escapeHtml(tp.name)}</option>`).join('')}
+                  </select>
                 </div>
                 <div style="min-width:80px">
                   <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Reihenfolge</div>
@@ -621,6 +600,12 @@ const SETTINGS = (() => {
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
             ${t.fallback_km != null ? t.fallback_km + '&thinsp;km' : '–'}
           </td>
+          <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
+            ${t.default_dauer_min != null ? t.default_dauer_min + '&thinsp;min' : '–'}
+          </td>
+          <td style="padding:6px 8px;text-align:left;color:var(--text2);font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${escapeHtml((TREFFPUNKTE.getListe().find(tp => String(tp.id) === String(t.default_treffpunkt_id ?? '')) || {}).name || '–')}
+          </td>
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">#${t.reihenfolge}</td>
           <td style="padding:6px 8px;text-align:center;font-size:12px;color:var(--text2)">${t.aktiv ? '✓' : '—'}</td>
           <td style="padding:6px 8px;text-align:right;white-space:nowrap">
@@ -640,6 +625,8 @@ const SETTINGS = (() => {
             <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Bezeichnung</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Blöcke</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Fallback km</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Termindauer</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Treffpunkt</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Reihenfolge</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Aktiv</th>
             <th></th>
@@ -667,12 +654,16 @@ const SETTINGS = (() => {
     const farbe       = farbeAktiv ? (document.getElementById(`typ-farbe-${idx}`)?.value || null) : null;
     const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
     const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
-    const fkRaw       = (document.getElementById(`typ-fallback-km-${idx}`)?.value || '').trim();
-    const fallback_km       = fkRaw !== '' ? parseFloat(fkRaw) : null;
+    const fkRaw         = (document.getElementById(`typ-fallback-km-${idx}`)?.value || '').trim();
+    const fallback_km   = fkRaw !== '' ? parseFloat(fkRaw) : null;
+    const dauerRaw      = (document.getElementById(`typ-dauer-${idx}`)?.value || '').trim();
+    const default_dauer_min = dauerRaw !== '' ? parseInt(dauerRaw, 10) : null;
+    const tpRaw         = document.getElementById(`typ-treffpunkt-${idx}`)?.value || '';
+    const default_treffpunkt_id = tpRaw !== '' ? parseInt(tpRaw, 10) : null;
     const ist_kein_training = document.getElementById(`typ-kein-training-${idx}`)?.checked ? true : false;
     const hat_strecke       = document.getElementById(`typ-hat-strecke-${idx}`)?.checked ? true : false;
     try {
-      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv, fallback_km, ist_kein_training, hat_strecke });
+      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv, fallback_km, default_dauer_min, default_treffpunkt_id, ist_kein_training, hat_strecke });
       if (!opts || !opts.silent) benachrichtigen('Typ gespeichert.', 'ok');
       typenBearbeitet = null;
       const r = await apiGet('admin/typen', { silent: true });

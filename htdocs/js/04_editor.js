@@ -46,7 +46,8 @@ const EDITOR = (() => {
     // Treffpunkte für Dropdown laden
     let tpListe = [];
     try { tpListe = await TREFFPUNKTE.laden(); } catch (_) {}
-    const curTpId = e.treffpunkt ? e.treffpunkt.id : null;
+    const curTpId = e.treffpunkt ? e.treffpunkt.id
+      : (ist_neu ? ((appConfig.typen || []).find(t => t.slug === e.typ)?.default_treffpunkt_id ?? null) : null);
     const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
       tpListe.map(t => `<option value="${t.id}"${t.id === curTpId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
 
@@ -226,6 +227,15 @@ const EDITOR = (() => {
     const segWrap    = document.getElementById('ed-seg-wrap');
     if (komootWrap) komootWrap.style.display = istRunde ? '' : 'none';
     if (segWrap)    segWrap.style.display    = istRunde ? 'none' : '';
+
+    // Standard-Treffpunkt des Typs vorausfüllen – nur wenn noch kein Treffpunkt gesetzt
+    const tpSel = document.getElementById('ed-treffpunkt-id');
+    if (tpSel && tpSel.value === '' && currentId === null) {
+      const typDef = (appConfig.typen || []).find(t => t.slug === typ);
+      if (typDef && typDef.default_treffpunkt_id) {
+        tpSel.value = String(typDef.default_treffpunkt_id);
+      }
+    }
   }
 
   function _sammlePayload() {
