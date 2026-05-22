@@ -1,7 +1,7 @@
 # Changelog
 
 ## v109
-- Serientermine: Trainingsblöcke als wiederkehrende Termine anlegen (täglich / wöchentlich / 14-tägig / monatlich / benutzerdefiniert), mit Wochentag-Auswahl, Enddatum oder Anzahl Termine und Live-Vorschau; DB-Migration #8 (training_serien + serie_id); Serien komplett, ab Datum oder einzeln löschbar
+- Alle hardcodierten Trainingstypen entfernt: neue DB-Flags `ist_kein_training` und `hat_strecke` in `training_typen`; globale Helpers `getTypen()`, `getTypLabel()`, `hatStrecke()`, `istKeinTraining()` in allen Modulen; Admin-UI erlaubt Konfiguration der Flags; API-Migration 8 setzt Defaults
 
 ## v108
 - Fix: Typ-Bezeichnungen überall aus appConfig.typen (Admin-Einstellungen) gelesen – keine hardcodierten Abkürzungen mehr (z. B. "Funkt. Tr." → "Funktionelles Training")

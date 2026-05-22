@@ -142,21 +142,8 @@ const KAL_POPOVER = (() => {
     currentId = null;
   }
 
-  function _getTypLabel(slug) {
-    const typen = (appConfig && Array.isArray(appConfig.typen) && appConfig.typen.length)
-      ? appConfig.typen
-      : [
-          { slug: 'intervall',     bezeichnung: 'Intervall' },
-          { slug: 'dauerlauf',     bezeichnung: 'Dauerlauf' },
-          { slug: 'funktionell',   bezeichnung: 'Funktionelles Training' },
-          { slug: 'runde',         bezeichnung: 'Runde / Strecke' },
-          { slug: 'event',         bezeichnung: 'Event / Wettkampf' },
-          { slug: 'frei',          bezeichnung: 'Sonstiges' },
-          { slug: 'kein_training', bezeichnung: 'Kein Training' },
-        ];
-    const t = typen.find(x => x.slug === slug);
-    return t ? t.bezeichnung : slug;
-  }
+  // _getTypLabel: delegiert an globales getTypLabel() aus 02_app.js
+  function _getTypLabel(slug) { return getTypLabel(slug); }
 
   return { initItems, hide: _hide };
 })();
@@ -425,17 +412,7 @@ const PLANUNG = (() => {
       return;
     }
 
-    const typenCfg = (appConfig && Array.isArray(appConfig.typen) && appConfig.typen.length)
-      ? appConfig.typen
-      : [
-          { slug: 'intervall',     bezeichnung: 'Intervall' },
-          { slug: 'dauerlauf',     bezeichnung: 'Dauerlauf' },
-          { slug: 'funktionell',   bezeichnung: 'Funktionelles Training' },
-          { slug: 'runde',         bezeichnung: 'Runde / Strecke' },
-          { slug: 'event',         bezeichnung: 'Event / Wettkampf' },
-          { slug: 'frei',          bezeichnung: 'Sonstiges' },
-          { slug: 'kein_training', bezeichnung: 'Kein Training' },
-        ];
+    const typenCfg = getTypen();
 
     const gruppen = {};
     bloecke.forEach(b => {
