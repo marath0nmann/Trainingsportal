@@ -1,5 +1,9 @@
 # Changelog
 
+## v137
+- Kalender-Popover: Browser-Tooltip (title) auf Kalendereinträgen entfernt – kein doppelter Hinweis mehr wenn Popover sichtbar
+- Kalender-Popover: Bei übernommenen Einheiten (abonniert/manuell) erscheint jetzt „Aus meinem Plan entfernen" + Abo-Checkbox statt gar keiner Aktion
+
 ## v136
 - Kalender: Private Einheiten lassen sich per Drag & Drop auf einen anderen Tag verschieben (übernommene Team-Einheiten bleiben fest); Drop-Zelle wird farblich hervorgehoben
 

@@ -513,8 +513,7 @@ async function renderKalender(main, monthArg) {
             ? `draggable="true" ondragstart="_kalDragStart(${e.id},event)" ondragend="_kalDragEnd(event)"`
             : '';
           return `<div class="${cls}" data-privat-id="${e.id}" ${adoptedAttr} ${dragAttr}
-                       onclick="${clickFn}"
-                       title="${escapeHtml(e.titel)}">
+                       onclick="${clickFn}">
             ${timeHtml}<span class="kal-item-title">${escapeHtml(e.titel)}</span>
             ${kmBadge}
             <button class="kal-item-del" onclick="event.stopPropagation();MEINPLAN.loeschePrivat(${e.id})" title="Löschen">×</button>
@@ -522,7 +521,7 @@ async function renderKalender(main, monthArg) {
         }
         const cls = `kal-item kal-typ-${e.typ}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
         const time = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
-        return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
+        return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
       }).join('');
 
       const addBtn = (angemeldet && inMonth)
