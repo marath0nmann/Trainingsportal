@@ -492,7 +492,7 @@ const SETTINGS = (() => {
       if (bearbeite) {
         return `
           <tr data-slug="${escapeHtml(t.slug)}" style="background:var(--panel-bg,var(--bg2))">
-            <td colspan="5" style="padding:10px 8px">
+            <td colspan="8" style="padding:10px 8px">
               <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">
                 <div style="flex:2;min-width:130px">
                   <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Bezeichnung</div>
@@ -521,7 +521,7 @@ const SETTINGS = (() => {
                     title="Standard-Distanz für „In meinen Plan" wenn keine Segmente vorhanden">
                 </div>
                 <div style="min-width:90px">
-                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Dauer (min)</div>
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Termindauer (min)</div>
                   <input type="number" id="typ-dauer-${i}" value="${t.default_dauer_min != null ? t.default_dauer_min : ''}"
                     min="1" max="600" step="5" placeholder="–" class="settings-input" style="width:80px;text-align:center"
                     title="Standard-Dauer für ICS-Export (DTEND)">
@@ -581,6 +581,12 @@ const SETTINGS = (() => {
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
             ${t.fallback_km != null ? t.fallback_km + '&thinsp;km' : '–'}
           </td>
+          <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
+            ${t.default_dauer_min != null ? t.default_dauer_min + '&thinsp;min' : '–'}
+          </td>
+          <td style="padding:6px 8px;text-align:left;color:var(--text2);font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${escapeHtml((TREFFPUNKTE.getListe().find(tp => String(tp.id) === String(t.default_treffpunkt_id ?? '')) || {}).name || '–')}
+          </td>
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">#${t.reihenfolge}</td>
           <td style="padding:6px 8px;text-align:center;font-size:12px;color:var(--text2)">${t.aktiv ? '✓' : '—'}</td>
           <td style="padding:6px 8px;text-align:right;white-space:nowrap">
@@ -600,6 +606,8 @@ const SETTINGS = (() => {
             <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Bezeichnung</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Blöcke</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Fallback km</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Termindauer</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600">Treffpunkt</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Reihenfolge</th>
             <th style="text-align:center;padding:6px 8px;color:var(--text2);font-weight:600">Aktiv</th>
             <th></th>

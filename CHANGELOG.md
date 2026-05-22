@@ -1,6 +1,6 @@
 # Changelog
 
-## v120
+## v121
 - Trainingsgruppen: Athleten können sich im Profil einer oder mehreren Trainingsgruppen zuordnen; fehlt die Zuordnung, erscheint ein Warnhinweis auf der Startseite (identischer Style wie Pace-Warnung)
 - Planungsansicht: Gruppen-Tabs oben; Trainer wählt über „⚙ Gruppen konfigurieren", welche Gruppen er sieht – Kalender und Block-Sidebar filtern nach aktivem Tab
 - Trainingsblöcke können im Block-Editor einer oder mehreren Trainingsgruppen zugeordnet werden
