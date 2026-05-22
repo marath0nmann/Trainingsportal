@@ -1,5 +1,8 @@
 # Changelog
 
+## v110
+- Fix: PHP-Syntaxfehler in GET /config (escapte \$r-Variablen) behoben → HTTP 500 beim Laden behoben
+
 ## v109
 - Alle hardcodierten Trainingstypen entfernt: neue DB-Flags `ist_kein_training` und `hat_strecke` in `training_typen`; globale Helpers `getTypen()`, `getTypLabel()`, `hatStrecke()`, `istKeinTraining()` in allen Modulen; Admin-UI erlaubt Konfiguration der Flags; API-Migration 8 setzt Defaults
 

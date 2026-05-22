@@ -1309,10 +1309,10 @@ function handleConfig(): void {
                 'slug'        => $r['slug'],
                 'bezeichnung' => $r['bezeichnung'],
                 'farbe'       => $r['farbe'] ?? '',
-                'reihenfolge'       => (int)\$r['reihenfolge'],
-                'fallback_km'       => \$r['fallback_km'] !== null ? (float)\$r['fallback_km'] : null,
-                'ist_kein_training' => !empty(\$r['ist_kein_training']),
-                'hat_strecke'       => !empty(\$r['hat_strecke']),
+                'reihenfolge'       => (int)$r['reihenfolge'],
+                'fallback_km'       => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+                'ist_kein_training' => !empty($r['ist_kein_training']),
+                'hat_strecke'       => !empty($r['hat_strecke']),
             ];
         }, $typenRows);
     } catch (Throwable $_) {
