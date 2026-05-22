@@ -109,6 +109,7 @@
 .kal-item.kal-typ-funktionell  { border-left-color: #c08010; }
 .kal-item.kal-typ-runde        { border-left-color: var(--accent); }
 .kal-item.kal-typ-event        { border-left-color: #8845c0; }
+.kal-item.kal-typ-wettkampf   { border-left-color: #27ae60; background: rgba(46,204,113,.15); }
 .kal-item.kal-typ-kein_training {
   border-left-color: var(--border); opacity: .65; font-style: italic;
 }

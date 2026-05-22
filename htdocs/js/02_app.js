@@ -451,11 +451,16 @@ async function renderKalender(main, monthArg) {
   });
 
   // Wettkampf-Termine: predicted/manuelles Datum → Array von Serien
+  // Tage mit eigenem persönlichen Wettkampf-Eintrag: 🏆-Chip dort unterdrücken (kein Doppeleintrag)
+  const privatWettkampfDaten = new Set(
+    privatGefiltert.filter(e => e.typ === 'wettkampf').map(e => e.datum)
+  );
   const wettkampfSerien  = wettkampfRaw;
   const wettkampfBeiDatum = {};
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
     wettkampfSerien.forEach(s => {
       if (s.aktiv === 0) return; // Deaktivierte Wettkämpfe ausblenden
+      if (privatWettkampfDaten.has(s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum))) return;
       const datum = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
       if (datum && datum >= von && datum <= bis) {
         (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);
@@ -1625,7 +1630,7 @@ async function _saveWettkampfEintrag(serieId) {
   const name      = _decodeHtml(serie.name || serie.kuerzel || '');
   const disziplin = (document.getElementById('wk-disz-sel')?.value || '').trim()
                  || (document.getElementById('wk-disz-txt')?.value || '').trim();
-  const titel     = (name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
+  const titel     = ('🏆 ' + name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
 
   const btn = document.querySelector('#modal-container .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
@@ -1633,7 +1638,7 @@ async function _saveWettkampfEintrag(serieId) {
   try {
     await apiPost('mein-plan/einheiten', {
       datum,
-      typ:      'event',
+      typ:      'wettkampf',
       titel,
       bemerkung: disziplin || null,
     });

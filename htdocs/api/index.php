@@ -372,6 +372,12 @@ function _migrationStmts(): array
             " COMMENT 'JSON-Array: Disziplinen aus Ergebnissen, die ausgeblendet werden'" .
             " AFTER disziplinen_extra",
         ],
+
+        // ── 14: Trainingstyp „wettkampf" – hardcodierter Typ für persönliche Wettkampf-Einträge ──
+        14 => [
+            "INSERT IGNORE INTO " . DB::tbl('training_typen') .
+            " (slug, bezeichnung, farbe, reihenfolge, aktiv) VALUES ('wettkampf', 'Wettkampf', '#27ae60', 7, 1)",
+        ],
     ];
 }
 
