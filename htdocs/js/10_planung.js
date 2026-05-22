@@ -103,12 +103,11 @@ const KAL_POPOVER = (() => {
           <button class="btn btn-primary btn-sm"
             onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"
             data-e="${eJson}" data-s="${segsJson}">In meinen Plan</button>
-          ${aboAktiv
-            ? `<button class="btn btn-ghost btn-sm" onclick="MEINPLAN.aboDeaktivieren('${typEsc}')">Alle künftigen aus meinem Plan entfernen</button>`
-            : `<button class="btn btn-ghost btn-sm"
-                onclick="MEINPLAN.aboAktivieren('${typEsc}', ${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"
-                data-e="${eJson}" data-s="${segsJson}">Alle künftigen in meinen Plan</button>`
-          }
+          <label class="kal-pop-abo-label">
+            <input type="checkbox" class="kal-pop-abo-cb" ${aboAktiv ? 'checked' : ''}
+              onchange="MEINPLAN.aboToggle('${typEsc}', this.checked, this)">
+            <span>${escapeHtml(typLabel)} abonnieren</span>
+          </label>
         </div>` : ''}
         ${kannEdit ? `<div class="kal-pop-actions">
           <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeiten(${einheitId})">Bearbeiten</button>

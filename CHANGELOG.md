@@ -1,5 +1,8 @@
 # Changelog
 
+## v119
+- „Alle künftigen in meinen Plan" entfernt (war fehlerhaft); ersetzt durch Checkbox „[Typ] abonnieren" im Kalender-Popover – neu erstellte Einheiten dieses Typs werden automatisch in den persönlichen Plan übernommen
+
 ## v117
 - Serientermine: Löschen-Button jetzt auch im Kalender- und Planung-Editor (bisher nur im Admin-Editor); bei Serien erscheint die Auswahl „Nur dieser / Dieser und alle folgenden / Gesamte Serie"
 - Fix: globale `benachrichtigen()`-Funktion ergänzt – Speichern/Löschen im Kalender-Slim-Modal lief zuvor in einen ReferenceError (Daten gespeichert, aber Kalender wurde nicht aktualisiert)
