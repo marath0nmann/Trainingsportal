@@ -335,6 +335,35 @@ function _migrationStmts(): array
               PRIMARY KEY (block_id, gruppe_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         ],
+
+        // ── 12: Wettkampf-Planung + Anmeldungen ─────────────────────────
+        // training_wettkampf_planung  → ein Planungseintrag pro Veranstaltungsserie
+        //   (naechstes_datum = manuell gesetztes Datum; sonst Prognose im Frontend)
+        // training_wettkampf_anmeldungen → Athleten melden sich für eine Disziplin an
+        12 => [
+            "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_wettkampf_planung') . " (
+              id                INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+              serie_id          INT           NOT NULL COMMENT 'Referenz auf veranstaltung_serien.id',
+              naechstes_datum   DATE          NULL,
+              disziplinen_extra TEXT          NULL COMMENT 'JSON-Array mit zusätzlichen Disziplinen',
+              aktiv             TINYINT(1)    NOT NULL DEFAULT 1,
+              erstellt_am       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              UNIQUE KEY uk_serie (serie_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_wettkampf_anmeldungen') . " (
+              id           INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+              planung_id   INT UNSIGNED  NOT NULL,
+              benutzer_id  INT UNSIGNED  NOT NULL,
+              disziplin    VARCHAR(200)  NOT NULL,
+              bemerkung    TEXT          NULL,
+              erstellt_am  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              UNIQUE KEY uk_planung_benutzer (planung_id, benutzer_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ],
     ];
 }
 
@@ -429,6 +458,10 @@ try {
     }
     if ($head === 'mein-plan') {
         handleMeinPlan($method, $tail);
+        exit;
+    }
+    if ($head === 'wettkampf') {
+        handleWettkampf($method, $tail ?? '');
         exit;
     }
     http_response_code(404);
@@ -4066,5 +4099,292 @@ function handleKalPrefs(string $method, string $sub): void
 
     http_response_code(405);
     echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+}
+
+// ============================================================
+// Wettkämpfe – Veranstaltungsserien aus dem Statistikportal
+// mit Planungs- und Anmeldungsfunktion
+//
+// GET  /wettkampf                        → Alle Serien inkl. Disziplinen, Planung, Anmeldungen
+// PUT  /wettkampf/{serie_id}/planung     → Nächstes Datum + Extra-Disziplinen setzen (Admin)
+// POST /wettkampf/{serie_id}/anmeldungen → Für Disziplin anmelden (erstellt Planung falls nötig)
+// DEL  /wettkampf/anmeldungen/{id}       → Anmeldung stornieren
+// ============================================================
+function handleWettkampf(string $method, string $tail): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    $userId  = (int)$user['id'];
+    $isAdmin = in_array($user['rolle'] ?? '', ['admin', 'trainer']);
+
+    $tws = DB::tbl('veranstaltung_serien');
+    $tvv = DB::tbl('veranstaltungen');
+    $ter = DB::tbl('ergebnisse');
+    $tdm = DB::tbl('disziplin_mapping');
+    $twp = DB::tbl('training_wettkampf_planung');
+    $twa = DB::tbl('training_wettkampf_anmeldungen');
+    $tbu = DB::tbl('benutzer');
+    $tat = DB::tbl('athleten');
+
+    // ── POST /{serie_id}/anmeldungen ─────────────────────────────
+    if (preg_match('/^(\d+)\/anmeldungen$/', $tail, $m) && $method === 'POST') {
+        $serieId   = (int)$m[1];
+        $in        = readJsonBody();
+        $disziplin = trim((string)($in['disziplin'] ?? ''));
+        $bemerkung = trim((string)($in['bemerkung'] ?? '')) ?: null;
+
+        if (!$disziplin) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'fehler' => 'Disziplin fehlt']);
+            return;
+        }
+
+        $serie = DB::fetchOne("SELECT id FROM $tws WHERE id=?", [$serieId]);
+        if (!$serie) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Serie nicht gefunden']);
+            return;
+        }
+
+        // Planung holen oder auto-anlegen
+        $planung = DB::fetchOne("SELECT id FROM $twp WHERE serie_id=?", [$serieId]);
+        if (!$planung) {
+            DB::query("INSERT INTO $twp (serie_id) VALUES (?)", [$serieId]);
+            $planungId = (int)DB::lastInsertId();
+        } else {
+            $planungId = (int)$planung['id'];
+        }
+
+        // Upsert – Disziplin ändern ist erlaubt
+        DB::query(
+            "INSERT INTO $twa (planung_id, benutzer_id, disziplin, bemerkung)
+             VALUES (?,?,?,?)
+             ON DUPLICATE KEY UPDATE disziplin=VALUES(disziplin), bemerkung=VALUES(bemerkung)",
+            [$planungId, $userId, $disziplin, $bemerkung]
+        );
+        echo json_encode(['ok' => true, 'planung_id' => $planungId]);
+        return;
+    }
+
+    // ── DELETE /anmeldungen/{id} ──────────────────────────────────
+    if (preg_match('/^anmeldungen\/(\d+)$/', $tail, $m) && $method === 'DELETE') {
+        $anmId = (int)$m[1];
+        $anm   = DB::fetchOne("SELECT id, benutzer_id FROM $twa WHERE id=?", [$anmId]);
+        if (!$anm) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Anmeldung nicht gefunden']);
+            return;
+        }
+        if ((int)$anm['benutzer_id'] !== $userId && !$isAdmin) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Kein Zugriff']);
+            return;
+        }
+        DB::query("DELETE FROM $twa WHERE id=?", [$anmId]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── PUT /{serie_id}/planung ───────────────────────────────────
+    if (preg_match('/^(\d+)\/planung$/', $tail, $m) && $method === 'PUT') {
+        if (!$isAdmin) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Nur Admins/Trainer dürfen die Planung bearbeiten']);
+            return;
+        }
+        $serieId = (int)$m[1];
+        $in      = readJsonBody();
+
+        $sets   = [];
+        $params = [];
+
+        if (array_key_exists('naechstes_datum', $in)) {
+            $sets[]   = 'naechstes_datum=?';
+            $params[] = ($in['naechstes_datum'] !== null && $in['naechstes_datum'] !== '')
+                        ? (string)$in['naechstes_datum'] : null;
+        }
+        if (array_key_exists('disziplinen_extra', $in)) {
+            $arr      = is_array($in['disziplinen_extra']) ? $in['disziplinen_extra'] : [];
+            $arr      = array_values(array_filter(array_map('trim', $arr)));
+            $sets[]   = 'disziplinen_extra=?';
+            $params[] = count($arr) ? json_encode($arr) : null;
+        }
+
+        $planung = DB::fetchOne("SELECT id FROM $twp WHERE serie_id=?", [$serieId]);
+        if ($planung) {
+            if ($sets) {
+                $params[] = $planung['id'];
+                DB::query("UPDATE $twp SET " . implode(',', $sets) . " WHERE id=?", $params);
+            }
+        } else {
+            $nd = array_key_exists('naechstes_datum', $in)
+                ? (($in['naechstes_datum'] !== null && $in['naechstes_datum'] !== '') ? (string)$in['naechstes_datum'] : null)
+                : null;
+            $de = array_key_exists('disziplinen_extra', $in) && is_array($in['disziplinen_extra'])
+                ? json_encode(array_values(array_filter(array_map('trim', $in['disziplinen_extra']))))
+                : null;
+            DB::query(
+                "INSERT INTO $twp (serie_id, naechstes_datum, disziplinen_extra) VALUES (?,?,?)",
+                [$serieId, $nd, $de]
+            );
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── GET /wettkampf ────────────────────────────────────────────
+    if ($method === 'GET' && $tail === '') {
+        try {
+            $serien = DB::fetchAll(
+                "SELECT vs.id, vs.name, vs.kuerzel,
+                        COUNT(DISTINCT v.id)      AS anz_veranstaltungen,
+                        MIN(v.datum)              AS erstes_datum,
+                        MAX(v.datum)              AS letztes_datum,
+                        (SELECT v2.ort FROM $tvv v2
+                         WHERE v2.serie_id = vs.id
+                           AND v2.geloescht_am IS NULL
+                           AND v2.genehmigt   = 1
+                         ORDER BY v2.datum DESC LIMIT 1) AS ort_letzter,
+                        wp.id                     AS planung_id,
+                        wp.naechstes_datum,
+                        wp.disziplinen_extra
+                 FROM $tws vs
+                 LEFT JOIN $tvv v  ON v.serie_id = vs.id
+                                   AND v.geloescht_am IS NULL
+                                   AND v.genehmigt   = 1
+                 LEFT JOIN $twp wp ON wp.serie_id = vs.id
+                 GROUP BY vs.id, vs.name, vs.kuerzel,
+                          wp.id, wp.naechstes_datum, wp.disziplinen_extra
+                 ORDER BY MONTH(MAX(v.datum)) ASC,
+                          DAY(MAX(v.datum))   ASC,
+                          vs.name             ASC"
+            );
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'fehler' => 'Datenbankfehler', 'detail' => $e->getMessage()]);
+            return;
+        }
+
+        if (empty($serien)) {
+            echo json_encode(['ok' => true, 'serien' => []]);
+            return;
+        }
+
+        $serieIds = array_map(fn($s) => (int)$s['id'], $serien);
+        $ph       = implode(',', array_fill(0, count($serieIds), '?'));
+
+        // Disziplinen aus Ergebnissen, sortiert nach Häufigkeit
+        $diszRows = [];
+        try {
+            $diszRows = DB::fetchAll(
+                "SELECT v.serie_id,
+                        COALESCE(dm.anzeige_name, e.disziplin) AS disziplin,
+                        COUNT(*) AS anz
+                 FROM $ter e
+                 JOIN $tvv v  ON v.id = e.veranstaltung_id
+                 LEFT JOIN $tdm dm ON dm.id = e.disziplin_mapping_id
+                 WHERE v.serie_id IN ($ph)
+                   AND e.geloescht_am IS NULL
+                   AND v.geloescht_am IS NULL
+                   AND v.genehmigt   = 1
+                   AND e.disziplin   IS NOT NULL
+                 GROUP BY v.serie_id, COALESCE(dm.anzeige_name, e.disziplin)
+                 ORDER BY v.serie_id, COUNT(*) DESC",
+                $serieIds
+            );
+        } catch (\Throwable $e) { /* Disziplinen sind optional */ }
+
+        $diszBySerie = [];
+        $seenBySerie = [];
+        foreach ($diszRows as $d) {
+            $sid  = (int)$d['serie_id'];
+            $disp = $d['disziplin'];
+            if (!isset($seenBySerie[$sid])) $seenBySerie[$sid] = [];
+            if (in_array($disp, $seenBySerie[$sid], true)) continue;
+            $seenBySerie[$sid][] = $disp;
+            $diszBySerie[$sid][] = $disp;
+        }
+
+        // Anmeldungen für alle aktiven Planungen
+        $planungIds     = array_values(array_filter(
+            array_map(fn($s) => $s['planung_id'] ? (int)$s['planung_id'] : null, $serien)
+        ));
+        $anmByPlanungId = [];
+        if ($planungIds) {
+            $phAnm = implode(',', array_fill(0, count($planungIds), '?'));
+            try {
+                $anmRows = DB::fetchAll(
+                    "SELECT a.id, a.planung_id, a.benutzer_id, a.disziplin, a.bemerkung,
+                            COALESCE(
+                              NULLIF(TRIM(CONCAT_WS(' ', ath.vorname, ath.nachname)), ''),
+                              b.benutzername
+                            ) AS anzeige_name
+                     FROM $twa a
+                     JOIN $tbu b ON b.id = a.benutzer_id
+                     LEFT JOIN $tat ath ON ath.id = b.athlet_id
+                     WHERE a.planung_id IN ($phAnm)
+                     ORDER BY a.erstellt_am ASC",
+                    $planungIds
+                );
+                foreach ($anmRows as $a) {
+                    $pid = (int)$a['planung_id'];
+                    $anmByPlanungId[$pid][] = [
+                        'id'          => (int)$a['id'],
+                        'benutzer_id' => (int)$a['benutzer_id'],
+                        'name'        => $a['anzeige_name'],
+                        'disziplin'   => $a['disziplin'],
+                        'bemerkung'   => $a['bemerkung'],
+                    ];
+                }
+            } catch (\Throwable $e) { /* Anmeldungen sind optional */ }
+        }
+
+        $result = [];
+        foreach ($serien as $s) {
+            $sid       = (int)$s['id'];
+            $pid       = $s['planung_id'] ? (int)$s['planung_id'] : null;
+            $diszExtra = [];
+            if ($s['disziplinen_extra']) {
+                $decoded = json_decode((string)$s['disziplinen_extra'], true);
+                if (is_array($decoded)) $diszExtra = $decoded;
+            }
+            $anmeldungen    = $pid ? ($anmByPlanungId[$pid] ?? []) : [];
+            $meineAnmId     = null;
+            $meineDisziplin = null;
+            foreach ($anmeldungen as $anm) {
+                if ((int)$anm['benutzer_id'] === $userId) {
+                    $meineAnmId     = (int)$anm['id'];
+                    $meineDisziplin = $anm['disziplin'];
+                    break;
+                }
+            }
+            $result[] = [
+                'id'                  => $sid,
+                'name'                => $s['name'],
+                'kuerzel'             => $s['kuerzel'],
+                'anz_veranstaltungen' => (int)$s['anz_veranstaltungen'],
+                'erstes_datum'        => $s['erstes_datum'],
+                'letztes_datum'       => $s['letztes_datum'],
+                'ort_letzter'         => $s['ort_letzter'],
+                'disziplinen'         => $diszBySerie[$sid] ?? [],
+                'disziplinen_extra'   => $diszExtra,
+                'planung_id'          => $pid,
+                'naechstes_datum'     => $s['naechstes_datum'],
+                'anmeldungen'         => $anmeldungen,
+                'meine_anmeldung_id'  => $meineAnmId,
+                'meine_disziplin'     => $meineDisziplin,
+            ];
+        }
+
+        echo json_encode(['ok' => true, 'serien' => $result]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
 }
 

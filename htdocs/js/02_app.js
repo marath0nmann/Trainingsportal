@@ -219,6 +219,8 @@ function renderAdminPage(main, subTab) {
           onclick="navigateAdmin('einstellungen')">Einstellungen</button>
         <button class="btn btn-ghost${tab === 'trainings' ? ' active' : ''}"
           onclick="navigateAdmin('trainings')">Trainings</button>
+        <button class="btn btn-ghost${tab === 'wettkampf' ? ' active' : ''}"
+          onclick="navigateAdmin('wettkampf')">Wettkämpfe</button>
       </div>
       <div id="admin-content"></div>
     </div>`;
@@ -228,6 +230,8 @@ function renderAdminPage(main, subTab) {
     renderAdminSystem(contentEl);
   } else if (tab === 'trainings') {
     ADMIN_TRAININGS.render(contentEl);
+  } else if (tab === 'wettkampf') {
+    ADMIN_WETTKAMPF.render(contentEl);
   } else {
     SETTINGS.render(contentEl);
   }
