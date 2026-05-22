@@ -217,5 +217,6 @@ const MEINPLAN = (() => {
     neuePrivatEinheit, bearbeitePrivat, loeschePrivat,
     uebernehmenVonOeffentlich, speichern,
     aboToggle,
+    berechneKm: _berechneKm,
   };
 })();

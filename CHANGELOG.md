@@ -1,5 +1,9 @@
 # Changelog
 
+## v124
+- Fix: „Mein Plan"-Legende-Dot zeigt jetzt korrekten Stil (getönte Hintergrundfläche + solider linker Streifen statt Dashed-Kreis)
+- Heute-Sektion: Button „☑ Ich bin dabei!" / „☐ Ich bin dabei?" zum schnellen Ein-/Austragen aus dem persönlichen Plan
+
 ## v123
 - Trainingsgruppen: neue DB-Tabellen, Admin-CRUD und Mitgliederverwaltung; Kalender-Legende zeigt Checkboxen pro Gruppe statt „Teamplan"; Gruppen-Bezeichnung statt Hardcode; Filter-Zustand wird serverseitig pro Benutzer gespeichert
 
