@@ -1,10 +1,20 @@
 # Changelog
 
-## v106
+## v109
 - Serientermine: Trainingsblöcke als wiederkehrende Termine anlegen (täglich / wöchentlich / 14-tägig / monatlich / benutzerdefiniert), mit Wochentag-Auswahl, Enddatum oder Anzahl Termine und Live-Vorschau; DB-Migration #8 (training_serien + serie_id); Serien komplett, ab Datum oder einzeln löschbar
 
+## v108
+- Fix: Typ-Bezeichnungen überall aus appConfig.typen (Admin-Einstellungen) gelesen – keine hardcodierten Abkürzungen mehr (z. B. "Funkt. Tr." → "Funktionelles Training")
+
+## v107
+- Fix: Pausendistanzen (GP/TP/BP) werden zur Trainingsdistanz addiert (z. B. 10 × 500 m + 100 m GP = 6 km statt 5 km)
+
+## v106
+- Fix: Anreise-km im Kalender werden jetzt auch für übernommene private Einheiten berücksichtigt (API liefert treffpunkt_id via JOIN; WEG-Matching nutzt jetzt auch treffpunkt_id direkt)
+
 ## v105
-- Fix: Trainingstypen – Bearbeiten als ✒-Icon + Settings-Breite 680→900px
+- Fix: Trainingsdistanz im Modal korrekt berechnet (Wiederholungen werden jetzt multipliziert, z. B. 12 × 400 m = 4,8 km)
+- Fix: Kalender-KW-Summe und km-Badges berücksichtigen jetzt die Anreise-km aus den Weg-Einstellungen
 
 ## v104
 - Hinweis-Toasts erscheinen jetzt am unteren Bildschirmrand (statt oben rechts)

@@ -29,7 +29,9 @@ const WEG = (() => {
   // (null in prefs = passt auf jede Einheit ohne Treffpunkt)
   function wegKm(einheit) {
     if (!cache || !Array.isArray(cache.prefs) || !cache.prefs.length) return null;
-    const tpId = einheit.treffpunkt ? (einheit.treffpunkt.id || null) : null;
+    // treffpunkt.id (öffentliche Einheiten) oder treffpunkt_id (private Einheiten via ref JOIN)
+    const tpId = einheit.treffpunkt ? (einheit.treffpunkt.id || null)
+               : (einheit.treffpunkt_id != null ? einheit.treffpunkt_id : null);
     const match = cache.prefs.find(p => {
       if (p.typ !== einheit.typ) return false;
       if (p.treffpunkt_id == null) return tpId == null; // null passt nur auf "kein Treffpunkt"

@@ -3349,9 +3349,11 @@ function handleMeinPlan(string $method, string $tail): void
             [$von, $bis]
         );
         $privatRows = DB::fetchAll(
-            'SELECT * FROM ' . DB::tbl('training_privat_einheiten') . '
-             WHERE benutzer_id = ? AND datum BETWEEN ? AND ?
-             ORDER BY datum',
+            'SELECT p.*, e.treffpunkt_id AS ref_treffpunkt_id
+               FROM ' . DB::tbl('training_privat_einheiten') . ' p
+               LEFT JOIN ' . DB::tbl('training_einheiten') . ' e ON e.id = p.ref_einheit_id
+              WHERE p.benutzer_id = ? AND p.datum BETWEEN ? AND ?
+              ORDER BY p.datum',
             [$userId, $von, $bis]
         );
         echo json_encode([
@@ -3573,5 +3575,8 @@ function mapPrivatEinheit(array $r): array
         'distanz_km'     => $r['distanz_km'] !== null ? (float)$r['distanz_km'] : null,
         'bemerkung'      => $r['bemerkung'],
         'ref_einheit_id' => $r['ref_einheit_id'] !== null ? (int)$r['ref_einheit_id'] : null,
+        // treffpunkt_id aus der referenzierten öffentlichen Einheit (für WEG-Matching)
+        'treffpunkt_id'  => isset($r['ref_treffpunkt_id']) && $r['ref_treffpunkt_id'] !== null
+                                ? (int)$r['ref_treffpunkt_id'] : null,
     ];
 }
