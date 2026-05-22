@@ -1,5 +1,8 @@
 # Changelog
 
+## v108
+- Fix: Typ-Bezeichnungen überall aus appConfig.typen (Admin-Einstellungen) gelesen – keine hardcodierten Abkürzungen mehr (z. B. "Funkt. Tr." → "Funktionelles Training")
+
 ## v107
 - Fix: Pausendistanzen (GP/TP/BP) werden zur Trainingsdistanz addiert (z. B. 10 × 500 m + 100 m GP = 6 km statt 5 km)
 

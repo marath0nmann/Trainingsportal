@@ -246,12 +246,20 @@ const WOCHENTAGE  = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 const TYP_LABEL = {
   intervall:    'Intervall',
   dauerlauf:    'Dauerlauf',
-  funktionell:  'Funkt. Tr.',
-  runde:        'Runde',
-  event:        'Event',
-  frei:         'Training',
+  funktionell:  'Funktionelles Training',
+  runde:        'Runde / Strecke',
+  event:        'Event / Wettkampf',
+  frei:         'Sonstiges',
   kein_training:'Kein Training',
 };
+
+// Typ-Bezeichnung: zuerst aus appConfig.typen (Admin-konfiguriert), dann TYP_LABEL, dann Slug
+function getTypLabel(typ) {
+  const typen = window.appConfig && Array.isArray(window.appConfig.typen) ? window.appConfig.typen : [];
+  const t = typen.find(x => x.slug === typ);
+  if (t) return t.bezeichnung;
+  return TYP_LABEL[typ] || typ;
+}
 
 // Effektive Distanz einer privaten Einheit:
 // - expliziter Wert (inkl. 0) wird direkt genutzt
@@ -500,7 +508,7 @@ async function renderKalender(main, monthArg) {
 
 function renderHeuteSektionHtml(items) {
   const cardsHtml = items.map(e => {
-    const typLabel = TYP_LABEL[e.typ] || e.typ;
+    const typLabel = getTypLabel(e.typ);
     const zeitStr = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
     const abgesagt = e.status === 'abgesagt';
     const intern = e.sichtbarkeit === 'intern';
@@ -891,7 +899,7 @@ async function renderListe(main, quarterArg) {
       const isCancelled = e.status === 'abgesagt';
       const isKeinTraining = e.typ === 'kein_training';
       const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : '';
-      const typLabel = TYP_LABEL[e.typ] || e.typ;
+      const typLabel = getTypLabel(e.typ);
 
       const rowCls = [
         'liste-row', `kal-typ-${e.typ}`,
@@ -989,7 +997,7 @@ async function zeigeEinheit(id) {
         <div class="modal-card" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div>
-              <div class="modal-eyebrow">${escapeHtml(TYP_LABEL[e.typ] || e.typ)}${e.uhrzeit ? ' · ' + escapeHtml(e.uhrzeit) : ''}</div>
+              <div class="modal-eyebrow">${escapeHtml(getTypLabel(e.typ))}${e.uhrzeit ? ' · ' + escapeHtml(e.uhrzeit) : ''}</div>
               <div class="modal-title">${escapeHtml(e.titel)}</div>
               <div class="modal-sub">${datStr}</div>
             </div>
