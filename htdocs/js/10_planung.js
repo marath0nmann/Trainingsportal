@@ -566,7 +566,7 @@ const PLANUNG = (() => {
               </div>
             </div>
             <div class="ed-footer">
-              <span></span>
+              <button class="btn btn-danger" onclick="PLANUNG.einheitLoeschenAusEditor(${einheitId})">Löschen</button>
               <div class="ed-footer-right">
                 <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
                 <button class="btn btn-primary" onclick="PLANUNG.einheitBearbeitenSpeichern(${einheitId})">Speichern</button>
@@ -622,6 +622,17 @@ const PLANUNG = (() => {
     }
   }
 
+  function _editorFooterStandard(einheitId) {
+    const footer = document.querySelector('#modal-container .ed-footer');
+    if (!footer) return;
+    footer.innerHTML = `
+      <button class="btn btn-danger" onclick="PLANUNG.einheitLoeschenAusEditor(${einheitId})">Löschen</button>
+      <div class="ed-footer-right">
+        <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="PLANUNG.einheitBearbeitenSpeichern(${einheitId})">Speichern</button>
+      </div>`;
+  }
+
   function _zeigeSerienScopeButtons(einheitId) {
     const footer = document.querySelector('#modal-container .ed-footer');
     if (!footer) return;
@@ -631,8 +642,52 @@ const PLANUNG = (() => {
         <button class="btn btn-ghost btn-sm" onclick="PLANUNG.einheitBearbeitenSpeichern(${einheitId},'einzel')">Nur dieser Termin</button>
         <button class="btn btn-warning btn-sm" onclick="PLANUNG.einheitBearbeitenSpeichern(${einheitId},'abjetzt')">Dieser und alle folgenden</button>
         <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeitenSpeichern(${einheitId},'alle')">Gesamte Serie</button>
-        <button class="btn btn-ghost btn-sm" onclick="schliesseModal()">Abbrechen</button>
+        <button class="btn btn-ghost btn-sm" onclick="PLANUNG.editorFooterRestore(${einheitId})">Abbrechen</button>
       </div>`;
+  }
+
+  // ── Einheit aus dem Editor löschen (mit Serien-Auswahl) ──
+  async function einheitLoeschenAusEditor(einheitId, scope) {
+    let e;
+    try {
+      e = (await apiGet(`einheiten/${einheitId}`, { silent: true })).einheit;
+    } catch (err) { notify('Fehler: ' + (err.message || ''), 'err'); return; }
+
+    // Serien-Einheit: Geltungsbereich abfragen
+    if (e.serie_id && !scope) {
+      const footer = document.querySelector('#modal-container .ed-footer');
+      if (footer) {
+        footer.innerHTML = `
+          <div class="serie-del-frage">Welche Termine löschen?</div>
+          <div class="serie-del-btns">
+            <button class="btn btn-ghost btn-sm" onclick="PLANUNG.einheitLoeschenAusEditor(${einheitId},'einzel')">Nur dieser Termin</button>
+            <button class="btn btn-warning btn-sm" onclick="PLANUNG.einheitLoeschenAusEditor(${einheitId},'abjetzt')">Dieser und alle folgenden</button>
+            <button class="btn btn-danger btn-sm" onclick="PLANUNG.einheitLoeschenAusEditor(${einheitId},'alle')">Gesamte Serie</button>
+            <button class="btn btn-ghost btn-sm" onclick="PLANUNG.editorFooterRestore(${einheitId})">Abbrechen</button>
+          </div>`;
+      }
+      return;
+    }
+    if (!e.serie_id && !confirm('Diesen Kalendereintrag löschen?')) return;
+
+    try {
+      if (scope === 'alle') {
+        await apiDel(`serien/${e.serie_id}`);
+      } else if (scope === 'abjetzt') {
+        await apiDel(`serien/${e.serie_id}/ab/${e.datum}`);
+      } else {
+        await apiDel(`einheiten/${einheitId}`);
+      }
+      schliesseModal();
+      notify('Gelöscht.', 'ok');
+      if ((location.hash || '').startsWith('#planung')) {
+        renderKal();
+      } else {
+        renderPage();
+      }
+    } catch (err) {
+      notify('Fehler: ' + (err.message || ''), 'err');
+    }
   }
 
   function reloadSidebar() {
@@ -653,6 +708,7 @@ const PLANUNG = (() => {
   return {
     render, navigateMonth, reloadSidebar, loescheEinheit,
     einheitBearbeiten, einheitBearbeitenSpeichern,
+    einheitLoeschenAusEditor, editorFooterRestore: _editorFooterStandard,
     reloadKal: renderKal,
   };
 })();

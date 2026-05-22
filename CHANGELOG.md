@@ -1,5 +1,9 @@
 # Changelog
 
+## v115
+- Serientermine: Löschen-Button jetzt auch im Kalender- und Planung-Editor (bisher nur im Admin-Editor); bei Serien erscheint die Auswahl „Nur dieser / Dieser und alle folgenden / Gesamte Serie"
+- Fix: globale `benachrichtigen()`-Funktion ergänzt – Speichern/Löschen im Kalender-Slim-Modal lief zuvor in einen ReferenceError (Daten gespeichert, aber Kalender wurde nicht aktualisiert)
+
 ## v114
 - Serientermine lassen sich jetzt für die gesamte Serie bearbeiten: Beim Speichern einer Serien-Einheit erscheint die Auswahl „Nur dieser Termin / Dieser und alle folgenden / Gesamte Serie" (analog zum Löschen) – in Kalender-, Planung- und Admin-Editor
 - Neue API-Endpunkte `PUT serien/{id}` und `PUT serien/{id}/ab/{datum}` (Teil-Update; jeder Termin behält sein eigenes Datum)

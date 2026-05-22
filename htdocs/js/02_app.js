@@ -683,7 +683,7 @@ async function oeffneTerminModal(einheit) {
           '</div>' +
         '</div>' +
         '<div class="ed-footer">' +
-          '<span></span>' +
+          '<button class="btn btn-danger" onclick="loescheTermin(' + id + ')">Löschen</button>' +
           '<div class="ed-footer-right">' +
             '<button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>' +
             '<button class="btn btn-primary" onclick="speichereTermin(' + id + ')">Speichern</button>' +
@@ -760,11 +760,45 @@ function terminSerienScopeAbbrechen(id) {
   const footer = document.querySelector('#modal-container .ed-footer');
   if (!footer) return;
   footer.innerHTML =
-    '<span></span>' +
+    '<button class="btn btn-danger" onclick="loescheTermin(' + id + ')">Löschen</button>' +
     '<div class="ed-footer-right">' +
       '<button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>' +
       '<button class="btn btn-primary" onclick="speichereTermin(' + id + ')">Speichern</button>' +
     '</div>';
+}
+
+async function loescheTermin(id, scope) {
+  const ctx = state._terminEdit || { id: id, serieId: null, datum: null };
+  // Serien-Einheit: Geltungsbereich abfragen
+  if (ctx.serieId && !scope) {
+    const footer = document.querySelector('#modal-container .ed-footer');
+    if (footer) {
+      footer.innerHTML =
+        '<div class="serie-del-frage">Welche Termine löschen?</div>' +
+        '<div class="serie-del-btns">' +
+          '<button class="btn btn-ghost btn-sm" onclick="loescheTermin(' + id + ',\'einzel\')">Nur dieser Termin</button>' +
+          '<button class="btn btn-warning btn-sm" onclick="loescheTermin(' + id + ',\'abjetzt\')">Dieser und alle folgenden</button>' +
+          '<button class="btn btn-danger btn-sm" onclick="loescheTermin(' + id + ',\'alle\')">Gesamte Serie</button>' +
+          '<button class="btn btn-ghost btn-sm" onclick="terminSerienScopeAbbrechen(' + id + ')">Abbrechen</button>' +
+        '</div>';
+    }
+    return;
+  }
+  if (!ctx.serieId && !confirm('Diesen Kalendereintrag löschen?')) return;
+  try {
+    if (scope === 'alle') {
+      await apiDel('serien/' + ctx.serieId);
+    } else if (scope === 'abjetzt') {
+      await apiDel('serien/' + ctx.serieId + '/ab/' + ctx.datum);
+    } else {
+      await apiDel('einheiten/' + ctx.id);
+    }
+    schliesseModal();
+    benachrichtigen('Gelöscht.', 'ok');
+    renderPage();
+  } catch (e) {
+    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+  }
 }
 
 // Segment-Blöcke (TrainingPeaks-Stil): jede Wiederholung als eigener Block
@@ -1108,6 +1142,18 @@ async function zeigeEinheit(id) {
 function schliesseModal(ev) {
   if (ev && ev.target && !ev.target.classList.contains('modal-overlay')) return;
   document.getElementById('modal-container').innerHTML = '';
+}
+
+// Globale Toast-Benachrichtigung (in 02_app.js verfügbar; Module nutzen eigene IIFE-Variante)
+function benachrichtigen(text, art) {
+  const cont = document.getElementById('notification-container');
+  if (!cont) { console.log(text); return; }
+  const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
+  const div = document.createElement('div');
+  div.className = `notif ${cls}`;
+  div.textContent = text;
+  cont.appendChild(div);
+  setTimeout(() => div.remove(), 4000);
 }
 
 // Extrahiert die Tour-ID aus einer Komoot-URL und gibt die Embed-URL zurück.
