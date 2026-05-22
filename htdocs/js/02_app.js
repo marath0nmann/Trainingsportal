@@ -207,10 +207,9 @@ function closeBurgerMenu() {
 // ── Admin-Seite mit Sub-Navigation ──────────────────────────
 function renderAdminPage(main, subTab) {
   const tab = subTab || 'system';
-  const wide = tab === 'system';
 
   main.innerHTML = `
-    <div style="${wide ? '' : 'max-width:900px;'}margin:0 auto;padding:16px">
+    <div style="max-width:1400px;margin:0 auto;padding:16px">
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:10px">
         <button class="btn btn-ghost${tab === 'system' ? ' active' : ''}"
           onclick="navigateAdmin('system')">&#x1F5A5;&#xFE0E; System</button>

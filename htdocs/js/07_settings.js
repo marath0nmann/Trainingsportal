@@ -21,13 +21,13 @@ const SETTINGS = (() => {
 
   async function render(main) {
     if (!state.user || state.user.rolle !== 'admin') {
-      main.innerHTML = '<div style="max-width:900px;margin:24px auto;padding:0 16px">' +
+      main.innerHTML = '<div style="margin:0 auto">' +
         '<div class="panel"><div class="panel-header"><div class="panel-title">Einstellungen</div></div>' +
         '<div class="settings-panel-body"><div class="empty">Diese Seite ist nur für Admins zugänglich.</div></div></div></div>';
       return;
     }
 
-    main.innerHTML = '<div style="max-width:900px;margin:24px auto;padding:0 16px">' +
+    main.innerHTML = '<div style="margin:0 auto">' +
       '<div class="loading"><div class="spinner"></div>Laden…</div></div>';
 
     try {
@@ -44,7 +44,7 @@ const SETTINGS = (() => {
       typen         = typenR.typen || [];
       rendereForm(main);
     } catch (e) {
-      main.innerHTML = '<div style="max-width:900px;margin:24px auto;padding:0 16px">' +
+      main.innerHTML = '<div style="margin:0 auto">' +
         '<div class="panel"><div class="panel-header"><div class="panel-title">Einstellungen</div></div>' +
         '<div class="settings-panel-body"><div class="empty">Fehler: ' + escapeHtml(e.message || '') + '</div></div></div></div>';
     }
@@ -94,7 +94,7 @@ const SETTINGS = (() => {
     const dauerMin = getWert('training_default_dauer_min') || '90';
 
     main.innerHTML =
-      '<div style="max-width:900px;margin:24px auto;padding:0 16px;display:flex;flex-direction:column;gap:20px">' +
+      '<div style="margin:0 auto;display:flex;flex-direction:column;gap:20px">' +
 
       // ── Externe Kalender ──
       '<div class="panel">' +

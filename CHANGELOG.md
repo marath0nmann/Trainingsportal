@@ -1,6 +1,6 @@
 # Changelog
 
-## v112
+## v113
 - Fix: Planungskalender zeigte keine Einträge mehr – Ursache war ein fehlendes DB-Schema für das Serien-Feature (`training_serien` + Spalte `einheiten.serie_id`), wodurch `GET /einheiten` mit HTTP 500 fehlschlug; Migration #9 ergänzt
 - Planung: API-Fehler werden nicht mehr still verschluckt, sondern in der Konsole protokolliert
 
