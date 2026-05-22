@@ -8,6 +8,8 @@ const ADMIN_WETTKAMPF = (() => {
   let serien     = [];
   let container  = null;
   let expandedId = null;
+  // Zustand des aktuell offenen Planungs-Modals
+  let _edit      = null; // { serieId, ausgeschlossen: Set, extras: [] , extrahiert: [] }
 
   const WT_KURZ = ['So','Mo','Di','Mi','Do','Fr','Sa'];
   const WT_LANG = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
@@ -88,7 +90,9 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   function allesDisziplinen(serie) {
-    const set = new Set(serie.disziplinen || []);
+    const ausgeschlossen = new Set(serie.disziplinen_ausgeschlossen || []);
+    const set = new Set();
+    (serie.disziplinen || []).forEach(d => { if (!ausgeschlossen.has(d)) set.add(d); });
     (serie.disziplinen_extra || []).forEach(d => set.add(d));
     return [...set];
   }
@@ -295,9 +299,17 @@ const ADMIN_WETTKAMPF = (() => {
   function showPlanungModal(serieId) {
     const serie = serien.find(s => s.id === serieId);
     if (!serie) return;
-    const prognose   = predictNextDate(serie.letztes_datum);
-    const manuell    = serie.naechstes_datum || '';
-    let   wtInfo     = '';
+
+    _edit = {
+      serieId,
+      extrahiert:    serie.disziplinen || [],
+      ausgeschlossen: new Set(serie.disziplinen_ausgeschlossen || []),
+      extras:        [...(serie.disziplinen_extra || [])],
+    };
+
+    const prognose = predictNextDate(serie.letztes_datum);
+    const manuell  = serie.naechstes_datum || '';
+    let   wtInfo   = '';
     if (serie.letztes_datum) {
       const ld  = new Date(serie.letztes_datum + 'T00:00:00');
       const nth = Math.floor((ld.getDate() - 1) / 7) + 1;
@@ -309,7 +321,7 @@ const ADMIN_WETTKAMPF = (() => {
     if (!cont) return;
     cont.innerHTML = `
       <div class="modal-overlay" onclick="schliesseModal(event)">
-        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:500px">
+        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:560px">
           <div class="modal-head">
             <div>
               <div class="modal-eyebrow">Planung bearbeiten</div>
@@ -318,8 +330,9 @@ const ADMIN_WETTKAMPF = (() => {
             <button class="modal-close" onclick="schliesseModal()">&times;</button>
           </div>
           <div class="modal-body">
-            <div class="modal-row">
-              <div class="modal-label">Nächster Termin</div>
+
+            <div class="modal-row" style="align-items:flex-start">
+              <div class="modal-label" style="padding-top:6px">Nächster Termin</div>
               <div style="flex:1">
                 <input type="date" id="planung-datum"
                   style="width:100%;border:1px solid var(--border);border-radius:6px;
@@ -327,30 +340,20 @@ const ADMIN_WETTKAMPF = (() => {
                   value="${escapeHtml(manuell)}">
                 <div style="font-size:11px;color:var(--text2);margin-top:4px">
                   ${prognose
-                    ? `Prognose (${WT_KURZ[new Date(prognose + 'T00:00:00').getDay()]}):
-                       <strong>${fmtDate(prognose)}</strong>
-                       ${wtInfo ? ' &bull; ' + escapeHtml(wtInfo) : ''}<br>
-                       Leer lassen = Prognose verwenden`
+                    ? `Prognose: <strong>${WT_KURZ[new Date(prognose + 'T00:00:00').getDay()]}, ${fmtDate(prognose)}</strong>`
+                      + (wtInfo ? ` &bull; ${escapeHtml(wtInfo)}` : '')
+                      + `<br>Leer lassen = Prognose verwenden`
                     : 'Leer lassen = kein Termin'}
                 </div>
               </div>
             </div>
-            <div class="modal-row modal-row-block">
-              <div class="modal-label">Zusätzliche Disziplinen</div>
-              <textarea id="planung-disziplinen" rows="4"
-                style="resize:vertical;border:1px solid var(--border);border-radius:6px;
-                       padding:6px 8px;font-size:13px;font-family:inherit;
-                       background:var(--bg);color:var(--text)"
-                placeholder="Eine Disziplin pro Zeile">${escapeHtml((serie.disziplinen_extra || []).join('\n'))}</textarea>
-              <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                Ergänzt die aus Ergebnissen extrahierten Disziplinen.
-                ${serie.disziplinen.length
-                  ? 'Aus Ergebnissen: ' + serie.disziplinen.slice(0, 5).map(d =>
-                      `<span style="padding:1px 5px;border-radius:8px;background:var(--border);font-size:11px">${escapeHtml(d)}</span>`
-                    ).join(' ') + (serie.disziplinen.length > 5 ? ` +${serie.disziplinen.length - 5}` : '')
-                  : ''}
-              </div>
+
+            <div style="margin-top:20px">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                          letter-spacing:.5px;color:var(--text2);margin-bottom:10px">Disziplinen</div>
+              <div id="planung-disz-area"></div>
             </div>
+
           </div>
           <div class="modal-actions">
             <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
@@ -359,18 +362,122 @@ const ADMIN_WETTKAMPF = (() => {
           </div>
         </div>
       </div>`;
+
+    _renderDiszArea();
+  }
+
+  // Disziplin-Bereich im Modal neu zeichnen
+  function _renderDiszArea() {
+    const area = document.getElementById('planung-disz-area');
+    if (!area || !_edit) return;
+
+    let html = '';
+
+    // ── Aus Ergebnissen extrahierte Disziplinen ──
+    if (_edit.extrahiert.length) {
+      html += `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">
+        Aus Ergebnissen &ndash; klicken zum Ein-/Ausblenden:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">`;
+      _edit.extrahiert.forEach(d => {
+        const ex  = _edit.ausgeschlossen.has(d);
+        const dJ  = escapeHtml(JSON.stringify(d));
+        if (ex) {
+          html += `<span onclick="ADMIN_WETTKAMPF._toggleDisz(${dJ})" title="Einschließen"
+            style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
+              border-radius:12px;font-size:13px;cursor:pointer;user-select:none;
+              background:var(--bg);border:1px solid var(--border);
+              color:var(--text2);text-decoration:line-through">
+            <span style="font-size:11px">✗</span>${escapeHtml(d)}</span>`;
+        } else {
+          html += `<span onclick="ADMIN_WETTKAMPF._toggleDisz(${dJ})" title="Ausblenden"
+            style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
+              border-radius:12px;font-size:13px;cursor:pointer;user-select:none;
+              background:rgba(46,204,113,.15);border:1px solid #27ae60;color:var(--text)">
+            <span style="font-size:11px;color:#27ae60">✓</span>${escapeHtml(d)}</span>`;
+        }
+      });
+      html += `</div>`;
+    }
+
+    // ── Manuell hinzugefügte Disziplinen ──
+    if (_edit.extras.length) {
+      html += `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">
+        Manuell hinzugefügt:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">`;
+      _edit.extras.forEach(d => {
+        const dJ = escapeHtml(JSON.stringify(d));
+        html += `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
+          border-radius:12px;font-size:13px;background:var(--border);color:var(--text)">
+          ${escapeHtml(d)}
+          <button onclick="ADMIN_WETTKAMPF._removeExtra(${dJ})"
+            style="border:none;background:none;cursor:pointer;color:var(--text2);
+                   font-size:16px;line-height:1;padding:0 0 0 2px;margin:0"
+            title="Entfernen">&times;</button>
+        </span>`;
+      });
+      html += `</div>`;
+    }
+
+    if (!_edit.extrahiert.length && !_edit.extras.length) {
+      html += `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">
+        Noch keine Disziplinen aus Ergebnissen vorhanden.</div>`;
+    }
+
+    // ── Neue Disziplin hinzufügen ──
+    html += `<div style="display:flex;gap:6px;align-items:center">
+      <input type="text" id="planung-disz-neu" placeholder="Neue Disziplin hinzufügen…"
+        style="flex:1;border:1px solid var(--border);border-radius:6px;padding:5px 8px;
+               font-size:13px;background:var(--bg);color:var(--text)"
+        onkeydown="if(event.key==='Enter'){ADMIN_WETTKAMPF._addExtra();event.preventDefault()}">
+      <button class="btn btn-sm btn-ghost" onclick="ADMIN_WETTKAMPF._addExtra()">+ Hinzufügen</button>
+    </div>`;
+
+    area.innerHTML = html;
+  }
+
+  // Extrahierte Disziplin ein-/ausblenden
+  function _toggleDisz(d) {
+    if (!_edit) return;
+    if (_edit.ausgeschlossen.has(d)) _edit.ausgeschlossen.delete(d);
+    else _edit.ausgeschlossen.add(d);
+    _renderDiszArea();
+  }
+
+  // Manuell hinzugefügte Disziplin entfernen
+  function _removeExtra(d) {
+    if (!_edit) return;
+    _edit.extras = _edit.extras.filter(x => x !== d);
+    _renderDiszArea();
+  }
+
+  // Neue Disziplin hinzufügen (oder ausgeschlossene wieder einschließen)
+  function _addExtra() {
+    if (!_edit) return;
+    const inp = document.getElementById('planung-disz-neu');
+    if (!inp) return;
+    const val = inp.value.trim();
+    inp.value = '';
+    if (!val) return;
+    if (_edit.extrahiert.includes(val)) {
+      // Ausgeschlossene wieder einschließen statt doppelt hinzufügen
+      _edit.ausgeschlossen.delete(val);
+    } else if (!_edit.extras.includes(val)) {
+      _edit.extras.push(val);
+    }
+    _renderDiszArea();
+    document.getElementById('planung-disz-neu')?.focus();
   }
 
   async function savePlanung(serieId) {
-    const datum     = (document.getElementById('planung-datum')?.value || '').trim() || null;
-    const diszText  = document.getElementById('planung-disziplinen')?.value || '';
-    const diszExtra = diszText.split('\n').map(s => s.trim()).filter(Boolean);
+    const datum = (document.getElementById('planung-datum')?.value || '').trim() || null;
     try {
       await apiPut(`wettkampf/${serieId}/planung`, {
-        naechstes_datum:   datum,
-        disziplinen_extra: diszExtra,
+        naechstes_datum:             datum,
+        disziplinen_extra:           _edit ? _edit.extras : [],
+        disziplinen_ausgeschlossen:  _edit ? [..._edit.ausgeschlossen] : [],
       });
       schliesseModal();
+      _edit = null;
       benachrichtigen('Planung gespeichert.', 'ok');
       await reload();
     } catch (e) {
@@ -410,5 +517,10 @@ const ADMIN_WETTKAMPF = (() => {
     } catch (_) {}
   }
 
-  return { render, toggleExpand, showPlanungModal, savePlanung, imKalenderEintragen, predictNextDate };
+  return {
+    render, toggleExpand,
+    showPlanungModal, savePlanung,
+    _toggleDisz, _removeExtra, _addExtra,
+    imKalenderEintragen, predictNextDate,
+  };
 })();

@@ -1,9 +1,9 @@
 # Changelog
 
-## v139
-- Admin → Wettkämpfe: neue Seite zeigt alle regelmäßigen Veranstaltungsserien direkt aus dem Statistikportal; Disziplinen werden aus den Ergebnissen extrahiert; Admin kann zusätzliche Disziplinen ergänzen, festes Datum setzen oder automatische Prognose (N. Wochentag im Monat) verwenden; Kalender-Eintrag per Knopf anlegbar; keine Anmelde-Funktion in der Admin-Ansicht; Dark-Mode-Fix (keine hardcodierten Farb-Fallbacks); HTML-Entities in Veranstaltungsnamen korrekt dekodiert
-- Kalender: Wettkämpfe als zusätzliche Darstellungsebene neben Teamplan, Trainingsgruppen und Mein Plan; grüne Einträge (🏆) mit eigenem Checkbox in der Legende; Prognose-Termine aus `predictNextDate` werden im aktuellen Monat eingeblendet; Präferenz wird serverseitig gespeichert
-- DB-Migration #12: neue Tabellen `training_wettkampf_planung` + `training_wettkampf_anmeldungen`
+## v140
+- Fix: Kalender lud nicht mehr (Startseite zeigte dauerhaft „Lade Trainingsplan…"): `d4` war mit `const` im `try`-Block deklariert und außerhalb nicht erreichbar → `ReferenceError`; jetzt als `let wettkampfRaw` außerhalb des Blocks
+- Admin → Wettkämpfe: Disziplinen-Verwaltung überarbeitet – extrahierte Disziplinen als Toggle-Chips (grün = aktiv, gestrichen = ausgeblendet), manuell hinzugefügte als entfernbare Tags, Eingabefeld für neue Disziplinen; ausgeblendete Disziplinen werden als `disziplinen_ausgeschlossen` gespeichert und beim nächsten Laden wiederhergestellt
+- DB-Migration #13: `disziplinen_ausgeschlossen TEXT NULL` in `training_wettkampf_planung`
 
 ## v137
 - Kalender-Popover: Browser-Tooltip (title) auf Kalendereinträgen entfernt – kein doppelter Hinweis mehr wenn Popover sichtbar

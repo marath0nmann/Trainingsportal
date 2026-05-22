@@ -378,7 +378,7 @@ async function renderKalender(main, monthArg) {
 
   const von = ymd(gridStart);
   const bis = ymd(gridEnd);
-  let oeffentlich = [], privat = [], feiertage = [];
+  let oeffentlich = [], privat = [], feiertage = [], wettkampfRaw = [];
   try {
     const needPrefs = angemeldet && state.kalFilter === null;
     const [d1, d2, d3, d4] = await Promise.all([
@@ -389,10 +389,11 @@ async function renderKalender(main, monthArg) {
       needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
       _ladeWettkampfDaten().catch(() => []),
     ]);
-    oeffentlich  = d1.einheiten || [];
-    privat       = angemeldet ? (d1.privat || []) : [];
-    _dragPrivat  = privat;   // Referenz für Drag&Drop-Handler
-    feiertage    = d2.feiertage || [];
+    oeffentlich    = d1.einheiten || [];
+    privat         = angemeldet ? (d1.privat || []) : [];
+    _dragPrivat    = privat;   // Referenz für Drag&Drop-Handler
+    feiertage      = d2.feiertage || [];
+    wettkampfRaw   = Array.isArray(d4) ? d4 : [];
     if (angemeldet) {
       MEINPLAN.setAbo(d1.abo_typen || []);
       state.meineGruppen = d1.meine_gruppen || [];
@@ -450,7 +451,7 @@ async function renderKalender(main, monthArg) {
   });
 
   // Wettkampf-Termine: predicted/manuelles Datum → Array von Serien
-  const wettkampfSerien  = Array.isArray(d4) ? d4 : [];
+  const wettkampfSerien  = wettkampfRaw;
   const wettkampfBeiDatum = {};
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
     wettkampfSerien.forEach(s => {

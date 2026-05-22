@@ -364,6 +364,14 @@ function _migrationStmts(): array
               UNIQUE KEY uk_planung_benutzer (planung_id, benutzer_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         ],
+
+        // ── 13: disziplinen_ausgeschlossen – vom Admin per Checkbox abgewählte Disziplinen ──
+        13 => [
+            "ALTER TABLE " . DB::tbl('training_wettkampf_planung') .
+            " ADD COLUMN IF NOT EXISTS disziplinen_ausgeschlossen TEXT NULL" .
+            " COMMENT 'JSON-Array: Disziplinen aus Ergebnissen, die ausgeblendet werden'" .
+            " AFTER disziplinen_extra",
+        ],
     ];
 }
 
@@ -4213,6 +4221,12 @@ function handleWettkampf(string $method, string $tail): void
             $sets[]   = 'disziplinen_extra=?';
             $params[] = count($arr) ? json_encode($arr) : null;
         }
+        if (array_key_exists('disziplinen_ausgeschlossen', $in)) {
+            $arr      = is_array($in['disziplinen_ausgeschlossen']) ? $in['disziplinen_ausgeschlossen'] : [];
+            $arr      = array_values(array_filter(array_map('trim', $arr)));
+            $sets[]   = 'disziplinen_ausgeschlossen=?';
+            $params[] = count($arr) ? json_encode($arr) : null;
+        }
 
         $planung = DB::fetchOne("SELECT id FROM $twp WHERE serie_id=?", [$serieId]);
         if ($planung) {
@@ -4221,15 +4235,18 @@ function handleWettkampf(string $method, string $tail): void
                 DB::query("UPDATE $twp SET " . implode(',', $sets) . " WHERE id=?", $params);
             }
         } else {
-            $nd = array_key_exists('naechstes_datum', $in)
+            $nd  = array_key_exists('naechstes_datum', $in)
                 ? (($in['naechstes_datum'] !== null && $in['naechstes_datum'] !== '') ? (string)$in['naechstes_datum'] : null)
                 : null;
-            $de = array_key_exists('disziplinen_extra', $in) && is_array($in['disziplinen_extra'])
+            $de  = array_key_exists('disziplinen_extra', $in) && is_array($in['disziplinen_extra'])
                 ? json_encode(array_values(array_filter(array_map('trim', $in['disziplinen_extra']))))
                 : null;
+            $dau = array_key_exists('disziplinen_ausgeschlossen', $in) && is_array($in['disziplinen_ausgeschlossen'])
+                ? json_encode(array_values(array_filter(array_map('trim', $in['disziplinen_ausgeschlossen']))))
+                : null;
             DB::query(
-                "INSERT INTO $twp (serie_id, naechstes_datum, disziplinen_extra) VALUES (?,?,?)",
-                [$serieId, $nd, $de]
+                "INSERT INTO $twp (serie_id, naechstes_datum, disziplinen_extra, disziplinen_ausgeschlossen) VALUES (?,?,?,?)",
+                [$serieId, $nd, $de, $dau]
             );
         }
         echo json_encode(['ok' => true]);
@@ -4251,14 +4268,16 @@ function handleWettkampf(string $method, string $tail): void
                          ORDER BY v2.datum DESC LIMIT 1) AS ort_letzter,
                         wp.id                     AS planung_id,
                         wp.naechstes_datum,
-                        wp.disziplinen_extra
+                        wp.disziplinen_extra,
+                        wp.disziplinen_ausgeschlossen
                  FROM $tws vs
                  LEFT JOIN $tvv v  ON v.serie_id = vs.id
                                    AND v.geloescht_am IS NULL
                                    AND v.genehmigt   = 1
                  LEFT JOIN $twp wp ON wp.serie_id = vs.id
                  GROUP BY vs.id, vs.name, vs.kuerzel,
-                          wp.id, wp.naechstes_datum, wp.disziplinen_extra
+                          wp.id, wp.naechstes_datum, wp.disziplinen_extra,
+                          wp.disziplinen_ausgeschlossen
                  ORDER BY MONTH(MAX(v.datum)) ASC,
                           DAY(MAX(v.datum))   ASC,
                           vs.name             ASC"
@@ -4352,6 +4371,11 @@ function handleWettkampf(string $method, string $tail): void
                 $decoded = json_decode((string)$s['disziplinen_extra'], true);
                 if (is_array($decoded)) $diszExtra = $decoded;
             }
+            $diszAusgeschlossen = [];
+            if (!empty($s['disziplinen_ausgeschlossen'])) {
+                $decoded = json_decode((string)$s['disziplinen_ausgeschlossen'], true);
+                if (is_array($decoded)) $diszAusgeschlossen = $decoded;
+            }
             $anmeldungen    = $pid ? ($anmByPlanungId[$pid] ?? []) : [];
             $meineAnmId     = null;
             $meineDisziplin = null;
@@ -4370,9 +4394,10 @@ function handleWettkampf(string $method, string $tail): void
                 'erstes_datum'        => $s['erstes_datum'],
                 'letztes_datum'       => $s['letztes_datum'],
                 'ort_letzter'         => $s['ort_letzter'],
-                'disziplinen'         => $diszBySerie[$sid] ?? [],
-                'disziplinen_extra'   => $diszExtra,
-                'planung_id'          => $pid,
+                'disziplinen'              => $diszBySerie[$sid] ?? [],
+                'disziplinen_extra'        => $diszExtra,
+                'disziplinen_ausgeschlossen' => $diszAusgeschlossen,
+                'planung_id'               => $pid,
                 'naechstes_datum'     => $s['naechstes_datum'],
                 'anmeldungen'         => $anmeldungen,
                 'meine_anmeldung_id'  => $meineAnmId,
