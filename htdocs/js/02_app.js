@@ -15,8 +15,9 @@ const state = {
 };
 
 // ── Drag & Drop (private Einheiten verschieben) ────────────
-let _dragPrivatId  = null;  // ID der gerade gezogenen Einheit
-let _dragPrivat    = [];    // Referenz auf aktuelle privat[]-Liste (aus renderKalender)
+let _dragPrivatId   = null;  // ID der gerade gezogenen Einheit
+let _dragPrivat     = [];    // Referenz auf aktuelle privat[]-Liste (aus renderKalender)
+let _wettkampfCache = null;  // { ts: number, data: [] } – Wettkampf-Serien-Cache
 
 window.addEventListener('DOMContentLoaded', init);
 window.addEventListener('hashchange', renderPage);
@@ -380,12 +381,13 @@ async function renderKalender(main, monthArg) {
   let oeffentlich = [], privat = [], feiertage = [];
   try {
     const needPrefs = angemeldet && state.kalFilter === null;
-    const [d1, d2, d3] = await Promise.all([
+    const [d1, d2, d3, d4] = await Promise.all([
       angemeldet
         ? apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true })
         : apiGet(`einheiten?von=${von}&bis=${bis}`, { silent: true }),
       apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
       needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
+      _ladeWettkampfDaten().catch(() => []),
     ]);
     oeffentlich  = d1.einheiten || [];
     privat       = angemeldet ? (d1.privat || []) : [];
@@ -446,6 +448,18 @@ async function renderKalender(main, monthArg) {
       (feiertageByDate[k] = feiertageByDate[k] || []).push(f);
     }
   });
+
+  // Wettkampf-Termine: predicted/manuelles Datum → Array von Serien
+  const wettkampfSerien  = Array.isArray(d4) ? d4 : [];
+  const wettkampfBeiDatum = {};
+  if (typeof ADMIN_WETTKAMPF !== 'undefined') {
+    wettkampfSerien.forEach(s => {
+      const datum = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+      if (datum && datum >= von && datum <= bis) {
+        (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);
+      }
+    });
+  }
 
   // Wochen (für KW-Spalte)
   const weeks = [];
@@ -528,6 +542,19 @@ async function renderKalender(main, monthArg) {
         return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
       }).join('');
 
+      // Wettkampf-Einträge für diesen Tag
+      const wkItems = wettkampfBeiDatum[k] || [];
+      const showWk  = !kf || kf.wettkampf !== false;
+      const wkHtml  = (showWk && wkItems.length)
+        ? wkItems.map(s => {
+            const name = _decodeHtml(s.name || s.kuerzel || '');
+            return `<div class="kal-item" title="${escapeHtml(name)}"
+              style="background:rgba(46,204,113,.15);border-left:3px solid #27ae60;color:var(--text);cursor:default">
+              <span class="kal-item-title">🏆 ${escapeHtml(name)}</span>
+            </div>`;
+          }).join('')
+        : '';
+
       const addBtn = (angemeldet && inMonth)
         ? `<button class="kal-add-btn" onclick="MEINPLAN.neuePrivatEinheit('${k}')" title="Private Einheit hinzufügen">+</button>`
         : '';
@@ -539,7 +566,7 @@ async function renderKalender(main, monthArg) {
           ${addBtn}
         </div>
         ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
-        <div class="kal-cell-items">${itemsHtml}</div>
+        <div class="kal-cell-items">${itemsHtml}${wkHtml}</div>
       </div>`;
     }).join('');
 
@@ -559,16 +586,18 @@ async function renderKalender(main, monthArg) {
 // ── Kalender-Filter: Initialisierung ───────────────────
 function _initKalFilter(gruppenIds, serverPrefs) {
   const filter = {
-    gruppen:  new Set(gruppenIds),
-    teamplan: true,
-    meinPlan: true,
+    gruppen:   new Set(gruppenIds),
+    teamplan:  true,
+    meinPlan:  true,
+    wettkampf: true,
   };
   if (serverPrefs && typeof serverPrefs === 'object') {
     if (Array.isArray(serverPrefs.gruppen)) {
       filter.gruppen = new Set(serverPrefs.gruppen.filter(id => gruppenIds.includes(id)));
     }
-    if (typeof serverPrefs.teamplan === 'boolean') filter.teamplan = serverPrefs.teamplan;
-    if (typeof serverPrefs.meinPlan === 'boolean') filter.meinPlan = serverPrefs.meinPlan;
+    if (typeof serverPrefs.teamplan  === 'boolean') filter.teamplan  = serverPrefs.teamplan;
+    if (typeof serverPrefs.meinPlan  === 'boolean') filter.meinPlan  = serverPrefs.meinPlan;
+    if (typeof serverPrefs.wettkampf === 'boolean') filter.wettkampf = serverPrefs.wettkampf;
   }
   return filter;
 }
@@ -589,6 +618,11 @@ function _renderKalLegend() {
           onchange="toggleKalPlan('meinPlan', this.checked)">
         <span class="kal-legend-dot kal-legend-dot-priv"></span>Mein Plan
       </label>
+      <label class="kal-legend-item">
+        <input type="checkbox" ${!kf || kf.wettkampf !== false ? 'checked' : ''}
+          onchange="toggleKalPlan('wettkampf', this.checked)">
+        <span class="kal-legend-dot" style="background:#27ae60;border-color:#27ae60"></span>Wettkämpfe
+      </label>
     </div>`;
   }
   const gruppenItems = gruppen.map(g => {
@@ -607,6 +641,11 @@ function _renderKalLegend() {
         onchange="toggleKalPlan('meinPlan', false, this.checked)">
       <span class="kal-legend-dot kal-legend-dot-priv"></span>Mein Plan
     </label>
+    <label class="kal-legend-item">
+      <input type="checkbox" ${!kf || kf.wettkampf !== false ? 'checked' : ''}
+        onchange="toggleKalPlan('wettkampf', this.checked)">
+      <span class="kal-legend-dot" style="background:#27ae60;border-color:#27ae60"></span>Wettkämpfe
+    </label>
   </div>`;
 }
 
@@ -623,6 +662,8 @@ function toggleKalPlan(type, idOrChecked, checkedMaybe) {
   } else if (type === 'meinPlan') {
     const checked = checkedMaybe !== undefined ? !!checkedMaybe : !!idOrChecked;
     state.kalFilter.meinPlan = checked;
+  } else if (type === 'wettkampf') {
+    state.kalFilter.wettkampf = !!idOrChecked;
   }
   renderPage();
   clearTimeout(_kalPrefsSaveTimer);
@@ -634,9 +675,10 @@ async function _saveKalPrefs() {
   try {
     const f = state.kalFilter;
     await apiPut('kal/prefs', {
-      gruppen:  [...f.gruppen],
-      teamplan: f.teamplan,
-      meinPlan: f.meinPlan,
+      gruppen:   [...f.gruppen],
+      teamplan:  f.teamplan,
+      meinPlan:  f.meinPlan,
+      wettkampf: f.wettkampf !== false,
     });
   } catch (_) {}
 }
@@ -1462,4 +1504,23 @@ function escapeHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// HTML-Entities aus DB-Strings dekodieren (z.B. &quot; → ")
+function _decodeHtml(s) {
+  if (!s) return '';
+  const el = document.createElement('textarea');
+  el.innerHTML = String(s);
+  return el.value;
+}
+
+// Wettkampf-Serien laden (5-Minuten-Cache)
+async function _ladeWettkampfDaten() {
+  const CACHE_MS = 5 * 60 * 1000;
+  if (_wettkampfCache && (Date.now() - _wettkampfCache.ts) < CACHE_MS) {
+    return _wettkampfCache.data;
+  }
+  const resp = await apiGet('wettkampf', { silent: true });
+  _wettkampfCache = { ts: Date.now(), data: resp.serien || [] };
+  return _wettkampfCache.data;
 }
