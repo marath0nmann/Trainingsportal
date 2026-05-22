@@ -277,7 +277,10 @@ const PLANUNG = (() => {
       ]);
       einheiten = d1.einheiten || [];
       feiertage = d2.feiertage || [];
-    } catch (e) { /* ignorieren */ }
+    } catch (e) {
+      // Nicht still verschlucken: leerer Kalender bei API-Fehler ist sonst nicht diagnostizierbar
+      console.warn('Planung: Einheiten/Feiertage konnten nicht geladen werden –', e && e.message);
+    }
 
     const byDate = {};
     einheiten.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push(e); });

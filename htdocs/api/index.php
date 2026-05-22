@@ -283,6 +283,27 @@ function _migrationStmts(): array
             "UPDATE $tt SET ist_kein_training = 1 WHERE slug = 'kein_training'",
             "UPDATE $tt SET hat_strecke = 1 WHERE slug = 'runde'",
         ],
+
+        // ── 9: Trainingsserien (wiederkehrende Einheiten) ────────────────
+        // Feature-Code referenziert training_serien + einheiten.serie_id,
+        // die Schema-Migration fehlte bislang → GET /einheiten warf 500.
+        9 => [
+            "CREATE TABLE IF NOT EXISTS $tser (
+              id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              block_id      INT UNSIGNED NULL,
+              titel         VARCHAR(200) NOT NULL,
+              typ           VARCHAR(40)  NOT NULL DEFAULT 'frei',
+              treffpunkt_id INT UNSIGNED NULL,
+              uhrzeit       TIME         NULL,
+              sichtbarkeit  VARCHAR(20)  NOT NULL DEFAULT 'oeffentlich',
+              regel         TEXT         NULL,
+              erstellt_von  INT UNSIGNED NULL,
+              erstellt_am   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "ALTER TABLE $te ADD COLUMN IF NOT EXISTS serie_id INT UNSIGNED NULL AFTER status",
+            "ALTER TABLE $te ADD KEY idx_serie (serie_id)",
+        ],
     ];
 }
 
