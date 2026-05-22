@@ -1557,28 +1557,31 @@ body.planung-active #app-footer    { display: none; }
 .profil-gruppe-item {
   display: flex; align-items: center; gap: 6px;
   padding: 6px 12px; border-radius: 20px;
-  background: var(--bg2, #f4f4f5);
+  background: var(--bg2, #f4f4f5); cursor: pointer;
   font-size: 13px; user-select: none;
   border: 1.5px solid transparent;
-  cursor: default;
+  transition: border-color .15s, background .15s;
 }
-.profil-gruppe-aktiv {
+.profil-gruppe-item:has(input:checked) {
   background: var(--accent-light, #e0f2fe);
   border-color: var(--accent, #0ea5e9);
   color: var(--accent, #0ea5e9);
   font-weight: 600;
 }
-.profil-gruppe-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  flex-shrink: 0;
+.profil-gruppe-item input[type="checkbox"] { display: none; }
+/* Gruppen aus Statistikportal: immer aktiv, read-only */
+.profil-gruppe-stat {
+  background: var(--accent-light, #e0f2fe);
+  border-color: var(--accent, #0ea5e9);
+  color: var(--accent, #0ea5e9);
+  font-weight: 600;
+  opacity: .85;
+  cursor: default;
 }
 .profil-gruppe-badge {
   font-size: 10px; font-weight: 500; opacity: .7;
   padding: 1px 5px; background: rgba(0,0,0,.1);
   border-radius: 10px; margin-left: 2px;
-}
-.profil-gruppe-badge-mitglied {
-  background: var(--accent, #0ea5e9); color: #fff; opacity: 1;
 }
 
 /* ── Trainingsgruppen – Block-Editor ───────────────────────────────────── */

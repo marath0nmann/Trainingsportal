@@ -1,10 +1,10 @@
 # Changelog
 
-## v128
-- Fix: Trainingsgruppen funktionieren wieder – `GRUPPEN`-Modul ruft jetzt `GET /gruppen` statt nicht mehr vorhandener Endpoints (`/trainingsgruppen`, `/profil/gruppen`) auf; orphaned Routing-Stubs entfernt; Gruppen-Zuordnung im Profil ist jetzt read-only (admin-verwaltet)
-- Fix: Planungs-Gruppenprefs in `kal/prefs.planung_gruppen` gespeichert statt defektem `planung/gruppen-prefs`-Endpoint
-- Fix: Regex-Fehler in `handleAdminGruppen` (trailing space im Delimiter) behoben → Admin kann Gruppen-Mitglieder jetzt korrekt zuweisen
-- Kalender-Legende „Teamplan"-Dot passt jetzt zur tatsächlichen Darstellung der Einträge (Hintergrundfläche + linker Akzentstreifen statt gefülltem Kreis)
+## v129
+- Trainingsgruppen: Gruppen kommen wieder aus dem Statistikportal (`gruppen`-Tabelle); Benutzer können sich im Profil selbst zuordnen (Statistikportal-Gruppen erscheinen read-only mit Badge, eigene Zuordnungen sind per Checkbox wählbar)
+- Admin-verwaltete Trainingsgruppen entfernt (war v123–v128, widerspricht dem Konzept)
+- DB-Migration #11: erstellt `training_benutzer_gruppen`, `training_planung_gruppen`, `training_block_gruppen` (Statistikportal-verknüpfte Tabellen)
+- `mein-plan/einheiten` liefert `meine_gruppen` jetzt aus `athlet_gruppen` + `training_benutzer_gruppen` statt `training_gruppen_mitglieder`
 
 ## v126
 - Fix: PHP-Parse-Fehler in `handleGruppen` – schließende `)` des SQL-Subqueries lag außerhalb des PHP-Strings (seit v123, verursachte HTTP 500 bei JEDEM API-Aufruf inkl. /ping)
