@@ -1,5 +1,9 @@
 # Changelog
 
+## v125
+- Fix: HTTP 500 in `GET mein-plan/einheiten` behoben – SELECT verwendete `COLUMN_EXISTS()` (nicht in MariaDB verfügbar); ersetzt durch `SELECT e.*`
+- Fix: `15_trainingsgruppen.js` (GRUPPEN-Modul) fehlte in `index.html` und verursachte „GRUPPEN is not defined"-Fehler
+
 ## v124
 - Fix: „Mein Plan"-Legende-Dot zeigt jetzt korrekten Stil (getönte Hintergrundfläche + solider linker Streifen statt Dashed-Kreis)
 - Heute-Sektion: Button „☑ Ich bin dabei!" / „☐ Ich bin dabei?" zum schnellen Ein-/Austragen aus dem persönlichen Plan
