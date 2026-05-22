@@ -1,5 +1,8 @@
 # Changelog
 
+## v111
+- Fix: Admin → Trainings: Typ-Bezeichnungen (Badge + Filter-Dropdown) werden jetzt aus den konfigurierbaren Trainingstypen gelesen – kein hardcodiertes „Funkt. Tr." mehr
+
 ## v110
 - Fix: PHP-Syntaxfehler in GET /config (escapte \$r-Variablen) behoben → HTTP 500 beim Laden behoben
 

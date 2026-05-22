@@ -11,11 +11,6 @@ const ADMIN_TRAININGS = (() => {
   let container   = null;
   let filterTyp   = '';
 
-  const TYP_LABEL = {
-    intervall: 'Intervall', dauerlauf: 'Dauerlauf',
-    funktionell: 'Funkt. Tr.', runde: 'Runde',
-    event: 'Event', frei: 'Training', kein_training: 'Kein Training',
-  };
   const WOCHENTAG = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 
   const COLS = [
@@ -96,7 +91,7 @@ const ADMIN_TRAININGS = (() => {
       const datStr   = `${WOCHENTAG[d.getDay()]}, ${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
       const zeitStr  = e.uhrzeit ? e.uhrzeit.slice(0, 5) : '–';
       const abgesagt = e.status === 'abgesagt';
-      const typLbl   = TYP_LABEL[e.typ] || e.typ;
+      const typLbl   = getTypLabel(e.typ);
       const rowHover = 'cursor:pointer';
       const rowStyle = abgesagt ? `${rowHover};opacity:.65` : rowHover;
       const statusSty = abgesagt ? 'color:var(--primary);font-weight:600' : 'color:var(--text2)';
@@ -120,7 +115,7 @@ const ADMIN_TRAININGS = (() => {
     // ── Typ-Filter ───────────────────────────────────────────
     const vorhandeneTypen = [...new Set(einheiten.map(e => e.typ))].sort();
     const typFilterOptionen = vorhandeneTypen.map(t =>
-      `<option value="${t}"${filterTyp === t ? ' selected' : ''}>${escapeHtml(TYP_LABEL[t] || t)}</option>`
+      `<option value="${t}"${filterTyp === t ? ' selected' : ''}>${escapeHtml(getTypLabel(t))}</option>`
     ).join('');
     const filterAnzeige = filterTyp
       ? `${data.length} von ${einheiten.length}`
