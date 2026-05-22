@@ -13,23 +13,12 @@ const PROFIL = (() => {
   let _wegData   = null; // weg/prefs response
   let _localWeg  = [];   // Arbeitskopie der Weg-Einträge
 
-  // Fallback-Typen (analog 04_editor.js)
-  const FALLBACK_TYPEN = [
-    { value: 'intervall',     label: 'Intervall' },
-    { value: 'dauerlauf',     label: 'Dauerlauf' },
-    { value: 'funktionell',   label: 'Funktionelles Training' },
-    { value: 'runde',         label: 'Runde / Strecke' },
-    { value: 'event',         label: 'Event / Wettkampf' },
-    { value: 'frei',          label: 'Sonstiges' },
-    { value: 'kein_training', label: 'Kein Training' },
-  ];
+  // _typOptions nutzt globales getTypen() aus 02_app.js
   function _typOptions() {
-    const t = typeof appConfig !== 'undefined' && appConfig && appConfig.typen;
-    const src = (Array.isArray(t) && t.length)
-      ? t.map(x => ({ value: x.slug, label: x.bezeichnung }))
-      : FALLBACK_TYPEN;
     // "Kein Training" macht für Anreise keinen Sinn → ausblenden
-    return src.filter(x => x.value !== 'kein_training');
+    return getTypen()
+      .filter(x => !istKeinTraining(x.slug))
+      .map(x => ({ value: x.slug, label: x.bezeichnung }));
   }
 
   async function open() {

@@ -195,6 +195,8 @@ function _migrationStmts(): array
               ('event',         'Event / Wettkampf',      5),
               ('frei',          'Sonstiges',              6),
               ('kein_training', 'Kein Training',          7)",
+            "UPDATE $tt SET ist_kein_training = 1 WHERE slug = 'kein_training' AND ist_kein_training = 0",
+            "UPDATE $tt SET hat_strecke = 1       WHERE slug = 'runde'         AND hat_strecke = 0",
 
             // MODIFY COLUMN ist idempotent (VARCHAR → VARCHAR ist keine Änderung);
             // auf bestehenden ENUM-Spalten migriert es die Definition sicher zu VARCHAR.
@@ -271,6 +273,14 @@ function _migrationStmts(): array
              JOIN $te te ON te.id = tp.ref_einheit_id
              SET tp.uhrzeit = te.uhrzeit
              WHERE tp.uhrzeit IS NULL AND tp.ref_einheit_id IS NOT NULL",
+        ],
+
+        // ── 8: Typ-Flags: konfigurierbare Sonderfunktionen ───────────────
+        8 => [
+            "ALTER TABLE $tt ADD COLUMN IF NOT EXISTS ist_kein_training TINYINT(1) NOT NULL DEFAULT 0",
+            "ALTER TABLE $tt ADD COLUMN IF NOT EXISTS hat_strecke TINYINT(1) NOT NULL DEFAULT 0",
+            "UPDATE $tt SET ist_kein_training = 1 WHERE slug = 'kein_training'",
+            "UPDATE $tt SET hat_strecke = 1 WHERE slug = 'runde'",
         ],
     ];
 }
@@ -1284,7 +1294,7 @@ function handleConfig(): void {
     try {
         ensureTypenTabelle();
         $typenRows = DB::fetchAll(
-            'SELECT slug, bezeichnung, farbe, reihenfolge, fallback_km
+            'SELECT slug, bezeichnung, farbe, reihenfolge, fallback_km, ist_kein_training, hat_strecke
                FROM ' . DB::tbl('training_typen') . '
               WHERE aktiv = 1
               ORDER BY reihenfolge, slug'
@@ -1294,8 +1304,10 @@ function handleConfig(): void {
                 'slug'        => $r['slug'],
                 'bezeichnung' => $r['bezeichnung'],
                 'farbe'       => $r['farbe'] ?? '',
-                'reihenfolge' => (int)$r['reihenfolge'],
-                'fallback_km' => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+                'reihenfolge'       => (int)\$r['reihenfolge'],
+                'fallback_km'       => \$r['fallback_km'] !== null ? (float)\$r['fallback_km'] : null,
+                'ist_kein_training' => !empty(\$r['ist_kein_training']),
+                'hat_strecke'       => !empty(\$r['hat_strecke']),
             ];
         }, $typenRows);
     } catch (Throwable $_) {
@@ -2006,7 +2018,7 @@ function handleAdminTypen(string $method, string $sub): void
 
     if ($sub === '' && $method === 'GET') {
         $rows = DB::fetchAll(
-            'SELECT t.slug, t.bezeichnung, t.farbe, t.reihenfolge, t.aktiv, t.fallback_km,
+            'SELECT t.slug, t.bezeichnung, t.farbe, t.reihenfolge, t.aktiv, t.fallback_km, t.ist_kein_training, t.hat_strecke,
                     COUNT(b.id) AS block_count
                FROM ' . DB::tbl('training_typen') . ' t
                LEFT JOIN ' . DB::tbl('training_bloecke') . ' b ON b.typ = t.slug
@@ -2021,7 +2033,9 @@ function handleAdminTypen(string $method, string $sub): void
                 'reihenfolge' => (int)$r['reihenfolge'],
                 'aktiv'       => (bool)$r['aktiv'],
                 'block_count' => (int)$r['block_count'],
-                'fallback_km' => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+                'fallback_km'       => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
+                'ist_kein_training' => !empty($r['ist_kein_training']),
+                'hat_strecke'       => !empty($r['hat_strecke']),
             ];
         }, $rows)]);
         return;
@@ -2047,11 +2061,13 @@ function handleAdminTypen(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => 'Slug bereits vorhanden']);
             return;
         }
-        $farbe       = substr(trim((string)($in['farbe'] ?? '')), 0, 20) ?: null;
-        $reihenfolge = isset($in['reihenfolge']) ? max(0, (int)$in['reihenfolge']) : 99;
+        $farbe            = substr(trim((string)($in['farbe'] ?? '')), 0, 20) ?: null;
+        $reihenfolge      = isset($in['reihenfolge']) ? max(0, (int)$in['reihenfolge']) : 99;
+        $istKeinTraining  = !empty($in['ist_kein_training']) ? 1 : 0;
+        $hatStrecke       = !empty($in['hat_strecke']) ? 1 : 0;
         DB::query(
-            'INSERT INTO ' . DB::tbl('training_typen') . ' (slug, bezeichnung, farbe, reihenfolge, aktiv) VALUES (?,?,?,?,1)',
-            [$slug, substr($bezeichnung, 0, 100), $farbe, $reihenfolge]
+            'INSERT INTO ' . DB::tbl('training_typen') . ' (slug, bezeichnung, farbe, reihenfolge, aktiv, ist_kein_training, hat_strecke) VALUES (?,?,?,?,1,?,?)',
+            [$slug, substr($bezeichnung, 0, 100), $farbe, $reihenfolge, $istKeinTraining, $hatStrecke]
         );
         echo json_encode(['ok' => true, 'slug' => $slug]);
         return;
@@ -2077,14 +2093,20 @@ function handleAdminTypen(string $method, string $sub): void
             : $row['farbe'];
         $reihenfolge = isset($in['reihenfolge']) ? max(0, (int)$in['reihenfolge']) : (int)$row['reihenfolge'];
         $aktiv       = isset($in['aktiv']) ? ($in['aktiv'] ? 1 : 0) : (int)$row['aktiv'];
-        $fallbackKm  = array_key_exists('fallback_km', $in)
+        $fallbackKm      = array_key_exists('fallback_km', $in)
             ? ($in['fallback_km'] !== null && $in['fallback_km'] !== ''
                 ? round(max(0.0, min(9999.0, (float)$in['fallback_km'])), 2)
                 : null)
             : ($row['fallback_km'] !== null ? (float)$row['fallback_km'] : null);
+        $istKeinTraining = array_key_exists('ist_kein_training', $in)
+            ? (!empty($in['ist_kein_training']) ? 1 : 0)
+            : (int)$row['ist_kein_training'];
+        $hatStrecke      = array_key_exists('hat_strecke', $in)
+            ? (!empty($in['hat_strecke']) ? 1 : 0)
+            : (int)$row['hat_strecke'];
         DB::query(
-            'UPDATE ' . DB::tbl('training_typen') . ' SET bezeichnung=?, farbe=?, reihenfolge=?, aktiv=?, fallback_km=? WHERE slug=?',
-            [substr($bezeichnung, 0, 100), $farbe, $reihenfolge, $aktiv, $fallbackKm, $slug]
+            'UPDATE ' . DB::tbl('training_typen') . ' SET bezeichnung=?, farbe=?, reihenfolge=?, aktiv=?, fallback_km=?, ist_kein_training=?, hat_strecke=? WHERE slug=?',
+            [substr($bezeichnung, 0, 100), $farbe, $reihenfolge, $aktiv, $fallbackKm, $istKeinTraining, $hatStrecke, $slug]
         );
         echo json_encode(['ok' => true]);
         return;

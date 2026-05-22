@@ -15,20 +15,9 @@ const EDITOR = (() => {
   let currentId = null;
   let currentSegmente = [];
 
-  // Typen dynamisch aus appConfig (via GET /config geladen), Fallback hardcodiert
-  const FALLBACK_TYP_OPTIONS = [
-    { value: 'intervall',     label: 'Intervall' },
-    { value: 'dauerlauf',     label: 'Dauerlauf' },
-    { value: 'funktionell',   label: 'Funktionelles Training' },
-    { value: 'runde',         label: 'Runde / Strecke' },
-    { value: 'event',         label: 'Event / Wettkampf' },
-    { value: 'frei',          label: 'Sonstiges' },
-    { value: 'kein_training', label: 'Kein Training' },
-  ];
+  // Typen aus globalem getTypen() (02_app.js), konfiguriert via Admin → Einstellungen
   function getTypOptions() {
-    const t = appConfig && appConfig.typen;
-    if (Array.isArray(t) && t.length) return t.map(x => ({ value: x.slug, label: x.bezeichnung }));
-    return FALLBACK_TYP_OPTIONS;
+    return getTypen().map(x => ({ value: x.slug, label: x.bezeichnung }));
   }
   const PAUSE_OPTIONS = [
     { value: 'TP',   label: 'TP – Trabpause' },
@@ -56,7 +45,7 @@ const EDITOR = (() => {
     const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
       tpListe.map(t => `<option value="${t.id}"${t.id === curTpId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
 
-    const istRunde = e.typ === 'runde';
+    const istRunde = hatStrecke(e.typ);
 
     const cont = document.getElementById('modal-container');
     cont.innerHTML = `
@@ -227,7 +216,7 @@ const EDITOR = (() => {
 
   function onTypChange() {
     const typ = (document.getElementById('ed-typ') || {}).value || '';
-    const istRunde = typ === 'runde';
+    const istRunde = hatStrecke(typ);
     const komootWrap = document.getElementById('ed-komoot-wrap');
     const segWrap    = document.getElementById('ed-seg-wrap');
     if (komootWrap) komootWrap.style.display = istRunde ? '' : 'none';
@@ -237,7 +226,7 @@ const EDITOR = (() => {
   async function speichern() {
     const tpIdStr  = val('ed-treffpunkt-id');
     const typ      = val('ed-typ');
-    const istRunde = typ === 'runde';
+    const istRunde = hatStrecke(typ);
     const payload = {
       datum:          val('ed-datum'),
       uhrzeit:        val('ed-uhrzeit') || null,

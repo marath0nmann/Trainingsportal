@@ -120,17 +120,7 @@ const MEINPLAN = (() => {
   }
 
   function _openModal(einheit, datum, prefill) {
-    const typenCfg = (appConfig && Array.isArray(appConfig.typen) && appConfig.typen.length)
-      ? appConfig.typen
-      : [
-          { slug: 'dauerlauf',     bezeichnung: 'Dauerlauf' },
-          { slug: 'intervall',     bezeichnung: 'Intervall' },
-          { slug: 'funktionell',   bezeichnung: 'Funktionelles Training' },
-          { slug: 'runde',         bezeichnung: 'Runde / Strecke' },
-          { slug: 'event',         bezeichnung: 'Event / Wettkampf' },
-          { slug: 'frei',          bezeichnung: 'Sonstiges' },
-          { slug: 'kein_training', bezeichnung: 'Kein Training' },
-        ];
+    const typenCfg = getTypen();
 
     const isNew    = !einheit;
     const e        = einheit || {};

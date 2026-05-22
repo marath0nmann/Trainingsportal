@@ -16,26 +16,9 @@ const BLOECKE = (() => {
     { value: 'frei', label: '— frei —' },
   ];
 
-  // Fallback-Typen falls Config noch nicht geladen
-  const FALLBACK_TYPEN = [
-    { slug: 'intervall',     bezeichnung: 'Intervall' },
-    { slug: 'dauerlauf',     bezeichnung: 'Dauerlauf' },
-    { slug: 'funktionell',   bezeichnung: 'Funktionelles Training' },
-    { slug: 'runde',         bezeichnung: 'Runde / Strecke' },
-    { slug: 'event',         bezeichnung: 'Event / Wettkampf' },
-    { slug: 'frei',          bezeichnung: 'Sonstiges' },
-    { slug: 'kein_training', bezeichnung: 'Kein Training' },
-  ];
+  // getTypen(), getTypLabel(), hatStrecke() aus 02_app.js (global)
 
-  function getTypen() {
-    const t = appConfig && appConfig.typen;
-    return (Array.isArray(t) && t.length) ? t : FALLBACK_TYPEN;
-  }
 
-  function getTypLabel(slug) {
-    const t = getTypen().find(x => x.slug === slug);
-    return t ? t.bezeichnung : slug;
-  }
 
   function istTrainer() {
     return state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
@@ -135,7 +118,7 @@ const BLOECKE = (() => {
     const istGlobal = b.sichtbarkeit === 'global';
     const kannBearbeiten = istTrainer()
       || (!istGlobal && state.user && b.erstellt_von === state.user.id);
-    const istRunde = b.typ === 'runde';
+    const istRunde = hatStrecke(b.typ);
     const segCount = b.seg_count ?? null;
     const infoBadge = istRunde
       ? (b.komoot_url
@@ -372,7 +355,7 @@ const BLOECKE = (() => {
       .map(t => `<option value="${escapeHtml(t.slug)}"${t.slug === b.typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`)
       .join('');
 
-    const istRunde = b.typ === 'runde';
+    const istRunde = hatStrecke(b.typ);
 
     const cont = document.getElementById('modal-container');
 
@@ -476,7 +459,7 @@ const BLOECKE = (() => {
 
   function onTypChange() {
     const typ = val('be-typ');
-    const istRunde = typ === 'runde';
+    const istRunde = hatStrecke(typ);
     const komootWrap = document.getElementById('be-komoot-wrap');
     const segWrap    = document.getElementById('be-seg-wrap');
     const resetBtn   = document.getElementById('be-titel-reset-btn');
@@ -671,7 +654,7 @@ const BLOECKE = (() => {
 
   async function speichern(blockId) {
     const typ      = val('be-typ');
-    const istRunde = typ === 'runde';
+    const istRunde = hatStrecke(typ);
     const payload = {
       titel:        val('be-titel'),
       typ,

@@ -1,5 +1,8 @@
 # Changelog
 
+## v109
+- Alle hardcodierten Trainingstypen entfernt: neue DB-Flags `ist_kein_training` und `hat_strecke` in `training_typen`; globale Helpers `getTypen()`, `getTypLabel()`, `hatStrecke()`, `istKeinTraining()` in allen Modulen; Admin-UI erlaubt Konfiguration der Flags; API-Migration 8 setzt Defaults
+
 ## v108
 - Fix: Typ-Bezeichnungen überall aus appConfig.typen (Admin-Einstellungen) gelesen – keine hardcodierten Abkürzungen mehr (z. B. "Funkt. Tr." → "Funktionelles Training")
 

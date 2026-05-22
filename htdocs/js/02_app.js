@@ -243,22 +243,33 @@ function navigateAdmin(subTab) {
 const MONATSNAMEN = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const WOCHENTAGE  = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
-const TYP_LABEL = {
-  intervall:    'Intervall',
-  dauerlauf:    'Dauerlauf',
-  funktionell:  'Funktionelles Training',
-  runde:        'Runde / Strecke',
-  event:        'Event / Wettkampf',
-  frei:         'Sonstiges',
-  kein_training:'Kein Training',
-};
+// Fallback-Typen wenn appConfig noch nicht geladen (vollständige Flags)
+const FALLBACK_TYPEN = [
+  { slug: 'intervall',     bezeichnung: 'Intervall',              farbe: null, fallback_km: null, ist_kein_training: false, hat_strecke: false },
+  { slug: 'dauerlauf',     bezeichnung: 'Dauerlauf',              farbe: null, fallback_km: null, ist_kein_training: false, hat_strecke: false },
+  { slug: 'funktionell',   bezeichnung: 'Funktionelles Training', farbe: null, fallback_km: null, ist_kein_training: false, hat_strecke: false },
+  { slug: 'runde',         bezeichnung: 'Runde / Strecke',        farbe: null, fallback_km: null, ist_kein_training: false, hat_strecke: true  },
+  { slug: 'event',         bezeichnung: 'Event / Wettkampf',      farbe: null, fallback_km: null, ist_kein_training: false, hat_strecke: false },
+  { slug: 'frei',          bezeichnung: 'Sonstiges',              farbe: null, fallback_km: null, ist_kein_training: false, hat_strecke: false },
+  { slug: 'kein_training', bezeichnung: 'Kein Training',          farbe: null, fallback_km: null, ist_kein_training: true,  hat_strecke: false },
+];
 
-// Typ-Bezeichnung: zuerst aus appConfig.typen (Admin-konfiguriert), dann TYP_LABEL, dann Slug
+// Globale Typ-Helfer (genutzt von allen Modulen)
+function getTypen() {
+  const t = window.appConfig && window.appConfig.typen;
+  return (Array.isArray(t) && t.length) ? t : FALLBACK_TYPEN;
+}
 function getTypLabel(typ) {
-  const typen = window.appConfig && Array.isArray(window.appConfig.typen) ? window.appConfig.typen : [];
-  const t = typen.find(x => x.slug === typ);
-  if (t) return t.bezeichnung;
-  return TYP_LABEL[typ] || typ;
+  const t = getTypen().find(x => x.slug === typ);
+  return t ? t.bezeichnung : typ;
+}
+function hatStrecke(typ) {
+  const t = getTypen().find(x => x.slug === typ);
+  return t ? !!t.hat_strecke : typ === 'runde';
+}
+function istKeinTraining(typ) {
+  const t = getTypen().find(x => x.slug === typ);
+  return t ? !!t.ist_kein_training : typ === 'kein_training';
 }
 
 // Effektive Distanz einer privaten Einheit:
@@ -555,7 +566,7 @@ async function ladeHeuteSektionInto(containerId) {
   const today = ymd(new Date());
   try {
     const d = await apiGet(`einheiten?von=${today}&bis=${today}`, { silent: true });
-    const items = (d.einheiten || []).filter(e => e.typ !== 'kein_training');
+    const items = (d.einheiten || []).filter(e => !istKeinTraining(e.typ));
     el.innerHTML = items.length ? renderHeuteSektionHtml(items) : '';
     if (items.length) ladHeuteDetails(items);
   } catch (e) {
@@ -897,7 +908,7 @@ async function renderListe(main, quarterArg) {
       const dayStr = `${WOCHENTAG_KURZ[dateObj.getDay()]}, ${dateObj.getDate()}. ${MONAT_KURZ[dateObj.getMonth()]}`;
       const isToday = e.datum === todayKey;
       const isCancelled = e.status === 'abgesagt';
-      const isKeinTraining = e.typ === 'kein_training';
+      const isKeinTraining = istKeinTraining(e.typ);
       const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : '';
       const typLabel = getTypLabel(e.typ);
 

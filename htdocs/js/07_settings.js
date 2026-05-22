@@ -564,6 +564,17 @@ const SETTINGS = (() => {
                     <input type="checkbox" id="typ-aktiv-${i}" ${t.aktiv ? 'checked' : ''}> aktiv
                   </label>
                 </div>
+                <div style="min-width:120px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Sonderfunktion</div>
+                  <div style="display:flex;flex-direction:column;gap:5px">
+                    <label style="cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px" title="Einheiten dieses Typs werden in der Heute-Sektion nicht angezeigt und aus km-Berechnungen ausgeschlossen">
+                      <input type="checkbox" id="typ-kein-training-${i}" ${t.ist_kein_training ? 'checked' : ''}> Kein Training
+                    </label>
+                    <label style="cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px" title="Zeigt Komoot-Strecken-Feld statt Segmenten im Editor">
+                      <input type="checkbox" id="typ-hat-strecke-${i}" ${t.hat_strecke ? 'checked' : ''}> Hat Strecke (Komoot)
+                    </label>
+                  </div>
+                </div>
               </div>
               <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">
                 <button class="btn btn-ghost btn-sm" onclick="SETTINGS.typAbbrechen()">Abbrechen</button>
@@ -639,9 +650,11 @@ const SETTINGS = (() => {
     const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
     const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
     const fkRaw       = (document.getElementById(`typ-fallback-km-${idx}`)?.value || '').trim();
-    const fallback_km = fkRaw !== '' ? parseFloat(fkRaw) : null;
+    const fallback_km       = fkRaw !== '' ? parseFloat(fkRaw) : null;
+    const ist_kein_training = document.getElementById(`typ-kein-training-${idx}`)?.checked ? true : false;
+    const hat_strecke       = document.getElementById(`typ-hat-strecke-${idx}`)?.checked ? true : false;
     try {
-      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv, fallback_km });
+      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv, fallback_km, ist_kein_training, hat_strecke });
       if (!opts || !opts.silent) benachrichtigen('Typ gespeichert.', 'ok');
       typenBearbeitet = null;
       const r = await apiGet('admin/typen', { silent: true });
