@@ -538,7 +538,7 @@ const PLANUNG = (() => {
         <div class="modal-card" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div>
-              <div class="modal-eyebrow">Kalendereintrag bearbeiten</div>
+              <div class="modal-eyebrow">Kalendereintrag bearbeiten${e.serie_id ? ' <span class="serie-badge">↺ Serie</span>' : ''}</div>
               <div class="modal-title">${escapeHtml(e.titel)}</div>
             </div>
             <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
@@ -577,23 +577,39 @@ const PLANUNG = (() => {
       </div>`;
   }
 
-  async function einheitBearbeitenSpeichern(einheitId) {
+  async function einheitBearbeitenSpeichern(einheitId, scope) {
     const datum = document.getElementById('edit-e-datum')?.value || '';
     if (!datum) { notify('Datum fehlt.', 'err'); return; }
-    const tpIdStr = document.getElementById('edit-e-treffpunkt-id')?.value || '';
+    const tpIdStr      = document.getElementById('edit-e-treffpunkt-id')?.value || '';
+    const uhrzeit      = document.getElementById('edit-e-uhrzeit')?.value || null;
+    const sichtbarkeit = document.getElementById('edit-e-sichtbarkeit')?.value || 'oeffentlich';
     try {
       const data = await apiGet(`einheiten/${einheitId}`, { silent: true });
       const e = data.einheit;
-      await apiPut(`einheiten/${einheitId}`, {
-        datum,
-        uhrzeit:       document.getElementById('edit-e-uhrzeit')?.value || null,
+
+      // Serien-Einheit: erst Geltungsbereich abfragen
+      if (e.serie_id && !scope) {
+        _zeigeSerienScopeButtons(einheitId);
+        return;
+      }
+
+      const basis = {
+        uhrzeit,
         typ:           e.typ       || 'frei',
         titel:         e.titel,
         treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
         bemerkung:     e.bemerkung || null,
-        sichtbarkeit:  document.getElementById('edit-e-sichtbarkeit')?.value || 'oeffentlich',
+        sichtbarkeit,
         status:        e.status    || 'geplant',
-      });
+      };
+
+      if (scope === 'alle') {
+        await apiPut(`serien/${e.serie_id}`, basis);
+      } else if (scope === 'abjetzt') {
+        await apiPut(`serien/${e.serie_id}/ab/${e.datum}`, basis);
+      } else {
+        await apiPut(`einheiten/${einheitId}`, { ...basis, datum });
+      }
       schliesseModal();
       notify('Eintrag aktualisiert.', 'ok');
       if ((location.hash || '').startsWith('#planung')) {
@@ -604,6 +620,19 @@ const PLANUNG = (() => {
     } catch (err) {
       notify('Fehler: ' + (err.message || ''), 'err');
     }
+  }
+
+  function _zeigeSerienScopeButtons(einheitId) {
+    const footer = document.querySelector('#modal-container .ed-footer');
+    if (!footer) return;
+    footer.innerHTML = `
+      <div class="serie-del-frage">Änderungen auf welche Termine anwenden?</div>
+      <div class="serie-del-btns">
+        <button class="btn btn-ghost btn-sm" onclick="PLANUNG.einheitBearbeitenSpeichern(${einheitId},'einzel')">Nur dieser Termin</button>
+        <button class="btn btn-warning btn-sm" onclick="PLANUNG.einheitBearbeitenSpeichern(${einheitId},'abjetzt')">Dieser und alle folgenden</button>
+        <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeitenSpeichern(${einheitId},'alle')">Gesamte Serie</button>
+        <button class="btn btn-ghost btn-sm" onclick="schliesseModal()">Abbrechen</button>
+      </div>`;
   }
 
   function reloadSidebar() {

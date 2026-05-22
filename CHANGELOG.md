@@ -1,5 +1,10 @@
 # Changelog
 
+## v114
+- Serientermine lassen sich jetzt für die gesamte Serie bearbeiten: Beim Speichern einer Serien-Einheit erscheint die Auswahl „Nur dieser Termin / Dieser und alle folgenden / Gesamte Serie" (analog zum Löschen) – in Kalender-, Planung- und Admin-Editor
+- Neue API-Endpunkte `PUT serien/{id}` und `PUT serien/{id}/ab/{datum}` (Teil-Update; jeder Termin behält sein eigenes Datum)
+- Fix: „Bearbeiten" aus dem Detail-Modal entpackt jetzt korrekt das `{einheit, segmente}`-Objekt (zuvor leeres Formular möglich)
+
 ## v113
 - Fix: Planungskalender zeigte keine Einträge mehr – Ursache war ein fehlendes DB-Schema für das Serien-Feature (`training_serien` + Spalte `einheiten.serie_id`), wodurch `GET /einheiten` mit HTTP 500 fehlschlug; Migration #9 ergänzt
 - Planung: API-Fehler werden nicht mehr still verschluckt, sondern in der Konsole protokolliert

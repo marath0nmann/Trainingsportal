@@ -228,11 +228,11 @@ const EDITOR = (() => {
     if (segWrap)    segWrap.style.display    = istRunde ? 'none' : '';
   }
 
-  async function speichern() {
+  function _sammlePayload() {
     const tpIdStr  = val('ed-treffpunkt-id');
     const typ      = val('ed-typ');
     const istRunde = hatStrecke(typ);
-    const payload = {
+    return {
       datum:          val('ed-datum'),
       uhrzeit:        val('ed-uhrzeit') || null,
       typ,
@@ -244,14 +244,34 @@ const EDITOR = (() => {
       status:         val('ed-status'),
       segmente:       istRunde ? [] : currentSegmente,
     };
+  }
+
+  async function speichern() {
+    // Serien-Einheit: erst Geltungsbereich abfragen
+    if (currentId && currentSerieId) {
+      const p = _sammlePayload();
+      if (!p.datum) { benachrichtigen('Datum fehlt.', 'err'); return; }
+      if (!p.titel) { benachrichtigen('Titel fehlt.', 'err'); return; }
+      _zeigeSerienSpeichernOptionen();
+      return;
+    }
+    await _speichernMitScope('einzel');
+  }
+
+  async function _speichernMitScope(scope) {
+    const payload = _sammlePayload();
     if (!payload.datum)  { benachrichtigen('Datum fehlt.', 'err'); return; }
     if (!payload.titel)  { benachrichtigen('Titel fehlt.', 'err'); return; }
 
     try {
-      if (currentId) {
-        await apiPut(`einheiten/${currentId}`, payload);
-      } else {
+      if (!currentId) {
         await apiPost('einheiten', payload);
+      } else if (scope === 'alle') {
+        await apiPut(`serien/${currentSerieId}`, payload);
+      } else if (scope === 'abjetzt') {
+        await apiPut(`serien/${currentSerieId}/ab/${currentDatum}`, payload);
+      } else {
+        await apiPut(`einheiten/${currentId}`, payload);
       }
       schliesseModal();
       benachrichtigen('Gespeichert.', 'ok');
@@ -260,6 +280,23 @@ const EDITOR = (() => {
       benachrichtigen('Fehler: ' + (e.message || ''), 'err');
     }
   }
+
+  function _zeigeSerienSpeichernOptionen() {
+    const footer = document.querySelector('#modal-container .ed-footer');
+    if (!footer) return;
+    footer.innerHTML = `
+      <div class="serie-del-frage">Änderungen auf welche Termine anwenden?</div>
+      <div class="serie-del-btns">
+        <button class="btn btn-ghost btn-sm" onclick="EDITOR.speichernEinzel()">Nur dieser Termin</button>
+        <button class="btn btn-warning btn-sm" onclick="EDITOR.speichernAbJetzt()">Dieser und alle folgenden</button>
+        <button class="btn btn-primary btn-sm" onclick="EDITOR.speichernAlle()">Gesamte Serie</button>
+        <button class="btn btn-ghost btn-sm" onclick="EDITOR.loeschenAbbrechen()">Abbrechen</button>
+      </div>`;
+  }
+
+  function speichernEinzel()  { _speichernMitScope('einzel');  }
+  function speichernAbJetzt() { _speichernMitScope('abjetzt'); }
+  function speichernAlle()    { _speichernMitScope('alle');    }
 
   async function loeschen() {
     if (!currentId) return;
@@ -356,6 +393,7 @@ const EDITOR = (() => {
   return {
     open, parsenAusTitel, segmentHinzufuegen, segmentLoeschen,
     speichern, loeschen, onTypChange,
+    speichernEinzel, speichernAbJetzt, speichernAlle,
     loeschenNurDieser, loeschenAbJetzt, loeschenAlleSerie, loeschenAbbrechen,
   };
 })();

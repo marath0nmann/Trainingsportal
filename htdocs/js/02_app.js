@@ -636,7 +636,12 @@ async function ladHeuteDetails(items) {
 
 async function oeffneTerminModal(einheit) {
   if (!einheit) return;
+  // Akzeptiere sowohl flaches Einheit-Objekt als auch {einheit, segmente}-Wrapper
+  if (einheit.einheit) einheit = einheit.einheit;
   const id = einheit.id;
+
+  // Serien-Kontext für den Speichern-Schritt merken
+  state._terminEdit = { id: id, serieId: einheit.serie_id || null, datum: einheit.datum || null };
 
   // Slim-Modal: nur Termin-Felder (Datum, Uhrzeit, Treffpunkt, Sichtbarkeit)
   let tpListe = [];
@@ -650,7 +655,7 @@ async function oeffneTerminModal(einheit) {
     '<div class="modal-card" onclick="event.stopPropagation()">' +
       '<div class="modal-head">' +
         '<div>' +
-          '<div class="modal-eyebrow">Kalendereintrag bearbeiten</div>' +
+          '<div class="modal-eyebrow">Kalendereintrag bearbeiten' + (einheit.serie_id ? ' <span class="serie-badge">↺ Serie</span>' : '') + '</div>' +
           '<div class="modal-title">' + escapeHtml(einheit.titel || '') + '</div>' +
         '</div>' +
         '<button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>' +
@@ -695,26 +700,71 @@ async function bearbeiteHeuteEinheit(id) {
 }
 
 async function speichereTermin(id) {
+  const ctx = state._terminEdit || { id: id, serieId: null, datum: null };
+  // Serien-Einheit: erst Geltungsbereich abfragen
+  if (ctx.serieId) {
+    function valD(elId) { const el = document.getElementById(elId); return el ? (el.value || '').trim() : ''; }
+    if (!valD('hte-datum')) { benachrichtigen('Datum fehlt.', 'err'); return; }
+    zeigeTerminSerienScope();
+    return;
+  }
+  await terminSpeichernMitScope('einzel');
+}
+
+async function terminSpeichernMitScope(scope) {
   function val(elId) {
     const el = document.getElementById(elId);
     return el ? (el.value || '').trim() : '';
   }
+  const ctx = state._terminEdit || {};
   const tpIdStr = val('hte-treffpunkt-id');
-  const payload = {
+  const datum = val('hte-datum');
+  if (!datum) { benachrichtigen('Datum fehlt.', 'err'); return; }
+  // Für Serien-Scopes wird das Datum nicht übernommen (je Termin individuell)
+  const basis = {
     treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
-    datum:         val('hte-datum'),
     uhrzeit:       val('hte-uhrzeit') || null,
     sichtbarkeit:  val('hte-sichtbarkeit'),
   };
-  if (!payload.datum) { benachrichtigen('Datum fehlt.', 'err'); return; }
   try {
-    await apiPut('einheiten/' + id, payload);
+    if (scope === 'alle') {
+      await apiPut('serien/' + ctx.serieId, basis);
+    } else if (scope === 'abjetzt') {
+      await apiPut('serien/' + ctx.serieId + '/ab/' + ctx.datum, basis);
+    } else {
+      await apiPut('einheiten/' + ctx.id, { ...basis, datum: datum });
+    }
     schliesseModal();
     benachrichtigen('Gespeichert.', 'ok');
     renderPage();
   } catch (e) {
     benachrichtigen('Fehler: ' + (e.message || ''), 'err');
   }
+}
+
+function zeigeTerminSerienScope() {
+  const footer = document.querySelector('#modal-container .ed-footer');
+  if (!footer) return;
+  const id = (state._terminEdit && state._terminEdit.id) || 0;
+  footer.innerHTML =
+    '<div class="serie-del-frage">Änderungen auf welche Termine anwenden?</div>' +
+    '<div class="serie-del-btns">' +
+      '<button class="btn btn-ghost btn-sm" onclick="terminSpeichernMitScope(\'einzel\')">Nur dieser Termin</button>' +
+      '<button class="btn btn-warning btn-sm" onclick="terminSpeichernMitScope(\'abjetzt\')">Dieser und alle folgenden</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="terminSpeichernMitScope(\'alle\')">Gesamte Serie</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="terminSerienScopeAbbrechen(' + id + ')">Abbrechen</button>' +
+    '</div>';
+}
+
+function terminSerienScopeAbbrechen(id) {
+  const footer = document.querySelector('#modal-container .ed-footer');
+  if (!footer) return;
+  footer.innerHTML =
+    '<span></span>' +
+    '<div class="ed-footer-right">' +
+      '<button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>' +
+      '<button class="btn btn-primary" onclick="speichereTermin(' + id + ')">Speichern</button>' +
+    '</div>';
 }
 
 // Segment-Blöcke (TrainingPeaks-Stil): jede Wiederholung als eigener Block

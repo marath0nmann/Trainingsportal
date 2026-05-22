@@ -2253,6 +2253,8 @@ function mapTreffpunkt(array $r): array {
 // Serientermine
 //   POST serien                      → Serie aus Block anlegen (auth)
 //   GET  serien/{id}                 → Serieninfo + Termine (auth)
+//   PUT  serien/{id}                 → Gesamte Serie aktualisieren (auth + Ersteller/Trainer)
+//   PUT  serien/{id}/ab/{datum}      → Ab Datum aktualisieren (auth + Ersteller/Trainer)
 //   DEL  serien/{id}                 → Gesamte Serie löschen (auth + Ersteller/Trainer)
 //   DEL  serien/{id}/ab/{datum}      → Ab Datum löschen (auth + Ersteller/Trainer)
 // ============================================================
@@ -2455,6 +2457,80 @@ function handleSerien(string $method, string $sub): void
             DB::query('DELETE FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
         }
         echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── PUT {id} | PUT {id}/ab/{datum} → Serie (bzw. ab Datum) aktualisieren ──
+    // Wendet die übergebenen Felder auf alle (bzw. ab Datum folgende) Termine an.
+    // Das Datum wird NIE übernommen – jeder Termin behält sein eigenes Datum.
+    if ($method === 'PUT' && preg_match('#^(\d+)(?:/ab/(\d{4}-\d{2}-\d{2}))?$#', $sub, $m)) {
+        $serieId = (int)$m[1];
+        $abDatum = $m[2] ?? null;
+        $serie   = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
+        if (!$serie) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Serie nicht gefunden']);
+            return;
+        }
+        if ((int)$serie['erstellt_von'] !== (int)$user['id'] && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $in = readJsonBody();
+
+        // Nur tatsächlich übergebene Felder aktualisieren (datum ausgenommen)
+        $sets = [];
+        $vals = [];
+        if (array_key_exists('uhrzeit', $in))       { $sets[] = 'uhrzeit=?';       $vals[] = ($in['uhrzeit'] !== '' ? $in['uhrzeit'] : null); }
+        if (array_key_exists('typ', $in))           { $sets[] = 'typ=?';           $vals[] = $in['typ'] ?: 'frei'; }
+        if (array_key_exists('titel', $in))         { $sets[] = 'titel=?';         $vals[] = (string)$in['titel']; }
+        if (array_key_exists('treffpunkt_id', $in)) { $sets[] = 'treffpunkt_id=?'; $vals[] = ($in['treffpunkt_id'] !== '' && $in['treffpunkt_id'] !== null ? (int)$in['treffpunkt_id'] : null); }
+        if (array_key_exists('komoot_url', $in))    { $sets[] = 'komoot_url=?';    $vals[] = ($in['komoot_url'] !== '' && $in['komoot_url'] !== null ? substr((string)$in['komoot_url'], 0, 500) : null); }
+        if (array_key_exists('bemerkung', $in))     { $sets[] = 'bemerkung=?';     $vals[] = ($in['bemerkung'] !== '' ? $in['bemerkung'] : null); }
+        if (array_key_exists('sichtbarkeit', $in))  { $sets[] = 'sichtbarkeit=?';  $vals[] = (in_array($in['sichtbarkeit'] ?? '', ['oeffentlich', 'intern'], true) ? $in['sichtbarkeit'] : 'oeffentlich'); }
+        if (array_key_exists('status', $in))        { $sets[] = 'status=?';        $vals[] = $in['status'] ?: 'geplant'; }
+        $hatSeg = array_key_exists('segmente', $in);
+
+        $params = [$serieId];
+        $whereDatum = '';
+        if ($abDatum !== null) { $whereDatum = ' AND datum >= ?'; $params[] = $abDatum; }
+        $ziele = DB::fetchAll(
+            'SELECT id FROM ' . DB::tbl('training_einheiten') . ' WHERE serie_id = ?' . $whereDatum,
+            $params
+        );
+
+        $pdo = DB::get();
+        $pdo->beginTransaction();
+        try {
+            foreach ($ziele as $z) {
+                $eid = (int)$z['id'];
+                if ($sets) {
+                    DB::query(
+                        'UPDATE ' . DB::tbl('training_einheiten') . ' SET ' . implode(', ', $sets) . ' WHERE id = ?',
+                        array_merge($vals, [$eid])
+                    );
+                }
+                if ($hatSeg) replaceSegmente($eid, $in['segmente'] ?? []);
+            }
+            // Serien-Metadaten bei Gesamt-Update mitziehen (nicht bei „ab Datum")
+            if ($abDatum === null) {
+                $mSets = []; $mVals = [];
+                if (array_key_exists('titel', $in))         { $mSets[] = 'titel=?';         $mVals[] = (string)$in['titel']; }
+                if (array_key_exists('typ', $in))           { $mSets[] = 'typ=?';           $mVals[] = $in['typ'] ?: 'frei'; }
+                if (array_key_exists('treffpunkt_id', $in)) { $mSets[] = 'treffpunkt_id=?'; $mVals[] = ($in['treffpunkt_id'] !== '' && $in['treffpunkt_id'] !== null ? (int)$in['treffpunkt_id'] : null); }
+                if (array_key_exists('uhrzeit', $in))       { $mSets[] = 'uhrzeit=?';       $mVals[] = ($in['uhrzeit'] !== '' ? $in['uhrzeit'] : null); }
+                if (array_key_exists('sichtbarkeit', $in))  { $mSets[] = 'sichtbarkeit=?';  $mVals[] = (in_array($in['sichtbarkeit'] ?? '', ['oeffentlich', 'intern'], true) ? $in['sichtbarkeit'] : 'oeffentlich'); }
+                if ($mSets) {
+                    DB::query('UPDATE ' . DB::tbl('training_serien') . ' SET ' . implode(', ', $mSets) . ' WHERE id = ?', array_merge($mVals, [$serieId]));
+                }
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        echo json_encode(['ok' => true, 'count' => count($ziele)]);
         return;
     }
 
