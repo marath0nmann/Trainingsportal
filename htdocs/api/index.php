@@ -3100,10 +3100,12 @@ function handleBloecke(string $method, string $sub): void
             $defaultSicht = ($block['sichtbarkeit'] === 'global') ? 'oeffentlich' : 'intern';
             $tpId = isset($in['treffpunkt_id']) && $in['treffpunkt_id'] !== '' && $in['treffpunkt_id'] !== null
                 ? (int)$in['treffpunkt_id'] : null;
+            $gruppeId = isset($in['gruppe_id']) && $in['gruppe_id'] !== '' && $in['gruppe_id'] !== null
+                ? (int)$in['gruppe_id'] : null;
             DB::query(
                 'INSERT INTO ' . DB::tbl('training_einheiten') . '
-                 (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, bemerkung, sichtbarkeit, status, erstellt_von)
-                 VALUES (?,?,?,?,?,?,?,?,?,?)',
+                 (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, bemerkung, sichtbarkeit, status, gruppe_id, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                 [
                     $in['datum'],
                     $in['uhrzeit'] ?? null,
@@ -3114,6 +3116,7 @@ function handleBloecke(string $method, string $sub): void
                     $block['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? $defaultSicht,
                     'geplant',
+                    $gruppeId,
                     (int)$user['id'],
                 ]
             );
