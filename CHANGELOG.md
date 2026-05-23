@@ -1,8 +1,7 @@
 # Changelog
 
-## v153
-- Heute-Sektion: „Ich bin dabei?"-Button optisch an Maps-Links angeglichen (11 px, Border, gleiche Höhe)
-- Heute-Sektion: Treffpunkt-Karte weiter herausgezoomt (Zoom 14 statt 16) + Marker verkleinert
+## v154
+- Header: Profil-Button (user-badge) identisch mit Statistikportal – ganzer Badge klickbar (öffnet Profileinstellungen), Avatar-Bild wird korrekt angezeigt, Initialen VN-Format, Online-Dot außerhalb des Kreises positioniert
 
 ## v150
 - Kalender: Wettkampf-Chips mit `🏆?` für Prognose-Termine (nicht bestätigtes Datum), `🏆` für fest eingetragene Termine

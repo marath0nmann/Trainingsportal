@@ -997,14 +997,13 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .notif-err { background: var(--primary); color: white; }
 
 /* Avatar: Klick-Cursor + Online-Dot */
-.user-avatar { transition: opacity .15s; position: relative; }
-.user-avatar:hover { opacity: .8; }
 .user-online-dot {
-  position: absolute; bottom: 1px; right: 1px;
+  position: absolute; bottom: 0; right: 0;
   width: 10px; height: 10px; border-radius: 50%;
   background: #22c55e;
-  border: 2px solid var(--header-bg, #1a1a2e);
-  pointer-events: none;
+  border: 2px solid var(--surface);
+  transform: translate(35%, 35%);
+  pointer-events: none; z-index: 2;
 }
 
 /* ============================================================

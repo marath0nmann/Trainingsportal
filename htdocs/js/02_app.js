@@ -81,18 +81,20 @@ function fillUserBadge() {
   if (nameEl)  nameEl.textContent  = displayName;
   if (rolleEl) rolleEl.textContent = ROLLE_LABEL[u.rolle] || u.rolle || '–';
   if (avatarEl) {
-    const initial = displayName.trim().charAt(0).toUpperCase();
+    // Initialen: Vorname[0]+Nachname[0] wenn beide vorhanden, sonst erster Buchstabe
+    const initials = (u.vorname && u.nachname)
+      ? (u.vorname.trim()[0] + u.nachname.trim()[0]).toUpperCase()
+      : displayName.trim().charAt(0).toUpperCase();
+    avatarEl.style.overflow = 'visible';
+    avatarEl.style.position = 'relative';
     let avatarInner = '';
     if (u.avatar_pfad) {
       // Avatar liegt im Statistikportal-htdocs; über shared.php ausliefern
-      avatarInner = `<img src="${assetUrl(u.avatar_pfad)}" alt="${escapeHtml(displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.outerHTML='${escapeHtml(initial)}'">`;
+      avatarInner = `<img src="${assetUrl(u.avatar_pfad)}" alt="${escapeHtml(displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none'">`;
     } else {
-      avatarInner = escapeHtml(initial);
+      avatarInner = `<span style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px">${escapeHtml(initials)}</span>`;
     }
     avatarEl.innerHTML = avatarInner + '<span class="user-online-dot" title="Online"></span>';
-    avatarEl.onclick = () => PROFIL.open();
-    avatarEl.title   = 'Profileinstellungen öffnen';
-    avatarEl.style.cursor = 'pointer';
   }
 
   const isAdmin   = u.rolle === 'admin';
