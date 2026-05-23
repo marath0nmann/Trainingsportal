@@ -562,7 +562,7 @@ async function renderKalender(main, monthArg) {
             return `<div class="kal-item" data-serie-id="${s.id}"
               style="background:rgba(46,204,113,.15);border-left:3px solid #27ae60;
                      color:var(--text);cursor:${canAdd ? 'pointer' : 'default'}"
-              ${canAdd ? `onclick="_wkPopoverShow(${s.id}, this)"` : ''}>
+              ${canAdd ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${s.id},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"` : ''}>
               <span class="kal-item-title">${emoji} ${escapeHtml(name)}</span>
             </div>`;
           }).join('')
@@ -1540,15 +1540,16 @@ async function _ladeWettkampfDaten() {
 
 // ── Wettkampf: Schnelleintrag-Popover ────────────────────────────────────
 
-let _wkPopSerie = null; // ID der aktuell geöffneten Serie (für Toggle)
+let _wkPopSerie   = null; // ID der aktuell geöffneten Serie
+let _wkHideTimer  = null; // Verzögerungs-Timer für Hover-Hide
 
 function _wkPopoverShow(serieId, anchorEl) {
   const serien = _wettkampfCache?.data || [];
   const serie  = serien.find(s => s.id === serieId);
   if (!serie || !state.user) return;
 
-  // Gleiche Serie erneut klicken → schließen (Toggle)
-  if (_wkPopSerie === serieId) { _wkPopoverHide(); return; }
+  clearTimeout(_wkHideTimer);
+  if (_wkPopSerie === serieId) return; // bereits offen, kein Flackern
   _wkPopoverHide();
   _wkPopSerie = serieId;
 
@@ -1610,17 +1611,15 @@ function _wkPopoverShow(serieId, anchorEl) {
   });
   pop.appendChild(diszDiv);
 
-  // Klicks im Popover nicht ans Dokument durchreichen (würde ihn sofort schließen)
-  pop.addEventListener('click', e => e.stopPropagation());
+  // Hover-Keep-alive: Maus über Popover → Timer stoppen
+  pop.addEventListener('mouseenter', () => clearTimeout(_wkHideTimer));
+  pop.addEventListener('mouseleave', () => { _wkHideTimer = setTimeout(_wkPopoverHide, 180); });
 
   document.body.appendChild(pop);
   _wkPopPosition(pop, anchorEl.getBoundingClientRect());
 
-  // Außen-Klick und Escape schließen den Popover
-  setTimeout(() => {
-    document.addEventListener('click',   _wkPopoverHide, { once: true });
-    document.addEventListener('keydown', _wkEscHide);
-  }, 0);
+  // Escape schließt den Popover
+  document.addEventListener('keydown', _wkEscHide);
 }
 
 function _wkEscHide(e) {
@@ -1628,6 +1627,7 @@ function _wkEscHide(e) {
 }
 
 function _wkPopoverHide() {
+  clearTimeout(_wkHideTimer);
   document.removeEventListener('keydown', _wkEscHide);
   const pop = document.getElementById('wk-popover');
   if (pop) pop.remove();
