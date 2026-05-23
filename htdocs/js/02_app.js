@@ -455,6 +455,11 @@ async function renderKalender(main, monthArg) {
   const privatWettkampfDaten = new Set(
     privatGefiltert.filter(e => e.typ === 'wettkampf').map(e => e.datum)
   );
+  // Befülle globale Map datum → [{id, bemerkung}] für Popover-Toggle-Logik
+  _wkPrivatMap = {};
+  privatGefiltert.filter(e => e.typ === 'wettkampf').forEach(e => {
+    (_wkPrivatMap[e.datum] = _wkPrivatMap[e.datum] || []).push({ id: e.id, bemerkung: e.bemerkung || null });
+  });
   const wettkampfSerien  = wettkampfRaw;
   const wettkampfBeiDatum  = {}; // für Forecast-Chips (gefiltert)
   const wkSerieDatumMap    = {}; // datum → [serien] für ALLE aktiven (für persönliche WK-Einträge)
@@ -532,7 +537,7 @@ async function renderKalender(main, monthArg) {
             const wkSerie = (wkSerieDatumMap[e.datum] || [])[0] || null;
             const sid     = wkSerie ? wkSerie.id : null;
             const hAttr   = sid
-              ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${sid},this,${e.id})" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`
+              ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${sid},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`
               : '';
             return `<div class="kal-item kal-typ-wettkampf is-privat" data-privat-id="${e.id}"
                          ${sid ? `data-serie-id="${sid}"` : ''} ${hAttr}>
@@ -1560,8 +1565,9 @@ async function _ladeWettkampfDaten() {
 
 let _wkPopSerie   = null; // ID der aktuell geöffneten Serie
 let _wkHideTimer  = null; // Verzögerungs-Timer für Hover-Hide
+let _wkPrivatMap  = {};   // datum → [{id, bemerkung}] – befüllt von renderKalender
 
-function _wkPopoverShow(serieId, anchorEl, privatId = null) {
+function _wkPopoverShow(serieId, anchorEl) {
   const serien = _wettkampfCache?.data || [];
   const serie  = serien.find(s => s.id === serieId);
   if (!serie || !state.user) return;
@@ -1611,39 +1617,29 @@ function _wkPopoverShow(serieId, anchorEl, privatId = null) {
   const diszDiv = document.createElement('div');
   diszDiv.className = 'wk-pop-disz';
 
-  // Disziplin-Buttons – ein Klick trägt sofort ein
+  // Disziplin-Buttons als Toggle: aktiv = bereits eingetragen, inaktiv = noch nicht
+  const vorhandene = _wkPrivatMap[datum] || [];
   const buttons = disziplinen.length ? disziplinen : [null];
   buttons.forEach(d => {
-    const km  = _disziplinKm(d);
+    const normD   = d || null; // null für „ohne Disziplin"
+    const existEintrag = vorhandene.find(ev => (ev.bemerkung || null) === normD) || null;
+    const isAktiv = !!existEintrag;
+
     const btn = document.createElement('button');
-    btn.className   = 'wk-pop-btn';
-    btn.textContent = d || 'Teilnahme eintragen';
-    if (km !== null) {
-      const kmSpan = document.createElement('span');
-      kmSpan.className   = 'wk-pop-km';
-      kmSpan.textContent = km < 1 ? `${Math.round(km * 1000)} m` : `${km} km`;
-      btn.appendChild(kmSpan);
+    btn.className   = 'wk-pop-btn' + (isAktiv ? ' wk-pop-btn--active' : '');
+    btn.textContent = (isAktiv ? '✓ ' : '') + (d || 'Teilnahme eintragen');
+    if (isAktiv) {
+      // Noch mal klicken → Eintrag löschen
+      btn.addEventListener('click', () => {
+        _wkPopoverHide();
+        if (typeof MEINPLAN !== 'undefined') MEINPLAN.loeschePrivat(existEintrag.id);
+      });
+    } else {
+      btn.addEventListener('click', () => _wkEintragen(serieId, d || ''));
     }
-    btn.addEventListener('click', () => _wkEintragen(serieId, d || ''));
     diszDiv.appendChild(btn);
   });
   pop.appendChild(diszDiv);
-
-  // „Teilnahme entfernen" – nur wenn der User bereits einen persönlichen Eintrag hat
-  if (privatId) {
-    const sep = document.createElement('div');
-    sep.style.cssText = 'border-top:1px solid var(--border);margin:6px 0';
-    pop.appendChild(sep);
-    const delBtn = document.createElement('button');
-    delBtn.className   = 'wk-pop-btn';
-    delBtn.style.cssText = 'background:rgba(231,76,60,.08);color:#e74c3c';
-    delBtn.textContent = '× Teilnahme entfernen';
-    delBtn.addEventListener('click', () => {
-      _wkPopoverHide();
-      if (typeof MEINPLAN !== 'undefined') MEINPLAN.loeschePrivat(privatId);
-    });
-    pop.appendChild(delBtn);
-  }
 
   // Hover-Keep-alive: Maus über Popover → Timer stoppen
   pop.addEventListener('mouseenter', () => clearTimeout(_wkHideTimer));

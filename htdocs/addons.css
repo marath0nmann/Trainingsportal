@@ -1671,6 +1671,10 @@ body.planung-active #app-footer    { display: none; }
   transition: background .12s;
 }
 .wk-pop-btn:hover { background: rgba(46,204,113,.28); }
+.wk-pop-btn--active {
+  background: #27ae60; color: #fff; border-color: #1e8449;
+}
+.wk-pop-btn--active:hover { background: #1e8449; }
 .wk-pop-km {
   font-size: 10px; color: var(--text2); font-weight: 400;
 }
