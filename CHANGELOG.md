@@ -1,10 +1,8 @@
 # Changelog
 
-## v152
-- Heute-Sektion: Treffpunkt-Karte jetzt mit OSM-Kacheln (wie Treffpunkte-Seite) statt iframe
-- Heute-Sektion: „Ich bin dabei?"-Button bündig mit Google-Maps-/Apple-Maps-Links (gleiche Unterkante)
-- Heute-Sektion: Alle Kacheln auf identische Höhe (CSS-Grid stretch)
-- Heute-Sektion: Bei 1 oder 2 Terminen volle Breite (keine 3-spaltige Aufteilung mit Lücken)
+## v153
+- Heute-Sektion: „Ich bin dabei?"-Button optisch an Maps-Links angeglichen (11 px, Border, gleiche Höhe)
+- Heute-Sektion: Treffpunkt-Karte weiter herausgezoomt (Zoom 14 statt 16) + Marker verkleinert
 
 ## v150
 - Kalender: Wettkampf-Chips mit `🏆?` für Prognose-Termine (nicht bestätigtes Datum), `🏆` für fest eingetragene Termine

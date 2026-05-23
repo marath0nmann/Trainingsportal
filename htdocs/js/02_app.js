@@ -720,7 +720,7 @@ async function _saveKalPrefs() {
 }
 
 function _osmStaticMapHtml(lat, lng) {
-  const zoom = 16, TILE = 256, GRID = 3;
+  const zoom = 14, TILE = 256, GRID = 3;
   const n    = Math.pow(2, zoom);
   const cx   = (lng + 180) / 360 * n;
   const latR = lat * Math.PI / 180;
@@ -740,7 +740,7 @@ function _osmStaticMapHtml(lat, lng) {
   return `<div class="heute-karte-map">
     <div style="position:absolute;width:${GRID*TILE}px;height:${GRID*TILE}px;left:calc(50% - ${mx}px);top:calc(50% - ${my}px);pointer-events:none">
       ${tiles}
-      <div style="position:absolute;left:${mx-12}px;top:${my-32}px;width:24px;height:32px">
+      <div style="position:absolute;left:${mx-8}px;top:${my-21}px;width:16px;height:21px">
         <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 0C5.37 0 0 5.37 0 12c0 7.75 12 20 12 20S24 19.75 24 12C24 5.37 18.63 0 12 0z" fill="#cc0000"/>
           <circle cx="12" cy="12" r="5" fill="#fff"/>

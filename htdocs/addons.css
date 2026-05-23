@@ -288,13 +288,19 @@
   border-top: 1px solid var(--border); flex-wrap: wrap; align-items: center;
 }
 .heute-dabei-btn {
-  display: flex; align-items: center; gap: 5px;
-  font-weight: 700; letter-spacing: .2px; transition: opacity .15s;
+  /* Optik wie .heute-map-nav a */
+  font-size: 11px !important; font-weight: 600 !important;
+  padding: 4px 8px !important; border-radius: 5px !important;
+  line-height: 1.4; letter-spacing: 0;
+  border: 1px solid var(--border) !important; color: var(--text) !important;
+  background: none !important; transition: background .1s;
+  cursor: pointer;
 }
+.heute-dabei-btn:hover { background: var(--surf2) !important; }
 .heute-dabei-btn.is-dabei {
-  background: color-mix(in srgb, var(--green, #1a8a3a) 15%, var(--surface));
-  color: var(--green, #1a8a3a);
-  border: 1px solid color-mix(in srgb, var(--green, #1a8a3a) 40%, transparent);
+  background: color-mix(in srgb, var(--green, #1a8a3a) 15%, var(--surface)) !important;
+  color: var(--green, #1a8a3a) !important;
+  border-color: color-mix(in srgb, var(--green, #1a8a3a) 40%, transparent) !important;
 }
 
 /* Segment-Blöcke (TrainingPeaks-Stil) */
