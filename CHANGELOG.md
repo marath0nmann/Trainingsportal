@@ -1,10 +1,10 @@
 # Changelog
 
-## v151
-- Heute-Sektion: Karten bis zu 3-spaltig nebeneinander (2-spaltig ab 960 px, 1-spaltig ab 720 px)
-- Heute-Sektion: Treffpunkt mit OpenStreetMap-Kartenausschnitt + Navigationslinks (Google Maps / Apple Maps) als kompakte rechte Spalte – nur wenn Koordinaten vorhanden und kein Komoot-Link gesetzt
-- Heute-Sektion: Eigene private Termine (ohne Teamplan-Verknüpfung) werden jetzt ebenfalls angezeigt
-- Heute-Sektion: „Bearbeiten"-Button entfernt
+## v152
+- Heute-Sektion: Treffpunkt-Karte jetzt mit OSM-Kacheln (wie Treffpunkte-Seite) statt iframe
+- Heute-Sektion: „Ich bin dabei?"-Button bündig mit Google-Maps-/Apple-Maps-Links (gleiche Unterkante)
+- Heute-Sektion: Alle Kacheln auf identische Höhe (CSS-Grid stretch)
+- Heute-Sektion: Bei 1 oder 2 Terminen volle Breite (keine 3-spaltige Aufteilung mit Lücken)
 
 ## v150
 - Kalender: Wettkampf-Chips mit `🏆?` für Prognose-Termine (nicht bestätigtes Datum), `🏆` für fest eingetragene Termine

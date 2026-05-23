@@ -172,8 +172,10 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  align-items: start;
+  /* align-items: stretch (default) → alle Kacheln gleich hoch */
 }
+.heute-cards-1 { grid-template-columns: 1fr; }
+.heute-cards-2 { grid-template-columns: repeat(2, 1fr); }
 .heute-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -203,16 +205,17 @@
   flex: 1; width: 100%; border: none;
   border-radius: 6px; min-height: 400px; display: block;
 }
-/* Treffpunkt-Karte (kompakt, ohne erzwungene Mindesthöhe) */
+/* Treffpunkt-Karte (OSM-Kacheln, kompakt) */
 .heute-card-map {
   display: none;
   flex: 0 0 180px;
   flex-direction: column; gap: 6px;
 }
 .heute-card-has-map .heute-card-map { display: flex; }
-.heute-card-map iframe {
-  flex: 1; width: 100%; border: none;
-  border-radius: 6px; min-height: 80px; display: block;
+.heute-karte-map {
+  flex: 1; min-height: 80px;
+  position: relative; overflow: hidden;
+  border-radius: 6px; user-select: none;
 }
 .heute-map-nav {
   display: flex; gap: 4px; flex-shrink: 0;
@@ -225,6 +228,13 @@
   text-decoration: none; transition: background .1s;
 }
 .heute-map-nav a:hover { background: var(--surf2); }
+/* Segs-Container wächst → Aktionen werden nach unten gedrückt */
+.heute-segs {
+  flex: 1; display: flex; flex-direction: column;
+}
+.heute-segs .heute-card-actions {
+  margin-top: auto;
+}
 .heute-card:hover {
   background: color-mix(in srgb, var(--accent) 5%, var(--surface));
   box-shadow: 0 4px 16px rgba(0,0,0,.12);
@@ -416,20 +426,20 @@
 }
 .liste-error { color: var(--primary); }
 
-/* Heute-Karten: 2-spaltig bei mittlerer Breite */
+/* Heute-Karten: 2-spaltig bei mittlerer Breite (außer explizite Count-Klasse) */
 @media (max-width: 960px) and (min-width: 721px) {
-  .heute-cards { grid-template-columns: repeat(2, 1fr); }
+  .heute-cards:not(.heute-cards-1):not(.heute-cards-2) { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* Mobile: kompakter Kalender */
 @media (max-width: 720px) {
   .kal-wrap { padding: 12px 8px 32px; }
-  .heute-cards { grid-template-columns: 1fr; }
+  .heute-cards { grid-template-columns: 1fr !important; }
   .heute-card { flex-direction: column; }
   .heute-card-komoot { flex: none; max-width: 100%; min-height: 180px; }
   .heute-card-komoot iframe { min-height: 180px; }
-  .heute-card-map { flex: none; min-height: 140px; }
-  .heute-card-map iframe { min-height: 120px; }
+  .heute-card-map { flex: none; }
+  .heute-karte-map { min-height: 140px; }
   .kal-title { font-size: 22px; min-width: 0; }
   .kal-cell { min-height: 80px; padding: 3px 4px; }
   .kal-head-cell { padding: 6px 4px; font-size: 10px; letter-spacing: .5px; }

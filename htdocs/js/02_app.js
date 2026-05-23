@@ -719,17 +719,45 @@ async function _saveKalPrefs() {
   } catch (_) {}
 }
 
+function _osmStaticMapHtml(lat, lng) {
+  const zoom = 16, TILE = 256, GRID = 3;
+  const n    = Math.pow(2, zoom);
+  const cx   = (lng + 180) / 360 * n;
+  const latR = lat * Math.PI / 180;
+  const cy   = (1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n;
+  const tx0  = Math.floor(cx) - 1;
+  const ty0  = Math.floor(cy) - 1;
+  const mx   = Math.round((cx - tx0) * TILE);
+  const my   = Math.round((cy - ty0) * TILE);
+  let tiles  = '';
+  for (let dy = 0; dy < GRID; dy++)
+    for (let dx = 0; dx < GRID; dx++) {
+      const tx = tx0 + dx, ty = ty0 + dy;
+      tiles += `<img src="https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png" `
+             + `style="position:absolute;left:${dx*TILE}px;top:${dy*TILE}px;width:${TILE}px;height:${TILE}px" `
+             + `draggable="false" alt="">`;
+    }
+  return `<div class="heute-karte-map">
+    <div style="position:absolute;width:${GRID*TILE}px;height:${GRID*TILE}px;left:calc(50% - ${mx}px);top:calc(50% - ${my}px);pointer-events:none">
+      ${tiles}
+      <div style="position:absolute;left:${mx-12}px;top:${my-32}px;width:24px;height:32px">
+        <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 7.75 12 20 12 20S24 19.75 24 12C24 5.37 18.63 0 12 0z" fill="#cc0000"/>
+          <circle cx="12" cy="12" r="5" fill="#fff"/>
+        </svg>
+      </div>
+    </div>
+  </div>`;
+}
+
 function _renderHeuteMap(tp) {
   const lat = parseFloat(tp.lat);
   const lng = parseFloat(tp.lng);
   if (isNaN(lat) || isNaN(lng)) return '';
-  const d    = 0.003;
-  const bbox = `${(lng - d).toFixed(6)},${(lat - d).toFixed(6)},${(lng + d).toFixed(6)},${(lat + d).toFixed(6)}`;
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
-  const gUrl   = escapeHtml(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
-  const aUrl   = escapeHtml(`https://maps.apple.com/?daddr=${lat},${lng}`);
+  const gUrl = escapeHtml(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+  const aUrl = escapeHtml(`https://maps.apple.com/?daddr=${lat},${lng}`);
   return `<div class="heute-card-map">
-    <iframe src="${escapeHtml(mapUrl)}" loading="lazy" frameborder="0" scrolling="no"></iframe>
+    ${_osmStaticMapHtml(lat, lng)}
     <div class="heute-map-nav">
       <a href="${gUrl}" target="_blank" rel="noopener">Google Maps</a>
       <a href="${aUrl}" target="_blank" rel="noopener">Apple Maps</a>
@@ -759,7 +787,7 @@ function renderHeuteSektionHtml(items, privatItems = []) {
           <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
           ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">${escapeHtml(treffpunktName)}</div>` : ''}
           ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
-          <div id="heute-segs-${e.id}"></div>
+          <div id="heute-segs-${e.id}" class="heute-segs"></div>
         </div>
         ${hasMap ? _renderHeuteMap(tp) : ''}
         <div id="heute-komoot-${e.id}" class="heute-card-komoot"></div>
@@ -787,7 +815,9 @@ function renderHeuteSektionHtml(items, privatItems = []) {
 
   const cardsHtml = oeffentlichHtml + privatHtml;
   if (!cardsHtml) return '';
-  return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
+  const count    = items.length + privatItems.length;
+  const countCls = count === 1 ? ' heute-cards-1' : count === 2 ? ' heute-cards-2' : '';
+  return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards${countCls}">${cardsHtml}</div></div>`;
 }
 
 async function ladeGlobalePaceWarnung(containerId) {
