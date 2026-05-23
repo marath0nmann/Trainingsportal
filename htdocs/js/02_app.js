@@ -456,12 +456,14 @@ async function renderKalender(main, monthArg) {
     privatGefiltert.filter(e => e.typ === 'wettkampf').map(e => e.datum)
   );
   const wettkampfSerien  = wettkampfRaw;
-  const wettkampfBeiDatum = {};
+  const wettkampfBeiDatum  = {}; // für Forecast-Chips (gefiltert)
+  const wkSerieDatumMap    = {}; // datum → [serien] für ALLE aktiven (für persönliche WK-Einträge)
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
     wettkampfSerien.forEach(s => {
       if (s.aktiv === 0) return; // Deaktivierte Wettkämpfe ausblenden
-      if (privatWettkampfDaten.has(s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum))) return;
       const datum = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+      if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
+      if (privatWettkampfDaten.has(datum)) return; // Doppeleintrag unterdrücken
       if (datum && datum >= von && datum <= bis) {
         (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);
       }
@@ -519,12 +521,28 @@ async function renderKalender(main, monthArg) {
 
       const itemsHtml = items.map(e => {
         if (e._privat) {
-          const cls = `kal-item kal-typ-${e.typ} is-privat`;
           const _ekm = _effektivKm(e);
           const _isFallback = _ekm !== null && (e.distanz_km === null || e.distanz_km === undefined);
           const kmBadge = (_ekm !== null && _ekm > 0)
             ? `<span class="kal-item-km${_isFallback ? ' is-fallback-km' : ''}">${_ekm % 1 === 0 ? _ekm : _ekm.toFixed(1)}&thinsp;km</span>`
             : '';
+
+          // ── Persönliche Wettkampf-Teilnahme: Hover-Popover, kein Drag ──
+          if (e.typ === 'wettkampf') {
+            const wkSerie = (wkSerieDatumMap[e.datum] || [])[0] || null;
+            const sid     = wkSerie ? wkSerie.id : null;
+            const hAttr   = sid
+              ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${sid},this,${e.id})" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`
+              : '';
+            return `<div class="kal-item kal-typ-wettkampf is-privat" data-privat-id="${e.id}"
+                         ${sid ? `data-serie-id="${sid}"` : ''} ${hAttr}>
+              <span class="kal-item-title">${escapeHtml(e.titel)}</span>
+              ${kmBadge}
+              <button class="kal-item-del" onclick="event.stopPropagation();MEINPLAN.loeschePrivat(${e.id})" title="Löschen">×</button>
+            </div>`;
+          }
+
+          const cls = `kal-item kal-typ-${e.typ} is-privat`;
           // Aus Team-Eintrag übernommen → normales Detail-Modal; eigener Eintrag → Edit-Modal
           const clickFn = e.ref_einheit_id
             ? `zeigeEinheit(${e.ref_einheit_id})`
@@ -1543,7 +1561,7 @@ async function _ladeWettkampfDaten() {
 let _wkPopSerie   = null; // ID der aktuell geöffneten Serie
 let _wkHideTimer  = null; // Verzögerungs-Timer für Hover-Hide
 
-function _wkPopoverShow(serieId, anchorEl) {
+function _wkPopoverShow(serieId, anchorEl, privatId = null) {
   const serien = _wettkampfCache?.data || [];
   const serie  = serien.find(s => s.id === serieId);
   if (!serie || !state.user) return;
@@ -1610,6 +1628,22 @@ function _wkPopoverShow(serieId, anchorEl) {
     diszDiv.appendChild(btn);
   });
   pop.appendChild(diszDiv);
+
+  // „Teilnahme entfernen" – nur wenn der User bereits einen persönlichen Eintrag hat
+  if (privatId) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'border-top:1px solid var(--border);margin:6px 0';
+    pop.appendChild(sep);
+    const delBtn = document.createElement('button');
+    delBtn.className   = 'wk-pop-btn';
+    delBtn.style.cssText = 'background:rgba(231,76,60,.08);color:#e74c3c';
+    delBtn.textContent = '× Teilnahme entfernen';
+    delBtn.addEventListener('click', () => {
+      _wkPopoverHide();
+      if (typeof MEINPLAN !== 'undefined') MEINPLAN.loeschePrivat(privatId);
+    });
+    pop.appendChild(delBtn);
+  }
 
   // Hover-Keep-alive: Maus über Popover → Timer stoppen
   pop.addEventListener('mouseenter', () => clearTimeout(_wkHideTimer));
