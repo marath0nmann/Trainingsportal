@@ -719,15 +719,37 @@ async function _saveKalPrefs() {
   } catch (_) {}
 }
 
-function renderHeuteSektionHtml(items) {
-  const cardsHtml = items.map(e => {
+function _renderHeuteMap(tp) {
+  const lat = parseFloat(tp.lat);
+  const lng = parseFloat(tp.lng);
+  if (isNaN(lat) || isNaN(lng)) return '';
+  const d    = 0.003;
+  const bbox = `${(lng - d).toFixed(6)},${(lat - d).toFixed(6)},${(lng + d).toFixed(6)},${(lat + d).toFixed(6)}`;
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  const gUrl   = escapeHtml(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+  const aUrl   = escapeHtml(`https://maps.apple.com/?daddr=${lat},${lng}`);
+  return `<div class="heute-card-map">
+    <iframe src="${escapeHtml(mapUrl)}" loading="lazy" frameborder="0" scrolling="no"></iframe>
+    <div class="heute-map-nav">
+      <a href="${gUrl}" target="_blank" rel="noopener">Google Maps</a>
+      <a href="${aUrl}" target="_blank" rel="noopener">Apple Maps</a>
+    </div>
+  </div>`;
+}
+
+function renderHeuteSektionHtml(items, privatItems = []) {
+  // ── Öffentliche / Team-Einheiten ────────────────────────
+  const oeffentlichHtml = items.map(e => {
     const typLabel = getTypLabel(e.typ);
     const zeitStr = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
     const abgesagt = e.status === 'abgesagt';
     const intern = e.sichtbarkeit === 'intern';
-    const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : null;
+    const tp = e.treffpunkt;
+    const treffpunktName = tp ? (tp.name || null) : null;
+    // Karte nur wenn Koordinaten vorhanden UND kein Komoot-Link vorhanden
+    const hasMap = !e.komoot_url && !!(tp && tp.lat && tp.lng);
     return `
-      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}">
+      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}${hasMap ? ' heute-card-has-map' : ''}">
         <div class="heute-card-main">
           <div class="heute-card-eyebrow">
             <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
@@ -735,13 +757,36 @@ function renderHeuteSektionHtml(items) {
             ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
           </div>
           <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-          ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
+          ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">${escapeHtml(treffpunktName)}</div>` : ''}
           ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
           <div id="heute-segs-${e.id}"></div>
         </div>
+        ${hasMap ? _renderHeuteMap(tp) : ''}
         <div id="heute-komoot-${e.id}" class="heute-card-komoot"></div>
       </div>`;
   }).join('');
+
+  // ── Eigene private Einheiten (nicht aus Teamplan übernommen) ─
+  const privatHtml = privatItems.map(e => {
+    const typLabel = getTypLabel(e.typ);
+    const zeitStr  = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
+    const km       = e.distanz_km != null ? e.distanz_km : null;
+    return `
+      <div class="heute-card kal-typ-${e.typ} is-privat" onclick="MEINPLAN.bearbeitePrivat(${e.id})" style="cursor:pointer">
+        <div class="heute-card-main">
+          <div class="heute-card-eyebrow">
+            <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
+            <span class="heute-badge heute-badge-privat">Mein Plan</span>
+          </div>
+          <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
+          ${km ? `<div class="heute-card-info">${km % 1 === 0 ? km : parseFloat(km).toFixed(1)}&thinsp;km</div>` : ''}
+          ${e.bemerkung ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  const cardsHtml = oeffentlichHtml + privatHtml;
+  if (!cardsHtml) return '';
   return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
 }
 
@@ -791,6 +836,10 @@ async function ladeHeuteSektionInto(containerId) {
       ? await apiGet(`mein-plan/einheiten?von=${today}&bis=${today}`, { silent: true })
       : await apiGet(`einheiten?von=${today}&bis=${today}`, { silent: true });
     const items = (d.einheiten || []).filter(e => !istKeinTraining(e.typ));
+    // Eigene Einheiten ohne Teamplan-Verknüpfung (rein persönliche Termine)
+    const privatItems = angemeldet
+      ? (d.privat || []).filter(p => !p.ref_einheit_id && !istKeinTraining(p.typ))
+      : [];
     // Adoptionsstatus: öffentliche EinheitID → private EinheitID
     if (angemeldet) {
       state._heuteAdoptedMap = {};
@@ -798,7 +847,8 @@ async function ladeHeuteSektionInto(containerId) {
         if (p.ref_einheit_id) state._heuteAdoptedMap[p.ref_einheit_id] = p.id;
       });
     }
-    el.innerHTML = items.length ? renderHeuteSektionHtml(items) : '';
+    const gesamt = items.length + privatItems.length;
+    el.innerHTML = gesamt ? renderHeuteSektionHtml(items, privatItems) : '';
     if (items.length) ladHeuteDetails(items);
   } catch (e) {
     el.innerHTML = '';
@@ -844,9 +894,6 @@ async function ladHeuteDetails(items) {
       }
       if (einheit.komoot_url) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>`);
-      }
-      if (state.user) {
-        actions.push(`<button class="btn btn-ghost btn-sm" onclick="bearbeiteHeuteEinheit(${einheit.id})">Bearbeiten</button>`);
       }
       if (actions.length) {
         html += `<div class="heute-card-actions">${actions.join('')}</div>`;
