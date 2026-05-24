@@ -1,9 +1,14 @@
 # Changelog
 
-## v151
+## v155
 - Listenansicht (Quartalsplan, Startseite mobil) zeigt jetzt dieselben Einträge wie der Kalender: persönliche Trainings (Mein Plan, mit Punkt-Markierung), Wochenkilometer-Badge pro KW, Wettkampf-Termine (🏆/🏆? mit Tap-Popover zum Eintragen) sowie die Gruppen-/Plan-/Wettkampf-Filter (gemeinsamer Datenlader `_buildPlanData`)
 - Umschaltung Liste ⇄ Kalender springt jetzt immer auf das aktuelle Quartal bzw. den aktuellen Monat (statt den gerade betrachteten Zeitraum beizubehalten)
 - Mobile-Optimierung: km-Badges & Mein-Plan-Markierung in der Liste, Touch-Geräte zeigen Löschen/Hinzufügen-Buttons dauerhaft, Modals nahezu bildschirmfüllend mit größeren Tap-Flächen, breite Admin-Tabellen horizontal scrollbar (`.table-scroll`)
+
+## v154
+- Header: Profil-Button (user-badge) identisch mit Statistikportal – ganzer Badge klickbar (öffnet Profileinstellungen), Avatar-Bild wird korrekt angezeigt, Initialen VN-Format, Online-Dot außerhalb des Kreises positioniert
+
+## v150
 - Kalender: Wettkampf-Chips mit `🏆?` für Prognose-Termine (nicht bestätigtes Datum), `🏆` für fest eingetragene Termine
 - Kalender: Klick auf Wettkampf-Chip öffnet Modal zum Eintragen in den persönlichen Kalender – mit Disziplin-Auswahl (Dropdown wenn Disziplinen bekannt, sonst Freitextfeld)
 - Fix: Kalender lud nicht mehr (Startseite zeigte dauerhaft „Lade Trainingsplan…"): `d4` war mit `const` im `try`-Block deklariert und außerhalb nicht erreichbar → `ReferenceError`; jetzt als `let wettkampfRaw` außerhalb des Blocks

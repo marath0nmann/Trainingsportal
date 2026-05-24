@@ -81,18 +81,20 @@ function fillUserBadge() {
   if (nameEl)  nameEl.textContent  = displayName;
   if (rolleEl) rolleEl.textContent = ROLLE_LABEL[u.rolle] || u.rolle || '–';
   if (avatarEl) {
-    const initial = displayName.trim().charAt(0).toUpperCase();
+    // Initialen: Vorname[0]+Nachname[0] wenn beide vorhanden, sonst erster Buchstabe
+    const initials = (u.vorname && u.nachname)
+      ? (u.vorname.trim()[0] + u.nachname.trim()[0]).toUpperCase()
+      : displayName.trim().charAt(0).toUpperCase();
+    avatarEl.style.overflow = 'visible';
+    avatarEl.style.position = 'relative';
     let avatarInner = '';
     if (u.avatar_pfad) {
       // Avatar liegt im Statistikportal-htdocs; über shared.php ausliefern
-      avatarInner = `<img src="${assetUrl(u.avatar_pfad)}" alt="${escapeHtml(displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.outerHTML='${escapeHtml(initial)}'">`;
+      avatarInner = `<img src="${assetUrl(u.avatar_pfad)}" alt="${escapeHtml(displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none'">`;
     } else {
-      avatarInner = escapeHtml(initial);
+      avatarInner = `<span style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px">${escapeHtml(initials)}</span>`;
     }
     avatarEl.innerHTML = avatarInner + '<span class="user-online-dot" title="Online"></span>';
-    avatarEl.onclick = () => PROFIL.open();
-    avatarEl.title   = 'Profileinstellungen öffnen';
-    avatarEl.style.cursor = 'pointer';
   }
 
   const isAdmin   = u.rolle === 'admin';
@@ -719,15 +721,65 @@ async function _saveKalPrefs() {
   } catch (_) {}
 }
 
-function renderHeuteSektionHtml(items) {
-  const cardsHtml = items.map(e => {
+function _osmStaticMapHtml(lat, lng) {
+  const zoom = 14, TILE = 256, GRID = 3;
+  const n    = Math.pow(2, zoom);
+  const cx   = (lng + 180) / 360 * n;
+  const latR = lat * Math.PI / 180;
+  const cy   = (1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n;
+  const tx0  = Math.floor(cx) - 1;
+  const ty0  = Math.floor(cy) - 1;
+  const mx   = Math.round((cx - tx0) * TILE);
+  const my   = Math.round((cy - ty0) * TILE);
+  let tiles  = '';
+  for (let dy = 0; dy < GRID; dy++)
+    for (let dx = 0; dx < GRID; dx++) {
+      const tx = tx0 + dx, ty = ty0 + dy;
+      tiles += `<img src="https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png" `
+             + `style="position:absolute;left:${dx*TILE}px;top:${dy*TILE}px;width:${TILE}px;height:${TILE}px" `
+             + `draggable="false" alt="">`;
+    }
+  return `<div class="heute-karte-map">
+    <div style="position:absolute;width:${GRID*TILE}px;height:${GRID*TILE}px;left:calc(50% - ${mx}px);top:calc(50% - ${my}px);pointer-events:none">
+      ${tiles}
+      <div style="position:absolute;left:${mx-8}px;top:${my-21}px;width:16px;height:21px">
+        <svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 7.75 12 20 12 20S24 19.75 24 12C24 5.37 18.63 0 12 0z" fill="#cc0000"/>
+          <circle cx="12" cy="12" r="5" fill="#fff"/>
+        </svg>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _renderHeuteMap(tp) {
+  const lat = parseFloat(tp.lat);
+  const lng = parseFloat(tp.lng);
+  if (isNaN(lat) || isNaN(lng)) return '';
+  const gUrl = escapeHtml(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+  const aUrl = escapeHtml(`https://maps.apple.com/?daddr=${lat},${lng}`);
+  return `<div class="heute-card-map">
+    ${_osmStaticMapHtml(lat, lng)}
+    <div class="heute-map-nav">
+      <a href="${gUrl}" target="_blank" rel="noopener">Google Maps</a>
+      <a href="${aUrl}" target="_blank" rel="noopener">Apple Maps</a>
+    </div>
+  </div>`;
+}
+
+function renderHeuteSektionHtml(items, privatItems = []) {
+  // ── Öffentliche / Team-Einheiten ────────────────────────
+  const oeffentlichHtml = items.map(e => {
     const typLabel = getTypLabel(e.typ);
     const zeitStr = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
     const abgesagt = e.status === 'abgesagt';
     const intern = e.sichtbarkeit === 'intern';
-    const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : null;
+    const tp = e.treffpunkt;
+    const treffpunktName = tp ? (tp.name || null) : null;
+    // Karte nur wenn Koordinaten vorhanden UND kein Komoot-Link vorhanden
+    const hasMap = !e.komoot_url && !!(tp && tp.lat && tp.lng);
     return `
-      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}">
+      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}${hasMap ? ' heute-card-has-map' : ''}">
         <div class="heute-card-main">
           <div class="heute-card-eyebrow">
             <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
@@ -735,14 +787,39 @@ function renderHeuteSektionHtml(items) {
             ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
           </div>
           <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-          ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">Treffpunkt: ${escapeHtml(treffpunktName)}</div>` : ''}
+          ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">${escapeHtml(treffpunktName)}</div>` : ''}
           ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
-          <div id="heute-segs-${e.id}"></div>
+          <div id="heute-segs-${e.id}" class="heute-segs"></div>
         </div>
+        ${hasMap ? _renderHeuteMap(tp) : ''}
         <div id="heute-komoot-${e.id}" class="heute-card-komoot"></div>
       </div>`;
   }).join('');
-  return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards">${cardsHtml}</div></div>`;
+
+  // ── Eigene private Einheiten (nicht aus Teamplan übernommen) ─
+  const privatHtml = privatItems.map(e => {
+    const typLabel = getTypLabel(e.typ);
+    const zeitStr  = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
+    const km       = e.distanz_km != null ? e.distanz_km : null;
+    return `
+      <div class="heute-card kal-typ-${e.typ} is-privat" onclick="MEINPLAN.bearbeitePrivat(${e.id})" style="cursor:pointer">
+        <div class="heute-card-main">
+          <div class="heute-card-eyebrow">
+            <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
+            <span class="heute-badge heute-badge-privat">Mein Plan</span>
+          </div>
+          <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
+          ${km ? `<div class="heute-card-info">${km % 1 === 0 ? km : parseFloat(km).toFixed(1)}&thinsp;km</div>` : ''}
+          ${e.bemerkung ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  const cardsHtml = oeffentlichHtml + privatHtml;
+  if (!cardsHtml) return '';
+  const count    = items.length + privatItems.length;
+  const countCls = count === 1 ? ' heute-cards-1' : count === 2 ? ' heute-cards-2' : '';
+  return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards${countCls}">${cardsHtml}</div></div>`;
 }
 
 async function ladeGlobalePaceWarnung(containerId) {
@@ -791,6 +868,10 @@ async function ladeHeuteSektionInto(containerId) {
       ? await apiGet(`mein-plan/einheiten?von=${today}&bis=${today}`, { silent: true })
       : await apiGet(`einheiten?von=${today}&bis=${today}`, { silent: true });
     const items = (d.einheiten || []).filter(e => !istKeinTraining(e.typ));
+    // Eigene Einheiten ohne Teamplan-Verknüpfung (rein persönliche Termine)
+    const privatItems = angemeldet
+      ? (d.privat || []).filter(p => !p.ref_einheit_id && !istKeinTraining(p.typ))
+      : [];
     // Adoptionsstatus: öffentliche EinheitID → private EinheitID
     if (angemeldet) {
       state._heuteAdoptedMap = {};
@@ -798,7 +879,8 @@ async function ladeHeuteSektionInto(containerId) {
         if (p.ref_einheit_id) state._heuteAdoptedMap[p.ref_einheit_id] = p.id;
       });
     }
-    el.innerHTML = items.length ? renderHeuteSektionHtml(items) : '';
+    const gesamt = items.length + privatItems.length;
+    el.innerHTML = gesamt ? renderHeuteSektionHtml(items, privatItems) : '';
     if (items.length) ladHeuteDetails(items);
   } catch (e) {
     el.innerHTML = '';
@@ -844,9 +926,6 @@ async function ladHeuteDetails(items) {
       }
       if (einheit.komoot_url) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>`);
-      }
-      if (state.user) {
-        actions.push(`<button class="btn btn-ghost btn-sm" onclick="bearbeiteHeuteEinheit(${einheit.id})">Bearbeiten</button>`);
       }
       if (actions.length) {
         html += `<div class="heute-card-actions">${actions.join('')}</div>`;
