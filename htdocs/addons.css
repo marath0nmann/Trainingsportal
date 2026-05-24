@@ -387,6 +387,44 @@
 }
 .liste-error { color: var(--primary); }
 
+/* ── Listenansicht: angereicherte Elemente (Parität mit Kalender) ── */
+/* Filter-Legende über der Liste */
+#liste-legend:not(:empty) { margin-bottom: 14px; }
+#liste-legend .kal-legend { margin-top: 0; justify-content: flex-start; }
+
+/* Wochenkilometer-Badge im KW-Kopf */
+.liste-kw-km {
+  margin-left: auto;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 15px; line-height: 1;
+  color: var(--accent); white-space: nowrap;
+}
+
+/* Privater Eintrag (Mein Plan) */
+.liste-row.is-privat {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+.liste-mein-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); margin-right: 6px; vertical-align: middle;
+  flex-shrink: 0;
+}
+.liste-km {
+  font-size: 12px; font-weight: 700; color: var(--text2);
+  white-space: nowrap;
+}
+.liste-km.is-fallback-km { opacity: .6; font-style: italic; }
+
+/* Wettkampf-Zeile (Forecast / Serie) */
+.liste-row.liste-row-wettkampf { border-left-color: #27ae60; }
+.liste-typ-wettkampf {
+  background: color-mix(in srgb, #27ae60 16%, var(--surface)); color: #1e8449;
+}
+.liste-wk-prognose {
+  font-size: 11px; font-weight: 600; color: var(--text2);
+  font-style: italic; opacity: .8;
+}
+
 /* Mobile: kompakter Kalender */
 @media (max-width: 720px) {
   .kal-wrap { padding: 12px 8px 32px; }
@@ -412,6 +450,31 @@
   .liste-row .liste-time  { grid-column: 2; grid-row: 1; font-size: 12px; }
   .liste-row .liste-title-text { grid-column: 3; grid-row: 1; white-space: normal; word-break: break-word; }
   .liste-row .liste-ort   { grid-column: 2 / 4; grid-row: 2; text-align: left; }
+  .liste-kw-km { font-size: 13px; }
+  .liste-kw-range { font-size: 12px; }
+  #liste-legend .kal-legend { gap: 6px 8px; }
+}
+
+/* Touch-Geräte: Aktionen ohne Hover dauerhaft sichtbar */
+@media (hover: none) {
+  .kal-item-del { display: block; opacity: .85; }
+  .kal-add-btn  { opacity: .7; }
+}
+
+/* Breite Tabellen (Admin) horizontal scrollbar statt Layout sprengen */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Smartphone-Politur: Modals fast bildschirmfüllend, größere Tap-Flächen */
+@media (max-width: 560px) {
+  .modal-overlay { padding: 8px; align-items: flex-end; }
+  .modal-card { max-height: 94vh; border-radius: 14px 14px 0 0; }
+  .modal-head { padding: 16px 16px 10px; }
+  .modal-body { padding: 12px 16px 16px; }
+  .modal-label { flex-basis: 92px; }
+  .modal-actions { flex-wrap: wrap; }
+  .modal-actions .btn { flex: 1 1 auto; }
+  .view-toggle .btn { padding: 8px 10px; }
+  .liste-nav .btn, .kal-nav .btn { min-width: 38px; }
 }
 
 /* ============================================================

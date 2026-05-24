@@ -366,7 +366,7 @@ async function renderKalender(main, monthArg) {
           <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
           <div class="view-toggle">
             <button class="btn btn-ghost view-active" title="Kalenderansicht">▦ Kalender</button>
-            <button class="btn btn-ghost" onclick="navigateListeFromKal('${ymd(monthStart).slice(0,7)}')" title="Quartalsplan">☰ Liste</button>
+            <button class="btn btn-ghost" onclick="navigateListe()" title="Quartalsplan (aktuelles Quartal)">☰ Liste</button>
           </div>
         </div>
       </div>
@@ -1201,17 +1201,103 @@ function isoWeekYear(date) {
   return d.getFullYear();
 }
 
+// ── Gemeinsame Datenbasis für Kalender- und Listenansicht ───
+// Lädt Team-/Privat-Einheiten, Feiertage, Filter-Prefs und Wettkämpfe,
+// wendet den Kalender-Filter an und liefert die abgeleiteten Maps.
+// Wird sowohl vom Monatskalender (indirekt) als auch von der Liste genutzt,
+// damit beide Ansichten dieselben Einträge zeigen.
+async function _buildPlanData(von, bis) {
+  const angemeldet = !!state.user;
+  const needPrefs  = angemeldet && state.kalFilter === null;
+  const [d1, d2, d3, d4] = await Promise.all([
+    angemeldet
+      ? apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true })
+      : apiGet(`einheiten?von=${von}&bis=${bis}`, { silent: true }),
+    apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
+    needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
+    _ladeWettkampfDaten().catch(() => []),
+  ]);
+  const oeffentlich  = d1.einheiten || [];
+  const privat       = angemeldet ? (d1.privat || []) : [];
+  const feiertage    = d2.feiertage || [];
+  const wettkampfRaw = Array.isArray(d4) ? d4 : [];
+  _dragPrivat = privat;
+  if (angemeldet) {
+    MEINPLAN.setAbo(d1.abo_typen || []);
+    state.meineGruppen = d1.meine_gruppen || [];
+    if (state.kalFilter === null) {
+      state.kalFilter = _initKalFilter(state.meineGruppen.map(g => g.id), d3.prefs);
+    }
+  }
+  // WEG vorladen, damit _effektivKm die Anreise-km einrechnen kann
+  if (angemeldet && typeof WEG !== 'undefined') await WEG.load();
+
+  const adoptedIds = new Set(privat.filter(p => p.ref_einheit_id != null).map(p => p.ref_einheit_id));
+  const kf         = state.kalFilter;
+  const hatGruppen = angemeldet && state.meineGruppen.length > 0;
+  const oeffentlichGefiltert = oeffentlich.filter(e => {
+    if (!angemeldet || !kf) return true;
+    if (hatGruppen) {
+      if (e.gruppe_id == null) return kf.gruppen.size > 0;
+      return kf.gruppen.has(e.gruppe_id);
+    }
+    return kf.teamplan !== false;
+  });
+  const privatGefiltert = (!angemeldet || !kf || kf.meinPlan !== false) ? privat : [];
+
+  const byDate = {};
+  oeffentlichGefiltert.forEach(e => {
+    if (adoptedIds.has(e.id)) return;
+    (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: false });
+  });
+  privatGefiltert.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push({ ...e, _privat: true }); });
+  Object.values(byDate).forEach(arr =>
+    arr.sort((a, b) => a._privat !== b._privat ? (a._privat ? 1 : -1) : (a.uhrzeit || '99:99').localeCompare(b.uhrzeit || '99:99'))
+  );
+
+  const feiertageByDate = {};
+  feiertage.forEach(f => {
+    const start = new Date(f.datum + 'T00:00:00');
+    const end   = new Date((f.datum_bis || f.datum) + 'T00:00:00');
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const k = ymd(d);
+      (feiertageByDate[k] = feiertageByDate[k] || []).push(f);
+    }
+  });
+
+  const privatWettkampfDaten = new Set(privatGefiltert.filter(e => e.typ === 'wettkampf').map(e => e.datum));
+  _wkPrivatMap = {};
+  privatGefiltert.filter(e => e.typ === 'wettkampf').forEach(e => {
+    (_wkPrivatMap[e.datum] = _wkPrivatMap[e.datum] || []).push({ id: e.id, bemerkung: e.bemerkung || null });
+  });
+  const wettkampfBeiDatum = {};
+  const wkSerieDatumMap   = {};
+  if (typeof ADMIN_WETTKAMPF !== 'undefined') {
+    wettkampfRaw.forEach(s => {
+      if (s.aktiv === 0) return;
+      const datum = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+      if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
+      if (privatWettkampfDaten.has(datum)) return;
+      if (datum && datum >= von && datum <= bis) {
+        (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);
+      }
+    });
+  }
+
+  return { angemeldet, byDate, feiertageByDate, wettkampfBeiDatum, wkSerieDatumMap, kf };
+}
+
 async function renderListe(main, quarterArg) {
   const { year, quarter } = parseQuarterArg(quarterArg);
   const qStart = new Date(year, (quarter - 1) * 3, 1);
   const qEnd   = new Date(year, quarter * 3, 0);
+  const angemeldet = !!state.user;
 
   const QUARTALS_MONATE_LABEL = [
     'Jan. – März', 'Apr. – Jun.', 'Jul. – Sep.', 'Okt. – Dez.'
   ];
   const prevQ = quarter === 1 ? `${year - 1}-Q4` : `${year}-Q${quarter - 1}`;
   const nextQ = quarter === 4 ? `${year + 1}-Q1` : `${year}-Q${quarter + 1}`;
-  const moKalStart = `${year}-${String((quarter - 1) * 3 + 1).padStart(2, '0')}`;
 
   main.innerHTML = `
     <div class="liste-wrap">
@@ -1227,54 +1313,145 @@ async function renderListe(main, quarterArg) {
           <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
           <button class="btn btn-ghost" onclick="navigateListe()">Heute</button>
           <div class="view-toggle">
-            <button class="btn btn-ghost" onclick="navigateKalender('${moKalStart}')" title="Kalenderansicht">▦ Kalender</button>
+            <button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Kalenderansicht (aktueller Monat)">▦ Kalender</button>
             <button class="btn btn-ghost view-active" title="Quartalsplan">☰ Liste</button>
           </div>
         </div>
       </div>
+      <div id="liste-legend"></div>
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
     </div>`;
 
   ladeGlobalePaceWarnung('pace-warn-sektion');
   ladeHeuteSektionInto('heute-sektion');
 
-  let einheiten = [];
+  let plan;
   try {
-    const d = await apiGet(`einheiten?von=${ymd(qStart)}&bis=${ymd(qEnd)}`, { silent: true });
-    einheiten = d.einheiten || [];
+    plan = await _buildPlanData(ymd(qStart), ymd(qEnd));
   } catch (e) {
     document.getElementById('liste-content').innerHTML =
       `<div class="liste-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
     return;
   }
+  const { byDate, wettkampfBeiDatum, kf } = plan;
 
-  // Group by ISO calendar week (only days within the quarter)
-  const byWeek = new Map(); // "YYYY-WW" → { weekNum, weekStart, items }
+  // Filter-Legende (gleiche Checkboxen wie im Kalender)
+  if (angemeldet) {
+    const leg = document.getElementById('liste-legend');
+    if (leg) leg.innerHTML = _renderKalLegend();
+  }
+
+  const showWk = !kf || kf.wettkampf !== false;
+
+  const WOCHENTAG_KURZ = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const MONAT_KURZ = ['Jan.','Feb.','März','Apr.','Mai','Jun.','Jul.','Aug.','Sep.','Okt.','Nov.','Dez.'];
   const todayKey = ymd(new Date());
 
+  // Nach ISO-Kalenderwoche gruppieren (nur Tage innerhalb des Quartals)
+  const byWeek = new Map(); // "YYYY-WW" → { weekNum, weekStart, days:[], kmSum }
   for (let d = new Date(qStart); d <= qEnd; d.setDate(d.getDate() + 1)) {
-    const k = ymd(new Date(d));
-    const kw  = isoWeek(new Date(d));
-    const wy  = isoWeekYear(new Date(d));
+    const k    = ymd(new Date(d));
+    const kw   = isoWeek(new Date(d));
+    const wy   = isoWeekYear(new Date(d));
     const wKey = `${wy}-${String(kw).padStart(2, '0')}`;
 
     if (!byWeek.has(wKey)) {
       const mon = new Date(d);
       const dow = (mon.getDay() + 6) % 7;
       mon.setDate(mon.getDate() - dow);
-      byWeek.set(wKey, { weekNum: kw, weekStart: new Date(mon), items: [] });
+      byWeek.set(wKey, { weekNum: kw, weekStart: new Date(mon), days: [], kmSum: 0 });
     }
-
-    const dayItems = einheiten.filter(e => e.datum === k);
-    if (dayItems.length) byWeek.get(wKey).items.push(...dayItems);
+    const w        = byWeek.get(wKey);
+    const dayItems = byDate[k] || [];
+    const dayWk    = showWk ? (wettkampfBeiDatum[k] || []) : [];
+    if (dayItems.length || dayWk.length) {
+      w.days.push({ datum: k, items: dayItems, wk: dayWk });
+    }
+    // Wochenkilometer: nur private Einträge (identisch zum Kalender)
+    if (angemeldet) {
+      w.kmSum += dayItems.filter(e => e._privat)
+        .reduce((s, e) => { const km = _effektivKm(e); return s + (km !== null ? km : 0); }, 0);
+    }
   }
 
-  const WOCHENTAG_KURZ = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-  const MONAT_KURZ = ['Jan.','Feb.','März','Apr.','Mai','Jun.','Jul.','Aug.','Sep.','Okt.','Nov.','Dez.'];
+  const dayLabel = (datum) => {
+    const o = new Date(datum + 'T00:00:00');
+    return `${WOCHENTAG_KURZ[o.getDay()]}, ${o.getDate()}. ${MONAT_KURZ[o.getMonth()]}`;
+  };
+  const dateCell = (datum) => {
+    const lbl = escapeHtml(dayLabel(datum));
+    return datum === todayKey
+      ? `<span class="liste-date"><span class="liste-date-today">${lbl}</span></span>`
+      : `<span class="liste-date">${lbl}</span>`;
+  };
+
+  // Zeile für eine (Team- oder Privat-)Einheit
+  const rowEinheit = (e, datum) => {
+    const isCancelled    = e.status === 'abgesagt';
+    const isKeinTraining = istKeinTraining(e.typ);
+    const istPrivat      = !!e._privat;
+    const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : '';
+    const typLabel       = getTypLabel(e.typ);
+
+    const rowCls = [
+      'liste-row', `kal-typ-${e.typ}`,
+      datum === todayKey ? 'is-today' : '',
+      isCancelled ? 'is-cancelled' : '',
+      isKeinTraining ? 'is-kein-training' : '',
+      istPrivat ? 'is-privat' : '',
+    ].filter(Boolean).join(' ');
+
+    let clickAttr = '';
+    if (!isKeinTraining) {
+      if (istPrivat) {
+        clickAttr = e.ref_einheit_id
+          ? ` onclick="zeigeEinheit(${e.ref_einheit_id})"`
+          : ` onclick="MEINPLAN.bearbeitePrivat(${e.id})"`;
+      } else {
+        clickAttr = ` onclick="zeigeEinheit(${e.id})"`;
+      }
+    }
+
+    // km-Badge für private Einträge; sonst Treffpunkt in letzter Spalte
+    let lastCell = escapeHtml(treffpunktName);
+    if (istPrivat) {
+      const ekm = _effektivKm(e);
+      const isFallback = ekm !== null && (e.distanz_km === null || e.distanz_km === undefined);
+      if (ekm !== null && ekm > 0) {
+        lastCell = `<span class="liste-km${isFallback ? ' is-fallback-km' : ''}">${ekm % 1 === 0 ? ekm : ekm.toFixed(1)}&thinsp;km</span>`;
+      }
+    }
+    const meinDot = istPrivat ? '<span class="liste-mein-dot" title="Mein Plan"></span>' : '';
+
+    return `<div class="${rowCls}"${clickAttr}>
+      ${dateCell(datum)}
+      <span class="liste-time">${e.uhrzeit ? escapeHtml(e.uhrzeit) : '–'}</span>
+      <span class="liste-typ-badge liste-typ-${e.typ}">${escapeHtml(typLabel)}</span>
+      <span class="liste-title-text">${meinDot}${escapeHtml(e.titel)}</span>
+      <span class="liste-ort">${lastCell}</span>
+    </div>`;
+  };
+
+  // Zeile für einen Wettkampf-Forecast (Serie)
+  const rowWettkampf = (s, datum) => {
+    const name   = _decodeHtml(s.name || s.kuerzel || '');
+    const isFest = !!s.naechstes_datum;
+    const emoji  = isFest ? '🏆' : '🏆?';
+    const canAdd = !!state.user;
+    const clickAttr = canAdd ? ` onclick="_wkPopoverToggle(${s.id}, this)"` : '';
+    const prognose  = isFest ? '' : ' <span class="liste-wk-prognose">~ Prognose</span>';
+    return `<div class="liste-row liste-row-wettkampf${datum === todayKey ? ' is-today' : ''}"${clickAttr} data-serie-id="${s.id}">
+      ${dateCell(datum)}
+      <span class="liste-time">–</span>
+      <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
+      <span class="liste-title-text">${emoji} ${escapeHtml(name)}${prognose}</span>
+      <span class="liste-ort"></span>
+    </div>`;
+  };
 
   let html = '';
   for (const [, week] of byWeek) {
-    if (!week.items.length) continue;
+    if (!week.days.length) continue;
 
     const ws = week.weekStart;
     const we = new Date(ws); we.setDate(ws.getDate() + 6);
@@ -1287,40 +1464,21 @@ async function renderListe(main, quarterArg) {
       rangeStr = `${ws.getDate()}. ${MONAT_KURZ[ws.getMonth()]} ${ws.getFullYear()} – ${we.getDate()}. ${MONAT_KURZ[we.getMonth()]} ${we.getFullYear()}`;
     }
 
-    const rowsHtml = week.items.map(e => {
-      const dateObj = new Date(e.datum + 'T00:00:00');
-      const dayStr = `${WOCHENTAG_KURZ[dateObj.getDay()]}, ${dateObj.getDate()}. ${MONAT_KURZ[dateObj.getMonth()]}`;
-      const isToday = e.datum === todayKey;
-      const isCancelled = e.status === 'abgesagt';
-      const isKeinTraining = istKeinTraining(e.typ);
-      const treffpunktName = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : '';
-      const typLabel = getTypLabel(e.typ);
+    const rowsHtml = week.days.map(day =>
+      day.items.map(e => rowEinheit(e, day.datum)).join('') +
+      day.wk.map(s => rowWettkampf(s, day.datum)).join('')
+    ).join('');
 
-      const rowCls = [
-        'liste-row', `kal-typ-${e.typ}`,
-        isToday ? 'is-today' : '',
-        isCancelled ? 'is-cancelled' : '',
-        isKeinTraining ? 'is-kein-training' : '',
-      ].filter(Boolean).join(' ');
-
-      const clickAttr = isKeinTraining ? '' : ` onclick="zeigeEinheit(${e.id})"`;
-      const dateHtml = isToday
-        ? `<span class="liste-date"><span class="liste-date-today">${escapeHtml(dayStr)}</span></span>`
-        : `<span class="liste-date">${escapeHtml(dayStr)}</span>`;
-
-      return `<div class="${rowCls}"${clickAttr}>
-        ${dateHtml}
-        <span class="liste-time">${e.uhrzeit ? escapeHtml(e.uhrzeit) : '–'}</span>
-        <span class="liste-typ-badge liste-typ-${e.typ}">${escapeHtml(typLabel)}</span>
-        <span class="liste-title-text">${escapeHtml(e.titel)}</span>
-        <span class="liste-ort">${escapeHtml(treffpunktName)}</span>
-      </div>`;
-    }).join('');
+    const km = Math.round(week.kmSum * 10) / 10;
+    const kmBadge = (angemeldet && km > 0)
+      ? `<span class="liste-kw-km" title="Wochenkilometer (Mein Plan)">${km % 1 === 0 ? km : km.toFixed(1)}&thinsp;km</span>`
+      : '';
 
     html += `<div class="liste-week-block">
       <div class="liste-kw-head">
         <span class="liste-kw-badge">KW ${week.weekNum}</span>
         <span class="liste-kw-range">${escapeHtml(rangeStr)}</span>
+        ${kmBadge}
       </div>
       <div class="liste-rows">${rowsHtml}</div>
     </div>`;
@@ -1566,6 +1724,12 @@ async function _ladeWettkampfDaten() {
 let _wkPopSerie   = null; // ID der aktuell geöffneten Serie
 let _wkHideTimer  = null; // Verzögerungs-Timer für Hover-Hide
 let _wkPrivatMap  = {};   // datum → [{id, bemerkung}] – befüllt von renderKalender
+
+// Tap-Toggle (Listenansicht / Touch): erneutes Antippen schließt das Popover
+function _wkPopoverToggle(serieId, anchorEl) {
+  if (_wkPopSerie === serieId) { _wkPopoverHide(); return; }
+  _wkPopoverShow(serieId, anchorEl);
+}
 
 function _wkPopoverShow(serieId, anchorEl) {
   const serien = _wettkampfCache?.data || [];
