@@ -33,13 +33,9 @@ async function init() {
   } catch (e) {
     state.user = null;
   }
-  // Mobile: Standard-Ansicht ist Quartalsplan
+  // Startseite: Smartphone → Quartalsplan (Liste), Desktop → Kalender
   if (!location.hash || location.hash === '#') {
-    const now = new Date();
-    const q = Math.floor(now.getMonth() / 3) + 1;
-    location.hash = window.innerWidth < 720
-      ? `#liste/${now.getFullYear()}-Q${q}`
-      : '#kalender';
+    location.hash = startHash();
   }
   showApp();
 }
@@ -141,6 +137,20 @@ function navigate(tab) {
   }
 }
 
+// Startseite: auf dem Smartphone konsequent Listenansicht (aktuelles Quartal),
+// auf größeren Bildschirmen der Monatskalender.
+function startHash() {
+  if (window.innerWidth < 720) {
+    const now = new Date();
+    const q = Math.floor(now.getMonth() / 3) + 1;
+    return `#liste/${now.getFullYear()}-Q${q}`;
+  }
+  return '#kalender';
+}
+function navigateStart() {
+  location.hash = startHash();
+}
+
 function parseHash() {
   const h = (location.hash || '').replace(/^#/, '');
   if (!h) return { page: 'kalender' };
@@ -169,12 +179,12 @@ function renderPage() {
     return;
   }
   if (state.tab === 'planung') {
-    if (!state.user) { location.replace('#kalender'); return; }
+    if (!state.user) { location.replace(startHash()); return; }
     PLANUNG.render(main);
     return;
   }
   if (state.tab === 'treffpunkte') {
-    if (!state.user) { location.replace('#kalender'); return; }
+    if (!state.user) { location.replace(startHash()); return; }
     TREFFPUNKTE.render(main);
     return;
   }
@@ -183,14 +193,14 @@ function renderPage() {
     return;
   }
   if (state.tab === 'admin') {
-    if (!state.user || state.user.rolle !== 'admin') { location.replace('#kalender'); return; }
+    if (!state.user || state.user.rolle !== 'admin') { location.replace(startHash()); return; }
     renderAdminPage(main, args && args[0]);
     return;
   }
 
   // Unbekannte Route (z. B. #dashboard / #konto aus Statistikportal-Header)
-  // → still auf den Kalender umleiten, statt 404 anzuzeigen
-  location.replace('#kalender');
+  // → still auf die Startseite umleiten, statt 404 anzuzeigen
+  location.replace(startHash());
 }
 
 async function logout() {
