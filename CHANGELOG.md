@@ -1,5 +1,8 @@
 # Changelog
 
+## v157
+- Fix Admin → System auf dem Smartphone: lange Werte (Datenbank-Server-String, E-Mail) brachen aus dem Bildschirm aus – Statistik-Tabellen nutzen jetzt `table-layout: fixed` mit Wortumbruch, sodass die roten Abschnitts-Header und Werte nicht mehr überlaufen
+
 ## v156
 - Startseite startet auf dem Smartphone jetzt konsequent in der Listenansicht (Quartalsplan): zentraler `startHash()`-Helfer, der bei Bildschirmbreite < 720 px die Liste wählt – greift beim Laden, beim Klick auf das Logo/Startseite und bei allen internen Umleitungen
 - Admin → System für Smartphones optimiert: Statistik- und Detailspalten brechen auf eine Spalte um, breite Tabellen (Gäste, letzte Logins) horizontal scrollbar (`.admin-sys-stats`, `.admin-sys-cols`, `.admin-sys-table`)

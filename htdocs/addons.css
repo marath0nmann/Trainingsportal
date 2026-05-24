@@ -523,6 +523,9 @@
 @media (max-width: 720px) {
   .admin-sys-stats, .admin-sys-cols { grid-template-columns: 1fr; gap: 14px; margin-bottom: 16px; }
   .admin-sys-table { min-width: 560px; }
+  /* Statistik-Tabellen: lange Werte (DB-Server, E-Mail) umbrechen statt überlaufen */
+  .admin-sys-stats table { table-layout: fixed; }
+  .admin-sys-stats th, .admin-sys-stats td { word-break: break-word; overflow-wrap: anywhere; }
 }
 
 /* Smartphone-Politur: Modals fast bildschirmfüllend, größere Tap-Flächen */
