@@ -107,12 +107,15 @@ function applyTypenFarben(typen) {
     var s = t.slug.replace(/[^a-z0-9_-]/g, '_');
     var f = t.farbe;
     // Kalender (Monat + Heute-Card + Hover-Popover + Listenansicht)
+    lines.push('.kal-item.kal-typ-'          + s + ' { border-left-color: ' + f + ' !important; background: color-mix(in srgb, ' + f + ' 10%, var(--surface)) !important; }');
     lines.push('.kal-item.is-privat.kal-typ-' + s + ' { background: color-mix(in srgb, ' + f + ' 14%, var(--surface)) !important; }');
-    lines.push('.kal-item.kal-typ-'          + s + ' { border-left-color: '   + f + ' !important; }');
     lines.push('.heute-card.kal-typ-'         + s + ' { border-left-color: '   + f + ' !important; }');
     lines.push('.kal-pop-typ.kal-typ-'        + s + ' { color: '               + f + ' !important; }');
     lines.push('.liste-row.kal-typ-'          + s + ' { border-left-color: '   + f + ' !important; }');
     lines.push('.liste-typ-'                  + s + ' { background: color-mix(in srgb, ' + f + ' 14%, var(--surface)); color: ' + f + ' !important; }');
+    // Nächste Wettkämpfe – wk-card trägt kal-typ-{slug} (via ladeWettkampfSektionInto)
+    lines.push('.wk-card.kal-typ-'            + s + ' { border-left-color: ' + f + ' !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ':hover { background: color-mix(in srgb, ' + f + ' 8%, var(--surface)) !important; }');
     // Planung-Sidebar
     lines.push('.pblock-gruppe-titel.block-typ-' + s + ' { border-bottom-color: ' + f + ' !important; }');
     lines.push('.pblock-card.block-typ-'      + s + ' { border-left-color: '   + f + ' !important; }');

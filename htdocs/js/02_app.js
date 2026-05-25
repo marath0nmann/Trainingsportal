@@ -996,7 +996,7 @@ async function ladeWettkampfSektionInto(containerId) {
       teilnehmerHtml = `<div class="wk-teilnehmer">${namen}</div>`;
     }
 
-    return `<div class="wk-card">
+    return `<div class="wk-card kal-typ-${escapeHtml(s.typ || 'wettkampf')}">
       <div class="wk-card-eyebrow">
         <span class="wk-datum">${escapeHtml(datumFmt)}</span>
         ${isFest
