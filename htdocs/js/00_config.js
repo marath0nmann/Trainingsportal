@@ -114,8 +114,14 @@ function applyTypenFarben(typen) {
     lines.push('.liste-row.kal-typ-'          + s + ' { border-left-color: '   + f + ' !important; }');
     lines.push('.liste-typ-'                  + s + ' { background: color-mix(in srgb, ' + f + ' 14%, var(--surface)); color: ' + f + ' !important; }');
     // Nächste Wettkämpfe – wk-card trägt kal-typ-{slug} (via ladeWettkampfSektionInto)
+    var fDark = _darken(f, 0.15);
+    var fOnColor = _onColor(f);
     lines.push('.wk-card.kal-typ-'            + s + ' { border-left-color: ' + f + ' !important; }');
     lines.push('.wk-card.kal-typ-'            + s + ':hover { background: color-mix(in srgb, ' + f + ' 8%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn { border-color: ' + f + ' !important; background: color-mix(in srgb, ' + f + ' 12%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn:hover { background: color-mix(in srgb, ' + f + ' 28%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn--active { background: ' + f + ' !important; border-color: ' + fDark + ' !important; color: ' + fOnColor + ' !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn--active:hover { background: ' + fDark + ' !important; }');
     // Planung-Sidebar
     lines.push('.pblock-gruppe-titel.block-typ-' + s + ' { border-bottom-color: ' + f + ' !important; }');
     lines.push('.pblock-card.block-typ-'      + s + ' { border-left-color: '   + f + ' !important; }');
