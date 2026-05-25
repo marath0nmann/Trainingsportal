@@ -127,9 +127,11 @@ const ADMIN_WETTKAMPF = (() => {
       } else if (_sortCol === 'letzter') {
         va = a.letztes_datum || '';
         vb = b.letztes_datum || '';
-      } else { // naechster
-        va = (naechstesDatum(a) || {}).datum || '9999-99-99';
-        vb = (naechstesDatum(b) || {}).datum || '9999-99-99';
+      } else { // naechster – Prognose bei Inaktiven wie in der Anzeige ignorieren
+        const na = naechstesDatum(a);
+        const nb = naechstesDatum(b);
+        va = (na && (a.aktiv !== 0 || na.modus === 'manuell')) ? na.datum : '9999-99-99';
+        vb = (nb && (b.aktiv !== 0 || nb.modus === 'manuell')) ? nb.datum : '9999-99-99';
       }
       if (va < vb) return _sortDir === 'asc' ? -1 : 1;
       if (va > vb) return _sortDir === 'asc' ? 1 : -1;
