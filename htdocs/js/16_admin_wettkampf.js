@@ -10,6 +10,9 @@ const ADMIN_WETTKAMPF = (() => {
   let expandedId = null;
   // Zustand des aktuell offenen Planungs-Modals
   let _edit      = null; // { serieId, ausgeschlossen: Set, extras: [] , extrahiert: [] }
+  // Sortierzustand
+  let _sortCol   = 'naechster'; // 'name' | 'letzter' | 'naechster'
+  let _sortDir   = 'asc';
 
   const WT_KURZ = ['So','Mo','Di','Mi','Do','Fr','Sa'];
   const WT_LANG = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
@@ -114,6 +117,52 @@ const ADMIN_WETTKAMPF = (() => {
     setTimeout(() => d.remove(), 3500);
   }
 
+  // ── Sortierung ────────────────────────────────────────────────
+  function _sortiereSerien() {
+    return [...serien].sort((a, b) => {
+      let va, vb;
+      if (_sortCol === 'name') {
+        va = decodeHtml(a.name || a.kuerzel || '').toLowerCase();
+        vb = decodeHtml(b.name || b.kuerzel || '').toLowerCase();
+      } else if (_sortCol === 'letzter') {
+        va = a.letztes_datum || '';
+        vb = b.letztes_datum || '';
+      } else { // naechster
+        va = (naechstesDatum(a) || {}).datum || '9999-99-99';
+        vb = (naechstesDatum(b) || {}).datum || '9999-99-99';
+      }
+      if (va < vb) return _sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return _sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  function sortiereNach(col) {
+    if (_sortCol === col) {
+      _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _sortCol = col;
+      _sortDir = 'asc';
+    }
+    renderTabelle();
+  }
+
+  function _thStyle(col) {
+    const active = _sortCol === col;
+    return `text-align:left;padding:8px 10px;font-size:11px;font-weight:700;
+      text-transform:uppercase;letter-spacing:.4px;
+      color:${active ? 'var(--primary)' : 'var(--text2)'};
+      white-space:nowrap;cursor:pointer;user-select:none;
+      border-bottom:2px solid ${active ? 'var(--primary)' : 'transparent'};`;
+  }
+
+  function _arrow(col) {
+    if (_sortCol !== col) return '<span style="opacity:.3;font-size:10px"> ⇅</span>';
+    return _sortDir === 'asc'
+      ? '<span style="font-size:10px"> ↑</span>'
+      : '<span style="font-size:10px"> ↓</span>';
+  }
+
   // ── Tabelle ───────────────────────────────────────────────────
   function renderTabelle() {
     if (!container) return;
@@ -140,15 +189,13 @@ const ADMIN_WETTKAMPF = (() => {
     html += `<div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;min-width:640px">
       <thead>
-        <tr style="border-bottom:2px solid var(--border)">
-          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;
-                     text-transform:uppercase;letter-spacing:.4px;color:var(--text2)">Veranstaltung</th>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;
-                     text-transform:uppercase;letter-spacing:.4px;color:var(--text2);
-                     white-space:nowrap">Letzter Wettkampf</th>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;
-                     text-transform:uppercase;letter-spacing:.4px;color:var(--text2);
-                     white-space:nowrap">Nächster Termin</th>
+        <tr>
+          <th style="${_thStyle('name')}" onclick="ADMIN_WETTKAMPF.sortiereNach('name')">
+            Veranstaltung${_arrow('name')}</th>
+          <th style="${_thStyle('letzter')}" onclick="ADMIN_WETTKAMPF.sortiereNach('letzter')">
+            Letzter Wettkampf${_arrow('letzter')}</th>
+          <th style="${_thStyle('naechster')}" onclick="ADMIN_WETTKAMPF.sortiereNach('naechster')">
+            Nächster Termin${_arrow('naechster')}</th>
           <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;
                      text-transform:uppercase;letter-spacing:.4px;color:var(--text2)">Disziplinen</th>
           <th style="width:80px"></th>
@@ -156,7 +203,7 @@ const ADMIN_WETTKAMPF = (() => {
       </thead>
       <tbody>`;
 
-    serien.forEach(s => {
+    _sortiereSerien().forEach(s => {
       const next     = naechstesDatum(s);
       const disz     = allesDisziplinen(s);
       const expanded = expandedId === s.id;
@@ -596,6 +643,6 @@ const ADMIN_WETTKAMPF = (() => {
     showPlanungModal, savePlanung,
     _toggleDisz, _removeExtra, _addExtra,
     toggleAktiv, saveDatumInline, clearDatumInline,
-    imKalenderEintragen, predictNextDate,
+    imKalenderEintragen, predictNextDate, sortiereNach,
   };
 })();
