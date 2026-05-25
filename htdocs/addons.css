@@ -191,6 +191,8 @@
 .wk-disz-buttons {
   display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;
 }
+/* Gäste: Disziplinen nur anzeigen, nicht klickbar (kein Hover/Cursor) */
+.wk-disz-static { cursor: default; pointer-events: none; }
 /* Teilnehmer-Liste */
 .wk-teilnehmer {
   display: flex; gap: 5px; flex-wrap: wrap; align-items: center;

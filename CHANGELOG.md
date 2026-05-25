@@ -1,5 +1,10 @@
 # Changelog
 
+## v166
+- Wettkämpfe ohne Login sichtbar: „Nächste Wettkämpfe" und die Kalender-Chips werden jetzt auch für Gäste angezeigt
+- Gäste sehen Disziplinen als nicht klickbare Pillen (`.wk-disz-static`) und keine Teilnehmer-Info
+- API: `GET /wettkampf` ohne Login erlaubt (nur Lesen); Schreiboperationen (Anmeldung/Planung) erfordern weiterhin Login; Teilnehmer-Abfrage entfällt für Gäste
+
 ## v165
 - Wettkampf-Karte: Disziplin-Buttons nutzen jetzt 1:1 die `.wk-pop-btn`-Klasse des Kalender-Popovers (grüne Pille, aktiv = vollflächig grün + weiße Schrift) – Optik exakt identisch
 - Wettkampf-Karte: Aktiv-Zustand wird aus BEIDEN Quellen erkannt (privater Plan-Eintrag `_wkPrivatMap` + formale Anmeldung) – Datenstand jetzt deckungsgleich mit Popover

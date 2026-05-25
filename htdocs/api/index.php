@@ -4139,13 +4139,15 @@ function handleKalPrefs(string $method, string $sub): void
 function handleWettkampf(string $method, string $tail): void
 {
     $user = Auth::check();
-    if (!$user) {
+    // GET (Lesen) ist auch ohne Login erlaubt – Anzeige der Wettkämpfe für Gäste.
+    // Schreibende Operationen (Anmeldung/Planung) erfordern weiterhin Login.
+    if ($method !== 'GET' && !$user) {
         http_response_code(401);
         echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
         return;
     }
-    $userId  = (int)$user['id'];
-    $isAdmin = in_array($user['rolle'] ?? '', ['admin', 'trainer']);
+    $userId  = $user ? (int)$user['id'] : 0;
+    $isAdmin = $user && in_array($user['rolle'] ?? '', ['admin', 'trainer']);
 
     $tws = DB::tbl('veranstaltung_serien');
     $tvv = DB::tbl('veranstaltungen');
@@ -4346,10 +4348,11 @@ function handleWettkampf(string $method, string $tail): void
             $diszBySerie[$sid][] = $disp;
         }
 
-        // Anmeldungen für alle aktiven Planungen
-        $planungIds     = array_values(array_filter(
+        // Anmeldungen für alle aktiven Planungen – nur für eingeloggte Nutzer
+        // (Gäste sehen die Wettkämpfe ohne Teilnehmer-Info)
+        $planungIds     = $userId ? array_values(array_filter(
             array_map(fn($s) => $s['planung_id'] ? (int)$s['planung_id'] : null, $serien)
-        ));
+        )) : [];
         $anmByPlanungId = [];
         if ($planungIds) {
             $phAnm = implode(',', array_fill(0, count($planungIds), '?'));

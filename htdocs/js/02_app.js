@@ -965,6 +965,11 @@ async function ladeWettkampfSektionInto(containerId) {
         return `<button class="wk-pop-btn" onclick="_wkKarteAn(${s.id},${JSON.stringify(d || '')})">${label}</button>`;
       }).join('');
       diszHtml = `<div class="wk-disz-buttons">${btns}</div>`;
+    } else if (disziplinen.length) {
+      // Gäste: Disziplinen nur anzeigen, nicht klickbar
+      const pills = disziplinen.map(d =>
+        `<span class="wk-pop-btn wk-disz-static">${escapeHtml(d)}</span>`).join('');
+      diszHtml = `<div class="wk-disz-buttons">${pills}</div>`;
     }
 
     // ── Teilnehmer-Liste ─────────────────────────────────────
