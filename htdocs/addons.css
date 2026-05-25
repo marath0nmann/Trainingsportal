@@ -187,23 +187,10 @@
 .wk-card-name {
   font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3;
 }
-/* Disziplin-Buttons (An-/Abmelden) */
+/* Disziplin-Buttons (An-/Abmelden) – nutzen .wk-pop-btn wie das Kalender-Popover */
 .wk-disz-buttons {
-  display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px;
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;
 }
-.wk-disz-btn {
-  font-size: 12px; font-weight: 600;
-  padding: 5px 12px; border-radius: 6px;
-  border: 1.5px solid color-mix(in srgb, var(--accent) 40%, transparent);
-  background: none; color: var(--text);
-  cursor: pointer; transition: background .1s;
-}
-.wk-disz-btn:hover { background: rgba(46,204,113,.28); }
-.wk-disz-btn--active {
-  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
-  color: var(--accent);
-}
-.wk-disz-btn--active:hover { background: #1e8449; }
 /* Teilnehmer-Liste */
 .wk-teilnehmer {
   display: flex; gap: 5px; flex-wrap: wrap; align-items: center;

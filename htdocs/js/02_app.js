@@ -633,6 +633,9 @@ async function renderKalender(main, monthArg) {
   if (typeof KAL_POPOVER !== 'undefined') {
     KAL_POPOVER.initItems(document.querySelectorAll('#kal-grid .kal-item[data-einheit-id]'));
   }
+
+  // Neu rendern, nachdem _wkPrivatMap befüllt ist → korrekte Aktiv-Zustände der Karten-Buttons
+  ladeWettkampfSektionInto('wettkampf-sektion');
 }
 
 // ── Kalender-Filter: Initialisierung ───────────────────
@@ -941,35 +944,43 @@ async function ladeWettkampfSektionInto(containerId) {
     (s.disziplinen_extra || []).forEach(d => diszSet.add(d));
     const disziplinen = [...diszSet];
 
-    // Meine Anmeldung (aus formaler Wettkampf-Anmeldungstabelle)
+    // Meine Anmeldung (formale Tabelle) + privater Plan-Eintrag (gleiche Logik wie Popover)
     const meineAnmId     = s.meine_anmeldung_id  || null;
     const meineDisziplin = s.meine_disziplin      || null;  // null = ohne Disziplin
+    const privatListe    = _wkPrivatMap[datum] || [];
 
-    // ── Disziplin-Buttons (nur für angemeldete User) ─────────
+    // ── Disziplin-Buttons (identisch mit Kalender-Popover) ───
     let diszHtml = '';
     if (angemeldet) {
       const liste = disziplinen.length ? disziplinen : [null]; // null = allgemeine Teilnahme
       const btns = liste.map(d => {
-        const label   = escapeHtml(d || 'Teilnehmen');
-        const isAktiv = meineAnmId && (d === meineDisziplin || (d === null && !meineDisziplin));
+        const normD   = d || null;
+        const label   = escapeHtml(d || 'Teilnahme eintragen');
+        const priv    = privatListe.find(ev => (ev.bemerkung || null) === normD) || null;
+        const anmId   = (meineAnmId && (meineDisziplin || null) === normD) ? meineAnmId : null;
+        const isAktiv = !!(priv || anmId);
         if (isAktiv) {
-          return `<button class="wk-disz-btn wk-disz-btn--active" onclick="_wkKarteEntfernen(${meineAnmId})">✓ ${label}</button>`;
+          return `<button class="wk-pop-btn wk-pop-btn--active" onclick="_wkKarteAb(${s.id},${priv ? priv.id : 'null'},${anmId || 'null'})">✓ ${label}</button>`;
         }
-        return `<button class="wk-disz-btn" onclick="_wkKarteEintragen(${s.id},${JSON.stringify(d || '')})">${label}</button>`;
+        return `<button class="wk-pop-btn" onclick="_wkKarteAn(${s.id},${JSON.stringify(d || '')})">${label}</button>`;
       }).join('');
       diszHtml = `<div class="wk-disz-buttons">${btns}</div>`;
     }
 
     // ── Teilnehmer-Liste ─────────────────────────────────────
-    const anmeldungen = s.anmeldungen || [];
+    const anmeldungen = (s.anmeldungen || []).slice();
+    const myId = state.user ? (state.user.id || 0) : 0;
+    const myName = state.user
+      ? (state.user.vorname && state.user.nachname
+          ? state.user.vorname + ' ' + state.user.nachname
+          : state.user.vorname || state.user.name || state.user.benutzername || '')
+      : '';
+    // Legacy: eigener Eintrag existiert nur als privater Plan-Eintrag (ohne formale Anmeldung) → ergänzen
+    if (myId && privatListe.length && !anmeldungen.some(a => a.benutzer_id === myId)) {
+      anmeldungen.push({ id: 0, benutzer_id: myId, name: myName || null, disziplin: privatListe[0].bemerkung || '' });
+    }
     let teilnehmerHtml = '';
     if (anmeldungen.length) {
-      const myId = state.user ? (state.user.id || 0) : 0;
-      const myName = state.user
-        ? (state.user.vorname && state.user.nachname
-            ? state.user.vorname + ' ' + state.user.nachname
-            : state.user.vorname || state.user.name || state.user.benutzername || '')
-        : '';
       const namen = anmeldungen.map(a => {
         const isMe = myId && (a.benutzer_id === myId);
         const name = isMe && myName ? myName : (a.name || a.benutzername || '?');
@@ -1001,21 +1012,18 @@ async function ladeWettkampfSektionInto(containerId) {
   </div>`;
 }
 
-async function _wkKarteEintragen(serieId, disziplin) {
-  try {
-    await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '' });
-    _wettkampfCache = null;  // Cache invalidieren → frische Daten beim nächsten Laden
-    ladeWettkampfSektionInto('wettkampf-sektion');
-  } catch (e) {
-    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
-  }
+// Karte: Anmelden – identisch zum Popover (privater Plan-Eintrag + formale Anmeldung)
+async function _wkKarteAn(serieId, disziplin) {
+  await _wkEintragen(serieId, disziplin || '');
 }
 
-async function _wkKarteEntfernen(anmId) {
+// Karte: Abmelden – entfernt beide Einträge (privater Plan + formale Anmeldung)
+async function _wkKarteAb(serieId, privatId, anmId) {
   try {
-    await apiDel(`wettkampf/anmeldungen/${anmId}`);
+    if (anmId)    await apiDel(`wettkampf/anmeldungen/${anmId}`);
+    if (privatId) await apiDel(`mein-plan/einheiten/${privatId}`);
     _wettkampfCache = null;
-    ladeWettkampfSektionInto('wettkampf-sektion');
+    renderPage();
   } catch (e) {
     benachrichtigen('Fehler: ' + (e.message || ''), 'err');
   }
@@ -1705,6 +1713,9 @@ async function renderListe(main, quarterArg) {
 
   document.getElementById('liste-content').outerHTML =
     `<div id="liste-content" class="liste-content">${html}</div>`;
+
+  // Neu rendern, nachdem _wkPrivatMap befüllt ist → korrekte Aktiv-Zustände der Karten-Buttons
+  ladeWettkampfSektionInto('wettkampf-sektion');
 }
 
 async function zeigeEinheit(id) {

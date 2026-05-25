@@ -1,9 +1,17 @@
 # Changelog
 
+## v165
+- Wettkampf-Karte: Disziplin-Buttons nutzen jetzt 1:1 die `.wk-pop-btn`-Klasse des Kalender-Popovers (grüne Pille, aktiv = vollflächig grün + weiße Schrift) – Optik exakt identisch
+- Wettkampf-Karte: Aktiv-Zustand wird aus BEIDEN Quellen erkannt (privater Plan-Eintrag `_wkPrivatMap` + formale Anmeldung) – Datenstand jetzt deckungsgleich mit Popover
+- Wettkampf-Karte: An-/Abmelden nutzt dieselbe Logik wie das Popover (`_wkEintragen`); Abmelden entfernt beide Einträge (Plan + Anmeldung)
+- Wettkampf-Karte: Karte wird nach Befüllen von `_wkPrivatMap` erneut gerendert (korrekte Aktiv-Zustände beim ersten Laden)
+- Teilnehmerliste: Legacy-Einträge (nur privater Plan, ohne formale Anmeldung) zeigen den eigenen Namen ergänzend an
+
 ## v164
-- Wettkampf-Karte: Disziplin-Buttons identisch mit Popover (font-size 12px, padding 5×12, radius 6, var(--accent))
-- Wettkampf-Karte: Eigener Eintrag in Teilnehmerliste farblich hervorgehoben; Name aus state.user (immer korrekt)
-- API: Teilnehmer-Abfrage nutzt ORDER BY a.id (robuster als erstellt_am)
+- Wettkampf-Sign-up: Popover und Karte synchronisiert – Popover-Anmeldung schreibt auch formale Anmeldung; ☐-Präfix bei inaktiven Karten-Buttons entfernt
+
+## v163
+- Wettkampf-Karte: erster Angleich der Disziplin-Buttons an das Popover; eigener Teilnehmer-Eintrag hervorgehoben; API-Abfrage `ORDER BY a.id`
 
 ## v162
 - Konfig: Seitentitel + Versionssichtbarkeit; Favicons erstellt
