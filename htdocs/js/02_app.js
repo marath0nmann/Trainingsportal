@@ -955,7 +955,7 @@ async function ladeWettkampfSektionInto(containerId) {
         if (isAktiv) {
           return `<button class="wk-disz-btn wk-disz-btn--active" onclick="_wkKarteEntfernen(${meineAnmId})">✓ ${label}</button>`;
         }
-        return `<button class="wk-disz-btn" onclick="_wkKarteEintragen(${s.id},${JSON.stringify(d || '')})">☐ ${label}</button>`;
+        return `<button class="wk-disz-btn" onclick="_wkKarteEintragen(${s.id},${JSON.stringify(d || '')})">${label}</button>`;
       }).join('');
       diszHtml = `<div class="wk-disz-buttons">${btns}</div>`;
     }
@@ -1997,21 +1997,32 @@ function _wkPopoverShow(serieId, anchorEl) {
   diszDiv.className = 'wk-pop-disz';
 
   // Disziplin-Buttons als Toggle: aktiv = bereits eingetragen, inaktiv = noch nicht
-  const vorhandene = _wkPrivatMap[datum] || [];
+  const vorhandene  = _wkPrivatMap[datum] || [];
+  const serieDaten  = (_wettkampfCache?.data || []).find(s => s.id === serieId) || null;
   const buttons = disziplinen.length ? disziplinen : [null];
   buttons.forEach(d => {
-    const normD   = d || null; // null für „ohne Disziplin"
+    const normD      = d || null; // null für „ohne Disziplin"
     const existEintrag = vorhandene.find(ev => (ev.bemerkung || null) === normD) || null;
-    const isAktiv = !!existEintrag;
+    // auch formale Anmeldung prüfen (Card-Sign-up)
+    const formalAnmId = (serieDaten?.meine_anmeldung_id &&
+                          (serieDaten.meine_disziplin || null) === normD)
+                        ? serieDaten.meine_anmeldung_id : null;
+    const isAktiv = !!(existEintrag || formalAnmId);
 
     const btn = document.createElement('button');
     btn.className   = 'wk-pop-btn' + (isAktiv ? ' wk-pop-btn--active' : '');
     btn.textContent = (isAktiv ? '✓ ' : '') + (d || 'Teilnahme eintragen');
     if (isAktiv) {
-      // Noch mal klicken → Eintrag löschen
+      // Noch mal klicken → beide Einträge löschen
       btn.addEventListener('click', () => {
         _wkPopoverHide();
-        if (typeof MEINPLAN !== 'undefined') MEINPLAN.loeschePrivat(existEintrag.id);
+        if (existEintrag && typeof MEINPLAN !== 'undefined') MEINPLAN.loeschePrivat(existEintrag.id);
+        const delId = formalAnmId || serieDaten?.meine_anmeldung_id || null;
+        if (delId) {
+          apiDel(`wettkampf/anmeldungen/${delId}`)
+            .then(() => { _wettkampfCache = null; ladeWettkampfSektionInto('wettkampf-sektion'); })
+            .catch(() => {});
+        }
       });
     } else {
       btn.addEventListener('click', () => _wkEintragen(serieId, d || ''));
@@ -2083,6 +2094,12 @@ async function _wkEintragen(serieId, disziplin) {
       distanz_km: km,
       bemerkung:  disziplin || null,
     });
+    // auch formale Anmeldung anlegen → erscheint in Teilnehmerliste der Karte
+    try {
+      await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '' });
+    } catch (_) { /* optional – kein Fehler wenn Anmeldung nicht möglich */ }
+    _wettkampfCache = null;
+    ladeWettkampfSektionInto('wettkampf-sektion');
     _wkNotify('Wettkampfteilnahme eingetragen.', true);
     renderPage();
   } catch (e) {
