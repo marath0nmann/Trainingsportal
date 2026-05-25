@@ -46,6 +46,23 @@ function _onColor(bgHex) {
   var contrastBlack = (lum + 0.05) / (0 + 0.05);
   return contrastWhite >= contrastBlack ? '#ffffff' : '#111111';
 }
+// Hellt eine Farbe so weit auf, dass sie auf der dunklen Dark-Mode-Fläche
+// (--surface ≈ #1a1f2e) als Border/Text sichtbar bleibt. Bereits helle
+// Farben (z. B. Gelb) bleiben unverändert. Analog zu --accent-light im
+// Statistikportal, aber kontrast-gesteuert statt mit festem Faktor.
+function _farbeFuerDark(hex) {
+  var DARK_SURFACE = '#1a1f2e';
+  var MIN_KONTRAST = 3.5;
+  function kontrast(a, b) {
+    var la = _luminance(a), lb = _luminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  var f = hex;
+  for (var i = 0; i < 12 && kontrast(f, DARK_SURFACE) < MIN_KONTRAST; i++) {
+    f = _lighten(f, 0.12);
+  }
+  return f;
+}
 
 function _updateBodyThemeColor() {
   var pref = (window.appConfig && window.appConfig.adressleiste_farbe) || 'aus';
@@ -106,28 +123,44 @@ function applyTypenFarben(typen) {
     if (!t.farbe) return;
     var s = t.slug.replace(/[^a-z0-9_-]/g, '_');
     var f = t.farbe;
+    var fDark   = _farbeFuerDark(f); // im Dark Mode genutzte, aufgehellte Variante
+
+    // Per-Typ-Farbvariablen. Alle Regeln referenzieren --tf statt der rohen
+    // Farbe; im Dark Mode wird --tf auf die aufgehellte Variante umgeschaltet,
+    // damit Border/Text auf dunklem Grund sichtbar bleiben (analog zu
+    // --accent-light im Statistikportal). --tf-d (dunklere Variante für
+    // aktive Buttons) und --tf-on (Textfarbe auf gefüllter Fläche) folgen mit.
+    var allSel = '.kal-typ-' + s + ',.block-typ-' + s + ',.liste-typ-' + s;
+    function scoped(scope) {
+      return scope + ' .kal-typ-' + s + ',' + scope + ' .block-typ-' + s + ',' + scope + ' .liste-typ-' + s;
+    }
+    // Hell (Standard)
+    lines.push(allSel + ' { --tf: ' + f + '; --tf-d: ' + _darken(f, 0.15) + '; --tf-on: ' + _onColor(f) + '; }');
+    // Dark Mode (manuell gesetzt)
+    lines.push(scoped('[data-theme="dark"]') + ' { --tf: ' + fDark + '; --tf-d: ' + _darken(fDark, 0.15) + '; --tf-on: ' + _onColor(fDark) + '; }');
+    // Dark Mode (OS-Präferenz, sofern nicht manuell auf hell gestellt)
+    lines.push('@media (prefers-color-scheme: dark) { ' + scoped(':root:not([data-theme="light"])') + ' { --tf: ' + fDark + '; --tf-d: ' + _darken(fDark, 0.15) + '; --tf-on: ' + _onColor(fDark) + '; } }');
+
     // Kalender (Monat + Heute-Card + Hover-Popover + Listenansicht)
-    lines.push('.kal-item.kal-typ-'          + s + ' { border-left-color: ' + f + ' !important; background: color-mix(in srgb, ' + f + ' 10%, var(--surface)) !important; }');
-    lines.push('.kal-item.is-privat.kal-typ-' + s + ' { background: color-mix(in srgb, ' + f + ' 14%, var(--surface)) !important; }');
-    lines.push('.heute-card.kal-typ-'         + s + ' { border-left-color: '   + f + ' !important; }');
-    lines.push('.kal-pop-typ.kal-typ-'        + s + ' { color: '               + f + ' !important; }');
-    lines.push('.liste-row.kal-typ-'          + s + ' { border-left-color: '   + f + ' !important; }');
-    lines.push('.liste-typ-'                  + s + ' { background: color-mix(in srgb, ' + f + ' 14%, var(--surface)); color: ' + f + ' !important; }');
+    lines.push('.kal-item.kal-typ-'          + s + ' { border-left-color: var(--tf) !important; background: color-mix(in srgb, var(--tf) 10%, var(--surface)) !important; }');
+    lines.push('.kal-item.is-privat.kal-typ-' + s + ' { background: color-mix(in srgb, var(--tf) 14%, var(--surface)) !important; }');
+    lines.push('.heute-card.kal-typ-'         + s + ' { border-left-color: var(--tf) !important; }');
+    lines.push('.kal-pop-typ.kal-typ-'        + s + ' { color: var(--tf) !important; }');
+    lines.push('.liste-row.kal-typ-'          + s + ' { border-left-color: var(--tf) !important; }');
+    lines.push('.liste-typ-'                  + s + ' { background: color-mix(in srgb, var(--tf) 14%, var(--surface)); color: var(--tf) !important; }');
     // Nächste Wettkämpfe – wk-card trägt kal-typ-{slug} (via ladeWettkampfSektionInto)
-    var fDark = _darken(f, 0.15);
-    var fOnColor = _onColor(f);
-    lines.push('.wk-card.kal-typ-'            + s + ' { border-left-color: ' + f + ' !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ':hover { background: color-mix(in srgb, ' + f + ' 8%, var(--surface)) !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn { border-color: ' + f + ' !important; background: color-mix(in srgb, ' + f + ' 12%, var(--surface)) !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn:hover { background: color-mix(in srgb, ' + f + ' 28%, var(--surface)) !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn--active { background: ' + f + ' !important; border-color: ' + fDark + ' !important; color: ' + fOnColor + ' !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn--active:hover { background: ' + fDark + ' !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' { border-left-color: var(--tf) !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ':hover { background: color-mix(in srgb, var(--tf) 8%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn { border-color: var(--tf) !important; background: color-mix(in srgb, var(--tf) 12%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn:hover { background: color-mix(in srgb, var(--tf) 28%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn--active { background: var(--tf) !important; border-color: var(--tf-d) !important; color: var(--tf-on) !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn--active:hover { background: var(--tf-d) !important; }');
     // Planung-Sidebar
-    lines.push('.pblock-gruppe-titel.block-typ-' + s + ' { border-bottom-color: ' + f + ' !important; }');
-    lines.push('.pblock-card.block-typ-'      + s + ' { border-left-color: '   + f + ' !important; }');
+    lines.push('.pblock-gruppe-titel.block-typ-' + s + ' { border-bottom-color: var(--tf) !important; }');
+    lines.push('.pblock-card.block-typ-'      + s + ' { border-left-color: var(--tf) !important; }');
     // Blöcke-Seite (Block-Karte oben + Gruppen-Titel)
-    lines.push('.block-typ-'                  + s + ' { border-top-color: '    + f + ' !important; }');
-    lines.push('.bloecke-gruppe-typ.block-typ-' + s + ' { border-left-color: ' + f + '; color: ' + f + '; }');
+    lines.push('.block-typ-'                  + s + ' { border-top-color: var(--tf) !important; }');
+    lines.push('.bloecke-gruppe-typ.block-typ-' + s + ' { border-left-color: var(--tf); color: var(--tf); }');
   });
   el.textContent = lines.join('\n');
 }

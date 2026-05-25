@@ -1,6 +1,7 @@
 # Changelog
 
-## v170
+## v171
+- Dark Mode: zu dunkle Typ-Farben werden für Border/Text automatisch aufgehellt (kontrast-gesteuert gegen die dunkle Fläche, analog `--accent-light` im Statistikportal) – Kalender, Listen, Blöcke & Wettkampf-Karten bleiben lesbar; bereits helle Farben unverändert
 - Favicons: echtes TuS-Oedt-Logo statt generischem T
 - Fix: Disziplin-Buttons unter „Nächste Wettkämpfe" sind jetzt klickbar – `JSON.stringify` im `onclick` brach das Attribut (literale Anführungszeichen); jetzt via `escapeHtml` korrekt kodiert
 - „Nächste Wettkämpfe": Badge „✓ Termin" entfernt – nur noch „Prognose" wird angezeigt (bei nicht bestätigtem Termin)
