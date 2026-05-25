@@ -367,6 +367,7 @@ async function renderKalender(main, monthArg) {
     <div class="kal-wrap">
       <div id="pace-warn-sektion"></div>
       <div id="heute-sektion"></div>
+      <div id="wettkampf-sektion"></div>
       <div class="kal-toolbar">
         <div class="kal-nav">
           <button class="btn btn-ghost" onclick="navigateKalender('${ymd(prev).slice(0,7)}')" aria-label="Vorheriger Monat">‹</button>
@@ -387,6 +388,7 @@ async function renderKalender(main, monthArg) {
 
   ladeGlobalePaceWarnung('pace-warn-sektion');
   ladeHeuteSektionInto('heute-sektion');
+  ladeWettkampfSektionInto('wettkampf-sektion');
 
   const von = ymd(gridStart);
   const bis = ymd(gridEnd);
@@ -897,6 +899,67 @@ async function ladeHeuteSektionInto(containerId) {
   }
 }
 
+async function ladeWettkampfSektionInto(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+
+  let serien = [];
+  try { serien = await _ladeWettkampfDaten(); } catch (_) { return; }
+
+  const heute = ymd(new Date());
+  const mitDatum = serien
+    .filter(s => s.aktiv !== 0 && s.aktiv !== false)
+    .map(s => {
+      let datum = null, modus = 'prognose';
+      if (s.naechstes_datum) {
+        datum = s.naechstes_datum; modus = 'manuell';
+      } else if (typeof ADMIN_WETTKAMPF !== 'undefined') {
+        datum = ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+      }
+      return { s, datum, modus };
+    })
+    .filter(e => e.datum && e.datum >= heute)
+    .sort((a, b) => a.datum.localeCompare(b.datum))
+    .slice(0, 3);
+
+  if (!mitDatum.length) return;
+
+  const cards = mitDatum.map(({ s, datum, modus }) => {
+    const datumFmt = new Date(datum + 'T00:00:00').toLocaleDateString('de-DE',
+      { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const isFest = modus === 'manuell';
+    const name   = escapeHtml(s.name || s.kuerzel || '?');
+
+    // Disziplinen: erst aus Ergebnissen, dann extra; ausgeschlossene raus
+    const ausgeschlossen = new Set(s.disziplinen_ausgeschlossen || []);
+    const diszSet = new Set();
+    (s.disziplinen || []).forEach(d => { if (!ausgeschlossen.has(d)) diszSet.add(d); });
+    (s.disziplinen_extra || []).forEach(d => diszSet.add(d));
+    const disziplinen = [...diszSet].slice(0, 5);
+
+    return `<div class="wk-card">
+      <div class="wk-card-eyebrow">
+        <span class="wk-datum">${escapeHtml(datumFmt)}</span>
+        ${isFest
+          ? '<span class="heute-badge wk-badge-fest">✓ Termin</span>'
+          : '<span class="heute-badge wk-badge-prognose">Prognose</span>'}
+      </div>
+      <div class="wk-card-name">${name}</div>
+      ${disziplinen.length
+        ? `<div class="wk-disziplinen">${disziplinen.map(d => `<span>${escapeHtml(d)}</span>`).join('')}</div>`
+        : ''}
+    </div>`;
+  }).join('');
+
+  const count    = mitDatum.length;
+  const countCls = count === 1 ? ' heute-cards-1' : count === 2 ? ' heute-cards-2' : '';
+  el.innerHTML   = `<div class="wettkampf-sektion">
+    <div class="heute-heading">Nächste Wettkämpfe</div>
+    <div class="heute-cards${countCls}">${cards}</div>
+  </div>`;
+}
+
 async function ladHeuteDetails(items) {
   if (!state._heuteEinheiten) state._heuteEinheiten = {};
   let paceData = null;
@@ -1392,6 +1455,7 @@ async function renderListe(main, quarterArg) {
     <div class="liste-wrap">
       <div id="pace-warn-sektion"></div>
       <div id="heute-sektion"></div>
+      <div id="wettkampf-sektion"></div>
       <div class="liste-toolbar">
         <div class="liste-nav">
           <button class="btn btn-ghost" onclick="navigateListe('${prevQ}')" aria-label="Vorheriges Quartal">‹</button>
@@ -1413,6 +1477,7 @@ async function renderListe(main, quarterArg) {
 
   ladeGlobalePaceWarnung('pace-warn-sektion');
   ladeHeuteSektionInto('heute-sektion');
+  ladeWettkampfSektionInto('wettkampf-sektion');
 
   let plan;
   try {

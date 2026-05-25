@@ -161,6 +161,50 @@
   font-weight: 800; font-size: 32px; letter-spacing: .5px;
 }
 
+/* ── Nächste Wettkämpfe ── */
+.wettkampf-sektion { margin-bottom: 20px; }
+.wk-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid #8845c0;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 6px;
+  transition: background .15s, box-shadow .15s;
+}
+.wk-card:hover {
+  background: color-mix(in srgb, #8845c0 5%, var(--surface));
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+}
+.wk-card-eyebrow {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.wk-datum {
+  font-size: 11px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--text2);
+}
+.wk-card-name {
+  font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3;
+}
+.wk-disziplinen {
+  display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;
+}
+.wk-disziplinen span {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  background: color-mix(in srgb, #8845c0 12%, var(--surface));
+  color: #8845c0;
+  border: 1px solid color-mix(in srgb, #8845c0 30%, transparent);
+}
+.wk-badge-fest {
+  background: color-mix(in srgb, var(--green, #1a8a3a) 15%, transparent);
+  color: var(--green, #1a8a3a);
+}
+.wk-badge-prognose {
+  background: color-mix(in srgb, #c08010 12%, transparent);
+  color: #c08010;
+}
+
 /* ── Heute-Sektion ── */
 .heute-sektion { margin-bottom: 20px; }
 .heute-heading {

@@ -1,5 +1,8 @@
 # Changelog
 
+## v160
+- Kalender/Liste: neue Sektion „Nächste Wettkämpfe" unterhalb von „Heute" – zeigt die 3 nächsten aktiven Wettkampf-Serien mit Datum (bestätigt/Prognose) und Disziplinen
+
 ## v159
 - Fix Admin → System auf dem Smartphone: lange Werte (Datenbank-Server-String, E-Mail) brachen aus dem Bildschirm aus – Statistik-Tabellen nutzen jetzt `table-layout: fixed` mit Wortumbruch, sodass die roten Abschnitts-Header und Werte nicht mehr überlaufen
 
