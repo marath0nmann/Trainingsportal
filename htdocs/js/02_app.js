@@ -367,7 +367,6 @@ async function renderKalender(main, monthArg) {
     <div class="kal-wrap">
       <div id="pace-warn-sektion"></div>
       <div id="heute-sektion"></div>
-      <div id="wettkampf-sektion"></div>
       <div class="kal-toolbar">
         <div class="kal-nav">
           <button class="btn btn-ghost" onclick="navigateKalender('${ymd(prev).slice(0,7)}')" aria-label="Vorheriger Monat">‹</button>
@@ -384,6 +383,7 @@ async function renderKalender(main, monthArg) {
         </div>
       </div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
+      <div id="wettkampf-sektion"></div>
     </div>`;
 
   ladeGlobalePaceWarnung('pace-warn-sektion');
@@ -907,8 +907,9 @@ async function ladeWettkampfSektionInto(containerId) {
   let serien = [];
   try { serien = await _ladeWettkampfDaten(); } catch (_) { return; }
 
-  const heute = ymd(new Date());
-  const mitDatum = serien
+  const heute      = ymd(new Date());
+  const angemeldet = !!state.user;
+  const mitDatum   = serien
     .filter(s => s.aktiv !== 0 && s.aktiv !== false)
     .map(s => {
       let datum = null, modus = 'prognose';
@@ -931,12 +932,42 @@ async function ladeWettkampfSektionInto(containerId) {
     const isFest = modus === 'manuell';
     const name   = escapeHtml(s.name || s.kuerzel || '?');
 
-    // Disziplinen: erst aus Ergebnissen, dann extra; ausgeschlossene raus
+    // Disziplinen ermitteln
     const ausgeschlossen = new Set(s.disziplinen_ausgeschlossen || []);
     const diszSet = new Set();
     (s.disziplinen || []).forEach(d => { if (!ausgeschlossen.has(d)) diszSet.add(d); });
     (s.disziplinen_extra || []).forEach(d => diszSet.add(d));
-    const disziplinen = [...diszSet].slice(0, 5);
+    const disziplinen = [...diszSet];
+
+    // Meine Anmeldung (aus formaler Wettkampf-Anmeldungstabelle)
+    const meineAnmId     = s.meine_anmeldung_id  || null;
+    const meineDisziplin = s.meine_disziplin      || null;  // null = ohne Disziplin
+
+    // ── Disziplin-Buttons (nur für angemeldete User) ─────────
+    let diszHtml = '';
+    if (angemeldet) {
+      const liste = disziplinen.length ? disziplinen : [null]; // null = allgemeine Teilnahme
+      const btns = liste.map(d => {
+        const label   = escapeHtml(d || 'Teilnehmen');
+        const isAktiv = meineAnmId && (d === meineDisziplin || (d === null && !meineDisziplin));
+        if (isAktiv) {
+          return `<button class="wk-disz-btn wk-disz-btn--active" onclick="_wkKarteEntfernen(${meineAnmId})">✓ ${label}</button>`;
+        }
+        return `<button class="wk-disz-btn" onclick="_wkKarteEintragen(${s.id},${JSON.stringify(d || '')})">☐ ${label}</button>`;
+      }).join('');
+      diszHtml = `<div class="wk-disz-buttons">${btns}</div>`;
+    }
+
+    // ── Teilnehmer-Liste ─────────────────────────────────────
+    const anmeldungen = s.anmeldungen || [];
+    let teilnehmerHtml = '';
+    if (anmeldungen.length) {
+      const namen = anmeldungen.map(a => {
+        const d = a.disziplin ? ` · ${escapeHtml(a.disziplin)}` : '';
+        return `<span class="wk-tl-name">${escapeHtml(a.name || '?')}${d}</span>`;
+      }).join('');
+      teilnehmerHtml = `<div class="wk-teilnehmer">${namen}</div>`;
+    }
 
     return `<div class="wk-card">
       <div class="wk-card-eyebrow">
@@ -946,9 +977,8 @@ async function ladeWettkampfSektionInto(containerId) {
           : '<span class="heute-badge wk-badge-prognose">Prognose</span>'}
       </div>
       <div class="wk-card-name">${name}</div>
-      ${disziplinen.length
-        ? `<div class="wk-disziplinen">${disziplinen.map(d => `<span>${escapeHtml(d)}</span>`).join('')}</div>`
-        : ''}
+      ${diszHtml}
+      ${teilnehmerHtml}
     </div>`;
   }).join('');
 
@@ -958,6 +988,26 @@ async function ladeWettkampfSektionInto(containerId) {
     <div class="heute-heading">Nächste Wettkämpfe</div>
     <div class="heute-cards${countCls}">${cards}</div>
   </div>`;
+}
+
+async function _wkKarteEintragen(serieId, disziplin) {
+  try {
+    await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '' });
+    _wettkampfCache = null;  // Cache invalidieren → frische Daten beim nächsten Laden
+    ladeWettkampfSektionInto('wettkampf-sektion');
+  } catch (e) {
+    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+  }
+}
+
+async function _wkKarteEntfernen(anmId) {
+  try {
+    await apiDel(`wettkampf/anmeldungen/${anmId}`);
+    _wettkampfCache = null;
+    ladeWettkampfSektionInto('wettkampf-sektion');
+  } catch (e) {
+    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+  }
 }
 
 async function ladHeuteDetails(items) {
@@ -1455,7 +1505,6 @@ async function renderListe(main, quarterArg) {
     <div class="liste-wrap">
       <div id="pace-warn-sektion"></div>
       <div id="heute-sektion"></div>
-      <div id="wettkampf-sektion"></div>
       <div class="liste-toolbar">
         <div class="liste-nav">
           <button class="btn btn-ghost" onclick="navigateListe('${prevQ}')" aria-label="Vorheriges Quartal">‹</button>
@@ -1473,6 +1522,7 @@ async function renderListe(main, quarterArg) {
       </div>
       <div id="liste-legend"></div>
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
+      <div id="wettkampf-sektion"></div>
     </div>`;
 
   ladeGlobalePaceWarnung('pace-warn-sektion');

@@ -1,5 +1,12 @@
 # Changelog
 
+## v162
+- „Nächste Wettkämpfe": unter den Kalender verschoben (nach dem Grid/Liste-Content)
+- „Nächste Wettkämpfe": Farbschema grün (#27ae60) wie Kalender-Wettkampfeinträge
+- „Nächste Wettkämpfe": Disziplin-Buttons zum An-/Abmelden (☐/✓); allgemeine Teilnahme wenn keine Disziplinen vorhanden
+- „Nächste Wettkämpfe": Teilnehmerliste unter jeder Karte (nur sichtbar wenn Anmeldungen vorhanden)
+- API: `POST wettkampf/{id}/anmeldungen` akzeptiert jetzt leere Disziplin (= allgemeine Teilnahme)
+
 ## v161
 - Kalender/Liste: neue Sektion „Nächste Wettkämpfe" unterhalb von „Heute" – zeigt die 3 nächsten aktiven Wettkampf-Serien mit Datum (bestätigt/Prognose) und Disziplinen
 

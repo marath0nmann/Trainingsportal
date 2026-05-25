@@ -4148,14 +4148,8 @@ function handleWettkampf(string $method, string $tail): void
     if (preg_match('/^(\d+)\/anmeldungen$/', $tail, $m) && $method === 'POST') {
         $serieId   = (int)$m[1];
         $in        = readJsonBody();
-        $disziplin = trim((string)($in['disziplin'] ?? ''));
+        $disziplin = trim((string)($in['disziplin'] ?? ''));  // '' = allgemeine Teilnahme
         $bemerkung = trim((string)($in['bemerkung'] ?? '')) ?: null;
-
-        if (!$disziplin) {
-            http_response_code(422);
-            echo json_encode(['ok' => false, 'fehler' => 'Disziplin fehlt']);
-            return;
-        }
 
         $serie = DB::fetchOne("SELECT id FROM $tws WHERE id=?", [$serieId]);
         if (!$serie) {
