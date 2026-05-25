@@ -962,7 +962,7 @@ async function ladeWettkampfSektionInto(containerId) {
         if (isAktiv) {
           return `<button class="wk-pop-btn wk-pop-btn--active" onclick="_wkKarteAb(${s.id},${priv ? priv.id : 'null'},${anmId || 'null'})">✓ ${label}</button>`;
         }
-        return `<button class="wk-pop-btn" onclick="_wkKarteAn(${s.id},${JSON.stringify(d || '')})">${label}</button>`;
+        return `<button class="wk-pop-btn" onclick="_wkKarteAn(${s.id},${escapeHtml(JSON.stringify(d || ''))})">${label}</button>`;
       }).join('');
       diszHtml = `<div class="wk-disz-buttons">${btns}</div>`;
     } else if (disziplinen.length) {
@@ -1000,7 +1000,7 @@ async function ladeWettkampfSektionInto(containerId) {
       <div class="wk-card-eyebrow">
         <span class="wk-datum">${escapeHtml(datumFmt)}</span>
         ${isFest
-          ? '<span class="heute-badge wk-badge-fest">✓ Termin</span>'
+          ? ''
           : '<span class="heute-badge wk-badge-prognose">Prognose</span>'}
       </div>
       <div class="wk-card-name">${name}</div>

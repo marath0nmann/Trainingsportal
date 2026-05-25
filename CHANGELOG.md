@@ -1,5 +1,9 @@
 # Changelog
 
+## v167
+- Fix: Disziplin-Buttons unter „Nächste Wettkämpfe" sind jetzt klickbar – `JSON.stringify` im `onclick` brach das Attribut (literale Anführungszeichen); jetzt via `escapeHtml` korrekt kodiert
+- „Nächste Wettkämpfe": Badge „✓ Termin" entfernt – nur noch „Prognose" wird angezeigt (bei nicht bestätigtem Termin)
+
 ## v166
 - Wettkämpfe ohne Login sichtbar: „Nächste Wettkämpfe" und die Kalender-Chips werden jetzt auch für Gäste angezeigt
 - Gäste sehen Disziplinen als nicht klickbare Pillen (`.wk-disz-static`) und keine Teilnehmer-Info
