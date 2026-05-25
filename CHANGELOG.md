@@ -1,6 +1,6 @@
 # Changelog
 
-## v168
+## v169
 - Favicons: echtes TuS-Oedt-Logo statt generischem T
 - Fix: Disziplin-Buttons unter „Nächste Wettkämpfe" sind jetzt klickbar – `JSON.stringify` im `onclick` brach das Attribut (literale Anführungszeichen); jetzt via `escapeHtml` korrekt kodiert
 - „Nächste Wettkämpfe": Badge „✓ Termin" entfernt – nur noch „Prognose" wird angezeigt (bei nicht bestätigtem Termin)
