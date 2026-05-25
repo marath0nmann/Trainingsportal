@@ -907,6 +907,18 @@ function trainingSettingsKeys(): array {
             'beschreibung' => 'ID des Treffpunkts, der beim Einplanen eines Blocks vorausgewählt wird',
             'default'  => '',
         ],
+        'training_seitentitel' => [
+            'label'    => 'Seitentitel',
+            'gruppe'   => 'training',
+            'beschreibung' => 'Bezeichnung des Portals im Browser-Tab, Header und Login-Screen (Standard: Trainingsplan)',
+            'default'  => '',
+        ],
+        'training_version_anzeigen' => [
+            'label'    => 'Versionsstand im Header',
+            'gruppe'   => 'training',
+            'beschreibung' => 'Wenn aktiv (1), wird die Versionsnummer nur eingeloggten Admins angezeigt',
+            'default'  => '',
+        ],
     ];
 }
 

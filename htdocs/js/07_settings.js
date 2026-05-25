@@ -15,6 +15,8 @@ const SETTINGS = (() => {
   let uhrzeiten = {};     // { "1": "18:00", ... } – 1=Mo … 7=So
   let typen = [];         // { slug, bezeichnung, farbe, reihenfolge, aktiv, block_count }
   let typenBearbeitet = null; // slug des gerade inline bearbeiteten Typs
+  let seitentitel = '';
+  let versionNurAdmin = false;
 
   const WOCHENTAGE_LANG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
@@ -35,11 +37,13 @@ const SETTINGS = (() => {
         apiGet('admin/typen',    { silent: true }),
         TREFFPUNKTE.laden(),
       ]);
-      felder        = settingsR.felder || [];
-      feiertage     = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
-      paceDistanzen = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
-      uhrzeiten     = parseUhrzeitenJson(getWert('training_default_uhrzeiten'));
-      typen         = typenR.typen || [];
+      felder         = settingsR.felder || [];
+      feiertage      = parseFeiertageJson(getWert('training_feiertage_ics_urls'));
+      paceDistanzen  = parsePaceDistanzenJson(getWert('training_pace_distanzen'));
+      uhrzeiten      = parseUhrzeitenJson(getWert('training_default_uhrzeiten'));
+      seitentitel    = getWert('training_seitentitel') || '';
+      versionNurAdmin= getWert('training_version_anzeigen') === '1';
+      typen          = typenR.typen || [];
       rendereForm(main);
     } catch (e) {
       main.innerHTML = '<div style="margin:0 auto">' +
@@ -91,6 +95,35 @@ const SETTINGS = (() => {
   function rendereForm(main) {
     main.innerHTML =
       '<div style="margin:0 auto;display:flex;flex-direction:column;gap:20px">' +
+
+      // ── Portal ──
+      '<div class="panel">' +
+        '<div class="panel-header"><div class="panel-title">🌐 Portal</div></div>' +
+        '<div class="settings-panel-body">' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Seitentitel</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">Bezeichnet das Portal im Browser-Tab, Header und Login-Screen. Standard: „Trainingsplan".</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<input type="text" id="set-seitentitel" class="settings-input" placeholder="Trainingsplan"' +
+                ' value="' + escapeHtml(seitentitel) + '" style="max-width:320px">' +
+            '</div>' +
+          '</div>' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Versionsstand im Header</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">Wenn aktiv, wird die Versionsnummer nur eingeloggten Admins angezeigt.</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">' +
+                '<input type="checkbox" id="set-version-nur-admin"' + (versionNurAdmin ? ' checked' : '') + '>' +
+                'Nur für Admins sichtbar' +
+              '</label>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
 
       // ── Externe Kalender ──
       '<div class="panel">' +
@@ -354,11 +387,17 @@ const SETTINGS = (() => {
     // Uhrzeiten aus den Inputs einlesen (damit auch direkte Eingabe ohne change-Event erfasst wird)
     document.querySelectorAll('.uhrzeit-input').forEach(el => { uhrzeiten[el.dataset.dow] = el.value; });
 
+    const seitentitelVal    = (document.getElementById('set-seitentitel')?.value || '').trim();
+    const versionNurAdminEl = document.getElementById('set-version-nur-admin');
+    const versionVal        = versionNurAdminEl?.checked ? '1' : '';
+
     const payload = {
       werte: {
         training_feiertage_ics_urls:  JSON.stringify(liste),
         training_pace_distanzen:      JSON.stringify(paceDistanzen),
         training_default_uhrzeiten:   JSON.stringify(uhrzeiten),
+        training_seitentitel:         seitentitelVal,
+        training_version_anzeigen:    versionVal,
       },
     };
     try {
@@ -366,6 +405,7 @@ const SETTINGS = (() => {
       benachrichtigen('Gespeichert.', 'ok');
       CONFIG.clear();
       await CONFIG.load();
+      applyVersionVisibility(state.user);
     } catch (e) {
       benachrichtigen('Fehler: ' + e.message, 'err');
     }

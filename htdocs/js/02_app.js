@@ -59,6 +59,8 @@ function fillUserBadge() {
   const u = state.user;
   const userBtn = document.getElementById('user-btn');
 
+  applyVersionVisibility(u);
+
   if (!u) {
     if (userBtn) {
       userBtn.style.display = 'flex';

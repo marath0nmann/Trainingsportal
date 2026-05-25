@@ -1,13 +1,12 @@
 # Changelog
 
 ## v162
+- Konfig: Seitentitel + Versionssichtbarkeit; Favicons erstellt
 - „Nächste Wettkämpfe": unter den Kalender verschoben (nach dem Grid/Liste-Content)
 - „Nächste Wettkämpfe": Farbschema grün (#27ae60) wie Kalender-Wettkampfeinträge
 - „Nächste Wettkämpfe": Disziplin-Buttons zum An-/Abmelden (☐/✓); allgemeine Teilnahme wenn keine Disziplinen vorhanden
 - „Nächste Wettkämpfe": Teilnehmerliste unter jeder Karte (nur sichtbar wenn Anmeldungen vorhanden)
 - API: `POST wettkampf/{id}/anmeldungen` akzeptiert jetzt leere Disziplin (= allgemeine Teilnahme)
-
-## v161
 - Kalender/Liste: neue Sektion „Nächste Wettkämpfe" unterhalb von „Heute" – zeigt die 3 nächsten aktiven Wettkampf-Serien mit Datum (bestätigt/Prognose) und Disziplinen
 
 ## v159
@@ -17,7 +16,7 @@
 - Startseite startet auf dem Smartphone jetzt konsequent in der Listenansicht (Quartalsplan): zentraler `startHash()`-Helfer, der bei Bildschirmbreite < 720 px die Liste wählt – greift beim Laden, beim Klick auf das Logo/Startseite und bei allen internen Umleitungen
 - Admin → System für Smartphones optimiert: Statistik- und Detailspalten brechen auf eine Spalte um, breite Tabellen (Gäste, letzte Logins) horizontal scrollbar (`.admin-sys-stats`, `.admin-sys-cols`, `.admin-sys-table`)
 
-## v161
+## v162
 - Listenansicht (Quartalsplan, Startseite mobil) zeigt jetzt dieselben Einträge wie der Kalender: persönliche Trainings (Mein Plan, mit Punkt-Markierung), Wochenkilometer-Badge pro KW, Wettkampf-Termine (🏆/🏆? mit Tap-Popover zum Eintragen) sowie die Gruppen-/Plan-/Wettkampf-Filter (gemeinsamer Datenlader `_buildPlanData`)
 - Umschaltung Liste ⇄ Kalender springt jetzt immer auf das aktuelle Quartal bzw. den aktuellen Monat (statt den gerade betrachteten Zeitraum beizubehalten)
 - Mobile-Optimierung: km-Badges & Mein-Plan-Markierung in der Liste, Touch-Geräte zeigen Löschen/Hinzufügen-Buttons dauerhaft, Modals nahezu bildschirmfüllend mit größeren Tap-Flächen, breite Admin-Tabellen horizontal scrollbar (`.table-scroll`)

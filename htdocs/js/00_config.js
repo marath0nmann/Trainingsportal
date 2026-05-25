@@ -168,20 +168,22 @@ function applyConfig(cfg) {
     ? (logoFile.startsWith('http') ? logoFile : 'shared.php?file=' + encodeURI(logoFile))
     : '';
 
-  document.title = name + ' – Trainingsplan';
+  var seitentitel = (cfg.training_seitentitel || '').trim() || 'Trainingsplan';
+
+  document.title = name + ' – ' + seitentitel;
 
   var elMain = document.querySelector('.logo-main span');
   if (elMain) elMain.textContent = kuerzel;
   var elSub  = document.querySelector('.logo-sub span:first-child');
-  if (elSub)  elSub.textContent  = 'Trainingsplan';
+  if (elSub)  elSub.textContent  = seitentitel;
 
   var elLT = document.querySelector('.login-title');
   if (elLT) elLT.textContent = name;
   var elLS = document.querySelector('.login-sub');
-  if (elLS) elLS.textContent = 'Trainingsplan · Bitte einloggen';
+  if (elLS) elLS.textContent = seitentitel + ' · Bitte einloggen';
 
   var elFoot = document.querySelector('.mobile-nav-footer');
-  if (elFoot) elFoot.textContent = 'Trainingsplan';
+  if (elFoot) elFoot.textContent = seitentitel;
 
   // Logos
   document.querySelectorAll('.logo-img, .login-logo').forEach(function(img) {
@@ -197,6 +199,24 @@ function applyConfig(cfg) {
 
   // ── Typ-Farben injizieren ──
   applyTypenFarben(cfg.typen || []);
+}
+
+// ── Versionssichtbarkeit steuern ───────────────────────────
+// Wird nach jedem Auth-State-Wechsel aufgerufen.
+// Setting "training_version_anzeigen" = '1' → nur Admins sehen die Version.
+// Setting leer/0 (Standard) → Version für alle sichtbar.
+function applyVersionVisibility(user) {
+  var cfg     = window.appConfig || {};
+  var nurAdmin = (cfg.training_version_anzeigen === '1' ||
+                  cfg.training_version_anzeigen === 1   ||
+                  cfg.training_version_anzeigen === true);
+  var isAdmin  = !!(user && user.rolle === 'admin');
+  var vis      = !nurAdmin || isAdmin;
+  var display  = vis ? '' : 'none';
+  var el1 = document.getElementById('header-version');
+  var el2 = document.getElementById('mobile-header-ver');
+  if (el1) el1.style.display = display;
+  if (el2) el2.style.display = display;
 }
 
 // ── Asset-URL aus Statistikportal-uploads über shared.php ──
