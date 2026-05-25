@@ -1,6 +1,6 @@
 # Changelog
 
-## v158
+## v159
 - Fix Admin → System auf dem Smartphone: lange Werte (Datenbank-Server-String, E-Mail) brachen aus dem Bildschirm aus – Statistik-Tabellen nutzen jetzt `table-layout: fixed` mit Wortumbruch, sodass die roten Abschnitts-Header und Werte nicht mehr überlaufen
 
 ## v156

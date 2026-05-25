@@ -224,9 +224,10 @@ const ADMIN_WETTKAMPF = (() => {
       const letzterWt = s.letztes_datum
         ? WT_KURZ[new Date(s.letztes_datum + 'T00:00:00').getDay()] : '';
 
-      // Nächster-Termin-Zelle
+      // Nächster-Termin-Zelle (bei deaktivierten Serien keine Prognose anzeigen)
       let nextCell = '<span style="color:var(--text2);font-size:13px">–</span>';
-      if (next) {
+      const inaktiv    = s.aktiv === 0;
+      if (next && (!inaktiv || next.modus === 'manuell')) {
         const nd = new Date(next.datum + 'T00:00:00');
         const wt = WT_KURZ[nd.getDay()];
         const badge = next.modus === 'manuell'
@@ -237,7 +238,6 @@ const ADMIN_WETTKAMPF = (() => {
         nextCell = `<span style="font-weight:600;font-size:13px">${wt}, ${fmtDate(next.datum)}</span>${badge}`;
       }
 
-      const inaktiv    = s.aktiv === 0;
       const rowOpacity = inaktiv ? 'opacity:.45' : '';
 
       html += `
