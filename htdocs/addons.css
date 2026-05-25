@@ -1875,3 +1875,27 @@ body.planung-active #app-footer    { display: none; }
 }
 .btn-warning:hover { background: #d97706; }
 .btn-warning.btn-sm { padding: 5px 10px; font-size: 12px; }
+
+/* ── Dark Mode: Akzent-als-Text aufhellen ──────────────────────────────
+ * --accent (z. B. dunkles Vereinsblau) ist als Text auf dunklem Grund
+ * kaum lesbar. Wie im Statistikportal auf die aufgehellte Variante
+ * --accent-light umschalten. Gilt für beide Dark-Mode-Quellen
+ * (manuell via data-theme + OS-Präferenz). */
+[data-theme="dark"] .meinplan-kw-km.has-km,
+[data-theme="dark"] .liste-kw-km {
+  color: var(--accent-light);
+}
+[data-theme="dark"] .wk-tl-name--ich {
+  color: var(--accent-light);
+  background: color-mix(in srgb, var(--accent-light) 18%, var(--surf2));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .meinplan-kw-km.has-km,
+  :root:not([data-theme="light"]) .liste-kw-km {
+    color: var(--accent-light);
+  }
+  :root:not([data-theme="light"]) .wk-tl-name--ich {
+    color: var(--accent-light);
+    background: color-mix(in srgb, var(--accent-light) 18%, var(--surf2));
+  }
+}
