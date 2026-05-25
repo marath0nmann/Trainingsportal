@@ -113,6 +113,9 @@ function applyTypenFarben(typen) {
     lines.push('.kal-pop-typ.kal-typ-'        + s + ' { color: '               + f + ' !important; }');
     lines.push('.liste-row.kal-typ-'          + s + ' { border-left-color: '   + f + ' !important; }');
     lines.push('.liste-typ-'                  + s + ' { background: color-mix(in srgb, ' + f + ' 14%, var(--surface)); color: ' + f + ' !important; }');
+    // Nächste Wettkämpfe – wk-card trägt kal-typ-{slug} (via ladeWettkampfSektionInto)
+    lines.push('.wk-card.kal-typ-'            + s + ' { border-left-color: ' + f + ' !important; }');
+    lines.push('.wk-card.kal-typ-'            + s + ':hover { background: color-mix(in srgb, ' + f + ' 8%, var(--surface)) !important; }');
     // Planung-Sidebar
     lines.push('.pblock-gruppe-titel.block-typ-' + s + ' { border-bottom-color: ' + f + ' !important; }');
     lines.push('.pblock-card.block-typ-'      + s + ' { border-left-color: '   + f + ' !important; }');
