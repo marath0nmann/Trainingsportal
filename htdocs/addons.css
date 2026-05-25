@@ -192,18 +192,18 @@
   display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px;
 }
 .wk-disz-btn {
-  font-size: 11px; font-weight: 600; line-height: 1.4;
-  padding: 3px 9px; border-radius: 5px;
-  border: 1.5px solid color-mix(in srgb, #27ae60 40%, transparent);
+  font-size: 12px; font-weight: 600;
+  padding: 5px 12px; border-radius: 6px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 40%, transparent);
   background: none; color: var(--text);
   cursor: pointer; transition: background .1s;
 }
-.wk-disz-btn:hover { background: rgba(46,204,113,.1); }
+.wk-disz-btn:hover { background: rgba(46,204,113,.28); }
 .wk-disz-btn--active {
-  background: color-mix(in srgb, #27ae60 15%, var(--surface));
-  color: #27ae60;
-  border-color: color-mix(in srgb, #27ae60 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  color: var(--accent);
 }
+.wk-disz-btn--active:hover { background: #1e8449; }
 /* Teilnehmer-Liste */
 .wk-teilnehmer {
   display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
@@ -213,6 +213,10 @@
 .wk-tl-name {
   font-size: 11px; padding: 2px 8px; border-radius: 10px;
   background: var(--surf2); color: var(--text2);
+}
+.wk-tl-name--ich {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surf2));
+  color: var(--accent); font-weight: 600;
 }
 .wk-badge-fest {
   background: color-mix(in srgb, #27ae60 15%, transparent);

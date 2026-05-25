@@ -1,5 +1,10 @@
 # Changelog
 
+## v163
+- Wettkampf-Karte: Disziplin-Buttons identisch mit Popover (font-size 12px, padding 5×12, radius 6, var(--accent))
+- Wettkampf-Karte: Eigener Eintrag in Teilnehmerliste farblich hervorgehoben; Name aus state.user (immer korrekt)
+- API: Teilnehmer-Abfrage nutzt ORDER BY a.id (robuster als erstellt_am)
+
 ## v162
 - Konfig: Seitentitel + Versionssichtbarkeit; Favicons erstellt
 - „Nächste Wettkämpfe": unter den Kalender verschoben (nach dem Grid/Liste-Content)

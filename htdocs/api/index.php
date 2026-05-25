@@ -4355,7 +4355,7 @@ function handleWettkampf(string $method, string $tail): void
             $phAnm = implode(',', array_fill(0, count($planungIds), '?'));
             try {
                 $anmRows = DB::fetchAll(
-                    "SELECT a.id, a.planung_id, a.benutzer_id, a.disziplin, a.bemerkung,
+                    "SELECT a.id, a.planung_id, a.benutzer_id, a.disziplin,
                             COALESCE(
                               NULLIF(TRIM(CONCAT_WS(' ', ath.vorname, ath.nachname)), ''),
                               b.benutzername
@@ -4364,7 +4364,7 @@ function handleWettkampf(string $method, string $tail): void
                      JOIN $tbu b ON b.id = a.benutzer_id
                      LEFT JOIN $tat ath ON ath.id = b.athlet_id
                      WHERE a.planung_id IN ($phAnm)
-                     ORDER BY a.erstellt_am ASC",
+                     ORDER BY a.id ASC",
                     $planungIds
                 );
                 foreach ($anmRows as $a) {
@@ -4372,9 +4372,8 @@ function handleWettkampf(string $method, string $tail): void
                     $anmByPlanungId[$pid][] = [
                         'id'          => (int)$a['id'],
                         'benutzer_id' => (int)$a['benutzer_id'],
-                        'name'        => $a['anzeige_name'],
+                        'name'        => $a['anzeige_name'] ?? null,
                         'disziplin'   => $a['disziplin'],
-                        'bemerkung'   => $a['bemerkung'],
                     ];
                 }
             } catch (\Throwable $e) { /* Anmeldungen sind optional */ }

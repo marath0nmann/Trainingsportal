@@ -964,9 +964,18 @@ async function ladeWettkampfSektionInto(containerId) {
     const anmeldungen = s.anmeldungen || [];
     let teilnehmerHtml = '';
     if (anmeldungen.length) {
+      const myId = state.user ? (state.user.id || 0) : 0;
+      const myName = state.user
+        ? (state.user.vorname && state.user.nachname
+            ? state.user.vorname + ' ' + state.user.nachname
+            : state.user.vorname || state.user.name || state.user.benutzername || '')
+        : '';
       const namen = anmeldungen.map(a => {
-        const d = a.disziplin ? ` · ${escapeHtml(a.disziplin)}` : '';
-        return `<span class="wk-tl-name">${escapeHtml(a.name || '?')}${d}</span>`;
+        const isMe = myId && (a.benutzer_id === myId);
+        const name = isMe && myName ? myName : (a.name || a.benutzername || '?');
+        const d    = a.disziplin ? ` · ${escapeHtml(a.disziplin)}` : '';
+        const cls  = isMe ? ' wk-tl-name--ich' : '';
+        return `<span class="wk-tl-name${cls}">${escapeHtml(name)}${d}</span>`;
       }).join('');
       teilnehmerHtml = `<div class="wk-teilnehmer">${namen}</div>`;
     }
