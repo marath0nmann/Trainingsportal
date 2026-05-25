@@ -912,7 +912,12 @@ async function ladeWettkampfSektionInto(containerId) {
   let serien = [];
   try { serien = await _ladeWettkampfDaten(); } catch (_) { return; }
 
-  const heute      = ymd(new Date());
+  const _now       = new Date();
+  const heute      = ymd(_now);
+  // Ab 12:00 Uhr: heutigen Tag nicht mehr anzeigen
+  const minDatum   = _now.getHours() >= 12
+    ? ymd(new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + 1))
+    : heute;
   const angemeldet = !!state.user;
   const mitDatum   = serien
     .filter(s => s.aktiv !== 0 && s.aktiv !== false)
@@ -925,7 +930,7 @@ async function ladeWettkampfSektionInto(containerId) {
       }
       return { s, datum, modus };
     })
-    .filter(e => e.datum && e.datum >= heute)
+    .filter(e => e.datum && e.datum >= minDatum)
     .sort((a, b) => a.datum.localeCompare(b.datum))
     .slice(0, 3);
 
