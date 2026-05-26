@@ -89,84 +89,111 @@ function _updateBodyThemeColor() {
   if (metaTheme) metaTheme.setAttribute('content', color);
 }
 
-// ── Typ-Fallback-Farbe aus CSS berechnen ───────────────────
-// Legt kurz ein unsichtbares Element mit der kal-typ-{slug}-Klasse an
-// und liest die computed border-left-color aus (→ CSS-Fallback-Wert).
-function getTypDefaultFarbe(slug) {
-  var el = document.createElement('div');
-  el.className = 'kal-item kal-typ-' + slug;
-  el.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;border-left-width:4px;border-left-style:solid';
-  document.body.appendChild(el);
-  var rgb = getComputedStyle(el).borderLeftColor;
-  document.body.removeChild(el);
-  var m = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
-  if (!m) return null;
-  return '#' + [m[1], m[2], m[3]].map(function(n) {
-    return parseInt(n, 10).toString(16).padStart(2, '0');
-  }).join('');
+// ── Kalenderfarben-Modell ──────────────────────────────────
+// Kalender (statt Trainingstypen) bestimmen die Farbe einer Einheit.
+// Kalender-Keys:
+//   g{id}      → Trainingsgruppe (z. B. "Senioren")
+//   teamplan   → öffentlicher Teamplan ohne Gruppenbezug
+//   meinplan   → privater Plan des Athleten
+//   wettkampf  → Wettkämpfe
+//
+// Farbauflösung (höchste Priorität zuerst):
+//   1. persönlicher Override des Athleten   (kalFarbenUser)
+//   2. globaler Default (Trainer, „Planung") (kalFarbenDefaults)
+//   3. eingebauter Fallback
+var kalFarbenDefaults = {};   // aus config.kalender_farben (global, vom Trainer)
+var kalFarbenUser     = {};   // persönliche Overrides des angemeldeten Athleten
+
+var KAL_FARBE_FALLBACK = { teamplan: '#cc0000', meinplan: '#5b8def', wettkampf: '#27ae60' };
+var KAL_GRUPPE_PALETTE = ['#003087', '#1a8a3a', '#c08010', '#8845c0', '#0d8a8a', '#b0306a'];
+
+// Kalender-Key einer Einheit bestimmen.
+function kalKeyFor(e) {
+  if (!e) return 'teamplan';
+  if (e.typ === 'wettkampf') return 'wettkampf';
+  if (e._privat) return 'meinplan';
+  if (e.gruppe_id != null) return 'g' + e.gruppe_id;
+  return 'teamplan';
 }
 
-// ── Dynamische Typ-Farben per <style>-Tag injizieren ───────
-// Erzeugt .kal-typ-{slug}, .block-typ-{slug}, .liste-typ-{slug} etc.
-// mit der in training_typen.farbe gespeicherten Farbe.
-// Typen ohne farbe werden übersprungen → CSS-Fallback greift.
-function applyTypenFarben(typen) {
-  var el = document.getElementById('typen-farben-style');
+// Aufgelöste Farbe (Hex) für einen Kalender-Key.
+function kalFarbe(key) {
+  if (!key) return '#888888';
+  if (kalFarbenUser[key])     return kalFarbenUser[key];
+  if (kalFarbenDefaults[key]) return kalFarbenDefaults[key];
+  if (KAL_FARBE_FALLBACK[key]) return KAL_FARBE_FALLBACK[key];
+  if (/^g\d+$/.test(key)) {
+    var id = parseInt(key.slice(1), 10) || 0;
+    return KAL_GRUPPE_PALETTE[id % KAL_GRUPPE_PALETTE.length];
+  }
+  return '#888888';
+}
+
+// Aufgelöste Default-Farbe (ohne persönlichen Override) – für die
+// Planungs-Tabs, die den globalen Standard für alle Athleten zeigen.
+function kalFarbeDefault(key) {
+  if (!key) return '#888888';
+  if (kalFarbenDefaults[key]) return kalFarbenDefaults[key];
+  if (KAL_FARBE_FALLBACK[key]) return KAL_FARBE_FALLBACK[key];
+  if (/^g\d+$/.test(key)) {
+    var id = parseInt(key.slice(1), 10) || 0;
+    return KAL_GRUPPE_PALETTE[id % KAL_GRUPPE_PALETTE.length];
+  }
+  return '#888888';
+}
+
+// CSS-Klassen-tauglicher Key.
+function kalKeyCss(key) { return (key || '').replace(/[^a-z0-9_-]/gi, '_'); }
+
+// ── Dynamische Kalenderfarben per <style>-Tag injizieren ───
+// Erzeugt .kal-cal-{key}-Regeln (Kalender-Items, Heute-Cards,
+// Listenansicht, Wettkampf-Karten/Popover) mit der aufgelösten Farbe.
+// Border-Akzent für alle Items; farbiger Hintergrund NUR für eigene
+// Plan-Einträge (is-privat) – wie bei den früheren Typ-Farben.
+// extraKeys: zusätzliche Kalender-Keys (z. B. die Gruppen des Athleten),
+// die evtl. nur über den Fallback eine Farbe haben.
+function applyKalenderFarben(extraKeys) {
+  var el = document.getElementById('kalender-farben-style');
   if (!el) {
     el = document.createElement('style');
-    el.id = 'typen-farben-style';
+    el.id = 'kalender-farben-style';
     document.head.appendChild(el);
   }
-  if (!Array.isArray(typen) || !typen.length) { el.textContent = ''; return; }
+  var keys = {};
+  ['teamplan', 'meinplan', 'wettkampf'].forEach(function(k) { keys[k] = true; });
+  Object.keys(kalFarbenDefaults).forEach(function(k) { keys[k] = true; });
+  Object.keys(kalFarbenUser).forEach(function(k) { keys[k] = true; });
+  (extraKeys || []).forEach(function(k) { if (k) keys[k] = true; });
+
   var lines = [];
-  typen.forEach(function(t) {
-    if (!t.farbe) return;
-    var s = t.slug.replace(/[^a-z0-9_-]/g, '_');
-    var f = t.farbe;
-    var fDark   = _farbeFuerDark(f); // im Dark Mode genutzte, aufgehellte Variante
+  Object.keys(keys).forEach(function(key) {
+    var s = kalKeyCss(key);
+    var f = kalFarbe(key);
+    var fDark = _farbeFuerDark(f);
 
-    // Per-Typ-Farbvariablen. Alle Regeln referenzieren --tf statt der rohen
-    // Farbe; im Dark Mode wird --tf auf die aufgehellte Variante umgeschaltet,
-    // damit Border/Text auf dunklem Grund sichtbar bleiben (analog zu
-    // --accent-light im Statistikportal). --tf-d (dunklere Variante für
-    // aktive Buttons) und --tf-on (Textfarbe auf gefüllter Fläche) folgen mit.
-    var allSel = '.kal-typ-' + s + ',.block-typ-' + s + ',.liste-typ-' + s;
-    function scoped(scope) {
-      return scope + ' .kal-typ-' + s + ',' + scope + ' .block-typ-' + s + ',' + scope + ' .liste-typ-' + s;
-    }
-    // Hell (Standard)
-    lines.push(allSel + ' { --tf: ' + f + '; --tf-d: ' + _darken(f, 0.15) + '; --tf-on: ' + _onColor(f) + '; }');
-    // Dark Mode (manuell gesetzt)
-    lines.push(scoped('[data-theme="dark"]') + ' { --tf: ' + fDark + '; --tf-d: ' + _darken(fDark, 0.15) + '; --tf-on: ' + _onColor(fDark) + '; }');
-    // Dark Mode (OS-Präferenz, sofern nicht manuell auf hell gestellt)
-    lines.push('@media (prefers-color-scheme: dark) { ' + scoped(':root:not([data-theme="light"])') + ' { --tf: ' + fDark + '; --tf-d: ' + _darken(fDark, 0.15) + '; --tf-on: ' + _onColor(fDark) + '; } }');
+    var allSel = '.kal-cal-' + s;
+    function scoped(scope) { return scope + ' .kal-cal-' + s; }
+    lines.push(allSel + ' { --cf: ' + f + '; --cf-d: ' + _darken(f, 0.15) + '; --cf-on: ' + _onColor(f) + '; }');
+    lines.push(scoped('[data-theme="dark"]') + ' { --cf: ' + fDark + '; --cf-d: ' + _darken(fDark, 0.15) + '; --cf-on: ' + _onColor(fDark) + '; }');
+    lines.push('@media (prefers-color-scheme: dark) { ' + scoped(':root:not([data-theme="light"])') + ' { --cf: ' + fDark + '; --cf-d: ' + _darken(fDark, 0.15) + '; --cf-on: ' + _onColor(fDark) + '; } }');
 
-    // Kalender (Monat + Heute-Card + Hover-Popover + Listenansicht)
-    // Border-Akzent für alle Items; farbiger Hintergrund NUR für eigene Plan-Einträge (is-privat)
-    lines.push('.kal-item.kal-typ-'          + s + ' { border-left-color: var(--tf) !important; }');
-    lines.push('.kal-item.is-privat.kal-typ-' + s + ' { background: color-mix(in srgb, var(--tf) 14%, var(--surface)) !important; }');
-    lines.push('.heute-card.kal-typ-'         + s + ' { border-left-color: var(--tf) !important; }');
-    lines.push('.kal-pop-typ.kal-typ-'        + s + ' { color: var(--tf) !important; }');
-    lines.push('.liste-row.kal-typ-'          + s + ' { border-left-color: var(--tf) !important; }');
-    lines.push('.liste-typ-'                  + s + ' { background: color-mix(in srgb, var(--tf) 14%, var(--surface)); color: var(--tf) !important; }');
-    // Wettkampf-Kalender-Popover (wk-popover trägt kal-typ-{slug})
-    lines.push('.wk-popover.kal-typ-'         + s + ' .wk-pop-btn { border-color: var(--tf) !important; background: color-mix(in srgb, var(--tf) 12%, transparent) !important; }');
-    lines.push('.wk-popover.kal-typ-'         + s + ' .wk-pop-btn:hover { background: color-mix(in srgb, var(--tf) 28%, transparent) !important; }');
-    lines.push('.wk-popover.kal-typ-'         + s + ' .wk-pop-btn--active { background: var(--tf) !important; border-color: var(--tf-d) !important; color: var(--tf-on) !important; }');
-    lines.push('.wk-popover.kal-typ-'         + s + ' .wk-pop-btn--active:hover { background: var(--tf-d) !important; }');
-    // Nächste Wettkämpfe – wk-card trägt kal-typ-{slug} (via ladeWettkampfSektionInto)
-    lines.push('.wk-card.kal-typ-'            + s + ' { border-left-color: var(--tf) !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ':hover { background: color-mix(in srgb, var(--tf) 8%, var(--surface)) !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn { border-color: var(--tf) !important; background: color-mix(in srgb, var(--tf) 12%, var(--surface)) !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn:hover { background: color-mix(in srgb, var(--tf) 28%, var(--surface)) !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn--active { background: var(--tf) !important; border-color: var(--tf-d) !important; color: var(--tf-on) !important; }');
-    lines.push('.wk-card.kal-typ-'            + s + ' .wk-pop-btn--active:hover { background: var(--tf-d) !important; }');
-    // Planung-Sidebar
-    lines.push('.pblock-gruppe-titel.block-typ-' + s + ' { border-bottom-color: var(--tf) !important; }');
-    lines.push('.pblock-card.block-typ-'      + s + ' { border-left-color: var(--tf) !important; }');
-    // Blöcke-Seite (Block-Karte oben + Gruppen-Titel)
-    lines.push('.block-typ-'                  + s + ' { border-top-color: var(--tf) !important; }');
-    lines.push('.bloecke-gruppe-typ.block-typ-' + s + ' { border-left-color: var(--tf); color: var(--tf); }');
+    // Kalender (Monat) + Heute-Card + Listenansicht
+    lines.push('.kal-item.kal-cal-'          + s + ' { border-left-color: var(--cf) !important; }');
+    lines.push('.kal-item.is-privat.kal-cal-' + s + ' { background: color-mix(in srgb, var(--cf) 14%, var(--surface)) !important; }');
+    lines.push('.heute-card.kal-cal-'         + s + ' { border-left-color: var(--cf) !important; }');
+    lines.push('.liste-row.kal-cal-'          + s + ' { border-left-color: var(--cf) !important; }');
+    // Wettkampf-Kalender-Popover (wk-popover trägt kal-cal-wettkampf)
+    lines.push('.wk-popover.kal-cal-'         + s + ' .wk-pop-btn { border-color: var(--cf) !important; background: color-mix(in srgb, var(--cf) 12%, transparent) !important; }');
+    lines.push('.wk-popover.kal-cal-'         + s + ' .wk-pop-btn:hover { background: color-mix(in srgb, var(--cf) 28%, transparent) !important; }');
+    lines.push('.wk-popover.kal-cal-'         + s + ' .wk-pop-btn--active { background: var(--cf) !important; border-color: var(--cf-d) !important; color: var(--cf-on) !important; }');
+    lines.push('.wk-popover.kal-cal-'         + s + ' .wk-pop-btn--active:hover { background: var(--cf-d) !important; }');
+    // Nächste Wettkämpfe – wk-card trägt kal-cal-wettkampf
+    lines.push('.wk-card.kal-cal-'            + s + ' { border-left-color: var(--cf) !important; }');
+    lines.push('.wk-card.kal-cal-'            + s + ':hover { background: color-mix(in srgb, var(--cf) 8%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-cal-'            + s + ' .wk-pop-btn { border-color: var(--cf) !important; background: color-mix(in srgb, var(--cf) 12%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-cal-'            + s + ' .wk-pop-btn:hover { background: color-mix(in srgb, var(--cf) 28%, var(--surface)) !important; }');
+    lines.push('.wk-card.kal-cal-'            + s + ' .wk-pop-btn--active { background: var(--cf) !important; border-color: var(--cf-d) !important; color: var(--cf-on) !important; }');
+    lines.push('.wk-card.kal-cal-'            + s + ' .wk-pop-btn--active:hover { background: var(--cf-d) !important; }');
   });
   el.textContent = lines.join('\n');
 }
@@ -245,8 +272,10 @@ function applyConfig(cfg) {
     }
   });
 
-  // ── Typ-Farben injizieren ──
-  applyTypenFarben(cfg.typen || []);
+  // ── Kalenderfarben injizieren ──
+  kalFarbenDefaults = (cfg.kalender_farben && typeof cfg.kalender_farben === 'object')
+    ? cfg.kalender_farben : {};
+  applyKalenderFarben();
 }
 
 // ── Versionssichtbarkeit steuern ───────────────────────────

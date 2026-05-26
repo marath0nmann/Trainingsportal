@@ -416,6 +416,8 @@ async function renderKalender(main, monthArg) {
       if (state.kalFilter === null) {
         state.kalFilter = _initKalFilter(state.meineGruppen.map(g => g.id), d3.prefs);
       }
+      if (d3.farben && typeof d3.farben === 'object') kalFarbenUser = d3.farben;
+      applyKalenderFarben(state.meineGruppen.map(g => 'g' + g.id));
     }
   } catch (e) {
     const g = document.getElementById('kal-grid');
@@ -555,7 +557,7 @@ async function renderKalender(main, monthArg) {
             const hAttr   = sid
               ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${sid},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`
               : '';
-            return `<div class="kal-item kal-typ-wettkampf is-privat" data-privat-id="${e.id}"
+            return `<div class="kal-item kal-cal-wettkampf is-privat" data-privat-id="${e.id}"
                          ${sid ? `data-serie-id="${sid}"` : ''} ${hAttr}>
               <span class="kal-item-title">${escapeHtml(e.titel)}</span>
               ${kmBadge}
@@ -563,7 +565,7 @@ async function renderKalender(main, monthArg) {
             </div>`;
           }
 
-          const cls = `kal-item kal-typ-${e.typ} is-privat`;
+          const cls = `kal-item kal-cal-${kalKeyFor(e)} is-privat`;
           // Aus Team-Eintrag übernommen → normales Detail-Modal; eigener Eintrag → Edit-Modal
           const clickFn = e.ref_einheit_id
             ? `zeigeEinheit(${e.ref_einheit_id})`
@@ -583,7 +585,7 @@ async function renderKalender(main, monthArg) {
             <button class="kal-item-del" onclick="event.stopPropagation();MEINPLAN.loeschePrivat(${e.id})" title="Löschen">×</button>
           </div>`;
         }
-        const cls = `kal-item kal-typ-${e.typ}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
+        const cls = `kal-item kal-cal-${kalKeyFor(e)}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
         const time = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
         return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
       }).join('');
@@ -598,7 +600,7 @@ async function renderKalender(main, monthArg) {
             const emoji  = isFest ? '🏆' : '🏆?';
             const hint   = isFest ? ' (fester Termin)' : ' (Prognosedatum – noch nicht bestätigt)';
             const canAdd = !!state.user;
-            return `<div class="kal-item kal-typ-${escapeHtml(s.typ || 'wettkampf')} is-privat" data-serie-id="${s.id}"
+            return `<div class="kal-item kal-cal-wettkampf is-privat" data-serie-id="${s.id}"
               style="cursor:${canAdd ? 'pointer' : 'default'}"
               ${canAdd ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${s.id},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"` : ''}>
               <span class="kal-item-title">${emoji} ${escapeHtml(name)}</span>
@@ -656,51 +658,73 @@ function _initKalFilter(gruppenIds, serverPrefs) {
   return filter;
 }
 
-// ── Kalender-Legend (Checkboxen) ────────────────────────
+// ── Kalender-Legend (Checkboxen + Farbwähler) ───────────
+// Jeder Kalender hat einen Farb-Swatch (input type=color); der Athlet
+// kann die Farbe für sich überschreiben (Rechtsklick = zurücksetzen).
+function _legendItem(key, checked, label, toggleAttr) {
+  const farbe       = kalFarbe(key);
+  const cbId        = 'kal-cb-' + kalKeyCss(key);
+  const hasOverride = !!kalFarbenUser[key];
+  return `<span class="kal-legend-item">
+    <input type="checkbox" id="${cbId}" ${checked ? 'checked' : ''} ${toggleAttr}>
+    <input type="color" class="kal-legend-color${hasOverride ? ' has-override' : ''}" value="${farbe}"
+      title="Kalenderfarbe für dich ändern${hasOverride ? ' · Rechtsklick: auf Standard zurücksetzen' : ''}"
+      onchange="setKalFarbe('${key}', this.value)"
+      oncontextmenu="return resetKalFarbe(event, '${key}')">
+    <label for="${cbId}" class="kal-legend-name">${escapeHtml(label)}</label>
+  </span>`;
+}
+
 function _renderKalLegend() {
   const kf      = state.kalFilter;
   const gruppen = state.meineGruppen || [];
+  let items;
   if (!gruppen.length) {
-    return `<div class="kal-legend">
-      <label class="kal-legend-item">
-        <input type="checkbox" ${kf && kf.teamplan !== false ? 'checked' : ''}
-          onchange="toggleKalPlan('teamplan', this.checked)">
-        <span class="kal-legend-dot kal-legend-dot-pub"></span>Teamplan
-      </label>
-      <label class="kal-legend-item">
-        <input type="checkbox" ${!kf || kf.meinPlan !== false ? 'checked' : ''}
-          onchange="toggleKalPlan('meinPlan', this.checked)">
-        <span class="kal-legend-dot kal-legend-dot-priv"></span>Mein Plan
-      </label>
-      <label class="kal-legend-item">
-        <input type="checkbox" ${!kf || kf.wettkampf !== false ? 'checked' : ''}
-          onchange="toggleKalPlan('wettkampf', this.checked)">
-        <span class="kal-legend-dot" style="background:${_wkFarbe('wettkampf')};border-color:${_wkFarbe('wettkampf')}"></span>Wettkämpfe
-      </label>
-    </div>`;
+    items = [
+      _legendItem('teamplan',  kf && kf.teamplan  !== false, 'Teamplan',   `onchange="toggleKalPlan('teamplan', this.checked)"`),
+      _legendItem('meinplan',  !kf || kf.meinPlan  !== false, 'Mein Plan',  `onchange="toggleKalPlan('meinPlan', this.checked)"`),
+      _legendItem('wettkampf', !kf || kf.wettkampf !== false, 'Wettkämpfe', `onchange="toggleKalPlan('wettkampf', this.checked)"`),
+    ];
+  } else {
+    items = gruppen.map(g =>
+      _legendItem('g' + g.id, !!(kf && kf.gruppen.has(g.id)), g.name,
+        `onchange="toggleKalPlan('gruppe', ${g.id}, this.checked)"`));
+    items.push(
+      _legendItem('meinplan',  !kf || kf.meinPlan  !== false, 'Mein Plan',  `onchange="toggleKalPlan('meinPlan', false, this.checked)"`),
+      _legendItem('wettkampf', !kf || kf.wettkampf !== false, 'Wettkämpfe', `onchange="toggleKalPlan('wettkampf', this.checked)"`),
+    );
   }
-  const gruppenItems = gruppen.map(g => {
-    const checked = kf && kf.gruppen.has(g.id);
-    const dotStyle = g.farbe ? ` style="border-left-color:${escapeHtml(g.farbe)}"` : '';
-    return `<label class="kal-legend-item">
-      <input type="checkbox" ${checked ? 'checked' : ''}
-        onchange="toggleKalPlan('gruppe', ${g.id}, this.checked)">
-      <span class="kal-legend-dot kal-legend-dot-gruppe"${dotStyle}></span>${escapeHtml(g.name)}
-    </label>`;
-  }).join('');
-  return `<div class="kal-legend">
-    ${gruppenItems}
-    <label class="kal-legend-item">
-      <input type="checkbox" ${!kf || kf.meinPlan !== false ? 'checked' : ''}
-        onchange="toggleKalPlan('meinPlan', false, this.checked)">
-      <span class="kal-legend-dot kal-legend-dot-priv"></span>Mein Plan
-    </label>
-    <label class="kal-legend-item">
-      <input type="checkbox" ${!kf || kf.wettkampf !== false ? 'checked' : ''}
-        onchange="toggleKalPlan('wettkampf', this.checked)">
-      <span class="kal-legend-dot" style="background:${_wkFarbe('wettkampf')};border-color:${_wkFarbe('wettkampf')}"></span>Wettkämpfe
-    </label>
-  </div>`;
+  return `<div class="kal-legend">${items.join('')}</div>`;
+}
+
+// ── Persönliche Kalenderfarbe setzen / zurücksetzen ──────
+let _kalFarbenSaveTimer = null;
+function setKalFarbe(key, hex) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  kalFarbenUser[key] = hex.toLowerCase();
+  applyKalenderFarben((state.meineGruppen || []).map(g => 'g' + g.id));
+  _saveKalFarben();
+}
+function resetKalFarbe(ev, key) {
+  ev.preventDefault();
+  if (kalFarbenUser[key]) {
+    delete kalFarbenUser[key];
+    applyKalenderFarben((state.meineGruppen || []).map(g => 'g' + g.id));
+    _saveKalFarben();
+  }
+  if (ev.currentTarget) {
+    ev.currentTarget.value = kalFarbe(key);
+    ev.currentTarget.classList.remove('has-override');
+    ev.currentTarget.title = 'Kalenderfarbe für dich ändern';
+  }
+  return false;
+}
+function _saveKalFarben() {
+  if (!state.user) return;
+  clearTimeout(_kalFarbenSaveTimer);
+  _kalFarbenSaveTimer = setTimeout(async () => {
+    try { await apiPut('kal/farben', kalFarbenUser); } catch (_) {}
+  }, 600);
 }
 
 // ── Filter-Toggle (aus Checkbox-onchange aufgerufen) ─────
@@ -795,7 +819,7 @@ function renderHeuteSektionHtml(items, privatItems = []) {
     // Karte nur wenn Koordinaten vorhanden UND kein Komoot-Link vorhanden
     const hasMap = !e.komoot_url && !!(tp && tp.lat && tp.lng);
     return `
-      <div class="heute-card kal-typ-${e.typ}${abgesagt ? ' is-cancelled' : ''}${hasMap ? ' heute-card-has-map' : ''}">
+      <div class="heute-card kal-cal-${kalKeyFor(e)}${abgesagt ? ' is-cancelled' : ''}${hasMap ? ' heute-card-has-map' : ''}">
         <div class="heute-card-main">
           <div class="heute-card-eyebrow">
             <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
@@ -818,7 +842,7 @@ function renderHeuteSektionHtml(items, privatItems = []) {
     const zeitStr  = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
     const km       = e.distanz_km != null ? e.distanz_km : null;
     return `
-      <div class="heute-card kal-typ-${e.typ} is-privat" onclick="MEINPLAN.bearbeitePrivat(${e.id})" style="cursor:pointer">
+      <div class="heute-card kal-cal-${kalKeyFor({ ...e, _privat: true })} is-privat" onclick="MEINPLAN.bearbeitePrivat(${e.id})" style="cursor:pointer">
         <div class="heute-card-main">
           <div class="heute-card-eyebrow">
             <span class="heute-typ-label">${escapeHtml(typLabel)}${zeitStr}</span>
@@ -1000,7 +1024,7 @@ async function ladeWettkampfSektionInto(containerId) {
       teilnehmerHtml = `<div class="wk-teilnehmer">${namen}</div>`;
     }
 
-    return `<div class="wk-card kal-typ-${escapeHtml(s.typ || 'wettkampf')}">
+    return `<div class="wk-card kal-cal-wettkampf">
       <div class="wk-card-eyebrow">
         <span class="wk-datum">${escapeHtml(datumFmt)}</span>
         ${isFest
@@ -1458,6 +1482,8 @@ async function _buildPlanData(von, bis) {
     if (state.kalFilter === null) {
       state.kalFilter = _initKalFilter(state.meineGruppen.map(g => g.id), d3.prefs);
     }
+    if (d3.farben && typeof d3.farben === 'object') kalFarbenUser = d3.farben;
+    applyKalenderFarben(state.meineGruppen.map(g => 'g' + g.id));
   }
   // WEG vorladen, damit _effektivKm die Anreise-km einrechnen kann
   if (angemeldet && typeof WEG !== 'undefined') await WEG.load();
@@ -1626,7 +1652,7 @@ async function renderListe(main, quarterArg) {
     const typLabel       = getTypLabel(e.typ);
 
     const rowCls = [
-      'liste-row', `kal-typ-${e.typ}`,
+      'liste-row', `kal-cal-${kalKeyFor(e)}`,
       datum === todayKey ? 'is-today' : '',
       isCancelled ? 'is-cancelled' : '',
       isKeinTraining ? 'is-kein-training' : '',
@@ -1672,7 +1698,7 @@ async function renderListe(main, quarterArg) {
     const canAdd = !!state.user;
     const clickAttr = canAdd ? ` onclick="_wkPopoverToggle(${s.id}, this)"` : '';
     const prognose  = isFest ? '' : ' <span class="liste-wk-prognose">~ Prognose</span>';
-    return `<div class="liste-row liste-row-wettkampf kal-typ-${escapeHtml(s.typ || 'wettkampf')}${datum === todayKey ? ' is-today' : ''}"${clickAttr} data-serie-id="${s.id}">
+    return `<div class="liste-row liste-row-wettkampf kal-cal-wettkampf${datum === todayKey ? ' is-today' : ''}"${clickAttr} data-serie-id="${s.id}">
       ${dateCell(datum)}
       <span class="liste-time">–</span>
       <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
@@ -1960,13 +1986,6 @@ let _wkPopSerie   = null; // ID der aktuell geöffneten Serie
 let _wkHideTimer  = null; // Verzögerungs-Timer für Hover-Hide
 let _wkPrivatMap  = {};   // datum → [{id, bemerkung}] – befüllt von renderKalender
 
-// Gibt die konfigurierte Farbe für einen Trainingstyp zurück (Fallback für 'wettkampf': #27ae60)
-function _wkFarbe(typ) {
-  const typen = (window.appConfig && Array.isArray(window.appConfig.typen)) ? window.appConfig.typen : [];
-  const t = typen.find(x => x.slug === typ);
-  return (t && t.farbe) ? t.farbe : (typ === 'wettkampf' ? '#27ae60' : null);
-}
-
 // Tap-Toggle (Listenansicht / Touch): erneutes Antippen schließt das Popover
 function _wkPopoverToggle(serieId, anchorEl) {
   if (_wkPopSerie === serieId) { _wkPopoverHide(); return; }
@@ -2002,7 +2021,7 @@ function _wkPopoverShow(serieId, anchorEl) {
   // Popover-Element aufbauen
   const pop = document.createElement('div');
   pop.id        = 'wk-popover';
-  pop.className = 'wk-popover kal-typ-' + (serie.typ || 'wettkampf');
+  pop.className = 'wk-popover kal-cal-wettkampf';
 
   const nameEl = document.createElement('div');
   nameEl.className   = 'wk-pop-name';

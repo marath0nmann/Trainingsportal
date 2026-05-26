@@ -516,19 +516,10 @@ const SETTINGS = (() => {
       return;
     }
 
-    // Compute CSS fallback colors once (temporarily hide injected overrides)
-    const cssDefaults = {};
-    const _styleEl = document.getElementById('typen-farben-style');
-    const _savedStyle = _styleEl ? _styleEl.textContent : '';
-    if (_styleEl) _styleEl.textContent = '';
-    typen.forEach(function(t) { cssDefaults[t.slug] = getTypDefaultFarbe(t.slug) || '#888888'; });
-    if (_styleEl) _styleEl.textContent = _savedStyle;
-
     const zeilen = typen.map((t, i) => {
       const bearbeite = typenBearbeitet === t.slug;
       const gesperrt  = t.block_count > 0;
       const inaktivStil = !t.aktiv ? 'opacity:0.5;' : '';
-      const defaultFarbe = cssDefaults[t.slug];
 
       if (bearbeite) {
         return `
@@ -539,21 +530,6 @@ const SETTINGS = (() => {
                   <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Bezeichnung</div>
                   <input type="text" id="typ-bez-${i}" value="${escapeHtml(t.bezeichnung)}"
                     class="settings-input" style="width:100%">
-                </div>
-                <div style="min-width:160px">
-                  <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Farbe</div>
-                  <div style="display:flex;align-items:center;gap:6px">
-                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-                      <input type="checkbox" id="typ-farbe-aktiv-${i}" ${t.farbe ? 'checked' : ''}>
-                      Eigene Farbe
-                    </label>
-                    <input type="color" id="typ-farbe-${i}" value="${escapeHtml(t.farbe || defaultFarbe)}"
-                      style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0">
-                  </div>
-                  <div style="margin-top:4px;display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2)">
-                    <span style="display:inline-block;width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${escapeHtml(defaultFarbe)};border:1px solid var(--border)"></span>
-                    CSS-Standard: <code style="font-size:10px">${escapeHtml(defaultFarbe)}</code>
-                  </div>
                 </div>
                 <div style="min-width:80px">
                   <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Fallback km</div>
@@ -604,16 +580,9 @@ const SETTINGS = (() => {
           </tr>`;
       }
 
-      // View row: show custom color or CSS default (dashed border = CSS fallback)
-      const swatchFarbe = t.farbe || defaultFarbe;
-      const swatchStyle = t.farbe
-        ? `background:${escapeHtml(swatchFarbe)}`
-        : `background:${escapeHtml(swatchFarbe)};border:1.5px dashed var(--border)`;
-
       return `
         <tr style="${inaktivStil}">
           <td style="padding:6px 8px;font-weight:600">
-            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;${swatchStyle};margin-right:6px;vertical-align:middle"></span>
             ${escapeHtml(t.bezeichnung)}
           </td>
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
@@ -672,8 +641,6 @@ const SETTINGS = (() => {
   async function typSpeichern(slug, idx, opts) {
     const bez = (document.getElementById(`typ-bez-${idx}`)?.value || '').trim();
     if (!bez) { benachrichtigen('Bezeichnung darf nicht leer sein.', 'err'); return false; }
-    const farbeAktiv  = document.getElementById(`typ-farbe-aktiv-${idx}`)?.checked;
-    const farbe       = farbeAktiv ? (document.getElementById(`typ-farbe-${idx}`)?.value || null) : null;
     const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
     const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
     const fkRaw         = (document.getElementById(`typ-fallback-km-${idx}`)?.value || '').trim();
@@ -685,7 +652,7 @@ const SETTINGS = (() => {
     const ist_kein_training = document.getElementById(`typ-kein-training-${idx}`)?.checked ? true : false;
     const hat_strecke       = document.getElementById(`typ-hat-strecke-${idx}`)?.checked ? true : false;
     try {
-      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, farbe, reihenfolge, aktiv, fallback_km, default_dauer_min, default_treffpunkt_id, ist_kein_training, hat_strecke });
+      await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, reihenfolge, aktiv, fallback_km, default_dauer_min, default_treffpunkt_id, ist_kein_training, hat_strecke });
       if (!opts || !opts.silent) benachrichtigen('Typ gespeichert.', 'ok');
       typenBearbeitet = null;
       const r = await apiGet('admin/typen', { silent: true });

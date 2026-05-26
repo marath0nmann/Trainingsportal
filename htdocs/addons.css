@@ -103,17 +103,8 @@
 .kal-item-del:hover { opacity: 1; color: var(--primary); }
 .kal-item:hover .kal-item-del { display: block; }
 
-/* Typ-Farben (Border-Akzent) */
-.kal-item.kal-typ-intervall    { border-left-color: var(--primary); }
-.kal-item.kal-typ-dauerlauf    { border-left-color: var(--green, #1a8a3a); }
-.kal-item.kal-typ-funktionell  { border-left-color: #c08010; }
-.kal-item.kal-typ-runde        { border-left-color: var(--accent); }
-.kal-item.kal-typ-event        { border-left-color: #8845c0; }
-.kal-item.kal-typ-wettkampf              { border-left-color: #27ae60; }
-.kal-item.is-privat.kal-typ-wettkampf   { background: rgba(46,204,113,.15); }
-.kal-item.kal-typ-kein_training {
-  border-left-color: var(--border); opacity: .65; font-style: italic;
-}
+/* Kalenderfarben (Border-Akzent) werden dynamisch per JS injiziert
+   (siehe applyKalenderFarben in 00_config.js → .kal-cal-{key}). */
 
 /* ── Modal ── */
 .modal-overlay {
@@ -296,11 +287,6 @@
   box-shadow: 0 4px 16px rgba(0,0,0,.12);
 }
 .heute-card.is-cancelled { opacity: .6; }
-.heute-card.kal-typ-intervall   { border-left-color: var(--primary); }
-.heute-card.kal-typ-dauerlauf   { border-left-color: var(--green, #1a8a3a); }
-.heute-card.kal-typ-funktionell { border-left-color: #c08010; }
-.heute-card.kal-typ-runde       { border-left-color: var(--accent); }
-.heute-card.kal-typ-event       { border-left-color: #8845c0; }
 .heute-card-eyebrow {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
@@ -453,11 +439,6 @@
 .liste-row.is-cancelled { opacity: .55; text-decoration: line-through; }
 .liste-row.is-kein-training { opacity: .5; cursor: default; font-style: italic; }
 .liste-row.is-kein-training:hover { background: none; }
-.liste-row.kal-typ-intervall   { border-left-color: var(--primary); }
-.liste-row.kal-typ-dauerlauf   { border-left-color: var(--green, #1a8a3a); }
-.liste-row.kal-typ-funktionell { border-left-color: #c08010; }
-.liste-row.kal-typ-runde       { border-left-color: var(--accent); }
-.liste-row.kal-typ-event       { border-left-color: #8845c0; }
 .liste-date { font-weight: 600; color: var(--text); white-space: nowrap; }
 .liste-date-today {
   background: var(--primary); color: var(--on-primary);
@@ -518,7 +499,6 @@
 
 /* Wettkampf-Zeile (Forecast / Serie) – Farbe folgt dem konfigurierten Wettkampf-Typ */
 .liste-row.liste-row-wettkampf { border-left-color: #27ae60; }
-.liste-row.kal-typ-wettkampf   { border-left-color: #27ae60; }
 .liste-typ-wettkampf {
   background: color-mix(in srgb, #27ae60 16%, var(--surface)); color: #1e8449;
 }
@@ -1331,10 +1311,6 @@ body.planung-active #app-footer    { display: none; }
   font-size: 10px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .8px; color: var(--text2); margin-bottom: 4px;
 }
-.kal-pop-typ.kal-typ-intervall   { color: var(--primary); }
-.kal-pop-typ.kal-typ-dauerlauf   { color: var(--green, #1a8a3a); }
-.kal-pop-typ.kal-typ-funktionell { color: #c08010; }
-.kal-pop-typ.kal-typ-event       { color: #8845c0; }
 .kal-pop-titel {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800; font-size: 17px; letter-spacing: .2px;
@@ -1514,17 +1490,11 @@ body.planung-active #app-footer    { display: none; }
    Mein Plan – privater Trainingsplan
    ============================================================ */
 
-/* Private Kalender-Einträge: invertierter Hintergrund (Typ-Farbe als Füllung) */
+/* Private Kalender-Einträge: invertierter Hintergrund (Kalenderfarbe als
+   Füllung) – wird dynamisch per .kal-cal-{key} injiziert. */
 .kal-item.is-privat {
   border-left-style: solid;
 }
-.kal-item.is-privat.kal-typ-intervall    { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); }
-.kal-item.is-privat.kal-typ-dauerlauf    { background: color-mix(in srgb, var(--green, #1a8a3a) 14%, var(--surface)); }
-.kal-item.is-privat.kal-typ-funktionell  { background: color-mix(in srgb, #c08010 14%, var(--surface)); }
-.kal-item.is-privat.kal-typ-runde        { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
-.kal-item.is-privat.kal-typ-event        { background: color-mix(in srgb, #8845c0 14%, var(--surface)); }
-.kal-item.is-privat.kal-typ-frei         { background: color-mix(in srgb, var(--text2) 10%, var(--surface)); }
-.kal-item.is-privat.kal-typ-kein_training { background: none; }
 
 /* Km-Badge auf privaten Einträgen */
 .kal-item-km {
@@ -1576,6 +1546,17 @@ body.planung-active #app-footer    { display: none; }
   border-radius: 2px;
   width: 14px; height: 10px;
 }
+/* Farbwähler je Kalender (Athlet überschreibt für sich) */
+.kal-legend-color {
+  width: 16px; height: 16px; flex-shrink: 0; padding: 0;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: none; cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.kal-legend-color::-webkit-color-swatch-wrapper { padding: 0; }
+.kal-legend-color::-webkit-color-swatch { border: none; border-radius: 50%; }
+.kal-legend-color::-moz-color-swatch { border: none; border-radius: 50%; }
+.kal-legend-color.has-override { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.kal-legend-name { cursor: pointer; }
 
 /* Rückwärtskompatibilität (alte Klassen werden nicht mehr gerendert, aber defensive Keep) */
 .meinplan-legend { display: none; }
@@ -1820,6 +1801,16 @@ body.planung-active #app-footer    { display: none; }
   background: transparent; border-color: transparent; color: var(--text2);
 }
 .planung-tab-config:hover { background: var(--bg2, #f4f4f5); color: var(--text); }
+/* Tab mit Standard-Kalenderfarbe (Trainer setzt sie hier) */
+.planung-tab-wrap { display: inline-flex; align-items: flex-end; gap: 3px; }
+.planung-tab-color {
+  width: 14px; height: 14px; padding: 0; margin-bottom: 4px;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: none; cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.planung-tab-color::-webkit-color-swatch-wrapper { padding: 0; }
+.planung-tab-color::-webkit-color-swatch { border: none; border-radius: 50%; }
+.planung-tab-color::-moz-color-swatch { border: none; border-radius: 50%; }
 .planung-gruppen-hint {
   font-size: 12px; color: var(--text2, #71717a);
 }
