@@ -557,7 +557,7 @@ async function renderKalender(main, monthArg) {
             const hAttr   = sid
               ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${sid},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`
               : '';
-            return `<div class="kal-item kal-cal-wettkampf is-privat" data-privat-id="${e.id}"
+            return `<div class="kal-item kal-cal-${kalKeyFor(e)} is-privat" data-privat-id="${e.id}"
                          ${sid ? `data-serie-id="${sid}"` : ''} ${hAttr}>
               <span class="kal-item-title">${escapeHtml(e.titel)}</span>
               ${kmBadge}

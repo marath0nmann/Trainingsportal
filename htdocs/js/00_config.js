@@ -108,10 +108,13 @@ var KAL_FARBE_FALLBACK = { teamplan: '#cc0000', meinplan: '#5b8def', wettkampf: 
 var KAL_GRUPPE_PALETTE = ['#003087', '#1a8a3a', '#c08010', '#8845c0', '#0d8a8a', '#b0306a'];
 
 // Kalender-Key einer Einheit bestimmen.
+// Reihenfolge wichtig: Eigene Plan-Einträge (auch Wettkampf-Teilnahmen)
+// gehören in den persönlichen Kalender „Mein Plan". Nur die öffentlichen
+// (prognostizierten) Wettkämpfe nutzen den Wettkampf-Kalender.
 function kalKeyFor(e) {
   if (!e) return 'teamplan';
-  if (e.typ === 'wettkampf') return 'wettkampf';
   if (e._privat) return 'meinplan';
+  if (e.typ === 'wettkampf') return 'wettkampf';
   if (e.gruppe_id != null) return 'g' + e.gruppe_id;
   return 'teamplan';
 }
