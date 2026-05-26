@@ -44,7 +44,7 @@ const WEG = (() => {
   // km-Zahl formatieren: 5.5 → "5,5 km"
   function fmtKm(km) {
     if (km == null || !isFinite(km)) return '–';
-    return km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' km';
+    return km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + 'km';
   }
 
   return { load, invalidate, wegKm, fmtKm };

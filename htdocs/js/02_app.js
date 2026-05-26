@@ -520,7 +520,7 @@ async function renderKalender(main, monthArg) {
   const rows = weeks.map(({ dates, kw, kmSum }) => {
     const kwCell = angemeldet ? `<div class="meinplan-kw-cell">
       <span class="meinplan-kw-num">KW&nbsp;${kw}</span>
-      <span class="meinplan-kw-km${kmSum > 0 ? ' has-km' : ''}">${kmSum > 0 ? (kmSum % 1 === 0 ? kmSum : kmSum.toFixed(1)) + '&thinsp;km' : '–'}</span>
+      <span class="meinplan-kw-km${kmSum > 0 ? ' has-km' : ''}">${kmSum > 0 ? (kmSum % 1 === 0 ? kmSum : kmSum.toFixed(1)) + 'km' : '–'}</span>
     </div>` : '';
 
     const cells = dates.map(k => {
@@ -547,7 +547,7 @@ async function renderKalender(main, monthArg) {
           const _ekm = _effektivKm(e);
           const _isFallback = _ekm !== null && (e.distanz_km === null || e.distanz_km === undefined);
           const kmBadge = (_ekm !== null && _ekm > 0)
-            ? `<span class="kal-item-km${_isFallback ? ' is-fallback-km' : ''}">${_ekm % 1 === 0 ? _ekm : _ekm.toFixed(1)}&thinsp;km</span>`
+            ? `<span class="kal-item-km${_isFallback ? ' is-fallback-km' : ''}">${_ekm % 1 === 0 ? _ekm : _ekm.toFixed(1)}km</span>`
             : '';
 
           // ── Persönliche Wettkampf-Teilnahme: Hover-Popover, kein Drag ──
@@ -856,7 +856,7 @@ function renderHeuteSektionHtml(items, privatItems = [], heading = 'Heute') {
             <span class="heute-badge heute-badge-privat">Mein Plan</span>
           </div>
           <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-          ${km ? `<div class="heute-card-info">${km % 1 === 0 ? km : parseFloat(km).toFixed(1)}&thinsp;km</div>` : ''}
+          ${km ? `<div class="heute-card-info">${km % 1 === 0 ? km : parseFloat(km).toFixed(1)}km</div>` : ''}
           ${e.bemerkung ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
         </div>
       </div>`;
@@ -1387,7 +1387,7 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
     const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
     const splitSek = sekProKm != null ? sekProKm * (s.distanz_m / 1000) : null;
     const paceStr  = splitSek != null ? PACE.formatTime(splitSek) : '';
-    const distStr  = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
+    const distStr  = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + 'km' : s.distanz_m + 'm';
     const PAUSE_LABEL = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' };
     for (let i = 0; i < wdh; i++) {
       const tip = `${wdh > 1 ? (i + 1) + ' / ' + wdh + ' · ' : ''}${distStr}${s.pace_referenz ? ' · ' + s.pace_referenz : ''}${paceStr ? ' · ' + paceStr : ''}`;
@@ -1403,7 +1403,7 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
   const PAUSE_LBL = { TP: 'Trabpause', GP: 'Gehpause', BP: 'Blockpause', frei: 'Pause' };
   const summaryHtml = seg.map(s => {
     const wdh     = s.wiederholungen || 1;
-    const distStr = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + ' km' : s.distanz_m + ' m';
+    const distStr = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + 'km' : s.distanz_m + 'm';
     let line = (wdh > 1 ? wdh + ' × ' : '') + distStr;
 
     // Pace: entweder berechnete Pace oder Referenz-Label
@@ -1700,7 +1700,7 @@ async function renderListe(main, quarterArg) {
       const ekm = _effektivKm(e);
       const isFallback = ekm !== null && (e.distanz_km === null || e.distanz_km === undefined);
       if (ekm !== null && ekm > 0) {
-        lastCell = `<span class="liste-km${isFallback ? ' is-fallback-km' : ''}">${ekm % 1 === 0 ? ekm : ekm.toFixed(1)}&thinsp;km</span>`;
+        lastCell = `<span class="liste-km${isFallback ? ' is-fallback-km' : ''}">${ekm % 1 === 0 ? ekm : ekm.toFixed(1)}km</span>`;
       }
     }
     const meinDot = istPrivat ? '<span class="liste-mein-dot" title="Mein Plan"></span>' : '';
@@ -1753,7 +1753,7 @@ async function renderListe(main, quarterArg) {
 
     const km = Math.round(week.kmSum * 10) / 10;
     const kmBadge = (angemeldet && km > 0)
-      ? `<span class="liste-kw-km" title="Wochenkilometer (Mein Plan)">${km % 1 === 0 ? km : km.toFixed(1)}&thinsp;km</span>`
+      ? `<span class="liste-kw-km" title="Wochenkilometer (Mein Plan)">${km % 1 === 0 ? km : km.toFixed(1)}km</span>`
       : '';
 
     const isCurrentKW = week.weekNum === currentKW && isoWeekYear(week.weekStart) === currentKWY;
@@ -1815,7 +1815,7 @@ async function zeigeEinheit(id) {
     }, 0) / 1000;
     let kmHtml = '';
     if (trainingsKm > 0 || wegKm != null) {
-      const fmtKm = km => km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' km';
+      const fmtKm = km => km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + 'km';
       if (wegKm != null && trainingsKm > 0) {
         const total = trainingsKm + wegKm;
         kmHtml = `<div class="modal-row"><span class="modal-label">Kilometer</span>

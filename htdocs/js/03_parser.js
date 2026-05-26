@@ -136,9 +136,9 @@ const PARSER = (() => {
       const txt = Number.isInteger(km)
         ? String(km)
         : km.toFixed(2).replace(/0+$/, '').replace(/\.$/, '').replace('.', ',');
-      return txt + ' km';
+      return txt + 'km';
     }
-    return m + ' m';
+    return m + 'm';
   }
 
   // Pace-Referenz Optionen für Editor-Dropdown (statischer Fallback; Editor nutzt PACE.getOptions())

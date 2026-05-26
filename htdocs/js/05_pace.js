@@ -33,9 +33,9 @@ const PACE = (() => {
     if (m >= 1000) {
       const km = m / 1000;
       const s  = Number.isInteger(km) ? String(km) : km.toFixed(1).replace('.', ',');
-      return s + ' km';
+      return s + 'km';
     }
-    return m + ' m';
+    return m + 'm';
   }
 
   async function load(force) {

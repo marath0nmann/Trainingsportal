@@ -754,9 +754,9 @@ const BLOECKE = (() => {
 
   function formatDistanz(m) {
     if (!m) return null;
-    if (m < 1000) return m + ' m';
+    if (m < 1000) return m + 'm';
     const km = m / 1000;
-    return km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' km';
+    return km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + 'km';
   }
 
   function aktualisiereGesamtdistanz() {

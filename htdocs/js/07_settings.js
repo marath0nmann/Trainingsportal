@@ -299,7 +299,7 @@ const SETTINGS = (() => {
     wrap.innerHTML = paceDistanzen.map((m, i) => {
       const label = LABELS[m] ? ` <span style="color:var(--text2);font-size:12px">(${LABELS[m]})</span>` : '';
       return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
-        '<span style="font-size:13px;font-weight:600;min-width:80px">' + escapeHtml(String(m)) + ' m' + label + '</span>' +
+        '<span style="font-size:13px;font-weight:600;min-width:80px">' + escapeHtml(String(m)) + 'm' + label + '</span>' +
         '<button class="btn" style="padding:2px 8px;font-size:14px;line-height:1" onclick="SETTINGS.paceDistanzEntfernen(' + i + ')" title="Entfernen">×</button>' +
       '</div>';
     }).join('');
@@ -589,10 +589,10 @@ const SETTINGS = (() => {
             ${t.block_count} ${t.block_count === 1 ? 'Block' : 'Blöcke'}
           </td>
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
-            ${t.fallback_km != null ? t.fallback_km + '&thinsp;km' : '–'}
+            ${t.fallback_km != null ? t.fallback_km + 'km' : '–'}
           </td>
           <td style="padding:6px 8px;text-align:center;color:var(--text2);font-size:12px">
-            ${t.default_dauer_min != null ? t.default_dauer_min + '&thinsp;min' : '–'}
+            ${t.default_dauer_min != null ? t.default_dauer_min + 'min' : '–'}
           </td>
           <td style="padding:6px 8px;text-align:left;color:var(--text2);font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
             ${escapeHtml((TREFFPUNKTE.getListe().find(tp => String(tp.id) === String(t.default_treffpunkt_id ?? '')) || {}).name || '–')}

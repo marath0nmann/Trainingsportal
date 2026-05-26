@@ -2081,7 +2081,7 @@ function formatDistText(int $m): string {
     if ($m >= 1000) {
         $km = $m / 1000;
         if ($km == (int)$km) return ((int)$km) . ' km';
-        return rtrim(rtrim(number_format($km, 2, ',', ''), '0'), ',') . ' km';
+        return rtrim(rtrim(number_format($km, 2, ',', ''), '0'), ',') . 'km';
     }
     return $m . ' m';
 }
