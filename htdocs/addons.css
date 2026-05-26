@@ -474,6 +474,19 @@
 #liste-legend:not(:empty) { margin-bottom: 14px; }
 #liste-legend .kal-legend { margin-top: 0; justify-content: flex-start; }
 
+/* Aktuelle KW hervorheben */
+.liste-week-block.is-current-kw {
+  border-color: var(--primary);
+}
+.liste-week-block.is-current-kw .liste-kw-head {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surf2));
+  border-bottom-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+}
+.liste-week-block.is-current-kw .liste-kw-badge {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
 /* Wochenkilometer-Badge im KW-Kopf */
 .liste-kw-km {
   margin-left: auto;

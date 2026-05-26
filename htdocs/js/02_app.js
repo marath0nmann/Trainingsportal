@@ -1624,7 +1624,10 @@ async function renderListe(main, quarterArg) {
 
   const WOCHENTAG_KURZ = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
   const MONAT_KURZ = ['Jan.','Feb.','März','Apr.','Mai','Jun.','Jul.','Aug.','Sep.','Okt.','Nov.','Dez.'];
-  const todayKey = ymd(new Date());
+  const todayKey    = ymd(new Date());
+  const _todayDate  = new Date();
+  const currentKW   = isoWeek(_todayDate);
+  const currentKWY  = isoWeekYear(_todayDate);
 
   // Nach ISO-Kalenderwoche gruppieren (nur Tage innerhalb des Quartals)
   const byWeek = new Map(); // "YYYY-WW" → { weekNum, weekStart, days:[], kmSum }
@@ -1753,7 +1756,8 @@ async function renderListe(main, quarterArg) {
       ? `<span class="liste-kw-km" title="Wochenkilometer (Mein Plan)">${km % 1 === 0 ? km : km.toFixed(1)}&thinsp;km</span>`
       : '';
 
-    html += `<div class="liste-week-block">
+    const isCurrentKW = week.weekNum === currentKW && isoWeekYear(week.weekStart) === currentKWY;
+    html += `<div class="liste-week-block${isCurrentKW ? ' is-current-kw' : ''}">
       <div class="liste-kw-head">
         <span class="liste-kw-badge">KW ${week.weekNum}</span>
         <span class="liste-kw-range">${escapeHtml(rangeStr)}</span>
