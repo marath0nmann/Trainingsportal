@@ -919,6 +919,25 @@ function trainingSettingsKeys(): array {
             'beschreibung' => 'Wenn aktiv (1), wird die Versionsnummer nur eingeloggten Admins angezeigt',
             'default'  => '',
         ],
+        // Footer-Rechtsseiten – geteilt mit dem Statistikportal (gleiche einstellungen-Keys)
+        'footer_datenschutz_text' => [
+            'label'    => 'Footer: Datenschutz-Text',
+            'gruppe'   => 'footer',
+            'beschreibung' => 'Markdown der Datenschutz-Seite (im Footer verlinkt)',
+            'default'  => '',
+        ],
+        'footer_nutzung_text' => [
+            'label'    => 'Footer: Nutzungsbedingungen-Text',
+            'gruppe'   => 'footer',
+            'beschreibung' => 'Markdown der Nutzungsbedingungen-Seite (im Footer verlinkt)',
+            'default'  => '',
+        ],
+        'footer_impressum_text' => [
+            'label'    => 'Footer: Impressum-Text',
+            'gruppe'   => 'footer',
+            'beschreibung' => 'Markdown der Impressum-Seite (im Footer verlinkt)',
+            'default'  => '',
+        ],
     ];
 }
 

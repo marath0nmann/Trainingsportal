@@ -44,6 +44,7 @@ function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = '';
   fillUserBadge();
+  buildFooter();
   renderPage();
 }
 
@@ -168,6 +169,12 @@ function renderPage() {
   // Aktiv-Markierung der Navigation aktualisieren
   if (state.user) fillUserBadge();
 
+  // Rechtliches (öffentlich, ohne Login) – vor den Login-Checks behandeln
+  if (FOOTER_LEGAL[state.tab]) {
+    renderLegalPage(state.tab);
+    return;
+  }
+
   if (state.tab === 'kalender') {
     renderKalender(main, args && args[0]);
     return;
@@ -258,6 +265,142 @@ function renderAdminPage(main, subTab) {
 
 function navigateAdmin(subTab) {
   location.hash = '#admin/' + subTab;
+}
+
+// ============================================================
+// Footer (1:1 aus dem Statistikportal übernommen)
+// ------------------------------------------------------------
+// Datengetrieben über die gemeinsame `einstellungen`-Tabelle:
+//   footer_*_url  → externe Linkziele (optional)
+//   footer_*_text → Markdown der Rechtsseiten (mit Default-Fallback)
+// Beide Portale teilen sich diese Keys.
+// ============================================================
+var FOOTER_DEFAULT_DS  = "# Datenschutzerklärung\n\n**Stand: 2026**\n\n## 1. Verantwortlicher\nVerantwortlich für diese Anwendung ist der Verein [Vereinsname]\n\n## 2. Erhobene Daten\nDiese Anwendung verarbeitet ausschließlich Daten, die zur Darstellung von Leichtathletik-Ergebnissen und Vereinsstatistiken erforderlich sind:\n- Athleten-Namen und Wettkampfergebnisse (öffentlich zugänglich)\n- Benutzerdaten registrierter Nutzer (Name, E-Mail-Adresse) zur Authentifizierung\n\n## 3. Keine Weitergabe an Dritte\nPersonenbezogene Daten werden nicht an Dritte weitergegeben.\n\n## 4. Hosting\nDie Anwendung wird auf Servern von all-inkl.com (ALL-INKL.COM – Neue Medien Münnich) in Deutschland betrieben.\n\n## 5. Kontakt\nBei Fragen zur Datenverarbeitung wenden Sie sich bitte an die Vereinsverantwortlichen.";
+var FOOTER_DEFAULT_NU  = "# Nutzungsbedingungen\n\n**Stand: 2026**\n\n## 1. Nutzung\nDiese Anwendung dient der internen Vereinsstatistik des [Vereinsname] Die Nutzung ist Vereinsmitgliedern und autorisierten Personen vorbehalten.\n\n## 2. Inhalte\nDie dargestellten Ergebnisse und Athletendaten sind vereinseigene Daten. Eine Weiterverwendung oder Veröffentlichung bedarf der Genehmigung des Vereins.\n\n## 3. Technische Verfügbarkeit\nDer Betreiber übernimmt keine Gewähr für die ständige Verfügbarkeit der Anwendung.\n\n## 4. Änderungen\nDiese Nutzungsbedingungen können jederzeit angepasst werden.";
+var FOOTER_DEFAULT_IMP = "# Impressum\n\n**Angaben gemäß § 5 TMG**\n\n[Vereinsname] – Leichtathletik-Abteilung\n\n*Bitte vervollständigen Sie das Impressum mit Ihrer Vereinsanschrift und einem Verantwortlichen.*\n\n## Kontakt\nE-Mail: [Ihre E-Mail-Adresse]\n\n## Vereinsregister\nEingetragen im Vereinsregister.\nRegistergericht: [Ihr Registergericht]\n\n## Inhaltlich Verantwortlicher\n[Name des Verantwortlichen gemäß § 55 Abs. 2 RStV]";
+
+var FOOTER_LEGAL = {
+  datenschutz: { titel: 'Datenschutz',          urlKey: 'footer_datenschutz_url', textKey: 'footer_datenschutz_text', def: FOOTER_DEFAULT_DS },
+  nutzung:     { titel: 'Nutzungsbedingungen',  urlKey: 'footer_nutzung_url',      textKey: 'footer_nutzung_text',     def: FOOTER_DEFAULT_NU },
+  impressum:   { titel: 'Impressum',            urlKey: 'footer_impressum_url',    textKey: 'footer_impressum_text',   def: FOOTER_DEFAULT_IMP },
+};
+
+function buildFooter() {
+  var el = document.getElementById('app-footer');
+  if (!el) return;
+  var cfg = window.appConfig || {};
+  var ghUrl = 'https://github.com/marath0nmann/Trainingsportal';
+  var authorUrl = 'https://webdev.danielweyers.de';
+  var linkStyle = 'color:inherit;text-decoration:underline;text-underline-offset:2px;opacity:.7;';
+  // Externe URL (neuer Tab) oder interne Hash-Route als Fallback
+  function footerLink(type, label) {
+    var url = cfg[FOOTER_LEGAL[type].urlKey] || '';
+    if (url) {
+      return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" style="' + linkStyle + '">' + label + '</a>';
+    }
+    return '<a href="#' + type + '" style="' + linkStyle + '">' + label + '</a>';
+  }
+  var legalLine = footerLink('datenschutz', 'Datenschutz') + ' &nbsp;&middot;&nbsp; ' +
+                  footerLink('nutzung',     'Nutzungsbedingungen') + ' &nbsp;&middot;&nbsp; ' +
+                  footerLink('impressum',   'Impressum');
+  el.innerHTML =
+    '<div>Powered by <a href="' + ghUrl + '" target="_blank" rel="noopener" style="' + linkStyle + '">Trainingsportal</a> &copy; 2026 <a href="' + authorUrl + '" target="_blank" rel="noopener" style="' + linkStyle + '">Daniel Weyers</a></div>' +
+    '<div>' + legalLine + '</div>';
+}
+
+function renderLegalPage(type) {
+  var meta = FOOTER_LEGAL[type];
+  if (!meta) { location.replace(startHash()); return; }
+  var cfg = window.appConfig || {};
+  var text = cfg[meta.textKey] || meta.def || '';
+  // Einfaches Markdown → HTML (h1, h2, bold, italic, Listen)
+  function mdToHtml(md) {
+    var lines = String(md).split('\n');
+    var out = [];
+    var inUl = false;
+    for (var li = 0; li < lines.length; li++) {
+      var l = lines[li].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      if (l.match(/^# /)) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        out.push('<h1 style="font-size:22px;font-weight:700;margin:16px 0 10px;color:var(--primary)">' + l.slice(2) + '</h1>');
+      } else if (l.match(/^## /)) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        out.push('<h2 style="font-size:16px;font-weight:700;margin:20px 0 6px;color:var(--text)">' + l.slice(3) + '</h2>');
+      } else if (l.match(/^- /)) {
+        if (!inUl) { out.push('<ul style="margin:8px 0 8px 20px">'); inUl = true; }
+        out.push('<li style="margin:4px 0">' + l.slice(2) + '</li>');
+      } else {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        out.push(l === '' ? '<br>' : '<p style="margin:6px 0">' + l + '</p>');
+      }
+    }
+    if (inUl) out.push('</ul>');
+    return out.join('\n')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>');
+  }
+  var html = '<p style="margin:8px 0">' + mdToHtml(text) + '</p>';
+  var isAdmin = state.user && state.user.rolle === 'admin';
+  var main = document.getElementById('main-content');
+  if (!main) return;
+  main.innerHTML =
+    '<div style="max-width:720px;margin:0 auto;padding:16px">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">' +
+        '<button class="btn btn-ghost btn-sm" onclick="history.back()" style="white-space:nowrap">&#x2190; Zurück</button>' +
+        (isAdmin ? '<button class="btn btn-ghost btn-sm" onclick="editLegalPage(&quot;' + type + '&quot;)" style="white-space:nowrap">&#x270F;&#xFE0E; Bearbeiten</button>' : '') +
+      '</div>' +
+      '<div class="panel" style="padding:28px 32px">' + html + '</div>' +
+    '</div>';
+}
+
+function editLegalPage(type) {
+  var meta = FOOTER_LEGAL[type];
+  if (!meta) return;
+  var cfg = window.appConfig || {};
+  var current = cfg[meta.textKey] || meta.def || '';
+  var cont = document.getElementById('modal-container');
+  if (!cont) return;
+  cont.innerHTML =
+    '<div class="modal-overlay" onclick="schliesseModal(event)">' +
+      '<div class="modal-card" onclick="event.stopPropagation()">' +
+        '<div class="modal-head">' +
+          '<div><div class="modal-title">' + escapeHtml(meta.titel) + ' bearbeiten</div></div>' +
+          '<button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>' +
+        '</div>' +
+        '<div class="modal-body">' +
+          '<p style="font-size:12px;color:var(--text2);margin:0 0 12px">Markdown wird unterstützt: # Überschrift, ## Unterüberschrift, **fett**, *kursiv*, - Liste</p>' +
+          '<textarea id="legal-edit-ta" style="width:100%;height:360px;box-sizing:border-box;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-family:monospace;font-size:13px;background:var(--surf2);color:var(--text);resize:vertical">' + escapeHtml(current) + '</textarea>' +
+          '<div class="modal-actions">' +
+            '<button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>' +
+            '<button class="btn btn-ghost" onclick="resetLegalPage(&quot;' + type + '&quot;)">&#x21BA; Standard</button>' +
+            '<button class="btn btn-primary" onclick="saveLegalPage(&quot;' + type + '&quot;)">&#x1F4BE; Speichern</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+async function saveLegalPage(type) {
+  var meta = FOOTER_LEGAL[type];
+  var ta = document.getElementById('legal-edit-ta');
+  if (!meta || !ta) return;
+  var payload = { werte: {} };
+  payload.werte[meta.textKey] = ta.value;
+  try {
+    await apiPut('admin/settings', payload);
+    window.appConfig[meta.textKey] = ta.value;
+    schliesseModal();
+    benachrichtigen('Gespeichert.', 'ok');
+    renderLegalPage(type);
+  } catch (e) {
+    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+  }
+}
+
+function resetLegalPage(type) {
+  var meta = FOOTER_LEGAL[type];
+  var ta = document.getElementById('legal-edit-ta');
+  if (meta && ta) ta.value = meta.def || '';
 }
 
 // ============================================================
