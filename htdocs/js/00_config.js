@@ -149,6 +149,11 @@ function applyTypenFarben(typen) {
     lines.push('.kal-pop-typ.kal-typ-'        + s + ' { color: var(--tf) !important; }');
     lines.push('.liste-row.kal-typ-'          + s + ' { border-left-color: var(--tf) !important; }');
     lines.push('.liste-typ-'                  + s + ' { background: color-mix(in srgb, var(--tf) 14%, var(--surface)); color: var(--tf) !important; }');
+    // Wettkampf-Kalender-Popover (wk-popover trägt kal-typ-{slug})
+    lines.push('.wk-popover.kal-typ-'         + s + ' .wk-pop-btn { border-color: var(--tf) !important; background: color-mix(in srgb, var(--tf) 12%, transparent) !important; }');
+    lines.push('.wk-popover.kal-typ-'         + s + ' .wk-pop-btn:hover { background: color-mix(in srgb, var(--tf) 28%, transparent) !important; }');
+    lines.push('.wk-popover.kal-typ-'         + s + ' .wk-pop-btn--active { background: var(--tf) !important; border-color: var(--tf-d) !important; color: var(--tf-on) !important; }');
+    lines.push('.wk-popover.kal-typ-'         + s + ' .wk-pop-btn--active:hover { background: var(--tf-d) !important; }');
     // Nächste Wettkämpfe – wk-card trägt kal-typ-{slug} (via ladeWettkampfSektionInto)
     lines.push('.wk-card.kal-typ-'            + s + ' { border-left-color: var(--tf) !important; }');
     lines.push('.wk-card.kal-typ-'            + s + ':hover { background: color-mix(in srgb, var(--tf) 8%, var(--surface)) !important; }');

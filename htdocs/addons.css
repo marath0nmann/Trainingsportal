@@ -109,7 +109,8 @@
 .kal-item.kal-typ-funktionell  { border-left-color: #c08010; }
 .kal-item.kal-typ-runde        { border-left-color: var(--accent); }
 .kal-item.kal-typ-event        { border-left-color: #8845c0; }
-.kal-item.kal-typ-wettkampf   { border-left-color: #27ae60; background: rgba(46,204,113,.15); }
+.kal-item.kal-typ-wettkampf              { border-left-color: #27ae60; }
+.kal-item.is-privat.kal-typ-wettkampf   { background: rgba(46,204,113,.15); }
 .kal-item.kal-typ-kein_training {
   border-left-color: var(--border); opacity: .65; font-style: italic;
 }
@@ -515,8 +516,9 @@
 }
 .liste-km.is-fallback-km { opacity: .6; font-style: italic; }
 
-/* Wettkampf-Zeile (Forecast / Serie) */
+/* Wettkampf-Zeile (Forecast / Serie) – Farbe folgt dem konfigurierten Wettkampf-Typ */
 .liste-row.liste-row-wettkampf { border-left-color: #27ae60; }
+.liste-row.kal-typ-wettkampf   { border-left-color: #27ae60; }
 .liste-typ-wettkampf {
   background: color-mix(in srgb, #27ae60 16%, var(--surface)); color: #1e8449;
 }

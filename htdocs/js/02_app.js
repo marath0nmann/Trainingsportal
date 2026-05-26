@@ -598,9 +598,8 @@ async function renderKalender(main, monthArg) {
             const emoji  = isFest ? '🏆' : '🏆?';
             const hint   = isFest ? ' (fester Termin)' : ' (Prognosedatum – noch nicht bestätigt)';
             const canAdd = !!state.user;
-            return `<div class="kal-item" data-serie-id="${s.id}"
-              style="background:rgba(46,204,113,.15);border-left:3px solid #27ae60;
-                     color:var(--text);cursor:${canAdd ? 'pointer' : 'default'}"
+            return `<div class="kal-item kal-typ-${escapeHtml(s.typ || 'wettkampf')} is-privat" data-serie-id="${s.id}"
+              style="cursor:${canAdd ? 'pointer' : 'default'}"
               ${canAdd ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${s.id},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"` : ''}>
               <span class="kal-item-title">${emoji} ${escapeHtml(name)}</span>
             </div>`;
@@ -676,7 +675,7 @@ function _renderKalLegend() {
       <label class="kal-legend-item">
         <input type="checkbox" ${!kf || kf.wettkampf !== false ? 'checked' : ''}
           onchange="toggleKalPlan('wettkampf', this.checked)">
-        <span class="kal-legend-dot" style="background:#27ae60;border-color:#27ae60"></span>Wettkämpfe
+        <span class="kal-legend-dot" style="background:${_wkFarbe('wettkampf')};border-color:${_wkFarbe('wettkampf')}"></span>Wettkämpfe
       </label>
     </div>`;
   }
@@ -699,7 +698,7 @@ function _renderKalLegend() {
     <label class="kal-legend-item">
       <input type="checkbox" ${!kf || kf.wettkampf !== false ? 'checked' : ''}
         onchange="toggleKalPlan('wettkampf', this.checked)">
-      <span class="kal-legend-dot" style="background:#27ae60;border-color:#27ae60"></span>Wettkämpfe
+      <span class="kal-legend-dot" style="background:${_wkFarbe('wettkampf')};border-color:${_wkFarbe('wettkampf')}"></span>Wettkämpfe
     </label>
   </div>`;
 }
@@ -1673,7 +1672,7 @@ async function renderListe(main, quarterArg) {
     const canAdd = !!state.user;
     const clickAttr = canAdd ? ` onclick="_wkPopoverToggle(${s.id}, this)"` : '';
     const prognose  = isFest ? '' : ' <span class="liste-wk-prognose">~ Prognose</span>';
-    return `<div class="liste-row liste-row-wettkampf${datum === todayKey ? ' is-today' : ''}"${clickAttr} data-serie-id="${s.id}">
+    return `<div class="liste-row liste-row-wettkampf kal-typ-${escapeHtml(s.typ || 'wettkampf')}${datum === todayKey ? ' is-today' : ''}"${clickAttr} data-serie-id="${s.id}">
       ${dateCell(datum)}
       <span class="liste-time">–</span>
       <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
@@ -1961,6 +1960,13 @@ let _wkPopSerie   = null; // ID der aktuell geöffneten Serie
 let _wkHideTimer  = null; // Verzögerungs-Timer für Hover-Hide
 let _wkPrivatMap  = {};   // datum → [{id, bemerkung}] – befüllt von renderKalender
 
+// Gibt die konfigurierte Farbe für einen Trainingstyp zurück (Fallback für 'wettkampf': #27ae60)
+function _wkFarbe(typ) {
+  const typen = (window.appConfig && Array.isArray(window.appConfig.typen)) ? window.appConfig.typen : [];
+  const t = typen.find(x => x.slug === typ);
+  return (t && t.farbe) ? t.farbe : (typ === 'wettkampf' ? '#27ae60' : null);
+}
+
 // Tap-Toggle (Listenansicht / Touch): erneutes Antippen schließt das Popover
 function _wkPopoverToggle(serieId, anchorEl) {
   if (_wkPopSerie === serieId) { _wkPopoverHide(); return; }
@@ -1996,7 +2002,7 @@ function _wkPopoverShow(serieId, anchorEl) {
   // Popover-Element aufbauen
   const pop = document.createElement('div');
   pop.id        = 'wk-popover';
-  pop.className = 'wk-popover';
+  pop.className = 'wk-popover kal-typ-' + (serie.typ || 'wettkampf');
 
   const nameEl = document.createElement('div');
   nameEl.className   = 'wk-pop-name';
