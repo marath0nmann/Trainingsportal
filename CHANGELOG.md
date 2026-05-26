@@ -1,6 +1,7 @@
 # Changelog
 
-## v176
+## v177
+- Kalenderfarben statt Trainingstypen-Farben: Einheiten werden jetzt nach Kalender eingefärbt (je Trainingsgruppe, „Mein Plan", „Wettkämpfe", „Teamplan"). Standardfarben legt der Trainer direkt an den Tabs unter „Planung" fest; jeder Athlet kann die Farben für sich in der Legende per Klick auf den Farbpunkt überschreiben (Rechtsklick = zurücksetzen). Der Farbwähler für Trainingstypen in den Einstellungen entfällt.
 - Wettkampf-Farbe vollständig dynamisch: Popover-Buttons (Disziplin-Auswahl), Kalender-Chip, Listenzeile und Legende-Punkt folgen jetzt der konfigurierten Typ-Farbe (Admin → Einstellungen) statt hartcodiertem Grün (#27ae60)
 - Fix: Team-Einheiten, die nicht im persönlichen Plan sind, erhalten keine farbige Hintergrund-Markierung mehr – nur eigene Plan-Einträge werden farbig hervorgehoben (Border-Akzent bleibt für alle sichtbar)
 - Fix: Kalender-km stimmt jetzt mit dem Modal überein – Gehpausen (`pause_m`) wurden beim Übernehmen in den persönlichen Plan nicht mitgezählt (4,8 statt 5,6 km bei 8×600m+100m); API berechnet Distanz für adoptierte Einheiten jetzt dynamisch aus den Segmenten

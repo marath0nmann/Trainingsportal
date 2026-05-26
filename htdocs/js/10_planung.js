@@ -280,6 +280,12 @@ const PLANUNG = (() => {
     };
     window.addEventListener('hashchange', _offPlanung);
 
+    // Kalenderfarben für die geplanten Gruppen injizieren (können von den
+    // eigenen Mitgliedschaften des Trainers abweichen).
+    if (typeof applyKalenderFarben === 'function') {
+      applyKalenderFarben(_gruppen.map(g => 'g' + g.id));
+    }
+
     await Promise.all([
       _activeTab === 'wettkampf' ? renderKalWettkampf() : renderKal(),
       _activeTab === 'wettkampf' ? renderSidebarWettkampf() : ladeBlocke(),
@@ -287,10 +293,23 @@ const PLANUNG = (() => {
   }
 
   // ── Gruppen-Tabs ──────────────────────────────────────────
+  // Jeder Tab trägt die Kalenderfarbe (Standard, vom Trainer setzbar).
+  function _tab(key, label, aktiv, onclick, title) {
+    const farbe = (typeof kalFarbeDefault === 'function') ? kalFarbeDefault(key) : '#888888';
+    return `<span class="planung-tab-wrap">
+      <input type="color" class="planung-tab-color" value="${farbe}"
+        title="Standard-Kalenderfarbe festlegen · Rechtsklick: zurücksetzen"
+        onclick="event.stopPropagation()"
+        onchange="PLANUNG.setDefaultFarbe('${key}', this.value)"
+        oncontextmenu="return PLANUNG.resetDefaultFarbe(event, '${key}')">
+      <button class="planung-tab${aktiv ? ' planung-tab-aktiv' : ''}" style="border-bottom:3px solid ${farbe}"
+        ${onclick}${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>
+    </span>`;
+  }
+
   function _renderGruppenTabs() {
-    const wkAktiv = _activeTab === 'wettkampf' ? ' planung-tab-aktiv' : '';
-    const wkTab   = `<button class="planung-tab${wkAktiv}" data-tab="wettkampf"
-      onclick="PLANUNG.wechsleTab('wettkampf')" title="Wettkampf-Planung">🏆&nbsp;Wettkämpfe</button>`;
+    const wkTab = _tab('wettkampf', '🏆 Wettkämpfe', _activeTab === 'wettkampf',
+      `onclick="PLANUNG.wechsleTab('wettkampf')"`, 'Wettkampf-Planung');
 
     if (!_gruppen.length) {
       return `<div class="planung-gruppen-bar">
@@ -300,16 +319,44 @@ const PLANUNG = (() => {
         ${wkTab}
       </div>`;
     }
-    const tabs = _gruppen.map(g => {
-      const aktiv = _activeTab === 'training' && aktivGruppe && aktivGruppe.id === g.id ? ' planung-tab-aktiv' : '';
-      return `<button class="planung-tab${aktiv}" data-tab="training" onclick="PLANUNG.gruppeWechseln(${g.id})">${escapeHtml(g.name)}</button>`;
-    }).join('');
+    const tabs = _gruppen.map(g =>
+      _tab('g' + g.id, g.name,
+        _activeTab === 'training' && aktivGruppe && aktivGruppe.id === g.id,
+        `onclick="PLANUNG.gruppeWechseln(${g.id})"`)
+    ).join('');
     return `<div class="planung-gruppen-bar">
       ${tabs}
       <button class="planung-tab planung-tab-config" onclick="PLANUNG.gruppenKonfigurieren()" title="Gruppen konfigurieren">⚙</button>
       <span class="planung-gruppen-sep"></span>
       ${wkTab}
     </div>`;
+  }
+
+  // Standard-Kalenderfarbe (global, für alle Athleten) setzen/zurücksetzen.
+  async function setDefaultFarbe(key, hex) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+    try {
+      const r = await apiPut('planung/kalender-farbe', { key, farbe: hex });
+      if (r && r.farben && typeof r.farben === 'object') kalFarbenDefaults = r.farben;
+      applyKalenderFarben(_gruppen.map(g => 'g' + g.id));
+      _aktualisiereTabs();
+    } catch (e) {
+      if (typeof benachrichtigen === 'function') benachrichtigen('Farbe konnte nicht gespeichert werden.', 'err');
+    }
+  }
+  async function resetDefaultFarbe(ev, key) {
+    ev.preventDefault();
+    try {
+      const r = await apiPut('planung/kalender-farbe', { key, farbe: '' });
+      if (r && r.farben && typeof r.farben === 'object') kalFarbenDefaults = r.farben;
+      applyKalenderFarben(_gruppen.map(g => 'g' + g.id));
+      _aktualisiereTabs();
+    } catch (_) {}
+    return false;
+  }
+  function _aktualisiereTabs() {
+    const bar = document.querySelector('.planung-gruppen-bar');
+    if (bar) bar.outerHTML = _renderGruppenTabs();
   }
 
   function gruppeWechseln(gruppeId) {
@@ -471,7 +518,7 @@ const PLANUNG = (() => {
 
         const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
         const itemsHtml = items.map(e => {
-          const cls    = `kal-item kal-typ-${e.typ}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
+          const cls    = `kal-item kal-cal-${kalKeyFor(e)}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
           const delBtn = kannEdit
             ? `<button class="kal-item-del" onclick="event.stopPropagation();PLANUNG.loescheEinheit(${e.id})" title="Eintrag löschen">×</button>`
             : '';
@@ -1166,5 +1213,6 @@ const PLANUNG = (() => {
     gruppeWechseln, gruppenKonfigurieren, gruppenKonfigSpeichern,
     getAktivGruppe,
     wechsleTab, loescheWkDatum,
+    setDefaultFarbe, resetDefaultFarbe,
   };
 })();

@@ -1457,6 +1457,16 @@ function handleConfig(): void {
         $cfg['typen'] = [];
     }
 
+    // Kalenderfarben (Default je Kalender, vom Trainer unter „Planung" gesetzt)
+    // gespeichert als JSON-Map { "g5":"#003087", "meinplan":"#5b8def", ... }
+    $kalFarben = [];
+    $rawKf = $cfg['training_kalender_farben'] ?? '';
+    if ($rawKf !== '') {
+        $j = json_decode((string)$rawKf, true);
+        if (is_array($j)) $kalFarben = $j;
+    }
+    $cfg['kalender_farben'] = $kalFarben;
+
     echo json_encode(['ok' => true, 'config' => $cfg]);
 }
 
@@ -4109,6 +4119,36 @@ function handlePlanung(string $method, string $tail): void
         }
     }
 
+    // ── Default-Kalenderfarbe setzen (Trainer/Admin): PUT /planung/kalender-farbe ──
+    // Body { key, farbe } → wird in die globale JSON-Einstellung
+    // `training_kalender_farben` gemerged. Leere/ungültige Farbe entfernt den Eintrag.
+    if ($tail === 'kalender-farbe' && $method === 'PUT') {
+        if (!in_array($user['rolle'] ?? '', ['admin', 'trainer'], true)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $in  = readJsonBody();
+        $key = preg_replace('/[^a-z0-9_-]/i', '', (string)($in['key'] ?? ''));
+        if ($key === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'key fehlt']);
+            return;
+        }
+        $farbe = trim((string)($in['farbe'] ?? ''));
+        $raw   = Settings::get('training_kalender_farben', '');
+        $map   = $raw !== '' ? json_decode($raw, true) : [];
+        if (!is_array($map)) $map = [];
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $farbe)) {
+            $map[$key] = strtolower($farbe);
+        } else {
+            unset($map[$key]);
+        }
+        Settings::set('training_kalender_farben', json_encode($map));
+        echo json_encode(['ok' => true, 'farben' => (object)$map]);
+        return;
+    }
+
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
 }
@@ -4126,9 +4166,37 @@ function handleKalPrefs(string $method, string $sub): void
     }
     $userId = (int)$user['id'];
 
-    if ($sub !== 'prefs') {
+    if ($sub !== 'prefs' && $sub !== 'farben') {
         http_response_code(404);
         echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
+        return;
+    }
+
+    // ── Persönliche Kalenderfarben-Overrides: GET/PUT /kal/farben ──
+    // Map { kalenderKey: "#rrggbb" } im prefs.kal_farben des Athleten.
+    if ($sub === 'farben') {
+        if ($method === 'GET') {
+            $row   = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+            $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+            if (!is_array($prefs)) $prefs = [];
+            $farben = is_array($prefs['kal_farben'] ?? null) ? $prefs['kal_farben'] : [];
+            echo json_encode(['ok' => true, 'farben' => (object)$farben]);
+            return;
+        }
+        if ($method === 'PUT') {
+            $in     = readJsonBody();
+            $farben = sanitizeKalenderFarben(is_array($in) ? $in : []);
+            $row    = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+            $prefs  = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+            if (!is_array($prefs)) $prefs = [];
+            $prefs['kal_farben'] = $farben;
+            DB::query('UPDATE ' . DB::tbl('benutzer') . ' SET prefs = ? WHERE id = ?',
+                [json_encode($prefs), $userId]);
+            echo json_encode(['ok' => true]);
+            return;
+        }
+        http_response_code(405);
+        echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
         return;
     }
 
@@ -4136,8 +4204,9 @@ function handleKalPrefs(string $method, string $sub): void
         $row   = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
         $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
         if (!is_array($prefs)) $prefs = [];
-        $kal = is_array($prefs['kal_filter'] ?? null) ? $prefs['kal_filter'] : null;
-        echo json_encode(['ok' => true, 'prefs' => $kal]);
+        $kal    = is_array($prefs['kal_filter'] ?? null) ? $prefs['kal_filter'] : null;
+        $farben = is_array($prefs['kal_farben'] ?? null) ? $prefs['kal_farben'] : [];
+        echo json_encode(['ok' => true, 'prefs' => $kal, 'farben' => (object)$farben]);
         return;
     }
 
@@ -4155,6 +4224,22 @@ function handleKalPrefs(string $method, string $sub): void
 
     http_response_code(405);
     echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+}
+
+// Validiert eine Kalenderfarben-Map: Keys [a-z0-9_-], Werte #rrggbb.
+// Ungültige Werte werden verworfen (→ entfernt den Override).
+function sanitizeKalenderFarben($in): array {
+    $out = [];
+    if (!is_array($in)) return $out;
+    foreach ($in as $key => $val) {
+        $k = preg_replace('/[^a-z0-9_-]/i', '', (string)$key);
+        if ($k === '') continue;
+        $v = trim((string)$val);
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
+            $out[$k] = strtolower($v);
+        }
+    }
+    return $out;
 }
 
 // ============================================================
