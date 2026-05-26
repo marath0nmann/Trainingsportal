@@ -167,6 +167,8 @@ const PLANUNG = (() => {
   let _gruppenGeladen = false;  // true nach erstem Laden – verhindert erneutes Laden nach leerem Speichern
   let _activeTab           = 'training'; // 'training' | 'wettkampf'
   let _wettkampfSerienCache = null;      // { ts: number, serien: [] } – 5-Min-Cache
+  let _wkTermineCache       = {};        // 'YYYY-MM' → { ts, termine, statistikportal_url }
+  let _statistikportalUrl   = '';        // aus API, gecacht
 
   // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
   function _applyPlanungLayout() {
@@ -632,8 +634,6 @@ const PLANUNG = (() => {
     const dowLast = (lastDay.getDay() + 6) % 7;
     const gridEnd = new Date(y, m + 1, 6 - dowLast);
 
-    const todayKey = ymd(new Date());
-
     col.innerHTML = `
       <div class="planung-kal-toolbar">
         <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(-1)" aria-label="Vorheriger Monat">‹</button>
@@ -642,23 +642,38 @@ const PLANUNG = (() => {
       </div>
       <div id="planung-kal-grid" class="planung-kal-loading">Lade Wettkämpfe…</div>`;
 
-    // Serien laden (gecacht)
-    const serien = await _ladeWettkampfSerien();
-
     const von = ymd(gridStart);
     const bis = ymd(gridEnd);
 
-    // Datum-Map aufbauen
+    // Serien (Forecast) + vergangene Termine parallel laden
+    const [serien, terminData] = await Promise.all([
+      _ladeWettkampfSerien(),
+      _ladeWettkampfTermine(von, bis),
+    ]);
+    const termine       = terminData.termine || [];
+    const statistikUrl  = terminData.statistikportal_url || _statistikportalUrl || '';
+    const todayKey      = ymd(new Date());
+
+    // Forecast-Map: nur aktive Serien mit zukünftigem Datum
     const wkByDate = {};
     if (typeof ADMIN_WETTKAMPF !== 'undefined') {
       serien.forEach(s => {
         if (s.aktiv === 0) return;
-        const datum = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+        const manuell = s.naechstes_datum && s.naechstes_datum >= todayKey ? s.naechstes_datum : null;
+        const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
         if (datum && datum >= von && datum <= bis) {
-          (wkByDate[datum] = wkByDate[datum] || []).push(s);
+          (wkByDate[datum] = wkByDate[datum] || []).push({ ...s, _isFest: !!manuell });
         }
       });
     }
+
+    // Historisch-Map: vergangene Veranstaltungen aus Statistikportal
+    const histByDate = {};
+    termine.forEach(t => {
+      if (t.datum <= todayKey) {
+        (histByDate[t.datum] = histByDate[t.datum] || []).push(t);
+      }
+    });
 
     const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
     const decFn    = typeof _decodeHtml === 'function' ? _decodeHtml : (s => s);
@@ -674,7 +689,8 @@ const PLANUNG = (() => {
         const k       = ymd(cursor);
         const inMonth = cursor.getMonth() === m;
         const isToday = k === todayKey;
-        const items   = wkByDate[k] || [];
+        const items    = wkByDate[k]  || [];
+        const histItems = histByDate[k] || [];
 
         const dayCls = [
           'kal-cell', 'planung-kal-cell',
@@ -683,9 +699,10 @@ const PLANUNG = (() => {
           (cursor.getDay() === 0 || cursor.getDay() === 6) ? 'weekend' : '',
         ].filter(Boolean).join(' ');
 
+        // Forecast-Chips (zukünftige / heutige Wettkämpfe)
         const itemsHtml = items.map(s => {
           const name    = decFn(s.name || s.kuerzel || '');
-          const manuell = !!s.naechstes_datum;
+          const manuell = !!s._isFest;
           const delBtn  = (kannEdit && manuell)
             ? `<button class="kal-item-del"
                 onclick="event.stopPropagation();PLANUNG.loescheWkDatum(${s.id})"
@@ -701,11 +718,24 @@ const PLANUNG = (() => {
           </div>`;
         }).join('');
 
+        // Historische Chips (vergangene Veranstaltungen aus Statistikportal)
+        const histHtml = histItems.map(t => {
+          const name    = decFn(t.serie_name || '');
+          const linkBtn = statistikUrl
+            ? ` <a class="wk-hist-link" href="${escapeHtml(statistikUrl)}/#veranstaltung/${t.id}"
+                   target="_blank" rel="noopener" onclick="event.stopPropagation()"
+                   title="Im Statistikportal öffnen">↗</a>`
+            : '';
+          return `<div class="kal-item wk-hist-item">
+            <span class="kal-item-title">🏆 ${escapeHtml(name)}${linkBtn}</span>
+          </div>`;
+        }).join('');
+
         cells.push(`
           <div class="${dayCls}" data-datum="${k}">
             <div class="kal-cell-head"><span class="kal-day-num">${cursor.getDate()}</span></div>
             <div class="kal-cell-items">
-              ${itemsHtml}
+              ${histHtml}${itemsHtml}
               ${inMonth ? '<div class="planung-drop-hint">Hier ablegen</div>' : ''}
             </div>
           </div>`);
@@ -826,6 +856,24 @@ const PLANUNG = (() => {
       return serien;
     } catch (_) {
       return [];
+    }
+  }
+
+  // ── Vergangene Veranstaltungen aus dem Statistikportal ───
+  async function _ladeWettkampfTermine(von, bis) {
+    const CACHE_MS  = 5 * 60 * 1000;
+    // Schlüssel: Monat (YYYY-MM) des Von-Datums genügt für Monats-Cache
+    const key = von.slice(0, 7);
+    const hit = _wkTermineCache[key];
+    if (hit && (Date.now() - hit.ts) < CACHE_MS) return hit;
+    try {
+      const resp = await apiGet(`wettkampf/termine?von=${von}&bis=${bis}`, { silent: true });
+      const entry = { ts: Date.now(), termine: resp.termine || [], statistikportal_url: resp.statistikportal_url || '' };
+      _wkTermineCache[key] = entry;
+      if (entry.statistikportal_url) _statistikportalUrl = entry.statistikportal_url;
+      return entry;
+    } catch (_) {
+      return { termine: [], statistikportal_url: '' };
     }
   }
 

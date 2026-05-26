@@ -520,6 +520,24 @@
   font-style: italic; opacity: .8;
 }
 
+/* Historische Wettkampf-Kacheln im Planungskalender */
+.wk-hist-item {
+  background: rgba(46,204,113,.07);
+  border-left: 3px solid #27ae60;
+  opacity: .72;
+  color: var(--text);
+}
+.wk-hist-link {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  color: #27ae60;
+  text-decoration: none;
+  vertical-align: middle;
+  opacity: .8;
+}
+.wk-hist-link:hover { opacity: 1; text-decoration: underline; }
+
 /* Heute-Karten: 2-spaltig bei mittlerer Breite (außer explizite Count-Klasse) */
 @media (max-width: 960px) and (min-width: 721px) {
   .heute-cards:not(.heute-cards-1):not(.heute-cards-2) { grid-template-columns: repeat(2, 1fr); }

@@ -4570,6 +4570,46 @@ function handleWettkampf(string $method, string $tail): void
         return;
     }
 
+    // ── GET /wettkampf/termine?von=YYYY-MM-DD&bis=YYYY-MM-DD ─────
+    // Gibt individuelle vergangene Veranstaltungen aus dem Statistikportal zurück.
+    // Öffentlich (kein Login erforderlich).
+    if ($method === 'GET' && $tail === 'termine') {
+        $von = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['von'] ?? '') ? $_GET['von'] : null;
+        $bis = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['bis'] ?? '') ? $_GET['bis'] : null;
+        if (!$von || !$bis) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Parameter von und bis (YYYY-MM-DD) erforderlich']);
+            return;
+        }
+        try {
+            $rows = DB::fetchAll(
+                "SELECT v.id, v.datum, v.ort, v.serie_id,
+                        COALESCE(vs.name, vs.kuerzel) AS serie_name
+                   FROM $tvv v
+                   JOIN $tws vs ON vs.id = v.serie_id
+                  WHERE v.datum BETWEEN ? AND ?
+                    AND v.geloescht_am IS NULL
+                    AND v.genehmigt   = 1
+                  ORDER BY v.datum ASC",
+                [$von, $bis]
+            );
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'fehler' => 'Datenbankfehler', 'detail' => $e->getMessage()]);
+            return;
+        }
+        $statistikUrl = Settings::get('statistikportal_url', '');
+        $termine = array_map(fn($r) => [
+            'id'         => (int)$r['id'],
+            'serie_id'   => (int)$r['serie_id'],
+            'serie_name' => $r['serie_name'],
+            'datum'      => $r['datum'],
+            'ort'        => $r['ort'] ?? null,
+        ], $rows);
+        echo json_encode(['ok' => true, 'termine' => $termine, 'statistikportal_url' => $statistikUrl]);
+        return;
+    }
+
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
 }
