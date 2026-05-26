@@ -624,10 +624,13 @@ async function renderKalender(main, monthArg) {
   const wettkampfSerien  = wettkampfRaw;
   const wettkampfBeiDatum  = {}; // für Forecast-Chips (gefiltert)
   const wkSerieDatumMap    = {}; // datum → [serien] für ALLE aktiven (für persönliche WK-Einträge)
+  const _heute = ymd(new Date());
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
     wettkampfSerien.forEach(s => {
       if (s.aktiv === 0) return; // Deaktivierte Wettkämpfe ausblenden
-      const datum = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+      // Vergangenes manuelles Datum ignorieren → Prognose verwenden
+      const manuell = s.naechstes_datum && s.naechstes_datum >= _heute ? s.naechstes_datum : null;
+      const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
       if (privatWettkampfDaten.has(datum)) return; // Doppeleintrag unterdrücken
       if (datum && datum >= von && datum <= bis) {
@@ -739,7 +742,7 @@ async function renderKalender(main, monthArg) {
       const wkHtml  = (showWk && wkItems.length)
         ? wkItems.map(s => {
             const name   = _decodeHtml(s.name || s.kuerzel || '');
-            const isFest = !!s.naechstes_datum;
+            const isFest = !!(s.naechstes_datum && s.naechstes_datum >= _heute);
             const emoji  = isFest ? '🏆' : '🏆?';
             const hint   = isFest ? ' (fester Termin)' : ' (Prognosedatum – noch nicht bestätigt)';
             const canAdd = !!state.user;
@@ -1110,7 +1113,8 @@ async function ladeWettkampfSektionInto(containerId) {
     .filter(s => s.aktiv !== 0 && s.aktiv !== false)
     .map(s => {
       let datum = null, modus = 'prognose';
-      if (s.naechstes_datum) {
+      const _heuteS = ymd(new Date());
+      if (s.naechstes_datum && s.naechstes_datum >= _heuteS) {
         datum = s.naechstes_datum; modus = 'manuell';
       } else if (typeof ADMIN_WETTKAMPF !== 'undefined') {
         datum = ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
@@ -1693,9 +1697,11 @@ async function _buildPlanData(von, bis) {
   const wettkampfBeiDatum = {};
   const wkSerieDatumMap   = {};
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
+    const _heuteListe = ymd(new Date());
     wettkampfRaw.forEach(s => {
       if (s.aktiv === 0) return;
-      const datum = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+      const manuellL = s.naechstes_datum && s.naechstes_datum >= _heuteListe ? s.naechstes_datum : null;
+      const datum    = manuellL || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
       if (privatWettkampfDaten.has(datum)) return;
       if (datum && datum >= von && datum <= bis) {
@@ -1860,7 +1866,7 @@ async function renderListe(main, quarterArg) {
   // Zeile für einen Wettkampf-Forecast (Serie)
   const rowWettkampf = (s, datum) => {
     const name   = _decodeHtml(s.name || s.kuerzel || '');
-    const isFest = !!s.naechstes_datum;
+    const isFest = !!(s.naechstes_datum && s.naechstes_datum >= ymd(new Date()));
     const emoji  = isFest ? '🏆' : '🏆?';
     const canAdd = !!state.user;
     const clickAttr = canAdd ? ` onclick="_wkPopoverToggle(${s.id}, this)"` : '';
@@ -2172,11 +2178,13 @@ function _wkPopoverShow(serieId, anchorEl) {
   if (typeof KAL_POPOVER !== 'undefined') KAL_POPOVER.hide();
   _wkPopSerie = serieId;
 
-  const datum = serie.naechstes_datum
+  const _heuteStr = ymd(new Date());
+  const manuell = serie.naechstes_datum && serie.naechstes_datum >= _heuteStr ? serie.naechstes_datum : null;
+  const datum   = manuell
     || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.letztes_datum) : null);
   if (!datum) { _wkNotify('Kein Termin berechenbar.', false); return; }
 
-  const isFest   = !!serie.naechstes_datum;
+  const isFest   = !!manuell;
   const name     = _decodeHtml(serie.name || serie.kuerzel || '');
   const datumFmt = new Date(datum + 'T00:00:00').toLocaleDateString('de-DE',
     { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -2296,7 +2304,9 @@ async function _wkEintragen(serieId, disziplin) {
   const serie  = serien.find(s => s.id === serieId);
   if (!serie) return;
 
-  const datum = serie.naechstes_datum
+  const _heuteWk = ymd(new Date());
+  const manuellWk = serie.naechstes_datum && serie.naechstes_datum >= _heuteWk ? serie.naechstes_datum : null;
+  const datum = manuellWk
     || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.letztes_datum) : null);
   if (!datum) return;
 

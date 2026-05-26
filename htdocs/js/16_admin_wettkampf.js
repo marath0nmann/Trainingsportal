@@ -82,8 +82,16 @@ const ADMIN_WETTKAMPF = (() => {
     return null;
   }
 
+  function _heute() {
+    const h = new Date(); h.setHours(0, 0, 0, 0);
+    return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-${String(h.getDate()).padStart(2,'0')}`;
+  }
+
   function naechstesDatum(serie) {
-    if (serie.naechstes_datum) return { datum: serie.naechstes_datum, modus: 'manuell' };
+    // Manuell gesetzter Termin nur verwenden, wenn er noch nicht vergangen ist
+    if (serie.naechstes_datum && serie.naechstes_datum >= _heute()) {
+      return { datum: serie.naechstes_datum, modus: 'manuell' };
+    }
     const p = predictNextDate(serie.letztes_datum);
     return p ? { datum: p, modus: 'prognose' } : null;
   }
