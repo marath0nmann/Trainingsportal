@@ -1,6 +1,7 @@
 # Changelog
 
-## v177
+## v178
+- Wettkampf-Teilnahmen gehören zum persönlichen Kalender: Wettkämpfe, in die sich der Athlet einträgt, werden jetzt in der „Mein Plan"-Farbe dargestellt (statt der Wettkampf-Farbe). Die Wettkampf-Farbe bleibt für die öffentlichen/prognostizierten Wettkampf-Chips reserviert.
 - Kalenderfarben statt Trainingstypen-Farben: Einheiten werden jetzt nach Kalender eingefärbt (je Trainingsgruppe, „Mein Plan", „Wettkämpfe", „Teamplan"). Standardfarben legt der Trainer direkt an den Tabs unter „Planung" fest; jeder Athlet kann die Farben für sich in der Legende per Klick auf den Farbpunkt überschreiben (Rechtsklick = zurücksetzen). Der Farbwähler für Trainingstypen in den Einstellungen entfällt.
 - Wettkampf-Farbe vollständig dynamisch: Popover-Buttons (Disziplin-Auswahl), Kalender-Chip, Listenzeile und Legende-Punkt folgen jetzt der konfigurierten Typ-Farbe (Admin → Einstellungen) statt hartcodiertem Grün (#27ae60)
 - Fix: Team-Einheiten, die nicht im persönlichen Plan sind, erhalten keine farbige Hintergrund-Markierung mehr – nur eigene Plan-Einträge werden farbig hervorgehoben (Border-Akzent bleibt für alle sichtbar)
