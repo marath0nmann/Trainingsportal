@@ -814,7 +814,7 @@ function _renderHeuteMap(tp) {
   </div>`;
 }
 
-function renderHeuteSektionHtml(items, privatItems = []) {
+function renderHeuteSektionHtml(items, privatItems = [], heading = 'Heute') {
   // ── Öffentliche / Team-Einheiten ────────────────────────
   const oeffentlichHtml = items.map(e => {
     const typLabel = getTypLabel(e.typ);
@@ -866,7 +866,7 @@ function renderHeuteSektionHtml(items, privatItems = []) {
   if (!cardsHtml) return '';
   const count    = items.length + privatItems.length;
   const countCls = count === 1 ? ' heute-cards-1' : count === 2 ? ' heute-cards-2' : '';
-  return `<div class="heute-sektion"><div class="heute-heading">Heute</div><div class="heute-cards${countCls}">${cardsHtml}</div></div>`;
+  return `<div class="heute-sektion"><div class="heute-heading">${heading}</div><div class="heute-cards${countCls}">${cardsHtml}</div></div>`;
 }
 
 async function ladeGlobalePaceWarnung(containerId) {
@@ -908,17 +908,16 @@ async function ladeGlobalePaceWarnung(containerId) {
 async function ladeHeuteSektionInto(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
-  const today = ymd(new Date());
+  const todayD   = new Date();
+  const morgenD  = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate() + 1);
+  const today    = ymd(todayD);
+  const morgen   = ymd(morgenD);
   try {
     const angemeldet = !!state.user;
     const d = angemeldet
-      ? await apiGet(`mein-plan/einheiten?von=${today}&bis=${today}`, { silent: true })
-      : await apiGet(`einheiten?von=${today}&bis=${today}`, { silent: true });
-    const items = (d.einheiten || []).filter(e => !istKeinTraining(e.typ));
-    // Eigene Einheiten ohne Teamplan-Verknüpfung (rein persönliche Termine)
-    const privatItems = angemeldet
-      ? (d.privat || []).filter(p => !p.ref_einheit_id && !istKeinTraining(p.typ))
-      : [];
+      ? await apiGet(`mein-plan/einheiten?von=${today}&bis=${morgen}`, { silent: true })
+      : await apiGet(`einheiten?von=${today}&bis=${morgen}`, { silent: true });
+
     // Adoptionsstatus: öffentliche EinheitID → private EinheitID
     if (angemeldet) {
       state._heuteAdoptedMap = {};
@@ -926,9 +925,24 @@ async function ladeHeuteSektionInto(containerId) {
         if (p.ref_einheit_id) state._heuteAdoptedMap[p.ref_einheit_id] = p.id;
       });
     }
-    const gesamt = items.length + privatItems.length;
-    el.innerHTML = gesamt ? renderHeuteSektionHtml(items, privatItems) : '';
-    if (items.length) ladHeuteDetails(items);
+
+    const allPublic = (d.einheiten || []).filter(e => !istKeinTraining(e.typ));
+    const allPrivat = angemeldet
+      ? (d.privat || []).filter(p => !p.ref_einheit_id && !istKeinTraining(p.typ))
+      : [];
+
+    const todayItems   = allPublic.filter(e => e.datum === today);
+    const todayPrivat  = allPrivat.filter(e => e.datum === today);
+    const morgenItems  = allPublic.filter(e => e.datum === morgen);
+    const morgenPrivat = allPrivat.filter(e => e.datum === morgen);
+
+    let html = '';
+    if (todayItems.length  + todayPrivat.length)  html += renderHeuteSektionHtml(todayItems,  todayPrivat,  'Heute');
+    if (morgenItems.length + morgenPrivat.length)  html += renderHeuteSektionHtml(morgenItems, morgenPrivat, 'Morgen');
+    el.innerHTML = html;
+
+    const allItems = [...todayItems, ...morgenItems];
+    if (allItems.length) ladHeuteDetails(allItems);
   } catch (e) {
     el.innerHTML = '';
   }

@@ -1,5 +1,8 @@
 # Changelog
 
+## v181
+- Sektion „Heute": zeigt jetzt auch den morgigen Tag unter der Überschrift „Morgen" – ein API-Aufruf für beide Tage, Einheiten nach Datum getrennt, eigener Heading je Sektion
+
 ## v180
 - Legende: Eine selbst gewählte Kalenderfarbe lässt sich jetzt per ↺-Knopf wieder löschen und auf die Vorgabe zurücksetzen (der Knopf erscheint neben dem Farbpunkt, sobald eine eigene Farbe gesetzt ist; Rechtsklick auf den Farbpunkt funktioniert weiterhin).
 - Wettkampf-Popover: Disziplin deaktivieren entfernt den Wettkampf sofort aus dem persönlichen Kalender – kein Bestätigungs-Dialog mehr, direktes Löschen (Plan-Eintrag + formale Anmeldung) + Kalender-Refresh
