@@ -474,7 +474,7 @@
 #liste-legend:not(:empty) { margin-bottom: 14px; }
 #liste-legend .kal-legend { margin-top: 0; justify-content: flex-start; }
 
-/* Aktuelle KW hervorheben */
+/* Aktuelle KW in der Listendarstellung hervorheben */
 .liste-week-block.is-current-kw {
   border-color: var(--primary);
 }
