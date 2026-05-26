@@ -2025,6 +2025,8 @@ function _wkPopoverShow(serieId, anchorEl) {
   clearTimeout(_wkHideTimer);
   if (_wkPopSerie === serieId) return; // bereits offen, kein Flackern
   _wkPopoverHide();
+  // Detail-Tooltip verstecken, wenn der Disziplin-Popover aufgeht
+  if (typeof KAL_POPOVER !== 'undefined') KAL_POPOVER.hide();
   _wkPopSerie = serieId;
 
   const datum = serie.naechstes_datum
@@ -2189,8 +2191,9 @@ function _disziplinKm(disziplin) {
   // "X,X km" oder "X km"
   const km = s.match(/(\d+(?:[,\.]\d+)?)\s*km/);
   if (km) return parseFloat(km[1].replace(',', '.'));
-  // Laufdistanzen in Metern: "1500m", "5000 m", "10000m" (mind. 60 m = keine Feldweiten)
-  const m = s.match(/(\d+)\s*m(?![a-z])/);
+  // Laufdistanzen in Metern: "3.000m", "1500m", "5000 m" (dt. Tausenderpunkt normalisieren)
+  const sNorm = s.replace(/(\d)\.(\d{3})(?=\s*m)/, '$1$2');
+  const m = sNorm.match(/(\d+)\s*m(?![a-z])/);
   if (m) { const v = parseInt(m[1], 10); return v >= 60 ? Math.round(v) / 1000 : null; }
   return null;
 }

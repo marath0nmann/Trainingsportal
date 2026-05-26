@@ -1,7 +1,8 @@
 # Changelog
 
-## v182
-- Listendarstellung: aktuelle Kalenderwoche wird hervorgehoben – KW-Badge in Primärfarbe, KW-Kopfzeile mit leichtem Primärfarben-Tint, Block-Rahmen in Primärfarbe
+## v183
+- Fix: Detail-Tooltip (KAL_POPOVER) wird jetzt versteckt, sobald der Wettkampf-Disziplin-Popover aufgeht – kein Tooltip und Popover gleichzeitig mehr
+- Fix: Wettkampf-Distanzen mit deutschem Tausenderpunkt (z. B. „3.000m") wurden in `_disziplinKm` falsch geparst (0 statt 3 km) und nicht zu den Wochenkilometern addiert
 
 ## v180
 - Legende: Eine selbst gewählte Kalenderfarbe lässt sich jetzt per ↺-Knopf wieder löschen und auf die Vorgabe zurücksetzen (der Knopf erscheint neben dem Farbpunkt, sobald eine eigene Farbe gesetzt ist; Rechtsklick auf den Farbpunkt funktioniert weiterhin).
