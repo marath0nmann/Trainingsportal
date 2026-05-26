@@ -2059,16 +2059,18 @@ function _wkPopoverShow(serieId, anchorEl) {
     btn.className   = 'wk-pop-btn' + (isAktiv ? ' wk-pop-btn--active' : '');
     btn.textContent = (isAktiv ? '✓ ' : '') + (d || 'Teilnahme eintragen');
     if (isAktiv) {
-      // Noch mal klicken → beide Einträge löschen
-      btn.addEventListener('click', () => {
+      // Noch mal klicken → direkt löschen (kein Confirm-Dialog, Toggle-UX)
+      btn.addEventListener('click', async () => {
         _wkPopoverHide();
-        if (existEintrag && typeof MEINPLAN !== 'undefined') MEINPLAN.loeschePrivat(existEintrag.id);
-        const delId = formalAnmId || serieDaten?.meine_anmeldung_id || null;
-        if (delId) {
-          apiDel(`wettkampf/anmeldungen/${delId}`)
-            .then(() => { _wettkampfCache = null; ladeWettkampfSektionInto('wettkampf-sektion'); })
-            .catch(() => {});
-        }
+        try {
+          const delAnmId = formalAnmId || serieDaten?.meine_anmeldung_id || null;
+          await Promise.all([
+            existEintrag ? apiDel(`mein-plan/einheiten/${existEintrag.id}`) : Promise.resolve(),
+            delAnmId     ? apiDel(`wettkampf/anmeldungen/${delAnmId}`)      : Promise.resolve(),
+          ]);
+        } catch (_) { /* optional */ }
+        _wettkampfCache = null;
+        renderPage();
       });
     } else {
       btn.addEventListener('click', () => _wkEintragen(serieId, d || ''));

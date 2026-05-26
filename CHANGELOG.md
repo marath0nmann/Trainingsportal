@@ -1,5 +1,8 @@
 # Changelog
 
+## v179
+- Wettkampf-Popover: Disziplin deaktivieren entfernt den Wettkampf sofort aus dem persönlichen Kalender – kein Bestätigungs-Dialog mehr, direktes Löschen (Plan-Eintrag + formale Anmeldung) + Kalender-Refresh
+
 ## v178
 - Wettkampf-Teilnahmen gehören zum persönlichen Kalender: Wettkämpfe, in die sich der Athlet einträgt, werden jetzt in der „Mein Plan"-Farbe dargestellt (statt der Wettkampf-Farbe). Die Wettkampf-Farbe bleibt für die öffentlichen/prognostizierten Wettkampf-Chips reserviert.
 - Kalenderfarben statt Trainingstypen-Farben: Einheiten werden jetzt nach Kalender eingefärbt (je Trainingsgruppe, „Mein Plan", „Wettkämpfe", „Teamplan"). Standardfarben legt der Trainer direkt an den Tabs unter „Planung" fest; jeder Athlet kann die Farben für sich in der Legende per Klick auf den Farbpunkt überschreiben (Rechtsklick = zurücksetzen). Der Farbwähler für Trainingstypen in den Einstellungen entfällt.
