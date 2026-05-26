@@ -4431,12 +4431,13 @@ function handleWettkampf(string $method, string $tail): void
         $serieIds = array_map(fn($s) => (int)$s['id'], $serien);
         $ph       = implode(',', array_fill(0, count($serieIds), '?'));
 
-        // Disziplinen aus Ergebnissen, sortiert nach Häufigkeit
+        // Disziplinen aus Ergebnissen, sortiert nach Häufigkeit (inkl. Distanz aus disziplin_mapping)
         $diszRows = [];
         try {
             $diszRows = DB::fetchAll(
                 "SELECT v.serie_id,
                         COALESCE(dm.anzeige_name, e.disziplin) AS disziplin,
+                        MAX(dm.distanz) AS distanz_m,
                         COUNT(*) AS anz
                  FROM $ter e
                  JOIN $tvv v  ON v.id = e.veranstaltung_id
@@ -4452,8 +4453,9 @@ function handleWettkampf(string $method, string $tail): void
             );
         } catch (\Throwable $e) { /* Disziplinen sind optional */ }
 
-        $diszBySerie = [];
-        $seenBySerie = [];
+        $diszBySerie  = [];
+        $diszDistBySerie = []; // Name → distanz_m
+        $seenBySerie  = [];
         foreach ($diszRows as $d) {
             $sid  = (int)$d['serie_id'];
             $disp = $d['disziplin'];
@@ -4461,6 +4463,9 @@ function handleWettkampf(string $method, string $tail): void
             if (in_array($disp, $seenBySerie[$sid], true)) continue;
             $seenBySerie[$sid][] = $disp;
             $diszBySerie[$sid][] = $disp;
+            if ($d['distanz_m'] !== null) {
+                $diszDistBySerie[$sid][$disp] = (int)$d['distanz_m'];
+            }
         }
 
         // Anmeldungen für alle aktiven Planungen – nur für eingeloggte Nutzer
@@ -4530,6 +4535,7 @@ function handleWettkampf(string $method, string $tail): void
                 'letztes_datum'       => $s['letztes_datum'],
                 'ort_letzter'         => $s['ort_letzter'],
                 'disziplinen'              => $diszBySerie[$sid] ?? [],
+                'disziplin_distanzen'      => (object)($diszDistBySerie[$sid] ?? []),
                 'disziplinen_extra'        => $diszExtra,
                 'disziplinen_ausgeschlossen' => $diszAusgeschlossen,
                 'planung_id'               => $pid,

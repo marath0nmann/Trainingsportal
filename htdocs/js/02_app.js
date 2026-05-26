@@ -2159,7 +2159,10 @@ async function _wkEintragen(serieId, disziplin) {
 
   const name  = _decodeHtml(serie.name || serie.kuerzel || '');
   const titel = ('🏆 ' + name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
-  const km    = _disziplinKm(disziplin);
+  // Distanz: zuerst aus disziplin_distanzen-Map der API (DB-Wert), Fallback: Name-Parsing
+  const distMap = serie.disziplin_distanzen || {};
+  const distM   = disziplin && distMap[disziplin] != null ? distMap[disziplin] : null;
+  const km      = distM !== null ? Math.round(distM) / 1000 : _disziplinKm(disziplin);
 
   try {
     await apiPost('mein-plan/einheiten', {
