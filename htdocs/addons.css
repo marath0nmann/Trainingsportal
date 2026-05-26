@@ -1556,6 +1556,15 @@ body.planung-active #app-footer    { display: none; }
 .kal-legend-color::-webkit-color-swatch { border: none; border-radius: 50%; }
 .kal-legend-color::-moz-color-swatch { border: none; border-radius: 50%; }
 .kal-legend-color.has-override { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.kal-legend-reset {
+  flex-shrink: 0; width: 16px; height: 16px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: var(--surface); color: var(--text2);
+  font-size: 11px; line-height: 1; cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.kal-legend-reset:hover { background: var(--primary); color: var(--on-primary, #fff); border-color: var(--primary); }
 .kal-legend-name { cursor: pointer; }
 
 /* Rückwärtskompatibilität (alte Klassen werden nicht mehr gerendert, aber defensive Keep) */

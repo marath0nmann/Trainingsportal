@@ -660,17 +660,23 @@ function _initKalFilter(gruppenIds, serverPrefs) {
 
 // ── Kalender-Legend (Checkboxen + Farbwähler) ───────────
 // Jeder Kalender hat einen Farb-Swatch (input type=color); der Athlet
-// kann die Farbe für sich überschreiben (Rechtsklick = zurücksetzen).
+// kann die Farbe für sich überschreiben. Ist eine eigene Farbe gesetzt,
+// erscheint ein Zurücksetzen-Knopf (↺), der auf die Vorgabe zurückführt.
 function _legendItem(key, checked, label, toggleAttr) {
   const farbe       = kalFarbe(key);
   const cbId        = 'kal-cb-' + kalKeyCss(key);
   const hasOverride = !!kalFarbenUser[key];
+  const resetBtn = hasOverride
+    ? `<button type="button" class="kal-legend-reset" title="Eigene Farbe löschen – zurück zur Vorgabe"
+        onclick="return resetKalFarbe(event, '${key}')">↺</button>`
+    : '';
   return `<span class="kal-legend-item">
     <input type="checkbox" id="${cbId}" ${checked ? 'checked' : ''} ${toggleAttr}>
     <input type="color" class="kal-legend-color${hasOverride ? ' has-override' : ''}" value="${farbe}"
-      title="Kalenderfarbe für dich ändern${hasOverride ? ' · Rechtsklick: auf Standard zurücksetzen' : ''}"
+      title="Kalenderfarbe für dich ändern${hasOverride ? ' · Rechtsklick: auf Vorgabe zurücksetzen' : ''}"
       onchange="setKalFarbe('${key}', this.value)"
       oncontextmenu="return resetKalFarbe(event, '${key}')">
+    ${resetBtn}
     <label for="${cbId}" class="kal-legend-name">${escapeHtml(label)}</label>
   </span>`;
 }
@@ -698,24 +704,25 @@ function _renderKalLegend() {
 }
 
 // ── Persönliche Kalenderfarbe setzen / zurücksetzen ──────
+// Legende an Ort und Stelle neu zeichnen (Swatch-Wert + ↺-Knopf aktualisieren).
+function _refreshKalLegend() {
+  document.querySelectorAll('.kal-legend').forEach(el => { el.outerHTML = _renderKalLegend(); });
+}
 let _kalFarbenSaveTimer = null;
 function setKalFarbe(key, hex) {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
   kalFarbenUser[key] = hex.toLowerCase();
   applyKalenderFarben((state.meineGruppen || []).map(g => 'g' + g.id));
   _saveKalFarben();
+  _refreshKalLegend();
 }
 function resetKalFarbe(ev, key) {
-  ev.preventDefault();
+  if (ev) ev.preventDefault();
   if (kalFarbenUser[key]) {
     delete kalFarbenUser[key];
     applyKalenderFarben((state.meineGruppen || []).map(g => 'g' + g.id));
     _saveKalFarben();
-  }
-  if (ev.currentTarget) {
-    ev.currentTarget.value = kalFarbe(key);
-    ev.currentTarget.classList.remove('has-override');
-    ev.currentTarget.title = 'Kalenderfarbe für dich ändern';
+    _refreshKalLegend();
   }
   return false;
 }
