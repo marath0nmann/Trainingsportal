@@ -1395,7 +1395,7 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
       if (s.pause_m) {
         const pH  = Math.round(16 + (s.pause_m / maxDist) * 40);
         const pLbl = PAUSE_LABEL[s.pause_typ] || 'Pause';
-        blocksHtml += `<div class="seg-blk seg-blk-pause" style="flex:${s.pause_m};height:${pH}px" title="${s.pause_m} m ${pLbl}"></div>`;
+        blocksHtml += `<div class="seg-blk seg-blk-pause" style="flex:${s.pause_m};height:${pH}px" title="${s.pause_m}m ${pLbl}"></div>`;
       }
     }
   });
@@ -1420,7 +1420,7 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
     // Pause
     if (s.pause_m) {
       const pLbl = PAUSE_LBL[s.pause_typ] || 'Pause';
-      line += ` · ${s.pause_m} m ${pLbl}`;
+      line += ` · ${s.pause_m}m ${pLbl}`;
     }
 
     return `<div class="seg-blk-sum-row">${line}</div>`;

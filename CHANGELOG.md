@@ -1,7 +1,7 @@
 # Changelog
 
-## v185
-- Einheitenformatierung vereinheitlicht: Leerzeichen zwischen Zahl und Einheit entfernt – überall im Frontend (JS) und Backend (PHP) jetzt „600m" statt „600 m", „3km" statt „3 km" usw.
+## v186
+- Fix: Pause-Distanz in Segment-Beschreibung (z. B. „100m Gehpause") hatte noch Leerzeichen vor „m"
 
 ## v180
 - Legende: Eine selbst gewählte Kalenderfarbe lässt sich jetzt per ↺-Knopf wieder löschen und auf die Vorgabe zurücksetzen (der Knopf erscheint neben dem Farbpunkt, sobald eine eigene Farbe gesetzt ist; Rechtsklick auf den Farbpunkt funktioniert weiterhin).
