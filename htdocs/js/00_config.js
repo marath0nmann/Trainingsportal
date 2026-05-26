@@ -142,7 +142,8 @@ function applyTypenFarben(typen) {
     lines.push('@media (prefers-color-scheme: dark) { ' + scoped(':root:not([data-theme="light"])') + ' { --tf: ' + fDark + '; --tf-d: ' + _darken(fDark, 0.15) + '; --tf-on: ' + _onColor(fDark) + '; } }');
 
     // Kalender (Monat + Heute-Card + Hover-Popover + Listenansicht)
-    lines.push('.kal-item.kal-typ-'          + s + ' { border-left-color: var(--tf) !important; background: color-mix(in srgb, var(--tf) 10%, var(--surface)) !important; }');
+    // Border-Akzent für alle Items; farbiger Hintergrund NUR für eigene Plan-Einträge (is-privat)
+    lines.push('.kal-item.kal-typ-'          + s + ' { border-left-color: var(--tf) !important; }');
     lines.push('.kal-item.is-privat.kal-typ-' + s + ' { background: color-mix(in srgb, var(--tf) 14%, var(--surface)) !important; }');
     lines.push('.heute-card.kal-typ-'         + s + ' { border-left-color: var(--tf) !important; }');
     lines.push('.kal-pop-typ.kal-typ-'        + s + ' { color: var(--tf) !important; }');
