@@ -93,7 +93,7 @@ const KAL_POPOVER = (() => {
         ? escapeHtml(JSON.stringify({ id: e.id, datum: e.datum, uhrzeit: e.uhrzeit || null, typ: e.typ, titel: e.titel }))
         : '';
       const segsJson = kannUebernehmen
-        ? escapeHtml(JSON.stringify(segs.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m }))))
+        ? escapeHtml(JSON.stringify(segs.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m, pause_m: s.pause_m ?? null }))))
         : '';
 
       const aboAktiv = zeigeAktionen && MEINPLAN.istAboAktivFuerTyp(e.typ);

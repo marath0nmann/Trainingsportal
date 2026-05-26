@@ -1,6 +1,7 @@
 # Changelog
 
-## v173
+## v174
+- Fix: Kalender-km stimmt jetzt mit dem Modal überein – Gehpausen (`pause_m`) wurden beim Übernehmen in den persönlichen Plan nicht mitgezählt (4,8 statt 5,6 km bei 8×600m+100m); API berechnet Distanz für adoptierte Einheiten jetzt dynamisch aus den Segmenten
 - „Nächste Wettkämpfe": heutiger Tag wird ab 12:00 Uhr Mittags nicht mehr angezeigt
 
 ## v172

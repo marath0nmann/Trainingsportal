@@ -3686,10 +3686,40 @@ function handleMeinPlan(string $method, string $tail): void
               ORDER BY p.datum',
             [$userId, $von, $bis]
         );
+
+        // Segment-km für adoptierte Einheiten dynamisch berechnen (distanz_m + pause_m)
+        // → Kalender und Modal zeigen immer denselben Wert
+        $refIds = array_values(array_filter(array_column($privatRows, 'ref_einheit_id')));
+        $segKmByEinheit = [];
+        if ($refIds) {
+            $placeholders = implode(',', array_fill(0, count($refIds), '?'));
+            $segRows = DB::fetchAll(
+                "SELECT einheit_id, wiederholungen, distanz_m, pause_m
+                   FROM " . DB::tbl('training_segmente') . "
+                  WHERE einheit_id IN ($placeholders)",
+                $refIds
+            );
+            foreach ($segRows as $sr) {
+                $eid = (int)$sr['einheit_id'];
+                $wdh = max(1, (int)$sr['wiederholungen']);
+                $km  = $wdh * (((int)$sr['distanz_m'] + (int)($sr['pause_m'] ?? 0)) / 1000.0);
+                $segKmByEinheit[$eid] = ($segKmByEinheit[$eid] ?? 0.0) + $km;
+            }
+        }
+        $privatMapped = array_map(function ($r) use ($segKmByEinheit) {
+            $mapped = mapPrivatEinheit($r);
+            // Berechneten km aus Segmenten nehmen wenn vorhanden (überschreibt gespeicherten Wert)
+            $refId = $mapped['ref_einheit_id'];
+            if ($refId && isset($segKmByEinheit[$refId]) && $segKmByEinheit[$refId] > 0) {
+                $mapped['distanz_km'] = round($segKmByEinheit[$refId], 2);
+            }
+            return $mapped;
+        }, $privatRows);
+
         echo json_encode([
             'ok'           => true,
             'einheiten'    => array_map('mapEinheit', $rows),
-            'privat'       => array_map('mapPrivatEinheit', $privatRows),
+            'privat'       => $privatMapped,
             'abo_typen'    => $aboTypen,
             'meine_gruppen'=> $meineGruppen,
         ]);
