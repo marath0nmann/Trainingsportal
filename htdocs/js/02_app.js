@@ -1097,9 +1097,14 @@ async function ladeHeuteSektionInto(containerId) {
     const morgenItems  = allPublic.filter(e => e.datum === morgen);
     const morgenPrivat = allPrivat.filter(e => e.datum === morgen);
 
+    const htmlHeute  = (todayItems.length  + todayPrivat.length)  ? renderHeuteSektionHtml(todayItems,  todayPrivat,  'Heute')  : '';
+    const htmlMorgen = (morgenItems.length + morgenPrivat.length) ? renderHeuteSektionHtml(morgenItems, morgenPrivat, 'Morgen') : '';
     let html = '';
-    if (todayItems.length  + todayPrivat.length)  html += renderHeuteSektionHtml(todayItems,  todayPrivat,  'Heute');
-    if (morgenItems.length + morgenPrivat.length)  html += renderHeuteSektionHtml(morgenItems, morgenPrivat, 'Morgen');
+    if (htmlHeute && htmlMorgen) {
+      html = `<div class="heute-morgen-wrap">${htmlHeute}${htmlMorgen}</div>`;
+    } else {
+      html = htmlHeute + htmlMorgen;
+    }
     el.innerHTML = html;
 
     const allItems = [...todayItems, ...morgenItems];
