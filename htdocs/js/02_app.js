@@ -540,19 +540,22 @@ async function renderKalender(main, monthArg) {
   let oeffentlich = [], privat = [], feiertage = [], wettkampfRaw = [];
   try {
     const needPrefs = angemeldet && state.kalFilter === null;
-    const [d1, d2, d3, d4] = await Promise.all([
+    const [d1, d2, d3, d4, d5] = await Promise.all([
       angemeldet
         ? apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true })
         : apiGet(`einheiten?von=${von}&bis=${bis}`, { silent: true }),
       apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
       needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
       _ladeWettkampfDaten().catch(() => []),
+      _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })),
     ]);
     oeffentlich    = d1.einheiten || [];
     privat         = angemeldet ? (d1.privat || []) : [];
     _dragPrivat    = privat;   // Referenz für Drag&Drop-Handler
     feiertage      = d2.feiertage || [];
     wettkampfRaw   = Array.isArray(d4) ? d4 : [];
+    const termineRaw      = d5.termine || [];
+    const statistikUrlKal = d5.statistikportal_url || _statistikportalUrl || '';
     if (angemeldet) {
       MEINPLAN.setAbo(d1.abo_typen || []);
       state.meineGruppen = d1.meine_gruppen || [];
@@ -638,6 +641,14 @@ async function renderKalender(main, monthArg) {
       }
     });
   }
+
+  // Historische Wettkampf-Termine (vergangene Veranstaltungen aus Statistikportal)
+  const histByDate = {};
+  termineRaw.forEach(t => {
+    if (t.datum <= _heute) {
+      (histByDate[t.datum] = histByDate[t.datum] || []).push(t);
+    }
+  });
 
   // Wochen (für KW-Spalte)
   const weeks = [];
@@ -765,7 +776,7 @@ async function renderKalender(main, monthArg) {
           ${addBtn}
         </div>
         ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
-        <div class="kal-cell-items">${itemsHtml}${wkHtml}</div>
+        <div class="kal-cell-items">${_histHtml(histByDate[k], statistikUrlKal)}${itemsHtml}${wkHtml}</div>
       </div>`;
     }).join('');
 
@@ -1631,18 +1642,21 @@ function isoWeekYear(date) {
 async function _buildPlanData(von, bis) {
   const angemeldet = !!state.user;
   const needPrefs  = angemeldet && state.kalFilter === null;
-  const [d1, d2, d3, d4] = await Promise.all([
+  const [d1, d2, d3, d4, d5] = await Promise.all([
     angemeldet
       ? apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true })
       : apiGet(`einheiten?von=${von}&bis=${bis}`, { silent: true }),
     apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
     needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
     _ladeWettkampfDaten().catch(() => []),
+    _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })),
   ]);
   const oeffentlich  = d1.einheiten || [];
   const privat       = angemeldet ? (d1.privat || []) : [];
   const feiertage    = d2.feiertage || [];
   const wettkampfRaw = Array.isArray(d4) ? d4 : [];
+  const termineRaw   = d5.termine || [];
+  const statistikUrl = d5.statistikportal_url || _statistikportalUrl || '';
   _dragPrivat = privat;
   if (angemeldet) {
     MEINPLAN.setAbo(d1.abo_typen || []);
@@ -1710,7 +1724,14 @@ async function _buildPlanData(von, bis) {
     });
   }
 
-  return { angemeldet, byDate, feiertageByDate, wettkampfBeiDatum, wkSerieDatumMap, kf };
+  // Historische Wettkampf-Termine
+  const _heuteB = ymd(new Date());
+  const histByDate = {};
+  termineRaw.forEach(t => {
+    if (t.datum <= _heuteB) (histByDate[t.datum] = histByDate[t.datum] || []).push(t);
+  });
+
+  return { angemeldet, byDate, feiertageByDate, wettkampfBeiDatum, wkSerieDatumMap, kf, histByDate, statistikUrl };
 }
 
 async function renderListe(main, quarterArg) {
@@ -1761,7 +1782,7 @@ async function renderListe(main, quarterArg) {
       `<div class="liste-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
     return;
   }
-  const { byDate, wettkampfBeiDatum, kf } = plan;
+  const { byDate, wettkampfBeiDatum, kf, histByDate: listHistByDate, statistikUrl: listStatistikUrl } = plan;
 
   // Filter-Legende (gleiche Checkboxen wie im Kalender)
   if (angemeldet) {
@@ -1794,9 +1815,10 @@ async function renderListe(main, quarterArg) {
     }
     const w        = byWeek.get(wKey);
     const dayItems = byDate[k] || [];
-    const dayWk    = showWk ? (wettkampfBeiDatum[k] || []) : [];
-    if (dayItems.length || dayWk.length) {
-      w.days.push({ datum: k, items: dayItems, wk: dayWk });
+    const dayWk   = showWk ? (wettkampfBeiDatum[k] || []) : [];
+    const dayHist = showWk ? (listHistByDate[k] || []) : [];
+    if (dayItems.length || dayWk.length || dayHist.length) {
+      w.days.push({ datum: k, items: dayItems, wk: dayWk, hist: dayHist });
     }
     // Wochenkilometer: nur private Einträge (identisch zum Kalender)
     if (angemeldet) {
@@ -1863,6 +1885,23 @@ async function renderListe(main, quarterArg) {
     </div>`;
   };
 
+  // Zeile für eine historische Veranstaltung aus dem Statistikportal
+  const rowHistWettkampf = (t, datum) => {
+    const name = _decodeHtml(t.serie_name || '');
+    const link = listStatistikUrl
+      ? ` <a class="wk-hist-link" href="${escapeHtml(listStatistikUrl)}/#veranstaltung/${t.id}"
+             target="_blank" rel="noopener" onclick="event.stopPropagation()"
+             title="Im Statistikportal öffnen">↗</a>`
+      : '';
+    return `<div class="liste-row liste-row-wettkampf wk-hist-item${datum === todayKey ? ' is-today' : ''}">
+      ${dateCell(datum)}
+      <span class="liste-time">–</span>
+      <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
+      <span class="liste-title-text">🏆 ${escapeHtml(name)}${link}</span>
+      <span class="liste-ort">${t.ort ? escapeHtml(t.ort) : ''}</span>
+    </div>`;
+  };
+
   // Zeile für einen Wettkampf-Forecast (Serie)
   const rowWettkampf = (s, datum) => {
     const name   = _decodeHtml(s.name || s.kuerzel || '');
@@ -1896,6 +1935,7 @@ async function renderListe(main, quarterArg) {
     }
 
     const rowsHtml = week.days.map(day =>
+      (day.hist || []).map(t => rowHistWettkampf(t, day.datum)).join('') +
       day.items.map(e => rowEinheit(e, day.datum)).join('') +
       day.wk.map(s => rowWettkampf(s, day.datum)).join('')
     ).join('');
@@ -2144,6 +2184,21 @@ function _decodeHtml(s) {
 }
 
 // Wettkampf-Serien laden (5-Minuten-Cache)
+function _histHtml(termine, statistikUrl) {
+  if (!termine || !termine.length) return '';
+  return termine.map(t => {
+    const name = _decodeHtml(t.serie_name || '');
+    const link = statistikUrl
+      ? ` <a class="wk-hist-link" href="${escapeHtml(statistikUrl)}/#veranstaltung/${t.id}"
+             target="_blank" rel="noopener" onclick="event.stopPropagation()"
+             title="Im Statistikportal öffnen">↗</a>`
+      : '';
+    return `<div class="kal-item wk-hist-item">
+      <span class="kal-item-title">🏆 ${escapeHtml(name)}${link}</span>
+    </div>`;
+  }).join('');
+}
+
 async function _ladeWettkampfDaten() {
   const CACHE_MS = 5 * 60 * 1000;
   if (_wettkampfCache && (Date.now() - _wettkampfCache.ts) < CACHE_MS) {
@@ -2152,6 +2207,29 @@ async function _ladeWettkampfDaten() {
   const resp = await apiGet('wettkampf', { silent: true });
   _wettkampfCache = { ts: Date.now(), data: resp.serien || [] };
   return _wettkampfCache.data;
+}
+
+let _wkTermineCache     = {}; // 'YYYY-MM' → { ts, termine, statistikportal_url }
+let _statistikportalUrl = '';
+
+async function _ladeWettkampfTermine(von, bis) {
+  const CACHE_MS = 5 * 60 * 1000;
+  const key = von.slice(0, 7); // Monat als Cache-Schlüssel
+  const hit = _wkTermineCache[key];
+  if (hit && (Date.now() - hit.ts) < CACHE_MS) return hit;
+  try {
+    const resp = await apiGet(`wettkampf/termine?von=${von}&bis=${bis}`, { silent: true });
+    const entry = {
+      ts: Date.now(),
+      termine: resp.termine || [],
+      statistikportal_url: resp.statistikportal_url || '',
+    };
+    _wkTermineCache[key] = entry;
+    if (entry.statistikportal_url) _statistikportalUrl = entry.statistikportal_url;
+    return entry;
+  } catch (_) {
+    return { termine: [], statistikportal_url: '' };
+  }
 }
 
 // ── Wettkampf: Schnelleintrag-Popover ────────────────────────────────────
