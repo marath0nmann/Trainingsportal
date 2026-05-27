@@ -538,6 +538,7 @@ async function renderKalender(main, monthArg) {
   const von = ymd(gridStart);
   const bis = ymd(gridEnd);
   let oeffentlich = [], privat = [], feiertage = [], wettkampfRaw = [];
+  let termineRaw = [], statistikUrlKal = '';
   try {
     const needPrefs = angemeldet && state.kalFilter === null;
     const [d1, d2, d3, d4, d5] = await Promise.all([
@@ -554,8 +555,8 @@ async function renderKalender(main, monthArg) {
     _dragPrivat    = privat;   // Referenz für Drag&Drop-Handler
     feiertage      = d2.feiertage || [];
     wettkampfRaw   = Array.isArray(d4) ? d4 : [];
-    const termineRaw      = d5.termine || [];
-    const statistikUrlKal = d5.statistikportal_url || _statistikportalUrl || '';
+    termineRaw     = d5.termine || [];
+    statistikUrlKal = d5.statistikportal_url || _statistikportalUrl || '';
     if (angemeldet) {
       MEINPLAN.setAbo(d1.abo_typen || []);
       state.meineGruppen = d1.meine_gruppen || [];
