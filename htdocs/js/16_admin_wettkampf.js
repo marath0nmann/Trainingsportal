@@ -389,6 +389,8 @@ const ADMIN_WETTKAMPF = (() => {
     if (!serie) return;
 
     _diszFilter = '';
+    // Leeren Cache zurücksetzen, damit ein erneutes Öffnen einen Reload auslöst
+    if (_alleDisziplinen !== null && _alleDisziplinen.length === 0) _alleDisziplinen = null;
     _edit = {
       serieId,
       extrahiert:    serie.disziplinen || [],

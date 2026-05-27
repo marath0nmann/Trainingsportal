@@ -4580,14 +4580,16 @@ function handleWettkampf(string $method, string $tail): void
             return;
         }
         try {
-            // Aus disziplin_mapping (bevorzugt – normalisierte Anzeigenamen)
+            // Aus disziplin_mapping: COALESCE(anzeige_name, disziplin) –
+            // anzeige_name ist ein optionales Override-Feld, das meist NULL ist;
+            // Fallback auf den Pflicht-Rohdisziplin-Namen.
             $mapped = DB::fetchAll(
-                "SELECT DISTINCT anzeige_name AS name
+                "SELECT DISTINCT COALESCE(anzeige_name, disziplin) AS name
                    FROM $tdm
-                  WHERE anzeige_name IS NOT NULL AND anzeige_name != ''
-                  ORDER BY anzeige_name ASC"
+                  WHERE disziplin IS NOT NULL AND disziplin != ''
+                  ORDER BY name ASC"
             );
-            // Nicht gemappte Rohdisziplinen aus ergebnissen
+            // Nicht gemappte Rohdisziplinen aus Ergebnissen
             $raw = DB::fetchAll(
                 "SELECT DISTINCT e.disziplin AS name
                    FROM $ter e
@@ -4597,14 +4599,14 @@ function handleWettkampf(string $method, string $tail): void
                     AND e.geloescht_am IS NULL
                   ORDER BY e.disziplin ASC"
             );
-            $alle  = array_unique(array_merge(
+            $alle = array_unique(array_merge(
                 array_column($mapped, 'name'),
                 array_column($raw, 'name')
             ));
             sort($alle);
             echo json_encode(['ok' => true, 'disziplinen' => array_values($alle)]);
         } catch (\Throwable $e) {
-            echo json_encode(['ok' => true, 'disziplinen' => []]); // graceful fallback
+            echo json_encode(['ok' => true, 'disziplinen' => [], '_debug' => $e->getMessage()]);
         }
         return;
     }

@@ -1,6 +1,6 @@
 # Changelog
 
-## v192
+## v193
 - Admin Wettkämpfe: Freitext-Eingabe für Disziplinen ersetzt durch durchsuchbare Liste aller Disziplinen aus dem Statistikportal (disziplin_mapping + Rohdaten). Neuer API-Endpunkt `GET /wettkampf/disziplinen`. Bereits aktive Disziplinen werden grün markiert; ausgeblendete lassen sich per Klick wieder einschließen.
 - Fix: Kalender-Legende wurde bei jedem Render-Aufruf doppelt eingefügt – `outerHTML` ersetzte nur `#kal-grid`, nicht dessen `.kal-legend`-Geschwister; vorherige Legendenelemente werden jetzt vor dem Neuzeichnen entfernt
 
