@@ -10,6 +10,9 @@ const ADMIN_WETTKAMPF = (() => {
   let expandedId = null;
   // Zustand des aktuell offenen Planungs-Modals
   let _edit      = null; // { serieId, ausgeschlossen: Set, extras: [] , extrahiert: [] }
+  // Disziplin-Auswahl im Modal
+  let _alleDisziplinen = null; // null = noch nicht geladen, [] = leer / Fehler
+  let _diszFilter      = '';
   // Sortierzustand
   let _sortCol   = 'naechster'; // 'name' | 'letzter' | 'naechster'
   let _sortDir   = 'asc';
@@ -381,10 +384,11 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   // ── Modal: Planung bearbeiten ─────────────────────────────────
-  function showPlanungModal(serieId) {
+  async function showPlanungModal(serieId) {
     const serie = serien.find(s => s.id === serieId);
     if (!serie) return;
 
+    _diszFilter = '';
     _edit = {
       serieId,
       extrahiert:    serie.disziplinen || [],
@@ -449,6 +453,17 @@ const ADMIN_WETTKAMPF = (() => {
       </div>`;
 
     _renderDiszArea();
+
+    // Disziplin-Liste nachladen (gecacht) – Modal ist bereits sichtbar
+    if (_alleDisziplinen === null) {
+      try {
+        const resp = await apiGet('wettkampf/disziplinen', { silent: true });
+        _alleDisziplinen = resp.disziplinen || [];
+      } catch (_) {
+        _alleDisziplinen = [];
+      }
+      _renderDiszArea();
+    }
   }
 
   // Disziplin-Bereich im Modal neu zeichnen
@@ -508,14 +523,82 @@ const ADMIN_WETTKAMPF = (() => {
         Noch keine Disziplinen aus Ergebnissen vorhanden.</div>`;
     }
 
-    // ── Neue Disziplin hinzufügen ──
-    html += `<div style="display:flex;gap:6px;align-items:center">
-      <input type="text" id="planung-disz-neu" placeholder="Neue Disziplin hinzufügen…"
-        style="flex:1;border:1px solid var(--border);border-radius:6px;padding:5px 8px;
-               font-size:13px;background:var(--bg);color:var(--text)"
-        onkeydown="if(event.key==='Enter'){ADMIN_WETTKAMPF._addExtra();event.preventDefault()}">
-      <button class="btn btn-sm btn-ghost" onclick="ADMIN_WETTKAMPF._addExtra()">+ Hinzufügen</button>
-    </div>`;
+    // ── Disziplin aus Statistikportal hinzufügen ──
+    html += `<div style="margin-top:4px">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">
+        Disziplin aus Statistikportal hinzufügen:</div>`;
+
+    if (_alleDisziplinen === null) {
+      html += `<div style="font-size:13px;color:var(--text2)">
+        <span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border);
+          border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;
+          vertical-align:middle;margin-right:6px"></span>Lade Disziplinen&hellip;</div>`;
+    } else {
+      // Schon aktive Disziplinen (sichtbar in extrahiert oder in extras)
+      const bereitsAktiv = new Set([
+        ..._edit.extrahiert.filter(d => !_edit.ausgeschlossen.has(d)),
+        ..._edit.extras,
+      ]);
+
+      const suchterm = _diszFilter.trim().toLowerCase();
+      const gefiltert = _alleDisziplinen.filter(d =>
+        !suchterm || d.toLowerCase().includes(suchterm)
+      );
+      const MAX_LIST = 40;
+
+      html += `<input type="text" id="disz-filter-inp"
+        placeholder="Suchen…"
+        value="${escapeHtml(_diszFilter)}"
+        oninput="ADMIN_WETTKAMPF._setDiszFilter(this.value)"
+        style="width:100%;box-sizing:border-box;border:1px solid var(--border);
+               border-radius:6px;padding:5px 8px;font-size:13px;
+               background:var(--bg);color:var(--text);margin-bottom:6px">`;
+
+      if (_alleDisziplinen.length === 0) {
+        html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
+          Keine Disziplinen aus dem Statistikportal verfügbar.</div>`;
+      } else if (gefiltert.length === 0) {
+        html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
+          Keine passenden Disziplinen gefunden.</div>`;
+      } else {
+        html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
+          border-radius:6px;padding:3px">`;
+        gefiltert.slice(0, MAX_LIST).forEach(d => {
+          const dJ = escapeHtml(JSON.stringify(d));
+          if (bereitsAktiv.has(d)) {
+            // Bereits aktiv – grau mit Häkchen, nicht klickbar
+            html += `<div style="padding:5px 10px;font-size:13px;color:var(--text2);
+              display:flex;align-items:center;gap:6px">
+              <span style="color:#27ae60;font-size:11px">✓</span>${escapeHtml(d)}</div>`;
+          } else if (_edit.extrahiert.includes(d) && _edit.ausgeschlossen.has(d)) {
+            // In Ergebnissen, aber ausgeblendet → Klick blendet wieder ein
+            html += `<div onclick="ADMIN_WETTKAMPF._addDiszFromList(${dJ})"
+              title="Wieder einblenden"
+              style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px;
+                     display:flex;align-items:center;gap:6px;"
+              onmouseover="this.style.background='var(--border)'"
+              onmouseout="this.style.background=''">
+              <span style="font-size:11px;color:var(--text2)">↩</span>
+              <span style="text-decoration:line-through;color:var(--text2)">${escapeHtml(d)}</span>
+              <span style="font-size:10px;color:var(--text2)">(ausgeblendet)</span>
+            </div>`;
+          } else {
+            html += `<div onclick="ADMIN_WETTKAMPF._addDiszFromList(${dJ})"
+              style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px"
+              onmouseover="this.style.background='var(--border)'"
+              onmouseout="this.style.background=''">
+              ${escapeHtml(d)}
+            </div>`;
+          }
+        });
+        if (gefiltert.length > MAX_LIST) {
+          html += `<div style="padding:5px 10px;font-size:11px;color:var(--text2)">
+            + ${gefiltert.length - MAX_LIST} weitere &ndash; Suche verfeinern</div>`;
+        }
+        html += `</div>`;
+      }
+    }
+    html += `</div>`;
 
     area.innerHTML = html;
   }
@@ -544,13 +627,34 @@ const ADMIN_WETTKAMPF = (() => {
     inp.value = '';
     if (!val) return;
     if (_edit.extrahiert.includes(val)) {
-      // Ausgeschlossene wieder einschließen statt doppelt hinzufügen
       _edit.ausgeschlossen.delete(val);
     } else if (!_edit.extras.includes(val)) {
       _edit.extras.push(val);
     }
     _renderDiszArea();
-    document.getElementById('planung-disz-neu')?.focus();
+  }
+
+  // Disziplin aus Statistikportal-Liste hinzufügen / wieder einblenden
+  function _addDiszFromList(d) {
+    if (!_edit) return;
+    if (_edit.extrahiert.includes(d)) {
+      _edit.ausgeschlossen.delete(d);
+    } else if (!_edit.extras.includes(d)) {
+      _edit.extras.push(d);
+    }
+    _diszFilter = '';
+    _renderDiszArea();
+    // Fokus zurück auf Suchfeld
+    setTimeout(() => document.getElementById('disz-filter-inp')?.focus(), 0);
+  }
+
+  // Suchfilter im Disziplin-Picker aktualisieren
+  function _setDiszFilter(val) {
+    _diszFilter = val;
+    _renderDiszArea();
+    // Fokus & Cursorposition erhalten
+    const inp = document.getElementById('disz-filter-inp');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
 
   async function savePlanung(serieId) {
@@ -652,6 +756,7 @@ const ADMIN_WETTKAMPF = (() => {
     render, toggleExpand,
     showPlanungModal, savePlanung,
     _toggleDisz, _removeExtra, _addExtra,
+    _addDiszFromList, _setDiszFilter,
     toggleAktiv, saveDatumInline, clearDatumInline,
     imKalenderEintragen, predictNextDate, sortiereNach,
   };

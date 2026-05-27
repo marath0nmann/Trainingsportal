@@ -1,6 +1,6 @@
 # Changelog
 
-## v191
+## v192
 - Footer aus dem Statistikportal übernommen: „Powered by Trainingsportal © 2026 Daniel Weyers" plus Rechtslinks (Datenschutz · Nutzungsbedingungen · Impressum). Datengetrieben über die gemeinsamen `footer_*`-Keys der `einstellungen`-Tabelle – Rechtstexte werden mit beiden Portalen geteilt; Admins können sie auch hier per Markdown bearbeiten.
 - Fix: Pause-Distanz in Segment-Beschreibung (z. B. „100m Gehpause") hatte noch Leerzeichen vor „m"
 

@@ -4570,6 +4570,45 @@ function handleWettkampf(string $method, string $tail): void
         return;
     }
 
+    // ── GET /wettkampf/disziplinen ────────────────────────────────
+    // Alle eindeutigen Disziplinbezeichnungen aus dem Statistikportal.
+    // Nur für eingeloggte Nutzer.
+    if ($method === 'GET' && $tail === 'disziplinen') {
+        if (!$userId) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Login erforderlich']);
+            return;
+        }
+        try {
+            // Aus disziplin_mapping (bevorzugt – normalisierte Anzeigenamen)
+            $mapped = DB::fetchAll(
+                "SELECT DISTINCT anzeige_name AS name
+                   FROM $tdm
+                  WHERE anzeige_name IS NOT NULL AND anzeige_name != ''
+                  ORDER BY anzeige_name ASC"
+            );
+            // Nicht gemappte Rohdisziplinen aus ergebnissen
+            $raw = DB::fetchAll(
+                "SELECT DISTINCT e.disziplin AS name
+                   FROM $ter e
+                  WHERE e.disziplin IS NOT NULL
+                    AND e.disziplin != ''
+                    AND e.disziplin_mapping_id IS NULL
+                    AND e.geloescht_am IS NULL
+                  ORDER BY e.disziplin ASC"
+            );
+            $alle  = array_unique(array_merge(
+                array_column($mapped, 'name'),
+                array_column($raw, 'name')
+            ));
+            sort($alle);
+            echo json_encode(['ok' => true, 'disziplinen' => array_values($alle)]);
+        } catch (\Throwable $e) {
+            echo json_encode(['ok' => true, 'disziplinen' => []]); // graceful fallback
+        }
+        return;
+    }
+
     // ── GET /wettkampf/termine?von=YYYY-MM-DD&bis=YYYY-MM-DD ─────
     // Gibt individuelle vergangene Veranstaltungen aus dem Statistikportal zurück.
     // Öffentlich (kein Login erforderlich).
