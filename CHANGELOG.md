@@ -1,5 +1,8 @@
 # Changelog
 
+## v192
+- Fix: Kalender-Legende wurde bei jedem Render-Aufruf doppelt eingefügt – `outerHTML` ersetzte nur `#kal-grid`, nicht dessen `.kal-legend`-Geschwister; vorherige Legendenelemente werden jetzt vor dem Neuzeichnen entfernt
+
 ## v191
 - Footer aus dem Statistikportal übernommen: „Powered by Trainingsportal © 2026 Daniel Weyers" plus Rechtslinks (Datenschutz · Nutzungsbedingungen · Impressum). Datengetrieben über die gemeinsamen `footer_*`-Keys der `einstellungen`-Tabelle – Rechtstexte werden mit beiden Portalen geteilt; Admins können sie auch hier per Markdown bearbeiten.
 - Fix: Pause-Distanz in Segment-Beschreibung (z. B. „100m Gehpause") hatte noch Leerzeichen vor „m"
