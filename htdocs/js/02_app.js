@@ -786,6 +786,9 @@ async function renderKalender(main, monthArg) {
 
   const gridCls = angemeldet ? 'kal-grid meinplan-kal-grid' : 'kal-grid';
   const legendHtml = angemeldet ? _renderKalLegend() : '';
+  // Vorherige Legende(n) entfernen – outerHTML ersetzt nur #kal-grid,
+  // nicht dessen Geschwister-Elemente, sodass sich .kal-legend bei jedem Render aufaddieren würde.
+  document.querySelectorAll('#kal-grid ~ .kal-legend').forEach(el => el.remove());
   document.getElementById('kal-grid').outerHTML =
     `<div id="kal-grid" class="${gridCls}">${head}${rows}</div>${legendHtml}`;
 
