@@ -210,6 +210,24 @@
 
 /* ── Heute-Sektion ── */
 .heute-sektion { margin-bottom: 20px; }
+
+/* Heute & Morgen nebeneinander */
+.heute-morgen-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+  align-items: stretch;   /* beide Spalten gleich hoch */
+  margin-bottom: 4px;
+}
+.heute-morgen-wrap .heute-sektion {
+  margin-bottom: 20px;
+  display: flex; flex-direction: column;
+}
+.heute-morgen-wrap .heute-cards {
+  flex: 1;                /* füllt die verbleibende Höhe der Sektion */
+  align-items: stretch;   /* Karten strecken sich auf Zellhöhe */
+}
+.heute-morgen-wrap .heute-card { flex: 1; }
 .heute-heading {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800; font-size: 13px; letter-spacing: 1.5px;
@@ -541,6 +559,11 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
 /* Heute-Karten: 2-spaltig bei mittlerer Breite (außer explizite Count-Klasse) */
 @media (max-width: 960px) and (min-width: 721px) {
   .heute-cards:not(.heute-cards-1):not(.heute-cards-2) { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Heute+Morgen-Wrap: ab 900px einspaltig stapeln */
+@media (max-width: 900px) {
+  .heute-morgen-wrap { grid-template-columns: 1fr; gap: 0; }
 }
 
 /* Mobile: kompakter Kalender */

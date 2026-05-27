@@ -1,6 +1,11 @@
 # Changelog
 
-## v193
+## v194
+- Fix `GET /wettkampf/disziplinen`: `COALESCE(anzeige_name, disziplin)` – `anzeige_name` ist ein optionales Override-Feld (meist NULL); Fallback auf `disziplin` damit alle gemappten Disziplinen erscheinen
+- Heute & Morgen: Spalten strecken sich auf gleiche Höhe (align-items: stretch + flex-Kette)
+- Heute & Morgen stehen nebeneinander (2-Spalten-Layout); unter 900px werden sie wieder gestapelt
+
+## v192
 - Admin Wettkämpfe: Freitext-Eingabe für Disziplinen ersetzt durch durchsuchbare Liste aller Disziplinen aus dem Statistikportal (disziplin_mapping + Rohdaten). Neuer API-Endpunkt `GET /wettkampf/disziplinen`. Bereits aktive Disziplinen werden grün markiert; ausgeblendete lassen sich per Klick wieder einschließen.
 - Fix: Kalender-Legende wurde bei jedem Render-Aufruf doppelt eingefügt – `outerHTML` ersetzte nur `#kal-grid`, nicht dessen `.kal-legend`-Geschwister; vorherige Legendenelemente werden jetzt vor dem Neuzeichnen entfernt
 
