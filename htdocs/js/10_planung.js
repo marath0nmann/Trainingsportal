@@ -720,15 +720,15 @@ const PLANUNG = (() => {
 
         // Historische Chips (vergangene Veranstaltungen aus Statistikportal)
         const histHtml = histItems.map(t => {
-          const name    = decFn(t.serie_name || '');
-          const linkBtn = statistikUrl
-            ? ` <a class="wk-hist-link" href="${escapeHtml(statistikUrl)}/#veranstaltung/${t.id}"
-                   target="_blank" rel="noopener" onclick="event.stopPropagation()"
-                   title="Im Statistikportal öffnen">↗</a>`
+          const name = decFn(t.serie_name || '');
+          const href = statistikUrl ? `${statistikUrl}/#veranstaltung/${t.id}` : null;
+          const tag  = href ? 'a' : 'div';
+          const attrs = href
+            ? ` href="${escapeHtml(href)}" target="_blank" rel="noopener" title="Im Statistikportal öffnen"`
             : '';
-          return `<div class="kal-item wk-hist-item">
-            <span class="kal-item-title">🏆 ${escapeHtml(name)}${linkBtn}</span>
-          </div>`;
+          return `<${tag} class="kal-item wk-hist-item"${attrs}>
+            <span class="kal-item-title">🏆 ${escapeHtml(name)}${href ? ' <span class="wk-hist-arrow">↗</span>' : ''}</span>
+          </${tag}>`;
         }).join('');
 
         cells.push(`

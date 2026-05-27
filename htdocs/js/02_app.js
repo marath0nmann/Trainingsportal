@@ -1889,18 +1889,18 @@ async function renderListe(main, quarterArg) {
   // Zeile für eine historische Veranstaltung aus dem Statistikportal
   const rowHistWettkampf = (t, datum) => {
     const name = _decodeHtml(t.serie_name || '');
-    const link = listStatistikUrl
-      ? ` <a class="wk-hist-link" href="${escapeHtml(listStatistikUrl)}/#veranstaltung/${t.id}"
-             target="_blank" rel="noopener" onclick="event.stopPropagation()"
-             title="Im Statistikportal öffnen">↗</a>`
+    const href = listStatistikUrl ? `${listStatistikUrl}/#veranstaltung/${t.id}` : null;
+    const rowAttrs = href
+      ? ` href="${escapeHtml(href)}" target="_blank" rel="noopener" title="Im Statistikportal öffnen"`
       : '';
-    return `<div class="liste-row liste-row-wettkampf wk-hist-item${datum === todayKey ? ' is-today' : ''}">
+    const tag = href ? 'a' : 'div';
+    return `<${tag} class="liste-row liste-row-wettkampf wk-hist-item${datum === todayKey ? ' is-today' : ''}"${rowAttrs}>
       ${dateCell(datum)}
       <span class="liste-time">–</span>
       <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
-      <span class="liste-title-text">🏆 ${escapeHtml(name)}${link}</span>
+      <span class="liste-title-text">🏆 ${escapeHtml(name)}${href ? ' <span class="wk-hist-arrow">↗</span>' : ''}</span>
       <span class="liste-ort">${t.ort ? escapeHtml(t.ort) : ''}</span>
-    </div>`;
+    </${tag}>`;
   };
 
   // Zeile für einen Wettkampf-Forecast (Serie)
@@ -2189,14 +2189,14 @@ function _histHtml(termine, statistikUrl) {
   if (!termine || !termine.length) return '';
   return termine.map(t => {
     const name = _decodeHtml(t.serie_name || '');
-    const link = statistikUrl
-      ? ` <a class="wk-hist-link" href="${escapeHtml(statistikUrl)}/#veranstaltung/${t.id}"
-             target="_blank" rel="noopener" onclick="event.stopPropagation()"
-             title="Im Statistikportal öffnen">↗</a>`
+    const href = statistikUrl ? `${statistikUrl}/#veranstaltung/${t.id}` : null;
+    const tag  = href ? 'a' : 'div';
+    const attrs = href
+      ? ` href="${escapeHtml(href)}" target="_blank" rel="noopener" title="Im Statistikportal öffnen"`
       : '';
-    return `<div class="kal-item wk-hist-item">
-      <span class="kal-item-title">🏆 ${escapeHtml(name)}${link}</span>
-    </div>`;
+    return `<${tag} class="kal-item wk-hist-item"${attrs}>
+      <span class="kal-item-title">🏆 ${escapeHtml(name)}${href ? ' <span class="wk-hist-arrow">↗</span>' : ''}</span>
+    </${tag}>`;
   }).join('');
 }
 
