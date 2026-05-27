@@ -1,5 +1,8 @@
 # Changelog
 
+## v195
+- Prognose-Wettkämpfe: Emoji von "🏆?" auf "❓" geändert
+
 ## v194
 - Fix `GET /wettkampf/disziplinen`: `COALESCE(anzeige_name, disziplin)` – `anzeige_name` ist ein optionales Override-Feld (meist NULL); Fallback auf `disziplin` damit alle gemappten Disziplinen erscheinen
 - Heute & Morgen: Spalten strecken sich auf gleiche Höhe (align-items: stretch + flex-Kette)

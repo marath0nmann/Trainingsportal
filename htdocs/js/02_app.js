@@ -755,7 +755,7 @@ async function renderKalender(main, monthArg) {
         ? wkItems.map(s => {
             const name   = _decodeHtml(s.name || s.kuerzel || '');
             const isFest = !!(s.naechstes_datum && s.naechstes_datum >= _heute);
-            const emoji  = isFest ? '🏆' : '🏆?';
+            const emoji  = isFest ? '🏆' : '❓';
             const hint   = isFest ? ' (fester Termin)' : ' (Prognosedatum – noch nicht bestätigt)';
             const canAdd = !!state.user;
             return `<div class="kal-item kal-cal-wettkampf is-privat" data-serie-id="${s.id}"
@@ -1915,7 +1915,7 @@ async function renderListe(main, quarterArg) {
   const rowWettkampf = (s, datum) => {
     const name   = _decodeHtml(s.name || s.kuerzel || '');
     const isFest = !!(s.naechstes_datum && s.naechstes_datum >= ymd(new Date()));
-    const emoji  = isFest ? '🏆' : '🏆?';
+    const emoji  = isFest ? '🏆' : '❓';
     const canAdd = !!state.user;
     const clickAttr = canAdd ? ` onclick="_wkPopoverToggle(${s.id}, this)"` : '';
     const prognose  = isFest ? '' : ' <span class="liste-wk-prognose">~ Prognose</span>';
