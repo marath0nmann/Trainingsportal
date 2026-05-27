@@ -1,6 +1,7 @@
 # Changelog
 
-## v193
+## v194
+- Heute & Morgen: Spalten strecken sich auf gleiche Höhe (align-items: stretch + flex-Kette)
 - Heute & Morgen stehen nebeneinander (2-Spalten-Layout); unter 900px werden sie wieder gestapelt
 
 ## v192

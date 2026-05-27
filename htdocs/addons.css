@@ -216,10 +216,18 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 24px;
-  align-items: start;
+  align-items: stretch;   /* beide Spalten gleich hoch */
   margin-bottom: 4px;
 }
-.heute-morgen-wrap .heute-sektion { margin-bottom: 20px; }
+.heute-morgen-wrap .heute-sektion {
+  margin-bottom: 20px;
+  display: flex; flex-direction: column;
+}
+.heute-morgen-wrap .heute-cards {
+  flex: 1;                /* füllt die verbleibende Höhe der Sektion */
+  align-items: stretch;   /* Karten strecken sich auf Zellhöhe */
+}
+.heute-morgen-wrap .heute-card { flex: 1; }
 .heute-heading {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800; font-size: 13px; letter-spacing: 1.5px;
