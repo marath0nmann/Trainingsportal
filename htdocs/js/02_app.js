@@ -616,14 +616,10 @@ async function renderKalender(main, monthArg) {
   });
 
   // Wettkampf-Termine: predicted/manuelles Datum → Array von Serien
-  // Tage mit eigenem persönlichen Wettkampf-Eintrag: 🏆-Chip dort unterdrücken (kein Doppeleintrag)
-  const privatWettkampfDaten = new Set(
-    privatGefiltert.filter(e => e.typ === 'wettkampf').map(e => e.datum)
-  );
-  // Befülle globale Map datum → [{id, bemerkung}] für Popover-Toggle-Logik
+  // Befülle globale Map datum → [{id, bemerkung, titel}] für Popover-Toggle-Logik + Serien-Zuordnung
   _wkPrivatMap = {};
   privatGefiltert.filter(e => e.typ === 'wettkampf').forEach(e => {
-    (_wkPrivatMap[e.datum] = _wkPrivatMap[e.datum] || []).push({ id: e.id, bemerkung: e.bemerkung || null });
+    (_wkPrivatMap[e.datum] = _wkPrivatMap[e.datum] || []).push({ id: e.id, bemerkung: e.bemerkung || null, titel: e.titel || '' });
   });
   const wettkampfSerien  = wettkampfRaw;
   const wettkampfBeiDatum  = {}; // für Forecast-Chips (gefiltert)
@@ -636,7 +632,9 @@ async function renderKalender(main, monthArg) {
       const manuell = s.naechstes_datum && s.naechstes_datum >= _heute ? s.naechstes_datum : null;
       const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
-      if (privatWettkampfDaten.has(datum)) return; // Doppeleintrag unterdrücken
+      // Doppeleintrag nur unterdrücken wenn ein privater Eintrag für genau diese Serie existiert
+      const sNorm = _decodeHtml(s.name || s.kuerzel || '');
+      if ((_wkPrivatMap[datum] || []).some(ev => (ev.titel || '').startsWith('🏆 ' + sNorm))) return;
       if (datum && datum >= von && datum <= bis) {
         (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);
       }
@@ -710,7 +708,12 @@ async function renderKalender(main, monthArg) {
 
           // ── Persönliche Wettkampf-Teilnahme: Hover-Popover, kein Drag ──
           if (e.typ === 'wettkampf') {
-            const wkSerie = (wkSerieDatumMap[e.datum] || [])[0] || null;
+            // Serie anhand des Titelprefix zuordnen – bei mehreren Serien am selben Tag korrekte wählen
+            const _privTitel = e.titel || '';
+            const wkSerie = (wkSerieDatumMap[e.datum] || []).find(s => {
+              const sn = _decodeHtml(s.name || s.kuerzel || '');
+              return _privTitel.startsWith('🏆 ' + sn);
+            }) || (wkSerieDatumMap[e.datum] || [])[0] || null;
             const sid     = wkSerie ? wkSerie.id : null;
             const hAttr   = sid
               ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${sid},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`
@@ -1163,7 +1166,11 @@ async function ladeWettkampfSektionInto(containerId) {
     // Meine Anmeldung (formale Tabelle) + privater Plan-Eintrag (gleiche Logik wie Popover)
     const meineAnmId     = s.meine_anmeldung_id  || null;
     const meineDisziplin = s.meine_disziplin      || null;  // null = ohne Disziplin
-    const privatListe    = _wkPrivatMap[datum] || [];
+    // Nur Einträge dieser Serie (Titelprefix), nicht alle Wettkämpfe an dem Datum
+    const _serieNorm  = _decodeHtml(s.name || s.kuerzel || '');
+    const privatListe = (_wkPrivatMap[datum] || []).filter(ev =>
+      (ev.titel || '').startsWith('🏆 ' + _serieNorm)
+    );
 
     // ── Disziplin-Buttons (identisch mit Kalender-Popover) ───
     let diszHtml = '';
@@ -1712,10 +1719,9 @@ async function _buildPlanData(von, bis) {
     }
   });
 
-  const privatWettkampfDaten = new Set(privatGefiltert.filter(e => e.typ === 'wettkampf').map(e => e.datum));
   _wkPrivatMap = {};
   privatGefiltert.filter(e => e.typ === 'wettkampf').forEach(e => {
-    (_wkPrivatMap[e.datum] = _wkPrivatMap[e.datum] || []).push({ id: e.id, bemerkung: e.bemerkung || null });
+    (_wkPrivatMap[e.datum] = _wkPrivatMap[e.datum] || []).push({ id: e.id, bemerkung: e.bemerkung || null, titel: e.titel || '' });
   });
   const wettkampfBeiDatum = {};
   const wkSerieDatumMap   = {};
@@ -1726,7 +1732,9 @@ async function _buildPlanData(von, bis) {
       const manuellL = s.naechstes_datum && s.naechstes_datum >= _heuteListe ? s.naechstes_datum : null;
       const datum    = manuellL || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
-      if (privatWettkampfDaten.has(datum)) return;
+      // Doppeleintrag nur unterdrücken wenn privater Eintrag für genau diese Serie existiert
+      const sNormL = _decodeHtml(s.name || s.kuerzel || '');
+      if ((_wkPrivatMap[datum] || []).some(ev => (ev.titel || '').startsWith('🏆 ' + sNormL))) return;
       if (datum && datum >= von && datum <= bis) {
         (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);
       }
@@ -2245,7 +2253,7 @@ async function _ladeWettkampfTermine(von, bis) {
 
 let _wkPopSerie   = null; // ID der aktuell geöffneten Serie
 let _wkHideTimer  = null; // Verzögerungs-Timer für Hover-Hide
-let _wkPrivatMap  = {};   // datum → [{id, bemerkung}] – befüllt von renderKalender
+let _wkPrivatMap  = {};   // datum → [{id, bemerkung, titel}] – befüllt von renderKalender/renderListeData
 
 // Tap-Toggle (Listenansicht / Touch): erneutes Antippen schließt das Popover
 function _wkPopoverToggle(serieId, anchorEl) {
@@ -2308,7 +2316,8 @@ function _wkPopoverShow(serieId, anchorEl) {
   diszDiv.className = 'wk-pop-disz';
 
   // Disziplin-Buttons als Toggle: aktiv = bereits eingetragen, inaktiv = noch nicht
-  const vorhandene  = _wkPrivatMap[datum] || [];
+  // Nur Einträge dieser Serie filtern (Titelprefix) – verhindert Überschneidungen bei gleichen Datum
+  const vorhandene  = (_wkPrivatMap[datum] || []).filter(ev => (ev.titel || '').startsWith('🏆 ' + name));
   const serieDaten  = (_wettkampfCache?.data || []).find(s => s.id === serieId) || null;
   const buttons = disziplinen.length ? disziplinen : [null];
   buttons.forEach(d => {

@@ -1,6 +1,7 @@
 # Changelog
 
-## v195
+## v196
+- Fix: Zwei Wettkämpfe am gleichen Tag – Kalender zeigte nur einen; "Nächste Wettkämpfe" zeigte Teilnahmedaten der falschen Serie. _wkPrivatMap speichert jetzt den Titel; Zuordnung erfolgt per Serienname-Prefix statt nur per Datum.
 - Prognose-Wettkämpfe: Emoji von "🏆?" auf "❓" geändert
 
 ## v194
