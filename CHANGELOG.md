@@ -1,5 +1,8 @@
 # Changelog
 
+## v199
+- Menüpunkt "Planung" in "Trainingsplanung" umbenannt (Desktop-Nav + Mobile-Drawer)
+
 ## v198
 - Planungs-Tabs: Gruppenfarbe wird im Dark-Mode per _farbeFuerDark() aufgehellt – aktives Tab ist jetzt lesbar; inaktive Tabs bekommen transparente Border (Hover via CSS)
 
