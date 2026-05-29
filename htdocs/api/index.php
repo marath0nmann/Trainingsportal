@@ -60,13 +60,20 @@ function runPendingMigrations(): void
 
     foreach ($migs as $num => $stmts) {
         if ($num <= $current) continue;
-        foreach ($stmts as $sql) {
-            try {
-                DB::query($sql);
-            } catch (Throwable $e) {
-                // DDL-Fehler ("already exists", "duplicate key name" …) sicher ignorieren;
-                // echte Fehler werden ins PHP-Error-Log geschrieben.
+        if (is_callable($stmts)) {
+            // Migration als PHP-Closure
+            try { $stmts(); } catch (Throwable $e) {
                 error_log("[migration {$num}] " . $e->getMessage());
+            }
+        } else {
+            foreach ($stmts as $sql) {
+                try {
+                    DB::query($sql);
+                } catch (Throwable $e) {
+                    // DDL-Fehler ("already exists", "duplicate key name" …) sicher ignorieren;
+                    // echte Fehler werden ins PHP-Error-Log geschrieben.
+                    error_log("[migration {$num}] " . $e->getMessage());
+                }
             }
         }
         Settings::set('training_db_version', (string) $num);
@@ -378,6 +385,195 @@ function _migrationStmts(): array
             "INSERT IGNORE INTO " . DB::tbl('training_typen') .
             " (slug, bezeichnung, farbe, reihenfolge, aktiv) VALUES ('wettkampf', 'Wettkampf', '#27ae60', 7, 1)",
         ],
+
+        // ── 15: Wettkampfplanung ─────────────────────────────────────────────────────────────
+        // – sortierindex / url / wettbewerbe zu veranstaltung_serien
+        // – training_wettkampf_status (pro Nutzer, pro Jahr, pro Serie)
+        // – Metadaten der vorhandenen 35 Serien befüllen
+        // – ~94 neue Serien aus dem Notion-Export einfügen
+        15 => static function (): void {
+            $tws = DB::tbl('veranstaltung_serien');
+            $tst = DB::tbl('training_wettkampf_status');
+
+            // Neue Spalten
+            foreach ([
+                "ALTER TABLE `{$tws}` ADD COLUMN IF NOT EXISTS sortierindex SMALLINT UNSIGNED NULL COMMENT 'MMDD – Monat+Tag des typischen Termins, für Jahressortierung'",
+                "ALTER TABLE `{$tws}` ADD COLUMN IF NOT EXISTS url VARCHAR(500) NULL COMMENT 'Website der Veranstaltung'",
+                "ALTER TABLE `{$tws}` ADD COLUMN IF NOT EXISTS wettbewerbe TEXT NULL COMMENT 'JSON-Array der angebotenen Wettbewerbe/Disziplinen'",
+            ] as $sql) {
+                try { DB::query($sql); } catch (Throwable $e) { error_log('mig15: ' . $e->getMessage()); }
+            }
+
+            // Planungsstatus-Tabelle
+            try {
+                DB::query("CREATE TABLE IF NOT EXISTS `{$tst}` (
+                    id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    serie_id     INT          NOT NULL,
+                    benutzer_id  INT UNSIGNED NOT NULL,
+                    jahr         SMALLINT UNSIGNED NOT NULL,
+                    status       ENUM('offen','in_klaerung','anmeldung_erforderlich','angemeldet',
+                                      'absolviert','findet_nicht_statt','passt_nicht','nicht_angetreten')
+                                 NOT NULL DEFAULT 'passt_nicht',
+                    notiz        TEXT NULL,
+                    erstellt_am  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    geaendert_am TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uq_serie_user_jahr (serie_id, benutzer_id, jahr)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            } catch (Throwable $e) { error_log('mig15: ' . $e->getMessage()); }
+
+            // ── Metadaten für vorhandene 35 Serien (id → [sortierindex, url, wettbewerbe_json]) ──
+            $updates = [
+                [1,  329,  'https://venloop.nl',                             '["10km Straße","5km Straße","Halbmarathon"]'],
+                [2,  214,  'https://www.hkl-mg.de',                          '["10km Straße","5km Straße"]'],
+                [3,  308,  'https://www.tsvbayer04-leichtathletik.de/events/strassenlauf-rund-um-das-bayerkreuz/', '["10km Straße","5km Straße"]'],
+                [4,  131,  'https://www.asv-winterlaufserie.de',              '["10km Straße","5km Straße"]'],
+                [5,  228,  'https://www.asv-winterlaufserie.de',              '["15km Straße","7,5km Straße"]'],
+                [6,  328,  'https://www.asv-winterlaufserie.de',              '["10km Straße","Halbmarathon"]'],
+                [7,  531,  'https://rahser-run.de/',                          '["10km Straße","5km Straße"]'],
+                [8,  426,  'https://www.uniper-duesseldorfmarathon.de',       '["Halbmarathon","Marathon"]'],
+                [9,  419,  'https://apfel-blueten-lauf.de',                   '["10km Straße","5km Straße","Halbmarathon"]'],
+                [11, 412,  'https://www.enschedemarathon.nl',                 '["Halbmarathon","Marathon"]'],
+                [13, 117,  'https://vfl-hinsbeck.de/waldlauf.html',           '["10km Straße","5km Straße"]'],
+                [14, 1011, null,                                              '["Trail"]'],
+                [15, 518,  null,                                              '["Halbmarathon","Marathon"]'],
+                [16, 1026, null,                                              '["Halbmarathon"]'],
+                [17, 509,  null,                                              '["10km Straße","5km Straße"]'],
+                [18, 1231, null,                                              '["10km Straße","5km Straße"]'],
+                [19, 427,  null,                                              '["Halbmarathon","Marathon"]'],
+                [20, 426,  'https://citylauf-korschenbroich.com',             '["10km Straße","5km Straße"]'],
+                [21, 425,  'https://schlossparklauf.org',                     '["10km Straße","5km Straße"]'],
+                [22, 104,  'https://www.marathon-wesel.de',                   '["Halbmarathon","Marathon"]'],
+                [23, 506,  'https://www.tus-oedt.de',                        '["5.000m Bahn"]'],
+                [24, 1122, 'http://www.tusem-leichtathletik.de/index.php/abg.html', '["10km Straße","Halbmarathon"]'],
+                [25, 603,  'https://tus-oedt.de',                            '["3.000m Bahn"]'],
+                [26, 701,  'https://tus-oedt.de',                            '["5.000m Bahn"]'],
+                [27, 1115, null,                                              '["15km Straße","5km Straße"]'],
+                [29, 1004, 'https://generali-koeln-marathon.de',              '["Halbmarathon","Marathon"]'],
+                [30, 528,  'https://sv-sonsbeck.de/index.php/leichtathletik/events/enni-brunnenlauf', '["10km Straße","5km Straße"]'],
+                [31, 517,  'https://www.brueckenlauf-duesseldorf.de/',        '["10km Straße","5km Straße"]'],
+                [33, 927,  null,                                              '["Marathon"]'],
+                [35, 618,  null,                                              '["10km Straße","5km Straße"]'],
+            ];
+            foreach ($updates as [$id, $si, $url, $wb]) {
+                try {
+                    DB::query("UPDATE `{$tws}` SET sortierindex=COALESCE(sortierindex,?), url=COALESCE(url,?), wettbewerbe=COALESCE(wettbewerbe,?) WHERE id=?",
+                        [$si, $url, $wb, $id]);
+                } catch (Throwable $e) { error_log('mig15: ' . $e->getMessage()); }
+            }
+
+            // ── Neue Serien aus Notion-Export ─────────────────────────────────────────────
+            // [name, kuerzel, sortierindex|null, url|null, wettbewerbe_json|null]
+            $neue = [
+                ['ASV Süchteln Läufertag',                'ASV-SUECHTELN-LAUEFTAG',               null, null, null],
+                ['B2Run Düsseldorf',                      'B2RUN-DUESSELDORF',                     null, null, '["Firmenlauf"]'],
+                ['Herbstlauf Niederrhein',                'HERBSTLAUF-NIEDERRHEIN',               1012, null, '["10km Straße","5km Straße"]'],
+                ['Die Kö-Meile',                          'DIE-KOE-MEILE',                         907, 'https://www.diekoemeile.de', '["1 Meile","5km Straße"]'],
+                ['HRS BusinessRun Cologne',               'HRS-BUSINESSRUN-COLOGNE',               null, null, '["Firmenlauf"]'],
+                ['Geilenkirchener Volkslauf',             'GEILENKIRCHENER-VOLKSLAUF',             null, null, null],
+                ['Mars-Nikolauslauf Süchteln',            'MARS-NIKOLAUSLAUF-SUECHTELN',           null, null, null],
+                ['NEW Volksbad-Lauf Mönchengladbach',     'NEW-VOLKSBAD-LAUF-MOENCHENGL',          null, null, null],
+                ['Santander-Marathon Mönchengladbach',    'SANTANDER-MARATHON-MOENCHENGL',         null, null, null],
+                ['Rheinuferlauf Duisburg',                'RHEINUFERLAUF-DUISBURG',                726, 'https://hombergertv.de/rheinuferlauf/', '["10km Straße","5km Straße","Halbmarathon"]'],
+                ['Run&Fun Mönchengladbach',               'RUN-FUN-MOENCHENGLADBACH',              915, null, '["Firmenlauf"]'],
+                ['Nikolauslauf der TSG Dülmen',           'NIKOLAUSLAUF-TSG-DUELMEN',             1206, null, '["10km Straße","5km Straße"]'],
+                ['Run&Fun Krefeld',                       'RUN-FUN-KREFELD',                       827, null, '["Firmenlauf"]'],
+                ['Seidenraupen-Cross',                    'SEIDENRAUPEN-CROSS',                    921, null, '["Trail"]'],
+                ['Selfkantlauf',                          'SELFKANTLAUF',                          null, null, null],
+                ['Vivawest Marathon',                     'VIVAWEST-MARATHON',                     null, null, '["Marathon"]'],
+                ['Ratinger Neujahrslauf',                 'RATINGER-NEUJAHRSLAUF',                 104, 'https://asc-ratingen.de/neujahrslauf/', '["10km Straße","5km Straße"]'],
+                ['DO it fast Winter',                     'DO-IT-FAST-WINTER',                     201, 'https://doitfast.de', '["10km Straße","5km Straße"]'],
+                ['Berliner Halbmarathon',                 'BERLINER-HALBMARATHON',                 329, null, '["Halbmarathon"]'],
+                ['ADAC Marathon Hannover',                'ADAC-MARATHON-HANNOVER',                412, 'https://www.marathon-hannover.de', '["10km Straße","Halbmarathon","Marathon"]'],
+                ['Deutsche Post Marathon Bonn',           'DEUTSCHE-POST-MARATHON-BONN',           419, 'https://www.deutschepostmarathonbonn.de', '["Halbmarathon","Marathon"]'],
+                ['NN Marathon Rotterdam',                 'NN-MARATHON-ROTTERDAM',                 413, 'https://nnmarathonrotterdam.nl/en/', '["Marathon"]'],
+                ['Boston Marathon',                       'BOSTON-MARATHON',                       420, 'https://www.baa.org/races/boston-marathon/', '["Marathon"]'],
+                ['Schneider Electric Marathon de Paris',  'SCHNEIDER-ELECTRIC-MARATHON-P',         412, 'https://www.schneiderelectricparismarathon.com/en/', '["Marathon"]'],
+                ['TCS London Marathon',                   'TCS-LONDON-MARATHON',                   426, null, '["Marathon"]'],
+                ['Schloss-Dyck-Lauf',                     'SCHLOSS-DYCK-LAUF',                     505, null, '["10km Straße"]'],
+                ['ING Night Marathon Luxembourg',         'ING-NIGHT-MARATHON-LUXEMBOURG',         531, null, '["Halbmarathon","Marathon"]'],
+                ['Benrather Schlosslauf',                 'BENRATHER-SCHLOSSLAUF',                 601, null, '["10km Straße","5km Straße"]'],
+                ['Neusser Sommernachtslauf',              'NEUSSER-SOMMERNACHTSLAUF',              524, 'https://tg-neuss.de/sommernachtslauf/', '["10km Straße","5km Straße"]'],
+                ['Himmelgeister Brückenlauf',             'HIMMELGEISTER-BRUECKENLAUF',            614, null, '["Halbmarathon"]'],
+                ['Grevenbroicher Citylauf',               'GREVENBROICHER-CITYLAUF',               613, 'https://citylauf-grevenbroich.de', '["10km Straße","5km Straße"]'],
+                ['EVL-Halbmarathon Leverkusen',           'EVL-HALBMARATHON-LEVERKUSEN',           615, null, '["Halbmarathon"]'],
+                ['NEW-Citylauf Erkelenz',                 'NEW-CITYLAUF-ERKELENZ',                 614, null, '["10km Straße"]'],
+                ['Move&Groove Run',                       'MOVE-GROOVE-RUN',                       614, null, '["5km Straße"]'],
+                ['Schloss Wickrath Lauf',                 'SCHLOSS-WICKRATH-LAUF',                 525, 'https://www.schloss-wickrath-lauf.de', '["10km Straße","5km Straße"]'],
+                ['Hella-Halbmarathon Hamburg',            'HELLA-HALBMARATHON-HAMBURG',            628, 'https://www.hamburg-halbmarathon.de', '["Halbmarathon"]'],
+                ['Dr. Ernst van Aaken Gedächtnislauf Waldniel', 'DR-VAN-AAKEN-GEDAECHTNISLAUF-WN', 627, 'http://osc-lauf.de', '["5.000m Bahn"]'],
+                ['Lank läuft',                            'LANK-LAEUFT',                           630, null, '["10km Straße","5km Straße"]'],
+                ['DO it fast Sommer',                     'DO-IT-FAST-SOMMER',                     831, 'https://doitfast.de', '["10km Straße","5km Straße"]'],
+                ['Stadtwerke Halbmarathon Bochum',        'STADTWERKE-HALBMARATHON-BOCHUM',        906, null, '["10km Straße","5km Straße","Halbmarathon"]'],
+                ['Sparkassen-Stadtlauf Wachtendonk',      'SPARKASSEN-STADTLAUF-WACHTENDONK',      907, 'https://niersrunners.de', '["10km Straße","5km Straße"]'],
+                ['Welterbelauf Zollverein',               'WELTERBELAUF-ZOLLVEREIN',               913, null, '["10km Straße","5km Straße"]'],
+                ['Bunerts Lichterlauf',                   'BUNERTS-LICHTERLAUF',                   913, 'https://lichterlauf.bunert.de', '["10km Straße","5km Straße"]'],
+                ['Brachter Depotlauf',                    'BRACHTER-DEPOTLAUF',                    914, 'https://www.brachter-depotlauf.de', '["Landschaftslauf"]'],
+                ['Gelderner Citylauf',                    'GELDERNER-CITYLAUF',                    510, 'https://citylauf-geldern.de', '["5km Straße"]'],
+                ['PSD Bank Halbmarathon Hamburg',         'PSD-BANK-HALBMARATHON-HAMBURG',         921, null, '["Halbmarathon"]'],
+                ['Münster Marathon',                      'MUENSTER-MARATHON',                     921, null, '["Marathon"]'],
+                ['NRZ Klosterlauf',                       'NRZ-KLOSTERLAUF',                      1003, null, '["Halbmarathon"]'],
+                ['Bridge2bridge Run Venlo',               'BRIDGE2BRIDGE-RUN-VENLO',              1005, null, '["5km Straße"]'],
+                ['Chicago Marathon',                      'CHICAGO-MARATHON',                     1012, null, '["Marathon"]'],
+                ['Sparkasse 3-Länder-Marathon',           'SPARKASSE-3-LAENDER-MARATHON',         1012, null, '["Halbmarathon","Marathon","Viertelmarathon"]'],
+                ['Drei-Brücken-Lauf Bonn',               'DREI-BRUECKEN-LAUF-BONN',              1019, null, '["10km Straße","15km Straße","30km Straße"]'],
+                ['München Marathon',                      'MUENCHEN-MARATHON',                    1012, 'https://marathonmuenchen.org', '["10km Straße","Halbmarathon","Marathon"]'],
+                ['Herbstlauf Köln',                       'HERBSTLAUF-KOELN',                     1018, null, '["10km Straße"]'],
+                ['TCS Amsterdam Marathon',                'TCS-AMSTERDAM-MARATHON',               1019, null, '["Halbmarathon","Marathon"]'],
+                ['Mainova Frankfurt Marathon',            'MAINOVA-FRANKFURT-MARATHON',            1026, null, '["Marathon"]'],
+                ['New York Marathon',                     'NEW-YORK-MARATHON',                    1103, null, '["Marathon"]'],
+                ['Martinslauf Düsseldorf',               'MARTINSLAUF-DUESSELDORF',              1109, null, '["10km Straße"]'],
+                ['Schmachtendorfer Nikolauslauf',         'SCHMACHTENDORFER-NIKOLAUSLAUF',        1130, null, '["10km Straße","5km Straße"]'],
+                ['Seattle Marathon',                      'SEATTLE-MARATHON',                     1201, null, '["Marathon"]'],
+                ['Neusser Silvesterlauf',                 'NEUSSER-SILVESTERLAUF',                1231, 'https://www.silvesterlauf-neuss.de', '["10km Straße"]'],
+                ['Barbara-Runde Bergkamen',               'BARBARA-RUNDE-BERGKAMEN',              1207, null, '["5km Straße"]'],
+                ['Essener Silvesterlauf',                 'ESSENER-SILVESTERLAUF',                1231, null, '["10km Straße","5km Straße"]'],
+                ['Gutenberg Halbmarathon Mainz',          'GUTENBERG-HALBMARATHON-MAINZ',          504, null, '["Halbmarathon"]'],
+                ['Mailauf Osterrath',                     'MAILAUF-OSTERRATH',                     501, null, '["10km Straße","5km Straße"]'],
+                ['S25 Berlin',                            'S25-BERLIN',                            419, 'https://berlin-laeuft.de/s25berlin/', '["10km Straße","25km Straße","5km Straße","Halbmarathon"]'],
+                ['Rosellener Abendlauf',                  'ROSELLENER-ABENDLAUF',                  509, 'https://sv-rosellen.de/abendlauf', '["10km Straße","5km Straße"]'],
+                ['Wessumer Klumpenlauf',                  'WESSUMER-KLUMPENLAUF',                  517, 'https://unionwessum.de/klumpenlauf', '["10km Straße","5km Straße"]'],
+                ['Westenergie-Marathon Essen',            'WESTENERGIE-MARATHON-ESSEN',           1012, 'https://westenergie-marathon.de', '["Marathon"]'],
+                ['Salzkotten Marathon',                   'SALZKOTTEN-MARATHON',                   601, 'https://salzkotten-marathon.de/', '["10km Straße","5km Straße","Halbmarathon","Marathon"]'],
+                ['Fun Run Jüchen',                        'FUN-RUN-JUECHEN',                       601, 'https://www.fun-run-juechen.de', '["10km Straße"]'],
+                ['GVG-Abteilauf Brauweiler',             'GVG-ABTEILAUF-BRAUWEILER',              629, 'https://www.abtei-lauf.de', '["10km Straße","5km Straße"]'],
+                ['Sommerlauf Hochneukirch',               'SOMMERLAUF-HOCHNEUKIRCH',               830, 'https://www.sommerlauf-hochneukirch.de', '["10km Straße","5km Straße"]'],
+                ['Stadtlauf Jüchen',                      'STADTLAUF-JUECHEN',                     831, 'https://www.stadtlauf-juechen.de', '["10km Straße","5km Straße"]'],
+                ['Volkslauf TV Schwafheim',               'VOLKSLAUF-TV-SCHWAFHEIM',               619, null, '["10km Straße","5km Straße","Halbmarathon"]'],
+                ['ENNI-Donkenlauf Neukirchen-Vluyn',     'ENNI-DONKENLAUF-NK-VLUYN',              614, 'https://as-neukirchen-vluyn.de/sportgruppen/donkenlauf/', '["10km Straße","5km Straße"]'],
+                ['Eschweiler Citylauf',                   'ESCHWEILER-CITYLAUF',                   824, 'https://mc-eschweiler.de/veranstaltungen/killewittchenlauf/', '["10km Straße","5km Straße"]'],
+                ['Gocher Steintorlauf',                   'GOCHER-STEINTORLAUF',                   705, 'https://www.viktoria-leichtathletik.de', '["5km Straße"]'],
+                ['adidas Runners City Night Berlin',      'ADIDAS-CITY-NIGHT-BERLIN',              801, 'https://www.berlin-citynight.de', '["10km Straße","5km Straße"]'],
+                ['Kölner Halbmarathon',                  'KOELNER-HALBMARATHON',                  824, null, '["Halbmarathon"]'],
+                ['10k Hamburg / Elbe',                   '10K-HAMBURG-ELBE',                      525, null, '["10km Straße"]'],
+                ['Citylauf Siegburg',                     'CITYLAUF-SIEGBURG',                     907, 'https://hit-citylauf.de/infos/ausschreibung/', '["10km Straße","5km Straße"]'],
+                ['10k Hamburg / Volkspark',              '10K-HAMBURG-VOLKSPARK',                  622, null, '["10km Straße"]'],
+                ['10k Hamburg / Rotherbaum',             '10K-HAMBURG-ROTHERBAUM',                 824, null, '["10km Straße"]'],
+                ['Hamminkelner Abendlauf',               'HAMMINKELNER-ABENDLAUF',                 829, 'https://sv-hamminkeln.de/uebersicht-citylauf/', '["10km Straße","5km Straße"]'],
+                ['Michaelislauf Gronau-Epe',             'MICHAELISLAUF-GRONAU-EPE',               927, null, '["10km Straße","5km Straße"]'],
+                ['Berliner Morgenpost Great 10k',        'BERLINER-MORGENPOST-GREAT-10K',         1012, 'https://berlin-laeuft.de/great10k/', '["10km Straße"]'],
+                ['Bottroper Herbstwaldlauf',             'BOTTROPER-HERBSTWALDLAUF',              1109, 'https://www.adler-langlauf.de/herbstwaldlauf/', '["10km Straße","25km Straße"]'],
+                ['Mallorca Marathon',                    'MALLORCA-MARATHON',                    1018, 'https://www.palmademallorcamarathon.com/deutsch/race-info', '["10km Straße","Halbmarathon","Marathon"]'],
+                ['Hockenheimringlauf',                  'HOCKENHEIMRINGLAUF',                   1101, 'https://www.asgtria-hockenheim.de/Hockenheimringlauf/', '["10km Straße","5km Straße"]'],
+                ['Brüssel Marathon',                     'BRUESSEL-MARATHON',                    1102, 'https://brusselsairportmarathon.be/en/', '["Halbmarathon","Marathon"]'],
+                ['B2Run Gelsenkirchen',                  'B2RUN-GELSENKIRCHEN',                   null, null, '["Firmenlauf"]'],
+                ['Orion Nieuwjaarsloop',                 'ORION-NIEUWJAARSLOOP',                   104, 'https://www.orionvenlo.nl/nieuwjaarsloop-2026/', '["10km Straße","5km Straße"]'],
+                ['Neusser Osterlauf',                    'NEUSSER-OSTERLAUF',                      404, null, '["10km Straße","5km Straße"]'],
+            ];
+            foreach ($neue as [$name, $kuerzel, $si, $url, $wb]) {
+                try {
+                    $row = DB::fetchOne("SELECT id FROM `{$tws}` WHERE name = ?", [$name]);
+                    if (!$row) {
+                        DB::query("INSERT INTO `{$tws}` (name, kuerzel, sortierindex, url, wettbewerbe) VALUES (?,?,?,?,?)",
+                            [$name, $kuerzel, $si, $url, $wb]);
+                    } else {
+                        // Metadaten ergänzen, bestehende Werte nicht überschreiben
+                        DB::query("UPDATE `{$tws}` SET sortierindex=COALESCE(sortierindex,?), url=COALESCE(url,?), wettbewerbe=COALESCE(wettbewerbe,?) WHERE id=?",
+                            [$si, $url, $wb, (int)$row['id']]);
+                    }
+                } catch (Throwable $e) { error_log('mig15: ' . $e->getMessage()); }
+            }
+        },
     ];
 }
 
@@ -476,6 +672,10 @@ try {
     }
     if ($head === 'wettkampf') {
         handleWettkampf($method, $tail ?? '');
+        exit;
+    }
+    if ($head === 'wettkampfplanung') {
+        handleWettkampfplanung($method, $tail ?? '');
         exit;
     }
     http_response_code(404);
@@ -4648,6 +4848,115 @@ function handleWettkampf(string $method, string $tail): void
             'ort'        => $r['ort'] ?? null,
         ], $rows);
         echo json_encode(['ok' => true, 'termine' => $termine, 'statistikportal_url' => $statistikUrl]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
+}
+
+// ============================================================
+// handleWettkampfplanung – Wettkampfplanung pro Athlet/Jahr
+// GET  /wettkampfplanung?jahr=YYYY   → alle Serien + Nutzerstatus
+// PUT  /wettkampfplanung/{serie_id}  → Status setzen
+// ============================================================
+function handleWettkampfplanung(string $method, string $tail): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Login erforderlich']);
+        return;
+    }
+    $userId  = (int)$user['id'];
+
+    $tws = DB::tbl('veranstaltung_serien');
+    $tvv = DB::tbl('veranstaltungen');
+    $twp = DB::tbl('training_wettkampf_planung');
+    $twa = DB::tbl('training_wettkampf_anmeldungen');
+    $tst = DB::tbl('training_wettkampf_status');
+
+    // ── GET /wettkampfplanung?jahr=YYYY ───────────────────────────
+    if ($method === 'GET' && $tail === '') {
+        $jahr = max(2020, min(2035, (int)($_GET['jahr'] ?? (int)date('Y'))));
+
+        $serien = DB::fetchAll("
+            SELECT
+                vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
+                wp.naechstes_datum, COALESCE(wp.aktiv, 1) AS aktiv,
+                MAX(vv.datum)                              AS letztes_datum,
+                tst.status
+            FROM `{$tws}` vs
+            LEFT JOIN `{$twp}` wp  ON wp.serie_id  = vs.id
+            LEFT JOIN `{$tvv}` vv  ON vv.serie_id  = vs.id AND vv.geloescht_am IS NULL
+            LEFT JOIN `{$tst}` tst ON tst.serie_id = vs.id
+                                   AND tst.benutzer_id = ?
+                                   AND tst.jahr        = ?
+            GROUP BY vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
+                     wp.naechstes_datum, wp.aktiv, tst.status
+            ORDER BY COALESCE(vs.sortierindex, 9999) ASC, vs.name ASC
+        ", [$userId, $jahr]);
+
+        // Discipline registrations per serie for this user
+        $anmeldungen = DB::fetchAll("
+            SELECT wp.serie_id, twa.disziplin
+            FROM `{$twa}` twa
+            JOIN `{$twp}` wp ON wp.id = twa.planung_id
+            WHERE twa.benutzer_id = ?
+        ", [$userId]);
+
+        $anmBySerie = [];
+        foreach ($anmeldungen as $a) {
+            $anmBySerie[(int)$a['serie_id']][] = $a['disziplin'];
+        }
+
+        $result = [];
+        foreach ($serien as $s) {
+            $sid  = (int)$s['id'];
+            $anm  = $anmBySerie[$sid] ?? [];
+            $st   = $s['status'] ?? 'passt_nicht';
+            // Vorhandene Anmeldungen überschreiben den Standard-Status
+            if (!empty($anm) && $st === 'passt_nicht') $st = 'angemeldet';
+
+            $result[] = [
+                'id'                    => $sid,
+                'name'                  => $s['name'],
+                'sortierindex'          => $s['sortierindex'] !== null ? (int)$s['sortierindex'] : null,
+                'url'                   => $s['url'],
+                'wettbewerbe'           => $s['wettbewerbe'] ? json_decode((string)$s['wettbewerbe'], true) : [],
+                'aktiv'                 => (int)$s['aktiv'],
+                'letztes_datum'         => $s['letztes_datum'],
+                'naechstes_datum'       => $s['naechstes_datum'],
+                'status'                => $st,
+                'angemeldet_disziplinen' => $anm,
+            ];
+        }
+
+        echo json_encode(['ok' => true, 'serien' => $result, 'jahr' => $jahr]);
+        return;
+    }
+
+    // ── PUT /wettkampfplanung/{serie_id} ──────────────────────────
+    if (preg_match('/^(\d+)$/', $tail, $m) && $method === 'PUT') {
+        $serieId = (int)$m[1];
+        $in      = readJsonBody();
+        $jahr    = max(2020, min(2035, (int)($in['jahr'] ?? (int)date('Y'))));
+        $status  = (string)($in['status'] ?? 'passt_nicht');
+
+        $valid = ['offen','in_klaerung','anmeldung_erforderlich','angemeldet',
+                  'absolviert','findet_nicht_statt','passt_nicht','nicht_angetreten'];
+        if (!in_array($status, $valid, true)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Ungültiger Status']);
+            return;
+        }
+
+        DB::query(
+            "INSERT INTO `{$tst}` (serie_id, benutzer_id, jahr, status) VALUES (?,?,?,?)
+             ON DUPLICATE KEY UPDATE status=VALUES(status), geaendert_am=CURRENT_TIMESTAMP",
+            [$serieId, $userId, $jahr, $status]
+        );
+        echo json_encode(['ok' => true]);
         return;
     }
 
