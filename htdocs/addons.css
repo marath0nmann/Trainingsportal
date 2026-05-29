@@ -1839,43 +1839,50 @@ body.planung-active #app-footer    { display: none; }
 }
 
 /* ── Trainingsgruppen – Planungs-Tabs ──────────────────────────────────── */
+/* Underline-Tabs: kein Box-Styling, passt zu Light- und Dark-Theme */
 .planung-gruppen-bar {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 16px 0;
-  border-bottom: 2px solid var(--border, #e4e4e7);
+  display: flex; align-items: center; gap: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
 .planung-tab {
-  padding: 6px 14px; border-radius: 6px 6px 0 0; cursor: pointer;
+  padding: 8px 14px;
+  border: none; border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text2);
   font-size: 13px; font-weight: 500;
-  border: 1.5px solid var(--border, #e4e4e7); border-bottom: none;
-  background: var(--bg2, #f4f4f5); color: var(--text2, #71717a);
-  transition: background .15s, color .15s;
-  margin-bottom: -2px;
+  cursor: pointer; white-space: nowrap;
+  font-family: inherit;
+  margin-bottom: -1px;          /* sitzt exakt auf der Bar-Trennlinie */
+  border-radius: 0;
+  transition: color .15s, border-bottom-color .15s;
 }
-.planung-tab:hover { background: var(--bg, #fff); color: var(--text, #18181b); }
+.planung-tab:hover { color: var(--text); border-bottom-color: color-mix(in srgb, var(--border) 80%, var(--accent)); }
 .planung-tab-aktiv {
-  background: var(--bg, #fff); color: var(--accent, #0ea5e9);
-  border-color: var(--accent, #0ea5e9); font-weight: 700;
+  color: var(--accent); border-bottom-color: var(--accent);
+  font-weight: 700;
 }
+.planung-tab-aktiv:hover { color: var(--accent); }
 .planung-tab-config {
-  margin-left: auto; padding: 6px 10px; font-size: 14px;
-  background: transparent; border-color: transparent; color: var(--text2);
+  padding: 8px 10px; font-size: 14px; color: var(--text2);
+  margin-left: 0;
 }
-.planung-tab-config:hover { background: var(--bg2, #f4f4f5); color: var(--text); }
-/* Tab mit Standard-Kalenderfarbe (Trainer setzt sie hier) */
-.planung-tab-wrap { display: inline-flex; align-items: flex-end; gap: 3px; }
+.planung-tab-config:hover { color: var(--text); }
+/* Tab mit Gruppenfarb-Dot */
+.planung-tab-wrap { display: inline-flex; align-items: center; gap: 5px; }
 .planung-tab-color {
-  width: 14px; height: 14px; padding: 0; margin-bottom: 4px;
-  border: 1px solid var(--border); border-radius: 50%;
+  width: 10px; height: 10px; padding: 0; flex-shrink: 0;
+  border: none; border-radius: 50%;
   background: none; cursor: pointer; -webkit-appearance: none; appearance: none;
 }
 .planung-tab-color::-webkit-color-swatch-wrapper { padding: 0; }
 .planung-tab-color::-webkit-color-swatch { border: none; border-radius: 50%; }
 .planung-tab-color::-moz-color-swatch { border: none; border-radius: 50%; }
 .planung-gruppen-hint {
-  font-size: 12px; color: var(--text2, #71717a);
+  font-size: 12px; color: var(--text2);
 }
 /* ── Wettkampf-Schnelleintrag-Popover ─────────────────────────────────── */
 .wk-popover {
