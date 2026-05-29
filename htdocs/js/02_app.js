@@ -105,7 +105,6 @@ function fillUserBadge() {
     nav.innerHTML = `
       <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
       ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Planung</button>` : ''}
-      ${isTrainer ? `<button onclick="navigate('treffpunkte')"${state.tab === 'treffpunkte' ? ' class="active"' : ''}>Treffpunkte</button>` : ''}
       ${isAdmin ? `<button onclick="navigate('admin')"${state.tab === 'admin' ? ' class="active"' : ''}>Admin</button>` : ''}`;
   }
 
@@ -119,7 +118,6 @@ function _fillMobileNav(isTrainer, isAdmin) {
   const act = (tab) => state.tab === tab ? ' active' : '';
   let html = `<button class="mobile-nav-item${act('kalender')}" onclick="navigate('kalender');closeBurgerMenu()">Kalender</button>`;
   if (isTrainer) html += `<button class="mobile-nav-item${act('planung')}" onclick="navigate('planung');closeBurgerMenu()">Planung</button>`;
-  if (isTrainer) html += `<button class="mobile-nav-item${act('treffpunkte')}" onclick="navigate('treffpunkte');closeBurgerMenu()">Treffpunkte</button>`;
   if (isAdmin)   html += `<button class="mobile-nav-item${act('admin')}" onclick="navigate('admin');closeBurgerMenu()">Admin</button>`;
   if (u) {
     html += `<button class="mobile-nav-item mobile-nav-profil" onclick="PROFIL.open();closeBurgerMenu()">Profil</button>`;
@@ -193,8 +191,7 @@ function renderPage() {
     return;
   }
   if (state.tab === 'treffpunkte') {
-    if (!state.user) { location.replace(startHash()); return; }
-    TREFFPUNKTE.render(main);
+    location.replace('#admin/treffpunkte');
     return;
   }
   if (state.tab === 'einstellungen') {
@@ -247,6 +244,8 @@ function renderAdminPage(main, subTab) {
           onclick="navigateAdmin('trainings')">Trainings</button>
         <button class="btn btn-ghost${tab === 'wettkampf' ? ' active' : ''}"
           onclick="navigateAdmin('wettkampf')">Wettkämpfe</button>
+        <button class="btn btn-ghost${tab === 'treffpunkte' ? ' active' : ''}"
+          onclick="navigateAdmin('treffpunkte')">Treffpunkte</button>
       </div>
       <div id="admin-content"></div>
     </div>`;
@@ -258,6 +257,8 @@ function renderAdminPage(main, subTab) {
     ADMIN_TRAININGS.render(contentEl);
   } else if (tab === 'wettkampf') {
     ADMIN_WETTKAMPF.render(contentEl);
+  } else if (tab === 'treffpunkte') {
+    TREFFPUNKTE.render(contentEl);
   } else {
     SETTINGS.render(contentEl);
   }
