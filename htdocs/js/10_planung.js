@@ -298,13 +298,22 @@ const PLANUNG = (() => {
   // Jeder Tab trägt die Kalenderfarbe (Standard, vom Trainer setzbar).
   function _tab(key, label, aktiv, onclick, title) {
     const farbe = (typeof kalFarbeDefault === 'function') ? kalFarbeDefault(key) : '#888888';
+    // Im Dark-Mode rohe Hex-Farben aufhellen, damit sie auf dunklem Grund lesbar sind
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+      (!document.documentElement.getAttribute('data-theme') &&
+       window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const farbeVis = (isDark && typeof _farbeFuerDark === 'function') ? _farbeFuerDark(farbe) : farbe;
+    // Aktiv: Farbe als Border + Text; inaktiv: transparente Border (CSS übernimmt Hover)
+    const btnStyle = aktiv
+      ? `border-bottom:3px solid ${farbeVis};color:${farbeVis}`
+      : `border-bottom:3px solid transparent`;
     return `<span class="planung-tab-wrap">
       <input type="color" class="planung-tab-color" value="${farbe}"
         title="Standard-Kalenderfarbe festlegen · Rechtsklick: zurücksetzen"
         onclick="event.stopPropagation()"
         onchange="PLANUNG.setDefaultFarbe('${key}', this.value)"
         oncontextmenu="return PLANUNG.resetDefaultFarbe(event, '${key}')">
-      <button class="planung-tab${aktiv ? ' planung-tab-aktiv' : ''}" style="border-bottom:3px solid ${farbe}"
+      <button class="planung-tab${aktiv ? ' planung-tab-aktiv' : ''}" style="${btnStyle}"
         ${onclick}${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>
     </span>`;
   }

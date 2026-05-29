@@ -1862,10 +1862,10 @@ body.planung-active #app-footer    { display: none; }
 }
 .planung-tab:hover { color: var(--text); border-bottom-color: color-mix(in srgb, var(--border) 80%, var(--accent)); }
 .planung-tab-aktiv {
-  color: var(--accent); border-bottom-color: var(--accent);
+  /* color + border-bottom werden per JS inline mit der (dark-adjustierten) Gruppenfarbe gesetzt */
   font-weight: 700;
 }
-.planung-tab-aktiv:hover { color: var(--accent); }
+.planung-tab-aktiv:hover { opacity: .9; }
 .planung-tab-config {
   padding: 8px 10px; font-size: 14px; color: var(--text2);
   margin-left: 0;

@@ -1,5 +1,8 @@
 # Changelog
 
+## v198
+- Planungs-Tabs: Gruppenfarbe wird im Dark-Mode per _farbeFuerDark() aufgehellt – aktives Tab ist jetzt lesbar; inaktive Tabs bekommen transparente Border (Hover via CSS)
+
 ## v197
 - Planungskalender: Kalender-Spalte bekommt Mindestbreite von 560px – schrumpft nicht mehr ungewöhnlich schmal wenn keine Einträge vorhanden sind (auf Mobilgeräten weiterhin flexibel)
 - Planungs-Tabs: Box-Tab-Design durch Underline-Tabs ersetzt – kein hartes Background/Border mehr, passt zu Light- und Dark-Theme
