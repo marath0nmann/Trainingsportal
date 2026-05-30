@@ -208,7 +208,7 @@ const WETTKAMPFPLANUNG = (() => {
         <tbody>`;
 
     sichtbar.forEach(s => {
-      const st      = ST[s.status] || ST['passt_nicht'];
+      const st      = ST[s.status] || ST['offen'];
       const datum   = _datumFuerJahr(s, _jahr);
       const heute   = (new Date()).toISOString().slice(0, 10);
       const vergangen   = datum && datum < heute;

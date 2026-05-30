@@ -4950,9 +4950,26 @@ function handleWettkampfplanung(string $method, string $tail): void
                 );
             }
 
-            if ($st === null) $st = 'passt_nicht';
+            // Standard: zukünftige Events → offen, vergangene ohne Status → passt_nicht
+            if ($st === null) {
+                $y = (string)$jahr;
+                $effDatum = null;
+                if (!empty($s['naechstes_datum']) && str_starts_with((string)$s['naechstes_datum'], $y)) {
+                    $effDatum = $s['naechstes_datum'];
+                } elseif (!empty($s['letztes_datum']) && str_starts_with((string)$s['letztes_datum'], $y)) {
+                    $effDatum = $s['letztes_datum'];
+                } elseif (!empty($s['sortierindex'])) {
+                    $si = str_pad((string)$s['sortierindex'], 4, '0', STR_PAD_LEFT);
+                    $mm = (int)substr($si, 0, 2);
+                    $dd = (int)substr($si, 2, 2);
+                    if ($mm >= 1 && $mm <= 12 && $dd >= 1 && $dd <= 31) {
+                        $effDatum = "$y-" . sprintf('%02d', $mm) . '-' . sprintf('%02d', $dd);
+                    }
+                }
+                $st = ($effDatum !== null && $effDatum < date('Y-m-d')) ? 'passt_nicht' : 'offen';
+            }
             // Vorhandene Anmeldungen überschreiben den Standard-Status
-            if (!empty($anm) && $st === 'passt_nicht') $st = 'angemeldet';
+            if (!empty($anm) && in_array($st, ['passt_nicht', 'offen'], true)) $st = 'angemeldet';
 
             $result[] = [
                 'id'                    => $sid,

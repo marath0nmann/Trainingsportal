@@ -1,6 +1,6 @@
 # Changelog
 
-## v203
+## v204
 - Wettkampfplanung: Filter (Freitext + Statusfilter mit Mehrfachauswahl), Sortierung per Spaltenklick (Name/Datum/Status), Multiselect + Bulk-Edit-Bar
 
 ## v202
