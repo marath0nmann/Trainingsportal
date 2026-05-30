@@ -16,7 +16,7 @@ const WETTKAMPFPLANUNG = (() => {
   // Filter / Sort / Select state
   let _filterText   = '';
   let _filterStatus = new Set();   // leer = alle Status anzeigen
-  let _sortKey      = null;        // 'name' | 'datum' | 'status'
+  let _sortKey      = 'datum';     // 'name' | 'datum' | 'status'
   let _sortDir      = 'asc';
   let _selected     = new Set();   // ausgewählte Serie-IDs
 
