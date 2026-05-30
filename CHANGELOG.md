@@ -1,5 +1,8 @@
 # Changelog
 
+## v203
+- Wettkampfplanung: Filter (Freitext + Statusfilter mit Mehrfachauswahl), Sortierung per Spaltenklick (Name/Datum/Status), Multiselect + Bulk-Edit-Bar
+
 ## v202
 - Fix: Wettkampf-Einträge in Heute/Morgen zeigten Distanz und Disziplin doppelt (sind bereits im Titel enthalten)
 

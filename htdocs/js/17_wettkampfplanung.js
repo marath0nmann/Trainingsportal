@@ -6,10 +6,19 @@
 
 const WETTKAMPFPLANUNG = (() => {
 
-  let _serien    = [];
-  let _jahr      = new Date().getFullYear();
-  let _container = null;
-  let _popper    = null;  // global floating status-picker
+  let _serien       = [];
+  let _jahr         = new Date().getFullYear();
+  let _container    = null;
+  let _popper       = null;
+  let _filterPopper = null;
+  let _bulkPopper   = null;
+
+  // Filter / Sort / Select state
+  let _filterText   = '';
+  let _filterStatus = new Set();   // leer = alle Status anzeigen
+  let _sortKey      = null;        // 'name' | 'datum' | 'status'
+  let _sortDir      = 'asc';
+  let _selected     = new Set();   // ausgewählte Serie-IDs
 
   // ── Statuskonfiguration ──────────────────────────────────────
   const ST = {
@@ -23,7 +32,7 @@ const WETTKAMPFPLANUNG = (() => {
     nicht_angetreten:       { label: 'nicht angetreten',       bg: '#7f8c8d', text: '#fff', kat: 3 },
   };
 
-  // Status-Gruppen für das Dropdown
+  // Status-Gruppen für Dropdown
   const ST_GRUPPEN = [
     { titel: 'To-Do',          keys: ['offen','in_klaerung'] },
     { titel: 'In Bearbeitung', keys: ['anmeldung_erforderlich'] },
@@ -52,21 +61,76 @@ const WETTKAMPFPLANUNG = (() => {
     _serien = resp.serien || [];
   }
 
+  // ── Gefilterte + sortierte Serien ────────────────────────────
+  function _gefilterteSerien() {
+    let arr = _serien.slice();
+
+    if (_filterText.trim()) {
+      const q = _filterText.trim().toLowerCase();
+      arr = arr.filter(s => s.name.toLowerCase().includes(q));
+    }
+
+    if (_filterStatus.size > 0) {
+      arr = arr.filter(s => _filterStatus.has(s.status));
+    }
+
+    if (_sortKey) {
+      arr.sort((a, b) => {
+        let av, bv;
+        if (_sortKey === 'name') {
+          av = a.name.toLowerCase();
+          bv = b.name.toLowerCase();
+        } else if (_sortKey === 'datum') {
+          av = _datumFuerJahr(a, _jahr) || '9999-99-99';
+          bv = _datumFuerJahr(b, _jahr) || '9999-99-99';
+        } else if (_sortKey === 'status') {
+          av = a.status || 'z';
+          bv = b.status || 'z';
+        }
+        if (av < bv) return _sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return _sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return arr;
+  }
+
   // ── Liste rendern ────────────────────────────────────────────
   function _renderListe() {
     if (!_container) return;
     _closePopper();
 
-    // Statistiken
+    // Fokus-ID merken damit Search-Input nach DOM-Rebuild refokussiert werden kann
+    const prevFocusId = document.activeElement?.id;
+
+    const sichtbar = _gefilterteSerien();
+
+    // Statistiken über alle Serien (nicht nur gefilterte)
     const stati = {};
     _serien.forEach(s => { stati[s.status] = (stati[s.status] || 0) + 1; });
     const angemeldet  = (stati['angemeldet']  || 0);
     const offen       = (stati['offen']       || 0) + (stati['in_klaerung'] || 0) + (stati['anmeldung_erforderlich'] || 0);
     const absolviert  = (stati['absolviert']  || 0);
 
+    const sichtbareIds = sichtbar.map(s => s.id);
+    const alleSelected = sichtbareIds.length > 0 && sichtbareIds.every(id => _selected.has(id));
+    const someSelected = sichtbareIds.some(id => _selected.has(id));
+
+    // Filter-Button-Label
+    let filterLabel = 'Alle Status';
+    if (_filterStatus.size === 1) filterLabel = ST[[..._filterStatus][0]]?.label || 'Filter';
+    else if (_filterStatus.size > 1) filterLabel = `${_filterStatus.size} Status`;
+
+    // Sort-Icon helper
+    const si = key => {
+      if (_sortKey !== key) return '<span style="color:var(--border);font-size:10px;margin-left:3px">↕</span>';
+      return `<span style="font-size:10px;margin-left:3px">${_sortDir === 'asc' ? '↑' : '↓'}</span>`;
+    };
+
     let html = `
       <div style="display:flex;justify-content:space-between;align-items:flex-end;
-                  margin-bottom:20px;flex-wrap:wrap;gap:12px">
+                  margin-bottom:16px;flex-wrap:wrap;gap:12px">
         <div>
           <h2 style="margin:0 0 2px;font-size:1.2rem;font-weight:700">Wettkampfplanung</h2>
           <div style="font-size:12px;color:var(--text2)">
@@ -83,33 +147,73 @@ const WETTKAMPFPLANUNG = (() => {
           <button class="btn btn-ghost btn-sm"
             onclick="WETTKAMPFPLANUNG.setJahr(${_jahr + 1})">${_jahr + 1} ›</button>
         </div>
+      </div>
+
+      <!-- Toolbar: Suche + Filter -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <input type="search" id="wkp-search"
+          placeholder="Veranstaltung suchen…"
+          value="${escapeHtml(_filterText)}"
+          oninput="WETTKAMPFPLANUNG._setFilter(this.value)"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;
+                 background:var(--bg2);color:var(--text);font-size:13px;
+                 width:200px;outline:none;box-sizing:border-box">
+        <button id="wkp-filter-btn"
+          onclick="WETTKAMPFPLANUNG._openFilterPopper(this)"
+          style="padding:6px 12px;border:1px solid ${_filterStatus.size ? 'var(--primary)' : 'var(--border)'};
+                 border-radius:8px;background:${_filterStatus.size ? 'color-mix(in srgb,var(--primary) 15%,transparent)' : 'var(--bg2)'};
+                 color:${_filterStatus.size ? 'var(--primary)' : 'var(--text)'};
+                 font-size:12px;cursor:pointer;white-space:nowrap">
+          ${escapeHtml(filterLabel)} ▾
+        </button>
+        ${(_filterText || _filterStatus.size) ? `
+          <button onclick="WETTKAMPFPLANUNG._resetFilter()"
+            style="padding:4px 8px;border:none;background:none;color:var(--text2);
+                   font-size:12px;cursor:pointer">✕ zurücksetzen</button>` : ''}
+        ${sichtbar.length !== _serien.length
+          ? `<span style="font-size:12px;color:var(--text2)">${sichtbar.length} von ${_serien.length}</span>`
+          : ''}
       </div>`;
 
-    if (!_serien.length) {
-      html += '<div style="padding:40px;text-align:center;color:var(--text2)">Keine Veranstaltungen vorhanden.</div>';
+    if (!sichtbar.length) {
+      html += '<div style="padding:40px;text-align:center;color:var(--text2)">Keine Veranstaltungen gefunden.</div>';
       _container.innerHTML = html;
       return;
     }
 
     html += `<div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;min-width:540px">
+      <table style="width:100%;border-collapse:collapse;min-width:560px">
         <thead>
           <tr style="border-bottom:2px solid var(--border)">
-            <th style="${_thStyle()}">Veranstaltung</th>
-            <th style="${_thStyle()}">Datum ${_jahr}</th>
+            <th style="padding:8px 8px;width:36px;text-align:center">
+              <input type="checkbox" class="wkp-check-all"
+                onchange="WETTKAMPFPLANUNG._toggleAll(this.checked)"
+                style="cursor:pointer;width:15px;height:15px;accent-color:var(--primary)">
+            </th>
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('name')"
+                style="${_thStyle()}cursor:pointer;user-select:none">
+              Veranstaltung${si('name')}
+            </th>
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('datum')"
+                style="${_thStyle()}cursor:pointer;user-select:none;white-space:nowrap">
+              Datum ${_jahr}${si('datum')}
+            </th>
             <th style="${_thStyle()}">Wettbewerbe</th>
-            <th style="${_thStyle()}">Status</th>
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('status')"
+                style="${_thStyle()}cursor:pointer;user-select:none">
+              Status${si('status')}
+            </th>
           </tr>
         </thead>
         <tbody>`;
 
-    _serien.forEach(s => {
-      const st   = ST[s.status] || ST['passt_nicht'];
-      const datum = _datumFuerJahr(s, _jahr);
-      const heute = (new Date()).toISOString().slice(0, 10);
-      const vergangen = datum && datum < heute;
+    sichtbar.forEach(s => {
+      const st      = ST[s.status] || ST['passt_nicht'];
+      const datum   = _datumFuerJahr(s, _jahr);
+      const heute   = (new Date()).toISOString().slice(0, 10);
+      const vergangen   = datum && datum < heute;
+      const isSelected  = _selected.has(s.id);
 
-      // Wettbewerbe-Chips (max 3)
       const wb = Array.isArray(s.wettbewerbe) ? s.wettbewerbe : [];
       const MAX_WB = 3;
       let wbHtml = '';
@@ -119,7 +223,6 @@ const WETTKAMPFPLANUNG = (() => {
       });
       if (wb.length > MAX_WB) wbHtml += `<span style="font-size:11px;color:var(--text2)">+${wb.length - MAX_WB}</span>`;
 
-      // Angemeldete Disziplinen
       const anmDisz = s.angemeldet_disziplinen || [];
       let anmHtml = '';
       if (anmDisz.length) {
@@ -129,7 +232,6 @@ const WETTKAMPFPLANUNG = (() => {
           `</div>`;
       }
 
-      // Datum-Anzeige
       let datumHtml = '<span style="color:var(--text2);font-size:13px">–</span>';
       if (datum) {
         const d = new Date(datum + 'T00:00:00');
@@ -138,11 +240,17 @@ const WETTKAMPFPLANUNG = (() => {
         datumHtml = `<span style="font-size:13px${vergangen ? ';color:var(--text2)' : ';font-weight:600'}">${fmt}</span>`;
       }
 
-      // Zeilen-Stil: vergangene Termine leicht ausgeblendet
-      const rowOp = vergangen && s.status === 'passt_nicht' ? 'opacity:.55' : '';
+      const rowOp  = vergangen && s.status === 'passt_nicht' ? 'opacity:.55;' : '';
+      const rowBg  = isSelected ? 'background:color-mix(in srgb,var(--primary) 8%,transparent);' : '';
 
       html += `
-        <tr style="border-bottom:1px solid var(--border);${rowOp}">
+        <tr style="border-bottom:1px solid var(--border);${rowOp}${rowBg}">
+          <td style="padding:9px 8px;text-align:center;width:36px">
+            <input type="checkbox" class="wkp-check" data-id="${s.id}"
+              ${isSelected ? 'checked' : ''}
+              onchange="WETTKAMPFPLANUNG._toggleSelect(${s.id}, this.checked)"
+              style="cursor:pointer;width:15px;height:15px;accent-color:var(--primary)">
+          </td>
           <td style="padding:9px 10px">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               ${s.aktiv === 0 ? '<span style="font-size:10px;padding:1px 5px;border-radius:6px;background:var(--border);color:var(--text2)">inaktiv</span>' : ''}
@@ -158,8 +266,7 @@ const WETTKAMPFPLANUNG = (() => {
             <button class="wkp-status-btn"
               onclick="WETTKAMPFPLANUNG._openPopper(${s.id}, this)"
               style="background:${st.bg};color:${st.text};border:none;border-radius:12px;
-                     padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;
-                     white-space:nowrap">
+                     padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">
               ${escapeHtml(st.label)}
             </button>
           </td>
@@ -167,33 +274,238 @@ const WETTKAMPFPLANUNG = (() => {
     });
 
     html += `</tbody></table></div>`;
+
+    // Bulk-Action-Bar (sticky, erscheint wenn etwas ausgewählt)
+    if (_selected.size > 0) {
+      html += `
+        <div id="wkp-bulk-bar" style="
+          position:sticky;bottom:0;margin-top:8px;
+          background:var(--bg);border-top:2px solid var(--primary);
+          padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+          box-shadow:0 -4px 16px rgba(0,0,0,.12);border-radius:0 0 10px 10px">
+          <strong style="font-size:13px;color:var(--primary)">${_selected.size} ausgewählt</strong>
+          <button id="wkp-bulk-btn"
+            onclick="WETTKAMPFPLANUNG._openBulkPopper(this)"
+            style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;
+                   background:var(--bg2);color:var(--text);font-size:12px;cursor:pointer">
+            Status setzen ▾
+          </button>
+          <button onclick="WETTKAMPFPLANUNG._clearSelection()"
+            style="padding:6px 10px;border:none;background:none;color:var(--text2);
+                   font-size:12px;cursor:pointer">Abbrechen</button>
+        </div>`;
+    }
+
     _container.innerHTML = html;
+
+    // Indeterminate-Zustand für "Alle auswählen"-Checkbox
+    const chkAll = _container.querySelector('.wkp-check-all');
+    if (chkAll) {
+      chkAll.checked       = alleSelected;
+      chkAll.indeterminate = !alleSelected && someSelected;
+    }
+
+    // Fokus nach DOM-Rebuild wiederherstellen (z. B. Search-Input)
+    if (prevFocusId) {
+      const el = _container.querySelector('#' + prevFocusId);
+      if (el) {
+        el.focus();
+        // Cursor ans Ende setzen
+        if (typeof el.selectionStart === 'number') {
+          const len = el.value.length;
+          el.selectionStart = el.selectionEnd = len;
+        }
+      }
+    }
   }
 
   function _thStyle() {
     return 'text-align:left;padding:8px 10px;font-size:11px;font-weight:700;' +
-           'text-transform:uppercase;letter-spacing:.4px;color:var(--text2);white-space:nowrap';
+           'text-transform:uppercase;letter-spacing:.4px;color:var(--text2);white-space:nowrap;';
   }
 
-  // ── Datum für ein bestimmtes Jahr berechnen ──────────────────
-  function _datumFuerJahr(serie, jahr) {
-    const y = String(jahr);
-    // 1. Manuell gesetzter Termin in diesem Jahr
-    if (serie.naechstes_datum && serie.naechstes_datum.startsWith(y)) return serie.naechstes_datum;
-    // 2. Letzter Termin in diesem Jahr (aus Ergebnissen)
-    if (serie.letztes_datum && serie.letztes_datum.startsWith(y)) return serie.letztes_datum;
-    // 3. Sortierindex → YYYY-MM-DD (grobe Schätzung)
-    if (serie.sortierindex) {
-      const si = String(serie.sortierindex).padStart(4, '0');
-      const mm = si.slice(0, 2);
-      const dd = si.slice(2, 4);
-      const m = parseInt(mm, 10), d = parseInt(dd, 10);
-      if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${mm}-${dd}`;
+  // ── Sort ─────────────────────────────────────────────────────
+  function _toggleSort(key) {
+    if (_sortKey === key) {
+      _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _sortKey = key;
+      _sortDir = 'asc';
     }
-    return null;
+    _renderListe();
   }
 
-  // ── Status-Popper ────────────────────────────────────────────
+  // ── Filter ───────────────────────────────────────────────────
+  function _setFilter(text) {
+    _filterText = text;
+    _selected.clear();
+    _renderListe();
+  }
+
+  function _resetFilter() {
+    _filterText = '';
+    _filterStatus.clear();
+    _selected.clear();
+    _renderListe();
+  }
+
+  function _openFilterPopper(btn) {
+    if (!_filterPopper || !_filterPopper.isConnected) {
+      _filterPopper = document.createElement('div');
+      _filterPopper.style.cssText =
+        'position:fixed;z-index:9900;background:var(--bg);border:1px solid var(--border);' +
+        'border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:6px;' +
+        'min-width:220px;display:none;';
+      document.body.appendChild(_filterPopper);
+      document.addEventListener('mousedown', e => {
+        const b = document.getElementById('wkp-filter-btn');
+        if (_filterPopper.style.display !== 'none' &&
+            !_filterPopper.contains(e.target) && !b?.contains(e.target)) {
+          _filterPopper.style.display = 'none';
+        }
+      });
+    }
+
+    let html = `<div style="padding:4px 10px 6px;font-size:10px;font-weight:700;
+      text-transform:uppercase;letter-spacing:.4px;color:var(--text2)">Status filtern</div>`;
+    ST_GRUPPEN.forEach(g => {
+      html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;
+        letter-spacing:.4px;color:var(--text2);padding:4px 10px 2px;margin-top:4px">${escapeHtml(g.titel)}</div>`;
+      g.keys.forEach(key => {
+        const cfg   = ST[key];
+        const aktiv = _filterStatus.has(key);
+        html += `<div onclick="WETTKAMPFPLANUNG._toggleFilterStatus('${key}')"
+          style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;
+                 background:${aktiv ? 'var(--border)' : 'transparent'}"
+          onmouseover="this.style.background='var(--border)'"
+          onmouseout="this.style.background='${aktiv ? 'var(--border)' : 'transparent'}'">
+          <span style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:${escapeHtml(cfg.bg)}"></span>
+          <span style="font-size:13px;flex:1">${escapeHtml(cfg.label)}</span>
+          ${aktiv ? '<span style="font-size:11px;color:var(--text2)">✓</span>' : ''}
+        </div>`;
+      });
+    });
+    html += `<div style="padding:6px 10px;border-top:1px solid var(--border);margin-top:4px">
+      <button onclick="WETTKAMPFPLANUNG._resetStatusFilter()"
+        style="font-size:12px;color:var(--text2);background:none;border:none;cursor:pointer;padding:0">
+        Alle anzeigen
+      </button>
+    </div>`;
+
+    _filterPopper.innerHTML = html;
+    _filterPopper.style.display = 'block';
+    _positionPopper(_filterPopper, btn, 220);
+  }
+
+  function _toggleFilterStatus(key) {
+    if (_filterStatus.has(key)) _filterStatus.delete(key);
+    else _filterStatus.add(key);
+    _selected.clear();
+    _renderListe();
+    const btn = document.getElementById('wkp-filter-btn');
+    if (btn) _openFilterPopper(btn);
+  }
+
+  function _resetStatusFilter() {
+    _filterStatus.clear();
+    if (_filterPopper) _filterPopper.style.display = 'none';
+    _selected.clear();
+    _renderListe();
+  }
+
+  // ── Auswahl ──────────────────────────────────────────────────
+  function _toggleSelect(serieId, checked) {
+    if (checked) _selected.add(serieId);
+    else         _selected.delete(serieId);
+    _renderListe();
+  }
+
+  function _toggleAll(checked) {
+    _gefilterteSerien().forEach(s => {
+      if (checked) _selected.add(s.id);
+      else         _selected.delete(s.id);
+    });
+    _renderListe();
+  }
+
+  function _clearSelection() {
+    _selected.clear();
+    _renderListe();
+  }
+
+  // ── Bulk-Status-Popper ────────────────────────────────────────
+  function _openBulkPopper(btn) {
+    if (!_bulkPopper || !_bulkPopper.isConnected) {
+      _bulkPopper = document.createElement('div');
+      _bulkPopper.style.cssText =
+        'position:fixed;z-index:9901;background:var(--bg);border:1px solid var(--border);' +
+        'border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:6px;' +
+        'min-width:200px;display:none;';
+      document.body.appendChild(_bulkPopper);
+      document.addEventListener('mousedown', e => {
+        const b = document.getElementById('wkp-bulk-btn');
+        if (_bulkPopper.style.display !== 'none' &&
+            !_bulkPopper.contains(e.target) && !b?.contains(e.target)) {
+          _bulkPopper.style.display = 'none';
+        }
+      });
+    }
+
+    let html = `<div style="padding:4px 10px 6px;font-size:10px;font-weight:700;
+      text-transform:uppercase;letter-spacing:.4px;color:var(--text2)">
+      Status für ${_selected.size} Einträge setzen</div>`;
+    ST_GRUPPEN.forEach(g => {
+      html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;
+        letter-spacing:.4px;color:var(--text2);padding:4px 10px 2px;margin-top:4px">${escapeHtml(g.titel)}</div>`;
+      g.keys.forEach(key => {
+        const cfg = ST[key];
+        html += `<div onclick="WETTKAMPFPLANUNG._bulkSetStatus('${key}')"
+          style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer"
+          onmouseover="this.style.background='var(--border)'"
+          onmouseout="this.style.background=''">
+          <span style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:${escapeHtml(cfg.bg)}"></span>
+          <span style="font-size:13px">${escapeHtml(cfg.label)}</span>
+        </div>`;
+      });
+    });
+
+    _bulkPopper.innerHTML = html;
+    _bulkPopper.style.display = 'block';
+    _positionPopper(_bulkPopper, btn, 200);
+  }
+
+  async function _bulkSetStatus(status) {
+    if (_bulkPopper) _bulkPopper.style.display = 'none';
+    const ids = [..._selected];
+    if (!ids.length) return;
+
+    // Optimistisch updaten
+    ids.forEach(id => {
+      const s = _serien.find(x => x.id === id);
+      if (s) s.status = status;
+    });
+    _selected.clear();
+    _renderListe();
+
+    // API-Calls parallel feuern
+    await Promise.allSettled(
+      ids.map(id => apiPut(`wettkampfplanung/${id}`, { jahr: _jahr, status }))
+    );
+  }
+
+  // ── Popper positionieren (shared) ────────────────────────────
+  function _positionPopper(el, anchor, minW) {
+    const rect = anchor.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const pw = Math.max(el.offsetWidth || minW, minW);
+    const ph = el.offsetHeight || 300;
+    const left = Math.min(rect.left, vw - pw - 8);
+    const top  = rect.bottom + ph > vh ? Math.max(4, rect.top - ph) : rect.bottom + 4;
+    el.style.left = Math.max(4, left) + 'px';
+    el.style.top  = top + 'px';
+  }
+
+  // ── Status-Popper (Einzelzeile) ───────────────────────────────
   function _ensurePopper() {
     if (_popper && _popper.isConnected) return _popper;
     _popper = document.createElement('div');
@@ -221,11 +533,11 @@ const WETTKAMPFPLANUNG = (() => {
       html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;
         letter-spacing:.4px;color:var(--text2);padding:4px 10px 2px;margin-top:4px">${escapeHtml(g.titel)}</div>`;
       g.keys.forEach(key => {
-        const cfg = ST[key];
+        const cfg   = ST[key];
         const aktiv = s.status === key;
         html += `<div onclick="WETTKAMPFPLANUNG._waehleStatus(${serieId},'${key}')"
           style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;
-                 ${aktiv ? `background:var(--border);font-weight:700;` : ''}"
+                 ${aktiv ? 'background:var(--border);font-weight:700;' : ''}"
           onmouseover="if(!${aktiv})this.style.background='var(--border)'"
           onmouseout="if(!${aktiv})this.style.background=''">
           <span style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:${escapeHtml(cfg.bg)}"></span>
@@ -237,14 +549,7 @@ const WETTKAMPFPLANUNG = (() => {
 
     p.innerHTML = html;
     p.style.display = 'block';
-
-    const rect = btnEl.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const pw = p.offsetWidth || 200, ph = p.offsetHeight || 200;
-    const left = Math.min(rect.left, vw - pw - 8);
-    const top  = rect.bottom + ph > vh ? Math.max(4, rect.top - ph) : rect.bottom + 4;
-    p.style.left = Math.max(4, left) + 'px';
-    p.style.top  = top + 'px';
+    _positionPopper(p, btnEl, 200);
   }
 
   function _closePopper() {
@@ -266,9 +571,25 @@ const WETTKAMPFPLANUNG = (() => {
     }
   }
 
+  // ── Datum für ein bestimmtes Jahr berechnen ──────────────────
+  function _datumFuerJahr(serie, jahr) {
+    const y = String(jahr);
+    if (serie.naechstes_datum && serie.naechstes_datum.startsWith(y)) return serie.naechstes_datum;
+    if (serie.letztes_datum   && serie.letztes_datum.startsWith(y))   return serie.letztes_datum;
+    if (serie.sortierindex) {
+      const si = String(serie.sortierindex).padStart(4, '0');
+      const mm = si.slice(0, 2);
+      const dd = si.slice(2, 4);
+      const m = parseInt(mm, 10), d = parseInt(dd, 10);
+      if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${mm}-${dd}`;
+    }
+    return null;
+  }
+
   // ── Jahreswechsel ────────────────────────────────────────────
   async function setJahr(j) {
     _jahr = j;
+    _selected.clear();
     if (_container) {
       _container.innerHTML =
         '<div class="loading"><div class="spinner"></div>Lade&hellip;</div>';
@@ -286,5 +607,12 @@ const WETTKAMPFPLANUNG = (() => {
   }
 
   // ── Öffentliche API ──────────────────────────────────────────
-  return { render, setJahr, _openPopper, _waehleStatus };
+  return {
+    render, setJahr,
+    _openPopper, _waehleStatus,
+    _toggleSort,
+    _setFilter, _resetFilter, _openFilterPopper, _toggleFilterStatus, _resetStatusFilter,
+    _toggleSelect, _toggleAll, _clearSelection,
+    _openBulkPopper, _bulkSetStatus,
+  };
 })();
