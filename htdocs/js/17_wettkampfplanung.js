@@ -232,12 +232,23 @@ const WETTKAMPFPLANUNG = (() => {
           `</div>`;
       }
 
+      const y = String(_jahr);
+      const istPrognose = datum && !(
+        (s.naechstes_datum && s.naechstes_datum.startsWith(y)) ||
+        (s.letztes_datum   && s.letztes_datum.startsWith(y))
+      );
+
       let datumHtml = '<span style="color:var(--text2);font-size:13px">–</span>';
       if (datum) {
         const d = new Date(datum + 'T00:00:00');
         const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
         const fmt = `${WT[d.getDay()]}, ${d.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' })}`;
-        datumHtml = `<span style="font-size:13px${vergangen ? ';color:var(--text2)' : ';font-weight:600'}">${fmt}</span>`;
+        if (istPrognose) {
+          datumHtml = `<span style="font-size:13px;color:var(--text2);font-style:italic"
+            title="Kein bestätigter Termin – Prognose aus typischem Jahrestermin">~ ${fmt}</span>`;
+        } else {
+          datumHtml = `<span style="font-size:13px${vergangen ? ';color:var(--text2)' : ';font-weight:600'}">${fmt}</span>`;
+        }
       }
 
       const rowOp  = vergangen && s.status === 'passt_nicht' ? 'opacity:.55;' : '';
