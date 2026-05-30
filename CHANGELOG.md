@@ -1,5 +1,8 @@
 # Changelog
 
+## v202
+- Fix: Wettkampf-Einträge in Heute/Morgen zeigten Distanz und Disziplin doppelt (sind bereits im Titel enthalten)
+
 ## v201
 - Menüpunkt "Planung" in "Trainingsplanung" umbenannt (Desktop-Nav + Mobile-Drawer)
 
@@ -11,8 +14,7 @@
 - Planungs-Tabs: Box-Tab-Design durch Underline-Tabs ersetzt – kein hartes Background/Border mehr, passt zu Light- und Dark-Theme
 
 ## v196
-- Treffpunkte als Untermenü unter Admin verschoben (nicht mehr eigener Nav-Punkt)
-- Fix: Zwei Wettkämpfe am gleichen Tag – Kalender zeigte nur einen; "Nächste Wettkämpfe" zeigte Teilnahmedaten der falschen Serie. _wkPrivatMap speichert jetzt den Titel; Zuordnung erfolgt per Serienname-Prefix statt nur per Datum.
+- Treffpunkte als Untermenü unter Admin verschoben (nicht mehr eigener Nav-Punkt)- Fix: Zwei Wettkämpfe am gleichen Tag – Kalender zeigte nur einen; "Nächste Wettkämpfe" zeigte Teilnahmedaten der falschen Serie. _wkPrivatMap speichert jetzt den Titel; Zuordnung erfolgt per Serienname-Prefix statt nur per Datum.
 - Prognose-Wettkämpfe: Emoji von "🏆?" auf "❓" geändert
 
 ## v194

@@ -1017,9 +1017,11 @@ function renderHeuteSektionHtml(items, privatItems = [], heading = 'Heute') {
 
   // ── Eigene private Einheiten (nicht aus Teamplan übernommen) ─
   const privatHtml = privatItems.map(e => {
-    const typLabel = getTypLabel(e.typ);
-    const zeitStr  = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
-    const km       = e.distanz_km != null ? e.distanz_km : null;
+    const typLabel  = getTypLabel(e.typ);
+    const zeitStr   = e.uhrzeit ? ` · ${escapeHtml(e.uhrzeit)} Uhr` : '';
+    const km        = e.distanz_km != null ? e.distanz_km : null;
+    // Bei Wettkampf: Disziplin (bemerkung) und km stecken bereits im Titel → nicht doppelt zeigen
+    const isWk      = e.typ === 'wettkampf';
     return `
       <div class="heute-card kal-cal-${kalKeyFor({ ...e, _privat: true })} is-privat" onclick="MEINPLAN.bearbeitePrivat(${e.id})" style="cursor:pointer">
         <div class="heute-card-main">
@@ -1028,8 +1030,8 @@ function renderHeuteSektionHtml(items, privatItems = [], heading = 'Heute') {
             <span class="heute-badge heute-badge-privat">Mein Plan</span>
           </div>
           <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-          ${km ? `<div class="heute-card-info">${km % 1 === 0 ? km : parseFloat(km).toFixed(1)}km</div>` : ''}
-          ${e.bemerkung ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+          ${!isWk && km ? `<div class="heute-card-info">${km % 1 === 0 ? km : parseFloat(km).toFixed(1)}km</div>` : ''}
+          ${!isWk && e.bemerkung ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
         </div>
       </div>`;
   }).join('');
