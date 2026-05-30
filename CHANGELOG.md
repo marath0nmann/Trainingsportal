@@ -1,6 +1,6 @@
 # Changelog
 
-## v200
+## v201
 - Menüpunkt "Planung" in "Trainingsplanung" umbenannt (Desktop-Nav + Mobile-Drawer)
 
 ## v198

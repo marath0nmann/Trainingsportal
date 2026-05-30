@@ -4910,11 +4910,47 @@ function handleWettkampfplanung(string $method, string $tail): void
             $anmBySerie[(int)$a['serie_id']][] = $a['disziplin'];
         }
 
+        // Serien mit Ergebnissen im Statistikportal ermitteln (auto-absolviert)
+        $serien_absolviert = [];
+        $bRow = DB::fetchOne("SELECT athlet_id FROM `" . DB::tbl('benutzer') . "` WHERE id = ?", [$userId]);
+        $athletId = $bRow && !empty($bRow['athlet_id']) ? (int)$bRow['athlet_id'] : 0;
+        if ($athletId > 0) {
+            $ter = DB::tbl('ergebnisse');
+            $erg = DB::fetchAll("
+                SELECT DISTINCT vv.serie_id
+                FROM `{$ter}` e
+                JOIN `{$tvv}` vv ON vv.id = e.veranstaltung_id
+                WHERE e.athlet_id = ?
+                  AND YEAR(vv.datum) = ?
+                  AND e.geloescht_am IS NULL
+                  AND vv.geloescht_am IS NULL
+                  AND vv.serie_id IS NOT NULL
+            ", [$athletId, $jahr]);
+            foreach ($erg as $row) {
+                $serien_absolviert[(int)$row['serie_id']] = true;
+            }
+        }
+
+        // Finale Status-Zuordnung und auto-persistieren
+        $final_nicht_setzen = ['absolviert', 'nicht_angetreten', 'findet_nicht_statt'];
         $result = [];
         foreach ($serien as $s) {
             $sid  = (int)$s['id'];
             $anm  = $anmBySerie[$sid] ?? [];
-            $st   = $s['status'] ?? 'passt_nicht';
+            $st   = $s['status'] ?? null;
+
+            // Auto-absolviert: Ergebnisse im Statistikportal gefunden, Status noch nicht final
+            if (isset($serien_absolviert[$sid]) && !in_array($st, $final_nicht_setzen, true)) {
+                $st = 'absolviert';
+                // Persistent speichern damit der User es ggf. manuell überschreiben kann
+                DB::query(
+                    "INSERT INTO `{$tst}` (serie_id, benutzer_id, jahr, status) VALUES (?,?,?,?)
+                     ON DUPLICATE KEY UPDATE status=VALUES(status), geaendert_am=CURRENT_TIMESTAMP",
+                    [$sid, $userId, $jahr, 'absolviert']
+                );
+            }
+
+            if ($st === null) $st = 'passt_nicht';
             // Vorhandene Anmeldungen überschreiben den Standard-Status
             if (!empty($anm) && $st === 'passt_nicht') $st = 'angemeldet';
 
