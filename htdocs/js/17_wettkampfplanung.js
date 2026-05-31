@@ -63,11 +63,12 @@ const WETTKAMPFPLANUNG = (() => {
 
   // ── Gefilterte + sortierte Serien ────────────────────────────
   function _gefilterteSerien() {
-    let arr = _serien.slice();
+    let arr = _serien.filter(s => s.aktiv !== 0);
 
     if (_filterText.trim()) {
       const q = _filterText.trim().toLowerCase();
-      arr = arr.filter(s => s.name.toLowerCase().includes(q));
+      arr = arr.filter(s => s.name.toLowerCase().includes(q) ||
+                            (s.ort && s.ort.toLowerCase().includes(q)));
     }
 
     if (_filterStatus.size > 0) {
@@ -244,8 +245,9 @@ const WETTKAMPFPLANUNG = (() => {
         const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
         const fmt = `${WT[d.getDay()]}, ${d.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' })}`;
         if (istPrognose) {
+          const wt = fmt.split(',')[0];
           datumHtml = `<span style="font-size:13px;color:var(--text2);font-style:italic"
-            title="Kein bestätigter Termin – Prognose aus typischem Jahrestermin">~ ${fmt}</span>`;
+            title="Prognose – gleicher ${wt} im gleichen Monat wie letztes Jahr">~ ${fmt}</span>`;
         } else {
           datumHtml = `<span style="font-size:13px${vergangen ? ';color:var(--text2)' : ';font-weight:600'}">${fmt}</span>`;
         }
@@ -264,11 +266,11 @@ const WETTKAMPFPLANUNG = (() => {
           </td>
           <td style="padding:9px 10px">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              ${s.aktiv === 0 ? '<span style="font-size:10px;padding:1px 5px;border-radius:6px;background:var(--border);color:var(--text2)">inaktiv</span>' : ''}
               <strong style="font-size:13px">${escapeHtml(s.name)}</strong>
               ${s.url ? `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener"
                   style="font-size:11px;color:var(--primary);text-decoration:none" title="${escapeHtml(s.url)}">↗</a>` : ''}
             </div>
+            ${s.ort ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">${escapeHtml(s.ort)}</div>` : ''}
             ${anmHtml}
           </td>
           <td style="padding:9px 10px;white-space:nowrap">${datumHtml}</td>
@@ -583,17 +585,28 @@ const WETTKAMPFPLANUNG = (() => {
   }
 
   // ── Datum für ein bestimmtes Jahr berechnen ──────────────────
+  // Prognose: gleicher N-ter Wochentag im gleichen Monat des Zieljahres
+  // (identische Logik zu predictNextDate in 16_admin_wettkampf.js)
+  function _predictDatumFuerJahr(letztesDateStr, targetJahr) {
+    const last  = new Date(letztesDateStr + 'T00:00:00');
+    const month = last.getMonth();              // 0–11
+    const dow   = last.getDay();               // 0=So … 6=Sa
+    const nth   = Math.floor((last.getDate() - 1) / 7); // 0=erster, 1=zweiter …
+    const erstDow = new Date(targetJahr, month, 1).getDay();
+    let   tag     = 1 + (dow - erstDow + 7) % 7 + nth * 7;
+    const tage    = new Date(targetJahr, month + 1, 0).getDate();
+    if (tag > tage) tag -= 7;  // letztes Vorkommen als Fallback
+    return `${targetJahr}-${String(month + 1).padStart(2, '0')}-${String(tag).padStart(2, '0')}`;
+  }
+
   function _datumFuerJahr(serie, jahr) {
     const y = String(jahr);
+    // 1. Manuell gesetzter Termin in diesem Jahr
     if (serie.naechstes_datum && serie.naechstes_datum.startsWith(y)) return serie.naechstes_datum;
+    // 2. Bekannter Termin aus dem Statistikportal für dieses Jahr
     if (serie.letztes_datum   && serie.letztes_datum.startsWith(y))   return serie.letztes_datum;
-    if (serie.sortierindex) {
-      const si = String(serie.sortierindex).padStart(4, '0');
-      const mm = si.slice(0, 2);
-      const dd = si.slice(2, 4);
-      const m = parseInt(mm, 10), d = parseInt(dd, 10);
-      if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${mm}-${dd}`;
-    }
+    // 3. Prognose: N-ter Wochentag des letzten bekannten Termins im Zieljahr
+    if (serie.letztes_datum) return _predictDatumFuerJahr(serie.letztes_datum, jahr);
     return null;
   }
 

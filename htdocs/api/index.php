@@ -4885,7 +4885,10 @@ function handleWettkampfplanung(string $method, string $tail): void
                 vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
                 wp.naechstes_datum, COALESCE(wp.aktiv, 1) AS aktiv,
                 MAX(vv.datum)                              AS letztes_datum,
-                tst.status
+                tst.status,
+                (SELECT v2.ort FROM `{$tvv}` v2
+                  WHERE v2.serie_id = vs.id AND v2.geloescht_am IS NULL
+                  ORDER BY v2.datum DESC LIMIT 1)          AS ort
             FROM `{$tws}` vs
             LEFT JOIN `{$twp}` wp  ON wp.serie_id  = vs.id
             LEFT JOIN `{$tvv}` vv  ON vv.serie_id  = vs.id AND vv.geloescht_am IS NULL
@@ -4958,13 +4961,21 @@ function handleWettkampfplanung(string $method, string $tail): void
                     $effDatum = $s['naechstes_datum'];
                 } elseif (!empty($s['letztes_datum']) && str_starts_with((string)$s['letztes_datum'], $y)) {
                     $effDatum = $s['letztes_datum'];
-                } elseif (!empty($s['sortierindex'])) {
-                    $si = str_pad((string)$s['sortierindex'], 4, '0', STR_PAD_LEFT);
-                    $mm = (int)substr($si, 0, 2);
-                    $dd = (int)substr($si, 2, 2);
-                    if ($mm >= 1 && $mm <= 12 && $dd >= 1 && $dd <= 31) {
-                        $effDatum = "$y-" . sprintf('%02d', $mm) . '-' . sprintf('%02d', $dd);
-                    }
+                } elseif (!empty($s['letztes_datum'])) {
+                    // Prognose: gleicher N-ter Wochentag im gleichen Monat des Zieljahres
+                    // (identisch zu predictNextDate in 16_admin_wettkampf.js)
+                    $last    = new DateTime($s['letztes_datum'] . 'T00:00:00');
+                    $month   = (int)$last->format('n');   // 1–12
+                    $dow     = (int)$last->format('w');   // 0=So
+                    $dom     = (int)$last->format('j');
+                    $nth     = (int)(($dom - 1) / 7);
+                    $first   = new DateTime(sprintf('%04d-%02d-01', $jahr, $month));
+                    $firstDow = (int)$first->format('w');
+                    $diff    = ($dow - $firstDow + 7) % 7;
+                    $tag     = 1 + $diff + $nth * 7;
+                    $tage    = (int)$first->format('t');
+                    if ($tag > $tage) $tag -= 7;
+                    $effDatum = sprintf('%04d-%02d-%02d', $jahr, $month, $tag);
                 }
                 $st = ($effDatum !== null && $effDatum < date('Y-m-d')) ? 'passt_nicht' : 'offen';
             }
@@ -4974,6 +4985,7 @@ function handleWettkampfplanung(string $method, string $tail): void
             $result[] = [
                 'id'                    => $sid,
                 'name'                  => $s['name'],
+                'ort'                   => $s['ort'] ?: null,
                 'sortierindex'          => $s['sortierindex'] !== null ? (int)$s['sortierindex'] : null,
                 'url'                   => $s['url'],
                 'wettbewerbe'           => $s['wettbewerbe'] ? json_decode((string)$s['wettbewerbe'], true) : [],
