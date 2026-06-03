@@ -1,5 +1,8 @@
 # Changelog
 
+## v211
+- Anmelden-/Registrieren-Buttons jetzt wirklich pixelgleich zum Statistikportal: Die `addons.css`-Overrides für `.btn` (Schriftart `inherit` statt `Barlow Condensed`, `font-size 13px`, abweichendes Padding) und für `.btn.btn-sm` (fehlende fixe Höhe 30px) wurden für die Header-Buttons im `.anon-btn-wrap` mit den Originalwerten aus der gemeinsamen `app.css` zurückgesetzt.
+
 ## v210
 - Header/Burger-Menü: Button „Registrieren" neben „Anmelden" ergänzt. Beide Buttons übernehmen exakt die Gestaltung aus dem Statistikportal (`btn btn-primary btn-sm` für Anmelden, `btn btn-ghost btn-sm anon-reg-btn` für Registrieren im `anon-btn-wrap`). „Registrieren" leitet zum Login-Portal mit `?register=1` weiter.
 

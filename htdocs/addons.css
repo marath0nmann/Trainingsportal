@@ -806,6 +806,23 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 }
 .btn-primary:hover { background: var(--btn-bg2); border-color: var(--btn-bg2); }
 
+/* Anon-Header-Buttons (Anmelden/Registrieren) exakt wie im Statistikportal:
+   die obigen addons.css-.btn-Overrides hier zurücknehmen und 1:1 die Werte
+   der gemeinsamen app.css verwenden. */
+.anon-btn-wrap .btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: none; border-radius: 7px; padding: 8px 18px;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600;
+  letter-spacing: 0.5px; text-transform: uppercase;
+}
+.anon-btn-wrap .btn.btn-sm {
+  padding: 5px 12px; font-size: 12px; height: 30px;
+  box-sizing: border-box; line-height: 1;
+}
+.anon-btn-wrap .btn-ghost {
+  background: var(--surf2); color: var(--text); border: 1.5px solid var(--border);
+}
+
 /* Notifications */
 #notification-container {
   position: fixed; bottom: 24px; right: 16px; z-index: 2000;
