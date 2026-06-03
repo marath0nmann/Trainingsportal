@@ -133,6 +133,19 @@ function _fillMobileNav(isTrainer, isAdmin) {
     html += `<button class="mobile-nav-item" onclick="goToRegisterPortal()">Registrieren</button>`;
   }
   mobileNav.innerHTML = html;
+
+  const TAB_LABEL = {
+    kalender:        'Kalender',
+    liste:           'Kalender',
+    wettkampfplanung:'Wettkampfplanung',
+    planung:         'Trainingsplanung',
+    admin:           'Admin',
+    treffpunkte:     'Treffpunkte',
+    einstellungen:   'Einstellungen',
+    bloecke:         'Trainingsblöcke',
+  };
+  const titleEl = document.getElementById('mobile-page-title');
+  if (titleEl) titleEl.textContent = TAB_LABEL[state.tab] || '';
 }
 
 // ── Routing ─────────────────────────────────────────────────

@@ -1,5 +1,8 @@
 # Changelog
 
+## v212
+- Smartphone-Header zeigt jetzt den Namen der aktiven Seite an (wie im Statistikportal): `_fillMobileNav` schreibt den Tab-Label in `#mobile-page-title`; das CSS-Styling kommt bereits aus der gemeinsamen `app.css`.
+
 ## v211
 - Anmelden-/Registrieren-Buttons jetzt wirklich pixelgleich zum Statistikportal: Die `addons.css`-Overrides für `.btn` (Schriftart `inherit` statt `Barlow Condensed`, `font-size 13px`, abweichendes Padding) und für `.btn.btn-sm` (fehlende fixe Höhe 30px) wurden für die Header-Buttons im `.anon-btn-wrap` mit den Originalwerten aus der gemeinsamen `app.css` zurückgesetzt.
 
