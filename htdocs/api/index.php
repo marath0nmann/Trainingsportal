@@ -575,6 +575,7 @@ function _migrationStmts(): array
             }
         },
 
+
         // ── 16: Share-Tokens für Gastansicht ─────────────────────────────
         16 => [
             "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_share_tokens') . " (
@@ -586,6 +587,156 @@ function _migrationStmts(): array
                 KEY idx_gruppe (gruppe_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ],
+
+
+        // ── 17: referenz_datum – letzte bekannte Termine aus Notion-Export ─────────
+        // Wird als Fallback für die Prognose genutzt, wenn veranstaltungen kein
+        // aktuelles Datum hat. GREATEST(MAX(vv.datum), referenz_datum) → letztes_datum.
+        17 => static function (): void {
+            $tws = DB::tbl('veranstaltung_serien');
+
+            try {
+                DB::query("ALTER TABLE `{$tws}` ADD COLUMN IF NOT EXISTS referenz_datum DATE NULL
+                    COMMENT 'Letztes bekanntes Datum aus externen Quellen (z.B. Notion); Fallback für Prognose'");
+            } catch (Throwable $e) { error_log('mig16: ' . $e->getMessage()); }
+
+            // Bestehende Serien – Zuordnung per ID (aus Migration 15)
+            $nachId = [
+                1  => '2026-03-29', // Venloop
+                2  => '2026-02-14', // Hardter Karnevalslauf
+                3  => '2026-03-08', // Straßenlauf Bayer-Kreuz
+                4  => '2026-01-31', // ASV-Winterlaufserie 1/3
+                5  => '2026-02-28', // ASV-Winterlaufserie 2/3
+                6  => '2026-03-28', // ASV-Winterlaufserie 3/3
+                7  => '2026-05-31', // Rahser Run Viersen
+                8  => '2026-04-26', // Düsseldorf-Marathon
+                9  => '2026-04-19', // Tönisvorster Apfelblütenlauf
+                11 => '2026-04-12', // Enschede Marathon
+                13 => '2026-01-17', // Waldlauf auf den Hinsbecker Höhen
+                14 => '2025-10-11', // Herbstwaldlauf Viersen
+                15 => '2025-05-18', // Rhein-Ruhr-Marathon Duisburg
+                16 => '2025-10-26', // Rhein City Run
+                17 => '2026-05-09', // Bocholter Citylauf
+                18 => '2025-12-31', // Sylvesterlauf Pfalzdorf
+                19 => '2025-04-27', // Haspa-Marathon Hamburg
+                20 => '2026-04-26', // Korschenbroicher Citylauf
+                21 => '2026-04-25', // Moerser Schlossparklauf
+                22 => '2026-01-04', // HÜLSKENS Marathon Wesel
+                23 => '2026-05-06', // TuS Oedt Bahneröffnung
+                24 => '2025-11-22', // Blumensaatlauf Essen
+                25 => '2026-06-03', // TuS Oedt Mittelstreckenabend
+                26 => '2026-07-01', // TuS Oedt Sparkassen-Sportfest
+                27 => '2025-11-15', // Neusser Erftlauf
+                29 => '2026-10-04', // Kölnmarathon
+                30 => '2025-05-28', // Brunnenlauf Sonsbeck
+                31 => '2026-05-17', // Düsseldorfer Brückenlauf
+                33 => '2026-09-27', // BMW Berlin Marathon
+                35 => '2025-06-18', // Alpener Stadtlauf
+            ];
+            foreach ($nachId as $id => $datum) {
+                try {
+                    DB::query("UPDATE `{$tws}` SET referenz_datum = GREATEST(COALESCE(referenz_datum,'1900-01-01'),?)
+                               WHERE id = ? AND (referenz_datum IS NULL OR referenz_datum < ?)",
+                        [$datum, $id, $datum]);
+                } catch (Throwable $e) { error_log('mig16: ' . $e->getMessage()); }
+            }
+
+            // Neue Serien – Zuordnung per kuerzel (aus Migration 15)
+            $nachKuerzel = [
+                'HERBSTLAUF-NIEDERRHEIN'          => '2025-10-12',
+                'DIE-KOE-MEILE'                   => '2025-09-07',
+                'RHEINUFERLAUF-DUISBURG'           => '2025-07-26',
+                'RUN-FUN-MOENCHENGLADBACH'         => '2025-09-15',
+                'NIKOLAUSLAUF-TSG-DUELMEN'         => '2025-12-06',
+                'RUN-FUN-KREFELD'                  => '2025-08-27',
+                'SEIDENRAUPEN-CROSS'               => '2025-09-21',
+                'RATINGER-NEUJAHRSLAUF'            => '2026-01-04',
+                'DO-IT-FAST-WINTER'                => '2026-02-01',
+                'BERLINER-HALBMARATHON'            => '2026-03-29',
+                'ADAC-MARATHON-HANNOVER'           => '2026-04-12',
+                'DEUTSCHE-POST-MARATHON-BONN'      => '2026-04-19',
+                'NN-MARATHON-ROTTERDAM'            => '2025-04-13',
+                'BOSTON-MARATHON'                  => '2026-04-20',
+                'SCHNEIDER-ELECTRIC-MARATHON-P'    => '2026-04-12',
+                'TCS-LONDON-MARATHON'              => '2026-04-26',
+                'SCHLOSS-DYCK-LAUF'                => '2024-05-05',
+                'ING-NIGHT-MARATHON-LUXEMBOURG'    => '2025-05-31',
+                'BENRATHER-SCHLOSSLAUF'            => '2025-06-01',
+                'NEUSSER-SOMMERNACHTSLAUF'         => '2025-05-24',
+                'HIMMELGEISTER-BRUECKENLAUF'       => '2025-06-14',
+                'GREVENBROICHER-CITYLAUF'          => '2025-06-13',
+                'EVL-HALBMARATHON-LEVERKUSEN'      => '2025-06-15',
+                'NEW-CITYLAUF-ERKELENZ'            => '2026-06-14',
+                'MOVE-GROOVE-RUN'                  => '2025-06-14',
+                'SCHLOSS-WICKRATH-LAUF'            => '2025-05-25',
+                'HELLA-HALBMARATHON-HAMBURG'       => '2026-06-28',
+                'DR-VAN-AAKEN-GEDAECHTNISLAUF-WN'  => '2025-06-27',
+                'LANK-LAEUFT'                      => '2024-06-30',
+                'DO-IT-FAST-SOMMER'                => '2025-08-31',
+                'STADTWERKE-HALBMARATHON-BOCHUM'   => '2026-09-06',
+                'SPARKASSEN-STADTLAUF-WACHTENDONK' => '2025-09-07',
+                'WELTERBELAUF-ZOLLVEREIN'          => '2025-09-13',
+                'BUNERTS-LICHTERLAUF'              => '2025-09-13',
+                'BRACHTER-DEPOTLAUF'               => '2025-09-14',
+                'GELDERNER-CITYLAUF'               => '2025-05-10',
+                'PSD-BANK-HALBMARATHON-HAMBURG'    => '2025-09-21',
+                'MUENSTER-MARATHON'                => '2025-09-21',
+                'NRZ-KLOSTERLAUF'                  => '2025-10-03',
+                'BRIDGE2BRIDGE-RUN-VENLO'          => '2025-10-05',
+                'CHICAGO-MARATHON'                 => '2025-10-12',
+                'SPARKASSE-3-LAENDER-MARATHON'     => '2025-10-12',
+                'DREI-BRUECKEN-LAUF-BONN'          => '2025-10-19',
+                'MUENCHEN-MARATHON'                => '2025-10-12',
+                'HERBSTLAUF-KOELN'                 => '2025-10-18',
+                'TCS-AMSTERDAM-MARATHON'           => '2025-10-19',
+                'MAINOVA-FRANKFURT-MARATHON'       => '2025-10-26',
+                'NEW-YORK-MARATHON'                => '2024-11-03',
+                'MARTINSLAUF-DUESSELDORF'          => '2025-11-09',
+                'SCHMACHTENDORFER-NIKOLAUSLAUF'    => '2025-11-30',
+                'SEATTLE-MARATHON'                 => '2024-12-01',
+                'NEUSSER-SILVESTERLAUF'            => '2024-12-31',
+                'BARBARA-RUNDE-BERGKAMEN'          => '2025-12-07',
+                'ESSENER-SILVESTERLAUF'            => '2025-12-31',
+                'GUTENBERG-HALBMARATHON-MAINZ'     => '2025-05-04',
+                'MAILAUF-OSTERRATH'                => '2025-05-01',
+                'S25-BERLIN'                       => '2026-04-19',
+                'ROSELLENER-ABENDLAUF'             => '2025-05-09',
+                'WESSUMER-KLUMPENLAUF'             => '2025-05-17',
+                'WESTENERGIE-MARATHON-ESSEN'       => '2025-10-12',
+                'SALZKOTTEN-MARATHON'              => '2025-06-01',
+                'FUN-RUN-JUECHEN'                  => '2025-06-01',
+                'GVG-ABTEILAUF-BRAUWEILER'         => '2025-06-29',
+                'SOMMERLAUF-HOCHNEUKIRCH'          => '2025-08-30',
+                'STADTLAUF-JUECHEN'                => '2025-08-31',
+                'VOLKSLAUF-TV-SCHWAFHEIM'          => '2025-06-19',
+                'ENNI-DONKENLAUF-NK-VLUYN'         => '2025-06-14',
+                'ESCHWEILER-CITYLAUF'              => '2025-08-24',
+                'GOCHER-STEINTORLAUF'              => '2025-07-05',
+                'ADIDAS-CITY-NIGHT-BERLIN'         => '2026-08-01',
+                'KOELNER-HALBMARATHON'             => '2025-08-24',
+                '10K-HAMBURG-ELBE'                 => '2025-05-25',
+                'CITYLAUF-SIEGBURG'                => '2025-09-07',
+                '10K-HAMBURG-VOLKSPARK'            => '2025-06-22',
+                '10K-HAMBURG-ROTHERBAUM'           => '2025-08-24',
+                'HAMMINKELNER-ABENDLAUF'           => '2025-08-29',
+                'MICHAELISLAUF-GRONAU-EPE'         => '2025-09-27',
+                'BERLINER-MORGENPOST-GREAT-10K'    => '2025-10-12',
+                'BOTTROPER-HERBSTWALDLAUF'         => '2025-11-09',
+                'MALLORCA-MARATHON'                => '2026-10-18',
+                'HOCKENHEIMRINGLAUF'               => '2025-11-01',
+                'BRUESSEL-MARATHON'                => '2025-11-02',
+                'ORION-NIEUWJAARSLOOP'             => '2026-01-04',
+                'NEUSSER-OSTERLAUF'                => '2026-04-04',
+            ];
+            foreach ($nachKuerzel as $kuerzel => $datum) {
+                try {
+                    DB::query("UPDATE `{$tws}` SET referenz_datum = ?
+                               WHERE kuerzel = ? AND (referenz_datum IS NULL OR referenz_datum < ?)",
+                        [$datum, $kuerzel, $datum]);
+                } catch (Throwable $e) { error_log('mig16: ' . $e->getMessage()); }
+            }
+        },
+
     ];
 }
 
@@ -4924,7 +5075,13 @@ function handleWettkampfplanung(string $method, string $tail): void
             SELECT
                 vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
                 wp.naechstes_datum, COALESCE(wp.aktiv, 1) AS aktiv,
-                MAX(vv.datum)                              AS letztes_datum,
+                CASE
+                    WHEN MAX(vv.datum) IS NULL AND vs.referenz_datum IS NULL THEN NULL
+                    ELSE GREATEST(
+                        COALESCE(MAX(vv.datum),      '1900-01-01'),
+                        COALESCE(vs.referenz_datum,  '1900-01-01')
+                    )
+                END                                        AS letztes_datum,
                 tst.status,
                 (SELECT v2.ort FROM `{$tvv}` v2
                   WHERE v2.serie_id = vs.id AND v2.geloescht_am IS NULL
@@ -4936,7 +5093,7 @@ function handleWettkampfplanung(string $method, string $tail): void
                                    AND tst.benutzer_id = ?
                                    AND tst.jahr        = ?
             GROUP BY vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
-                     wp.naechstes_datum, wp.aktiv, tst.status
+                     vs.referenz_datum, wp.naechstes_datum, wp.aktiv, tst.status
             ORDER BY COALESCE(vs.sortierindex, 9999) ASC, vs.name ASC
         ", [$userId, $jahr]);
 

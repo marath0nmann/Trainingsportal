@@ -1,6 +1,9 @@
 # Changelog
 
 ## v213
+## v214
+- Wettkampfplanung: referenz_datum aus Notion-Export – 115 Serien erhalten ihr letztes bekanntes Datum; letztes_datum per GREATEST(Statistikportal, Notion) – Prognose jetzt auch ohne Statistikportal-Eintrag möglich
+
 - Gäste ohne Share-Token sehen keine Daten mehr (Login-Hinweis-Seite)
 - Neuer "Teilen"-Button: Trainer/Admins können kryptische Gast-Links für Gruppen-Trainingspläne generieren und verwalten
 - "Abonnieren" und "Teilen" unter den Kalender/die Liste verschoben
@@ -10,6 +13,7 @@
 - API: GET /einheiten akzeptiert ?share_token= für authentifizierte Gastansicht
 
 ## v212
+
 - Smartphone-Header zeigt jetzt den Namen der aktiven Seite an (wie im Statistikportal): `_fillMobileNav` schreibt den Tab-Label in `#mobile-page-title`; das CSS-Styling kommt bereits aus der gemeinsamen `app.css`.
 
 ## v211
