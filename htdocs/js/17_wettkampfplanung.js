@@ -234,9 +234,11 @@ const WETTKAMPFPLANUNG = (() => {
       }
 
       const y = String(_jahr);
+      // Prognose = kein naechstes_datum für dieses Jahr UND Statistikportal
+      // hat kein Datum für dieses Jahr (referenz_datum allein = immer Prognose)
       const istPrognose = datum && !(
-        (s.naechstes_datum && s.naechstes_datum.startsWith(y)) ||
-        (s.letztes_datum   && s.letztes_datum.startsWith(y))
+        (s.naechstes_datum           && s.naechstes_datum.startsWith(y)) ||
+        (s.letztes_datum_statistik   && s.letztes_datum_statistik.startsWith(y))
       );
 
       let datumHtml = '<span style="color:var(--text2);font-size:13px">–</span>';

@@ -4804,7 +4804,14 @@ function handleWettkampf(string $method, string $tail): void
                 "SELECT vs.id, vs.name, vs.kuerzel,
                         COUNT(DISTINCT v.id)      AS anz_veranstaltungen,
                         MIN(v.datum)              AS erstes_datum,
-                        MAX(v.datum)              AS letztes_datum,
+                        MAX(v.datum)              AS letztes_datum_statistik,
+                        CASE
+                            WHEN MAX(v.datum) IS NULL AND vs.referenz_datum IS NULL THEN NULL
+                            ELSE GREATEST(
+                                COALESCE(MAX(v.datum),       '1900-01-01'),
+                                COALESCE(vs.referenz_datum,  '1900-01-01')
+                            )
+                        END                       AS letztes_datum,
                         (SELECT v2.ort FROM $tvv v2
                          WHERE v2.serie_id = vs.id
                            AND v2.geloescht_am IS NULL
@@ -4820,11 +4827,11 @@ function handleWettkampf(string $method, string $tail): void
                                    AND v.geloescht_am IS NULL
                                    AND v.genehmigt   = 1
                  LEFT JOIN $twp wp ON wp.serie_id = vs.id
-                 GROUP BY vs.id, vs.name, vs.kuerzel,
+                 GROUP BY vs.id, vs.name, vs.kuerzel, vs.referenz_datum,
                           wp.id, wp.naechstes_datum, wp.disziplinen_extra,
                           wp.disziplinen_ausgeschlossen, wp.aktiv
-                 ORDER BY MONTH(MAX(v.datum)) ASC,
-                          DAY(MAX(v.datum))   ASC,
+                 ORDER BY MONTH(COALESCE(MAX(v.datum), vs.referenz_datum)) ASC,
+                          DAY(COALESCE(MAX(v.datum), vs.referenz_datum))   ASC,
                           vs.name             ASC"
             );
         } catch (\Throwable $e) {
@@ -4942,7 +4949,8 @@ function handleWettkampf(string $method, string $tail): void
                 'kuerzel'             => $s['kuerzel'],
                 'anz_veranstaltungen' => (int)$s['anz_veranstaltungen'],
                 'erstes_datum'        => $s['erstes_datum'],
-                'letztes_datum'       => $s['letztes_datum'],
+                'letztes_datum'           => $s['letztes_datum'],
+                'letztes_datum_statistik' => $s['letztes_datum_statistik'],
                 'ort_letzter'         => $s['ort_letzter'],
                 'disziplinen'              => $diszBySerie[$sid] ?? [],
                 'disziplin_distanzen'      => (object)($diszDistBySerie[$sid] ?? []),
@@ -5075,6 +5083,7 @@ function handleWettkampfplanung(string $method, string $tail): void
             SELECT
                 vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
                 wp.naechstes_datum, COALESCE(wp.aktiv, 1) AS aktiv,
+                MAX(vv.datum)                              AS letztes_datum_statistik,
                 CASE
                     WHEN MAX(vv.datum) IS NULL AND vs.referenz_datum IS NULL THEN NULL
                     ELSE GREATEST(
@@ -5155,10 +5164,13 @@ function handleWettkampfplanung(string $method, string $tail): void
                 $y = (string)$jahr;
                 $effDatum = null;
                 if (!empty($s['naechstes_datum']) && str_starts_with((string)$s['naechstes_datum'], $y)) {
+                    // Admin-bestätigter Termin für dieses Jahr
                     $effDatum = $s['naechstes_datum'];
-                } elseif (!empty($s['letztes_datum']) && str_starts_with((string)$s['letztes_datum'], $y)) {
-                    $effDatum = $s['letztes_datum'];
+                } elseif (!empty($s['letztes_datum_statistik']) && str_starts_with((string)$s['letztes_datum_statistik'], $y)) {
+                    // Statistikportal hat einen Termin für dieses Jahr → definitiv
+                    $effDatum = $s['letztes_datum_statistik'];
                 } elseif (!empty($s['letztes_datum'])) {
+                    // letztes_datum = GREATEST(Statistikportal, referenz_datum) → Prognose
                     // Prognose: gleicher N-ter Wochentag im gleichen Monat des Zieljahres
                     // (identisch zu predictNextDate in 16_admin_wettkampf.js)
                     $last    = new DateTime($s['letztes_datum'] . 'T00:00:00');
@@ -5187,8 +5199,9 @@ function handleWettkampfplanung(string $method, string $tail): void
                 'url'                   => $s['url'],
                 'wettbewerbe'           => $s['wettbewerbe'] ? json_decode((string)$s['wettbewerbe'], true) : [],
                 'aktiv'                 => (int)$s['aktiv'],
-                'letztes_datum'         => $s['letztes_datum'],
-                'naechstes_datum'       => $s['naechstes_datum'],
+                'letztes_datum'           => $s['letztes_datum'],
+                'letztes_datum_statistik' => $s['letztes_datum_statistik'],
+                'naechstes_datum'         => $s['naechstes_datum'],
                 'status'                => $st,
                 'angemeldet_disziplinen' => $anm,
             ];
