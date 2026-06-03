@@ -1,5 +1,8 @@
 # Changelog
 
+## v208
+- Trainingsplanung auf dem Smartphone benutzbar gemacht: Viewport-Lock (100vh/overflow-hidden) wird auf Bildschirmen ≤900px deaktiviert, sodass die Seite normal scrollt. Der Kalender bekommt wieder natürliche Zeilenhöhen (statt kollabierender Flex-Zeilen), die Trainingsblöcke stehen ohne künstliche Höhenbegrenzung darunter.
+
 ## v207
 - Wettkampfplanung: Filter (Freitext + Statusfilter mit Mehrfachauswahl), Sortierung per Spaltenklick (Name/Datum/Status), Multiselect + Bulk-Edit-Bar
 

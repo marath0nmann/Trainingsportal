@@ -172,6 +172,12 @@ const PLANUNG = (() => {
 
   // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
   function _applyPlanungLayout() {
+    // Auf schmalen Bildschirmen kein Viewport-Lock: das 100vh/overflow-hidden-
+    // Layout lässt die Flex-Kalenderzeilen kollabieren und erzeugt eine
+    // unbenutzbare Darstellung. Stattdessen normales Seiten-Scrollen erlauben
+    // (CSS-Breakpoint @max-width:900px übernimmt die gestapelte Darstellung).
+    if (window.innerWidth <= 900) { _clearPlanungLayout(); return; }
+
     // Inline-Styles mit !important überschreiben shared.php CSS zuverlässig
     document.body.style.setProperty('overflow', 'hidden', 'important');
 

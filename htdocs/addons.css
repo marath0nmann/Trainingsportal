@@ -1407,16 +1407,31 @@ body.planung-active #app-footer    { display: none; }
 .kal-pop-abo-label:hover { color: var(--text); }
 .kal-pop-abo-cb { accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
 
-/* Responsive */
+/* Responsive: gestapeltes Layout, normales Seiten-Scrollen (Viewport-Lock
+   wird in _applyPlanungLayout() für ≤900px deaktiviert) */
 @media (max-width: 900px) {
-  .planung-wrap { height: auto !important; overflow: visible; }
-  .planung-split { flex-direction: column; align-items: stretch; }
-  .planung-sidebar {
-    width: 100%; height: auto; max-height: 40vh;
-    border-left: none; border-top: 1px solid var(--border);
-    order: 2;
+  .planung-wrap { height: auto !important; overflow: visible; display: block; }
+  .planung-split { flex-direction: column; align-items: stretch; overflow: visible; min-height: 0; }
+
+  /* Kalender oben: natürliche Zeilenhöhen statt Flex-Fill (sonst kollabieren
+     die Zeilen auf 0, weil die Spalte keine feste Höhe mehr hat) */
+  .planung-kal-col {
+    height: auto; overflow: visible; padding: 12px 8px 20px;
+    order: 1; min-width: 0; flex: none;
   }
-  .planung-kal-col { height: auto; overflow-y: visible; padding: 12px 8px 24px; order: 1; min-width: 0; }
+  .planung-kal-col .kal-grid { display: block; flex: none; min-height: 0; }
+  .planung-kal-col .kal-row { flex: none; min-height: 0; }
+  .planung-kal-col .kal-cell { min-height: 62px; }
+  .planung-kal-col .kal-cell-items { overflow: visible; }
+  .planung-kal-title { font-size: 20px; }
+
+  /* Blöcke darunter: volle Breite, eigene Höhe – kein künstliches Stauchen */
+  .planung-sidebar {
+    width: 100%; height: auto; max-height: none;
+    border-left: none; border-top: 1px solid var(--border);
+    order: 2; overflow: visible;
+  }
+  .planung-sidebar-head { position: static; }
 }
 
 /* ── Treffpunkte ──────────────────────────────────────────── */
