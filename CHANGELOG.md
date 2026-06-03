@@ -1,5 +1,8 @@
 # Changelog
 
+## v210
+- Header/Burger-Menü: Button „Registrieren" neben „Anmelden" ergänzt. Beide Buttons übernehmen exakt die Gestaltung aus dem Statistikportal (`btn btn-primary btn-sm` für Anmelden, `btn btn-ghost btn-sm anon-reg-btn` für Registrieren im `anon-btn-wrap`). „Registrieren" leitet zum Login-Portal mit `?register=1` weiter.
+
 ## v209
 - Trainingsplanung: Auto-Scroll beim Ziehen – kommt der Zeiger nahe an den oberen/unteren Bildschirmrand, scrollt die Seite mit. Dadurch lassen sich Blöcke aus der unten liegenden Sidebar in den oben stehenden Kalender ziehen (v. a. auf dem Smartphone). Geschwindigkeit skaliert mit der Nähe zum Rand.
 

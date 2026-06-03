@@ -65,7 +65,11 @@ function fillUserBadge() {
   if (!u) {
     if (userBtn) {
       userBtn.style.display = 'flex';
-      userBtn.innerHTML = `<button class="btn-login-header" onclick="goToLoginPortal()">Anmelden</button>`;
+      userBtn.innerHTML =
+        `<div class="anon-btn-wrap">` +
+          `<button class="btn btn-primary btn-sm" onclick="goToLoginPortal()">Anmelden</button>` +
+          `<button class="btn btn-ghost btn-sm anon-reg-btn" onclick="goToRegisterPortal()">Registrieren</button>` +
+        `</div>`;
     }
     _fillMobileNav(false, false);
     return;
@@ -126,6 +130,7 @@ function _fillMobileNav(isTrainer, isAdmin) {
     html += `<button class="mobile-nav-item mobile-nav-logout" onclick="logout()">Abmelden</button>`;
   } else {
     html += `<button class="mobile-nav-item" onclick="goToLoginPortal()">Anmelden</button>`;
+    html += `<button class="mobile-nav-item" onclick="goToRegisterPortal()">Registrieren</button>`;
   }
   mobileNav.innerHTML = html;
 }

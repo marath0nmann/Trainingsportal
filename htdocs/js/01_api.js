@@ -72,3 +72,14 @@ function handleUnauthorized(data) {
 function goToLoginPortal() {
   apiGet('auth/me').catch(() => {});
 }
+
+function goToRegisterPortal() {
+  const cfg = window.appConfig || {};
+  if (String(cfg.login_portal_aktiv) === '1' && cfg.login_portal_url) {
+    const ret = encodeURIComponent(window.location.href);
+    window.location.href = cfg.login_portal_url.replace(/\/$/, '') + '/?register=1&return=' + ret;
+    return;
+  }
+  // Fallback: regulärer Login-Portal-Flow
+  goToLoginPortal();
+}
