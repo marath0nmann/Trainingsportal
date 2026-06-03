@@ -8,10 +8,13 @@
 // ============================================================
 
 const state = {
-  user:         null,
-  tab:          'kalender',
-  kalFilter:    null,   // {gruppen:Set, teamplan:bool, meinPlan:bool} | null
-  meineGruppen: [],     // [{id, name, farbe}]
+  user:           null,
+  tab:            'kalender',
+  kalFilter:      null,   // {gruppen:Set, teamplan:bool, meinPlan:bool} | null
+  meineGruppen:   [],     // [{id, name, farbe}]
+  shareToken:     null,   // aktiver Share-Token (Gastansicht)
+  shareGruppeId:  null,
+  shareGruppeName: null,
 };
 
 // ── Drag & Drop (private Einheiten verschieben) ────────────
@@ -33,6 +36,10 @@ async function init() {
   } catch (e) {
     state.user = null;
   }
+
+  // Share-Token aus URL/localStorage laden (für Gastansicht)
+  if (!state.user) await _initShareToken();
+
   // Startseite: Smartphone → Quartalsplan (Liste), Desktop → Kalender
   if (!location.hash || location.hash === '#') {
     location.hash = startHash();
@@ -174,9 +181,43 @@ function navigateStart() {
 
 function parseHash() {
   const h = (location.hash || '').replace(/^#/, '');
-  if (!h) return { page: 'kalender' };
-  const [page, ...rest] = h.split('/');
-  return { page, args: rest };
+  if (!h) return { page: 'kalender', args: [], query: {} };
+  const [pathPart, queryPart] = h.split('?');
+  const query = {};
+  if (queryPart) {
+    queryPart.split('&').forEach(p => {
+      const [k, v] = p.split('=');
+      if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : '';
+    });
+  }
+  const [page, ...rest] = (pathPart || 'kalender').split('/');
+  return { page, args: rest, query };
+}
+
+/** Share-Token aus Hash oder localStorage laden und in state speichern. */
+async function _initShareToken() {
+  const { query } = parseHash();
+  const tokenFromUrl = query.share || null;
+  const token = tokenFromUrl || localStorage.getItem('training_share_token') || null;
+  if (!token) return;
+  try {
+    const r = await apiGet(`share/resolve/${token}`, { silent: true });
+    if (r.ok && r.token) {
+      state.shareToken      = r.token.token;
+      state.shareGruppeId   = r.token.gruppe_id;
+      state.shareGruppeName = r.token.gruppe_name || r.token.name;
+      localStorage.setItem('training_share_token', state.shareToken);
+      // Token aus URL entfernen (saubere URL) ohne re-render
+      if (tokenFromUrl) {
+        const clean = location.hash.replace(/[?&]share=[^&]*/g, '').replace(/[?&]$/, '');
+        history.replaceState(null, '', clean || '#kalender');
+      }
+    } else {
+      localStorage.removeItem('training_share_token');
+    }
+  } catch (_) {
+    localStorage.removeItem('training_share_token');
+  }
 }
 
 function renderPage() {
@@ -190,6 +231,12 @@ function renderPage() {
   // Rechtliches (öffentlich, ohne Login) – vor den Login-Checks behandeln
   if (FOOTER_LEGAL[state.tab]) {
     renderLegalPage(state.tab);
+    return;
+  }
+
+  // Gäste ohne Share-Token sehen nichts – Login-Hinweis zeigen
+  if (!state.user && !state.shareToken) {
+    renderGastSeite(main);
     return;
   }
 
@@ -232,6 +279,18 @@ function renderPage() {
   // Unbekannte Route (z. B. #dashboard / #konto aus Statistikportal-Header)
   // → still auf die Startseite umleiten, statt 404 anzuzeigen
   location.replace(startHash());
+}
+
+function renderGastSeite(main) {
+  main.innerHTML = `
+    <div class="gast-wrap">
+      <div class="gast-card">
+        <div class="gast-icon">🔒</div>
+        <div class="gast-titel">Trainingsportal</div>
+        <div class="gast-sub">Bitte melden Sie sich an, um den Trainingsplan zu sehen.</div>
+        <button class="btn btn-primary" onclick="goToLoginPortal()">Jetzt anmelden</button>
+      </div>
+    </div>`;
 }
 
 async function logout() {
@@ -534,19 +593,27 @@ async function renderKalender(main, monthArg) {
   const todayKey  = ymd(new Date());
   const angemeldet = !!state.user;
 
+  const shareBanner = state.shareToken
+    ? `<div class="share-banner">
+        👁 Gastansicht: <strong>${escapeHtml(state.shareGruppeName || '')}</strong>
+        <button class="btn btn-ghost share-banner-login" onclick="goToLoginPortal()">Anmelden</button>
+        <button class="share-banner-close" onclick="SHARE.beenden()" title="Gastansicht beenden">×</button>
+       </div>`
+    : '';
+
   main.innerHTML = `
     <div class="kal-wrap">
+      ${shareBanner}
       <div id="pace-warn-sektion"></div>
       <div id="heute-sektion"></div>
       <div class="kal-toolbar">
         <div class="kal-nav">
+          <button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Aktuellen Monat anzeigen">Heute</button>
           <button class="btn btn-ghost" onclick="navigateKalender('${ymd(prev).slice(0,7)}')" aria-label="Vorheriger Monat">‹</button>
           <h1 class="kal-title">${MONATSNAMEN[m]} ${y}</h1>
           <button class="btn btn-ghost" onclick="navigateKalender('${ymd(next).slice(0,7)}')" aria-label="Nächster Monat">›</button>
         </div>
         <div class="kal-nav-right">
-          <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
-          <button class="btn btn-ghost" onclick="navigateKalenderHeute()">Heute</button>
           <div class="view-toggle">
             <button class="btn btn-ghost view-active" title="Kalenderansicht">▦ Kalender</button>
             <button class="btn btn-ghost" onclick="navigateListe()" title="Quartalsplan (aktuelles Quartal)">☰ Liste</button>
@@ -554,12 +621,14 @@ async function renderKalender(main, monthArg) {
         </div>
       </div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
+      <div id="kal-actions" class="kal-actions"></div>
       <div id="wettkampf-sektion"></div>
     </div>`;
 
   ladeGlobalePaceWarnung('pace-warn-sektion');
-  ladeHeuteSektionInto('heute-sektion');
-  ladeWettkampfSektionInto('wettkampf-sektion');
+  if (angemeldet) ladeHeuteSektionInto('heute-sektion');
+  if (angemeldet) ladeWettkampfSektionInto('wettkampf-sektion');
+  _renderKalActions('kal-actions');
 
   const von = ymd(gridStart);
   const bis = ymd(gridEnd);
@@ -567,14 +636,15 @@ async function renderKalender(main, monthArg) {
   let termineRaw = [], statistikUrlKal = '';
   try {
     const needPrefs = angemeldet && state.kalFilter === null;
+    const einheitenUrl = angemeldet
+      ? `mein-plan/einheiten?von=${von}&bis=${bis}`
+      : `einheiten?von=${von}&bis=${bis}${state.shareToken ? `&share_token=${state.shareToken}` : ''}`;
     const [d1, d2, d3, d4, d5] = await Promise.all([
-      angemeldet
-        ? apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true })
-        : apiGet(`einheiten?von=${von}&bis=${bis}`, { silent: true }),
+      apiGet(einheitenUrl, { silent: true }),
       apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
       needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
-      _ladeWettkampfDaten().catch(() => []),
-      _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })),
+      angemeldet ? _ladeWettkampfDaten().catch(() => []) : Promise.resolve([]),
+      angemeldet ? _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })) : Promise.resolve({ termine: [], statistikportal_url: '' }),
     ]);
     oeffentlich    = d1.einheiten || [];
     privat         = angemeldet ? (d1.privat || []) : [];
@@ -1686,14 +1756,15 @@ function isoWeekYear(date) {
 async function _buildPlanData(von, bis) {
   const angemeldet = !!state.user;
   const needPrefs  = angemeldet && state.kalFilter === null;
+  const einheitenUrl = angemeldet
+    ? `mein-plan/einheiten?von=${von}&bis=${bis}`
+    : `einheiten?von=${von}&bis=${bis}${state.shareToken ? `&share_token=${state.shareToken}` : ''}`;
   const [d1, d2, d3, d4, d5] = await Promise.all([
-    angemeldet
-      ? apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true })
-      : apiGet(`einheiten?von=${von}&bis=${bis}`, { silent: true }),
+    apiGet(einheitenUrl, { silent: true }),
     apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
     needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
-    _ladeWettkampfDaten().catch(() => []),
-    _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })),
+    angemeldet ? _ladeWettkampfDaten().catch(() => []) : Promise.resolve([]),
+    angemeldet ? _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })) : Promise.resolve({ termine: [], statistikportal_url: '' }),
   ]);
   const oeffentlich  = d1.einheiten || [];
   const privat       = angemeldet ? (d1.privat || []) : [];
@@ -1791,19 +1862,27 @@ async function renderListe(main, quarterArg) {
   const prevQ = quarter === 1 ? `${year - 1}-Q4` : `${year}-Q${quarter - 1}`;
   const nextQ = quarter === 4 ? `${year + 1}-Q1` : `${year}-Q${quarter + 1}`;
 
+  const shareBannerL = state.shareToken
+    ? `<div class="share-banner">
+        👁 Gastansicht: <strong>${escapeHtml(state.shareGruppeName || '')}</strong>
+        <button class="btn btn-ghost share-banner-login" onclick="goToLoginPortal()">Anmelden</button>
+        <button class="share-banner-close" onclick="SHARE.beenden()" title="Gastansicht beenden">×</button>
+       </div>`
+    : '';
+
   main.innerHTML = `
     <div class="liste-wrap">
+      ${shareBannerL}
       <div id="pace-warn-sektion"></div>
       <div id="heute-sektion"></div>
       <div class="liste-toolbar">
         <div class="liste-nav">
+          <button class="btn btn-ghost" onclick="navigateListe()" title="Aktuelles Quartal anzeigen">Heute</button>
           <button class="btn btn-ghost" onclick="navigateListe('${prevQ}')" aria-label="Vorheriges Quartal">‹</button>
           <span class="liste-title">Q${quarter} ${year} · ${QUARTALS_MONATE_LABEL[quarter - 1]}</span>
           <button class="btn btn-ghost" onclick="navigateListe('${nextQ}')" aria-label="Nächstes Quartal">›</button>
         </div>
         <div class="liste-nav-right">
-          <button class="btn btn-ghost" onclick="ICS.open()" title="Im Kalender abonnieren">📅 Abonnieren</button>
-          <button class="btn btn-ghost" onclick="navigateListe()">Heute</button>
           <div class="view-toggle">
             <button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Kalenderansicht (aktueller Monat)">▦ Kalender</button>
             <button class="btn btn-ghost view-active" title="Quartalsplan">☰ Liste</button>
@@ -1812,12 +1891,14 @@ async function renderListe(main, quarterArg) {
       </div>
       <div id="liste-legend"></div>
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
+      <div id="liste-actions" class="kal-actions"></div>
       <div id="wettkampf-sektion"></div>
     </div>`;
 
   ladeGlobalePaceWarnung('pace-warn-sektion');
-  ladeHeuteSektionInto('heute-sektion');
-  ladeWettkampfSektionInto('wettkampf-sektion');
+  if (angemeldet) ladeHeuteSektionInto('heute-sektion');
+  if (angemeldet) ladeWettkampfSektionInto('wettkampf-sektion');
+  _renderKalActions('liste-actions');
 
   let plan;
   try {
@@ -2276,6 +2357,149 @@ async function _ladeWettkampfTermine(von, bis) {
     return { termine: [], statistikportal_url: '' };
   }
 }
+
+// ── Abonnieren + Teilen: Aktionsleiste unter dem Kalender/der Liste ──────
+
+function _renderKalActions(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!state.user) { el.innerHTML = ''; return; }
+  const canShare = true; // Teilen ist für alle eingeloggten Nutzer verfügbar
+  el.innerHTML = `
+    <div class="kal-actions-bar">
+      <button class="btn btn-ghost kal-action-btn" onclick="ICS.open()" title="Im Kalender-Programm abonnieren">
+        📅 Abonnieren
+      </button>
+      ${canShare ? `<button class="btn btn-ghost kal-action-btn" onclick="SHARE.openDialog()" title="Trainingsplan als Gast-Link teilen">
+        🔗 Teilen
+      </button>` : ''}
+    </div>`;
+}
+
+// ── SHARE-Modul ───────────────────────────────────────────────────────────
+const SHARE = (() => {
+  let _gruppen = [];
+  let _tokens  = [];
+
+  async function _loadData() {
+    const [gr, tk] = await Promise.all([
+      apiGet('trainingsgruppen', { silent: true }).catch(() => ({ gruppen: [] })),
+      apiGet('share/tokens',     { silent: true }).catch(() => ({ tokens: [] })),
+    ]);
+    _gruppen = gr.gruppen || [];
+    _tokens  = tk.tokens  || [];
+  }
+
+  async function openDialog() {
+    const mod = document.getElementById('modal-container');
+    if (!mod) return;
+    mod.innerHTML = `<div class="modal-overlay"><div class="modal-card" style="max-width:560px">
+      <div class="modal-head"><div><div class="modal-eyebrow">Trainingsplan teilen</div>
+        <div class="modal-title">🔗 Gast-Links verwalten</div>
+        <div class="modal-sub">Erstelle einen kryptischen Link, über den Gäste einen Gruppen-Trainingsplan einsehen können – ohne Anmeldung.</div>
+      </div>
+      <button class="modal-close" onclick="SHARE._closeDialog()">×</button></div>
+      <div class="modal-body">
+        <div id="share-loading" style="text-align:center;padding:24px;color:var(--text2)">Lade…</div>
+      </div></div></div>`;
+    try {
+      await _loadData();
+      _renderDialogBody();
+    } catch (e) {
+      const b = mod.querySelector('.modal-body');
+      if (b) b.innerHTML = `<div class="liste-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
+    }
+  }
+
+  function _renderDialogBody() {
+    const mod = document.getElementById('modal-container');
+    if (!mod) return;
+    const body = mod.querySelector('.modal-body');
+    if (!body) return;
+
+    const gruppenOpts = _gruppen.map(g =>
+      `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+
+    const tokenRows = _tokens.length
+      ? _tokens.map(t => {
+          const url = `${location.origin}${location.pathname}#kalender?share=${t.token}`;
+          return `<div class="share-token-row">
+            <div class="share-token-info">
+              <span class="share-token-name">${escapeHtml(t.gruppe_name || t.name)}</span>
+              <span class="share-token-url" title="${escapeHtml(url)}">${escapeHtml(url.length > 55 ? url.slice(0, 52) + '…' : url)}</span>
+            </div>
+            <div class="share-token-actions">
+              <button class="btn btn-ghost share-copy-btn" onclick="SHARE._copy('${escapeHtml(url)}')" title="Link kopieren">📋</button>
+              <button class="btn btn-ghost share-del-btn" onclick="SHARE._revoke('${t.token}')" title="Link widerrufen">🗑</button>
+            </div>
+          </div>`;
+        }).join('')
+      : '<div style="color:var(--text2);font-size:13px;padding:8px 0">Noch keine Gast-Links vorhanden.</div>';
+
+    body.innerHTML = `
+      <div class="share-create-form">
+        <label class="share-label">Gruppe wählen</label>
+        <div class="share-form-row">
+          <select id="share-gruppe-sel" class="share-select">${gruppenOpts}</select>
+          <button class="btn btn-primary" onclick="SHARE._create()">Link erstellen</button>
+        </div>
+      </div>
+      <div class="share-tokens-list">
+        <div class="share-tokens-heading">Vorhandene Links</div>
+        ${tokenRows}
+      </div>`;
+  }
+
+  async function _create() {
+    const sel = document.getElementById('share-gruppe-sel');
+    if (!sel) return;
+    const gruppeId = parseInt(sel.value, 10);
+    const gruppe = _gruppen.find(g => g.id === gruppeId);
+    if (!gruppe) return;
+    try {
+      await apiPost('share/tokens', { gruppe_id: gruppeId, name: gruppe.name });
+      await _loadData();
+      _renderDialogBody();
+    } catch (e) {
+      alert('Fehler: ' + (e.message || ''));
+    }
+  }
+
+  async function _revoke(token) {
+    if (!confirm('Gast-Link widerrufen? Bestehende Links mit diesem Token funktionieren danach nicht mehr.')) return;
+    try {
+      await apiDel(`share/tokens/${token}`);
+      await _loadData();
+      _renderDialogBody();
+    } catch (e) {
+      alert('Fehler: ' + (e.message || ''));
+    }
+  }
+
+  function _copy(url) {
+    navigator.clipboard?.writeText(url).then(() => {
+      showNotification('Link kopiert!', 'success');
+    }).catch(() => {
+      prompt('Link zum Kopieren:', url);
+    });
+  }
+
+  function _closeDialog() {
+    const mod = document.getElementById('modal-container');
+    if (mod) mod.innerHTML = '';
+  }
+
+  /** Gastansicht beenden: Token aus State + localStorage löschen, neu laden */
+  function beenden() {
+    state.shareToken      = null;
+    state.shareGruppeId   = null;
+    state.shareGruppeName = null;
+    localStorage.removeItem('training_share_token');
+    location.reload();
+  }
+
+  return { openDialog, _create, _revoke, _copy, _closeDialog, beenden };
+})();
 
 // ── Wettkampf: Schnelleintrag-Popover ────────────────────────────────────
 

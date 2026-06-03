@@ -3,6 +3,59 @@
    ============================================================ */
 .kal-wrap { padding: 24px 28px 48px; max-width: 1320px; margin: 0 auto; }
 
+/* ── Gastseite (nicht eingeloggt, kein Token) ── */
+.gast-wrap {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 60vh; padding: 32px 16px;
+}
+.gast-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 40px 48px; text-align: center; max-width: 400px;
+  display: flex; flex-direction: column; gap: 16px; align-items: center;
+}
+.gast-icon  { font-size: 40px; line-height: 1; }
+.gast-titel { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 26px; }
+.gast-sub   { font-size: 14px; color: var(--text2); line-height: 1.5; }
+
+/* ── Share-Banner (Gastansicht-Hinweis oben) ── */
+.share-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: var(--radius); padding: 8px 14px; margin-bottom: 14px;
+  font-size: 13px; color: var(--text);
+}
+.share-banner strong { color: var(--accent); }
+.share-banner-login  { font-size: 12px !important; padding: 4px 10px !important; }
+.share-banner-close  {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  font-size: 16px; color: var(--text2); line-height: 1; padding: 2px 4px;
+  opacity: .7; transition: opacity .15s;
+}
+.share-banner-close:hover { opacity: 1; }
+
+/* ── Aktionsleiste (Abonnieren + Teilen) unter Kalender/Liste ── */
+.kal-actions-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 0 4px;
+}
+.kal-action-btn { font-size: 13px !important; }
+
+/* ── Teilen-Dialog ── */
+.share-create-form  { margin-bottom: 20px; }
+.share-label        { display: block; font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--text2); margin-bottom: 6px; }
+.share-form-row     { display: flex; gap: 8px; align-items: center; }
+.share-select       { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 14px; }
+.share-tokens-heading { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; }
+.share-token-row    { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.share-token-row:last-child { border-bottom: none; }
+.share-token-info   { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.share-token-name   { font-weight: 600; font-size: 13px; }
+.share-token-url    { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; }
+.share-token-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.share-copy-btn, .share-del-btn { font-size: 14px !important; padding: 4px 8px !important; }
+
 .kal-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; margin-bottom: 16px; flex-wrap: wrap;

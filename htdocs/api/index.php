@@ -574,6 +574,18 @@ function _migrationStmts(): array
                 } catch (Throwable $e) { error_log('mig15: ' . $e->getMessage()); }
             }
         },
+
+        // ── 16: Share-Tokens für Gastansicht ─────────────────────────────
+        16 => [
+            "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_share_tokens') . " (
+                token       CHAR(32)     NOT NULL COMMENT 'MD5-Hex, zufällig',
+                gruppe_id   INT UNSIGNED NOT NULL,
+                name        VARCHAR(200) NOT NULL COMMENT 'Anzeigename (z.B. Gruppenname)',
+                erstellt_am DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (token),
+                KEY idx_gruppe (gruppe_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        ],
     ];
 }
 
@@ -600,6 +612,10 @@ try {
     }
     if ($head === 'einheiten') {
         handleEinheiten($method, $tail);
+        exit;
+    }
+    if ($head === 'share') {
+        handleShare($method, $tail);
         exit;
     }
     if ($head === 'pace') {
@@ -750,15 +766,39 @@ function handleEinheiten(string $method, string $sub): void
 
         $where = 'e.datum BETWEEN ? AND ?';
         $params = [$von, $bis];
-        if (!$user) {
-            $where .= " AND e.sichtbarkeit = 'oeffentlich'";
+
+        // Share-Token: Gast mit gültigem Token darf öffentliche Einheiten der Token-Gruppe sehen
+        $shareToken = isset($_GET['share_token']) ? trim($_GET['share_token']) : null;
+        $shareGruppeId = null;
+        if (!$user && $shareToken) {
+            $tokenRow = preg_match('/^[a-f0-9]{32}$/', $shareToken)
+                ? DB::fetchOne('SELECT gruppe_id FROM ' . DB::tbl('training_share_tokens') . ' WHERE token = ?', [$shareToken])
+                : null;
+            if ($tokenRow) {
+                $shareGruppeId = (int)$tokenRow['gruppe_id'];
+            } else {
+                http_response_code(403);
+                echo json_encode(['ok' => false, 'fehler' => 'Ungültiger Share-Token']);
+                return;
+            }
         }
-        // Optionaler Gruppen-Filter für Planungskalender
-        $gruppeId = isset($_GET['gruppe_id']) && ctype_digit((string)$_GET['gruppe_id'])
-            ? (int)$_GET['gruppe_id'] : null;
-        if ($gruppeId !== null) {
-            $where .= ' AND e.gruppe_id = ?';
-            $params[] = $gruppeId;
+
+        if (!$user) {
+            // Gäste ohne Token sehen gar nichts
+            if ($shareGruppeId === null) {
+                echo json_encode(['ok' => true, 'einheiten' => []]);
+                return;
+            }
+            $where .= " AND e.sichtbarkeit = 'oeffentlich' AND e.gruppe_id = ?";
+            $params[] = $shareGruppeId;
+        } else {
+            // Optionaler Gruppen-Filter für Planungskalender (nur für eingeloggte Nutzer)
+            $gruppeId = isset($_GET['gruppe_id']) && ctype_digit((string)$_GET['gruppe_id'])
+                ? (int)$_GET['gruppe_id'] : null;
+            if ($gruppeId !== null) {
+                $where .= ' AND e.gruppe_id = ?';
+                $params[] = $gruppeId;
+            }
         }
 
         $rows = DB::fetchAll(
@@ -5029,3 +5069,131 @@ function handleWettkampfplanung(string $method, string $tail): void
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
 }
 
+
+// ============================================================
+// Share-Token API
+//   GET  share/resolve/{token}      → Token-Info ohne Auth (für Gastansicht)
+//   GET  share/tokens               → Tokens auflisten (auth + trainer)
+//   POST share/tokens               → neuen Token erzeugen (auth + trainer)
+//   DELETE share/tokens/{token}     → Token widerrufen (auth + trainer)
+// ============================================================
+function handleShare(string $method, string $sub): void
+{
+    runPendingMigrations();
+    $tst = DB::tbl('training_share_tokens');
+
+    // ── Öffentlich: Token auflösen (kein Login nötig) ──
+    if ($method === 'GET' && str_starts_with($sub, 'resolve/')) {
+        $token = substr($sub, 8);
+        if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Ungültiger Token']);
+            return;
+        }
+        $row = null;
+        try {
+            $row = DB::fetchOne(
+                "SELECT t.token, t.gruppe_id, t.name, g.name AS gruppe_name
+                   FROM $tst t
+                   LEFT JOIN " . DB::tbl('gruppen') . " g ON g.id = t.gruppe_id
+                  WHERE t.token = ?",
+                [$token]
+            );
+        } catch (Throwable $e) {}
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Token nicht gefunden']);
+            return;
+        }
+        echo json_encode(['ok' => true, 'token' => [
+            'token'       => $row['token'],
+            'gruppe_id'   => (int)$row['gruppe_id'],
+            'name'        => $row['name'],
+            'gruppe_name' => $row['gruppe_name'] ?? $row['name'],
+        ]]);
+        return;
+    }
+
+    // Ab hier: Login erforderlich
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    if (!Auth::hasRecht('training_bearbeiten') && ($user['rolle'] ?? '') !== 'admin') {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung (Trainer/Admin)']);
+        return;
+    }
+
+    // GET /share/tokens – alle Tokens auflisten
+    if ($sub === 'tokens' && $method === 'GET') {
+        $rows = [];
+        try {
+            $rows = DB::fetchAll(
+                "SELECT t.token, t.gruppe_id, t.name, t.erstellt_am, g.name AS gruppe_name
+                   FROM $tst t
+                   LEFT JOIN " . DB::tbl('gruppen') . " g ON g.id = t.gruppe_id
+                 ORDER BY t.erstellt_am DESC",
+                []
+            );
+        } catch (Throwable $e) {}
+        $tokens = array_map(fn($r) => [
+            'token'       => $r['token'],
+            'gruppe_id'   => (int)$r['gruppe_id'],
+            'name'        => $r['name'],
+            'gruppe_name' => $r['gruppe_name'] ?? $r['name'],
+            'erstellt_am' => $r['erstellt_am'],
+        ], $rows);
+        echo json_encode(['ok' => true, 'tokens' => $tokens]);
+        return;
+    }
+
+    // POST /share/tokens – neuen Token erzeugen
+    if ($sub === 'tokens' && $method === 'POST') {
+        $in       = json_decode(file_get_contents('php://input'), true) ?: [];
+        $gruppeId = isset($in['gruppe_id']) && ctype_digit((string)$in['gruppe_id'])
+            ? (int)$in['gruppe_id'] : null;
+        $name     = trim($in['name'] ?? '');
+        if (!$gruppeId || $name === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'gruppe_id und name erforderlich']);
+            return;
+        }
+        $gruppe = null;
+        try {
+            $gruppe = DB::fetchOne("SELECT name FROM " . DB::tbl('gruppen') . " WHERE id = ?", [$gruppeId]);
+        } catch (Throwable $e) {}
+        if (!$gruppe) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Gruppe nicht gefunden']);
+            return;
+        }
+        $token = bin2hex(random_bytes(16));
+        DB::query("INSERT INTO $tst (token, gruppe_id, name) VALUES (?,?,?)", [$token, $gruppeId, $name]);
+        echo json_encode(['ok' => true, 'token' => [
+            'token'       => $token,
+            'gruppe_id'   => $gruppeId,
+            'name'        => $name,
+            'gruppe_name' => $gruppe['name'],
+        ]]);
+        return;
+    }
+
+    // DELETE /share/tokens/{token} – Token widerrufen
+    if (str_starts_with($sub, 'tokens/') && $method === 'DELETE') {
+        $token = substr($sub, 7);
+        if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Ungültiger Token']);
+            return;
+        }
+        try { DB::query("DELETE FROM $tst WHERE token = ?", [$token]); } catch (Throwable $e) {}
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Share-Endpoint nicht gefunden']);
+}

@@ -1,5 +1,14 @@
 # Changelog
 
+## v213
+- Gäste ohne Share-Token sehen keine Daten mehr (Login-Hinweis-Seite)
+- Neuer "Teilen"-Button: Trainer/Admins können kryptische Gast-Links für Gruppen-Trainingspläne generieren und verwalten
+- "Abonnieren" und "Teilen" unter den Kalender/die Liste verschoben
+- "Heute"-Button links neben die Monatsauswahl / Quartalsauswahl verschoben
+- DB-Migration 16: Tabelle training_share_tokens
+- API: GET/POST/DELETE share/tokens, GET share/resolve/{token}
+- API: GET /einheiten akzeptiert ?share_token= für authentifizierte Gastansicht
+
 ## v212
 - Smartphone-Header zeigt jetzt den Namen der aktiven Seite an (wie im Statistikportal): `_fillMobileNav` schreibt den Tab-Label in `#mobile-page-title`; das CSS-Styling kommt bereits aus der gemeinsamen `app.css`.
 
@@ -18,8 +27,7 @@
 ## v207
 - Wettkampfplanung: Filter (Freitext + Statusfilter mit Mehrfachauswahl), Sortierung per Spaltenklick (Name/Datum/Status), Multiselect + Bulk-Edit-Bar
 
-## v202
-- Fix: Wettkampf-Einträge in Heute/Morgen zeigten Distanz und Disziplin doppelt (sind bereits im Titel enthalten)
+## v202- Fix: Wettkampf-Einträge in Heute/Morgen zeigten Distanz und Disziplin doppelt (sind bereits im Titel enthalten)
 
 ## v201
 - Menüpunkt "Planung" in "Trainingsplanung" umbenannt (Desktop-Nav + Mobile-Drawer)
