@@ -1254,11 +1254,13 @@ async function ladeWettkampfSektionInto(containerId) {
     const isFest = modus === 'manuell';
     const name   = escapeHtml(s.name || s.kuerzel || '?');
 
-    // Disziplinen ermitteln
+    // Disziplinen ermitteln: Statistikportal-Ergebnisse + Extra-Disziplinen,
+    // Fallback auf wettbewerbe (was das Event anbietet) wenn beides leer
     const ausgeschlossen = new Set(s.disziplinen_ausgeschlossen || []);
     const diszSet = new Set();
     (s.disziplinen || []).forEach(d => { if (!ausgeschlossen.has(d)) diszSet.add(d); });
     (s.disziplinen_extra || []).forEach(d => diszSet.add(d));
+    if (diszSet.size === 0) (s.wettbewerbe || []).forEach(d => diszSet.add(d));
     const disziplinen = [...diszSet];
 
     // Meine Anmeldung (formale Tabelle) + privater Plan-Eintrag (gleiche Logik wie Popover)
@@ -2536,11 +2538,13 @@ function _wkPopoverShow(serieId, anchorEl) {
   const datumFmt = new Date(datum + 'T00:00:00').toLocaleDateString('de-DE',
     { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  // Disziplinen ermitteln
+  // Disziplinen ermitteln: Statistikportal-Ergebnisse + Extra-Disziplinen,
+  // Fallback auf wettbewerbe (was das Event anbietet) wenn beides leer
   const ausgeschlossen = new Set(serie.disziplinen_ausgeschlossen || []);
   const diszSet = new Set();
   (serie.disziplinen || []).forEach(d => { if (!ausgeschlossen.has(d)) diszSet.add(d); });
   (serie.disziplinen_extra || []).forEach(d => diszSet.add(d));
+  if (diszSet.size === 0) (serie.wettbewerbe || []).forEach(d => diszSet.add(d));
   const disziplinen = [...diszSet];
 
   // Popover-Element aufbauen

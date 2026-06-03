@@ -4801,7 +4801,7 @@ function handleWettkampf(string $method, string $tail): void
     if ($method === 'GET' && $tail === '') {
         try {
             $serien = DB::fetchAll(
-                "SELECT vs.id, vs.name, vs.kuerzel,
+                "SELECT vs.id, vs.name, vs.kuerzel, vs.wettbewerbe,
                         COUNT(DISTINCT v.id)      AS anz_veranstaltungen,
                         MIN(v.datum)              AS erstes_datum,
                         MAX(v.datum)              AS letztes_datum_statistik,
@@ -4827,7 +4827,7 @@ function handleWettkampf(string $method, string $tail): void
                                    AND v.geloescht_am IS NULL
                                    AND v.genehmigt   = 1
                  LEFT JOIN $twp wp ON wp.serie_id = vs.id
-                 GROUP BY vs.id, vs.name, vs.kuerzel, vs.referenz_datum,
+                 GROUP BY vs.id, vs.name, vs.kuerzel, vs.wettbewerbe, vs.referenz_datum,
                           wp.id, wp.naechstes_datum, wp.disziplinen_extra,
                           wp.disziplinen_ausgeschlossen, wp.aktiv
                  ORDER BY MONTH(COALESCE(MAX(v.datum), vs.referenz_datum)) ASC,
@@ -4955,6 +4955,7 @@ function handleWettkampf(string $method, string $tail): void
                 'disziplinen'              => $diszBySerie[$sid] ?? [],
                 'disziplin_distanzen'      => (object)($diszDistBySerie[$sid] ?? []),
                 'disziplinen_extra'        => $diszExtra,
+                'wettbewerbe'              => $s['wettbewerbe'] ? json_decode((string)$s['wettbewerbe'], true) : [],
                 'disziplinen_ausgeschlossen' => $diszAusgeschlossen,
                 'planung_id'               => $pid,
                 'aktiv'                    => $s['aktiv'] !== null ? (int)$s['aktiv'] : 1,

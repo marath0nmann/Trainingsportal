@@ -199,7 +199,7 @@ const WETTKAMPFPLANUNG = (() => {
                 style="${_thStyle()}cursor:pointer;user-select:none;white-space:nowrap">
               Datum ${_jahr}${si('datum')}
             </th>
-            <th style="${_thStyle()}">Wettbewerbe</th>
+            <th style="${_thStyle()}">Disziplinen</th>
             <th onclick="WETTKAMPFPLANUNG._toggleSort('status')"
                 style="${_thStyle()}cursor:pointer;user-select:none">
               Status${si('status')}
