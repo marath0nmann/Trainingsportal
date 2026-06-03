@@ -1,5 +1,8 @@
 # Changelog
 
+## v209
+- Trainingsplanung: Auto-Scroll beim Ziehen – kommt der Zeiger nahe an den oberen/unteren Bildschirmrand, scrollt die Seite mit. Dadurch lassen sich Blöcke aus der unten liegenden Sidebar in den oben stehenden Kalender ziehen (v. a. auf dem Smartphone). Geschwindigkeit skaliert mit der Nähe zum Rand.
+
 ## v208
 - Trainingsplanung auf dem Smartphone benutzbar gemacht: Viewport-Lock (100vh/overflow-hidden) wird auf Bildschirmen ≤900px deaktiviert, sodass die Seite normal scrollt. Der Kalender bekommt wieder natürliche Zeilenhöhen (statt kollabierender Flex-Zeilen), die Trainingsblöcke stehen ohne künstliche Höhenbegrenzung darunter.
 

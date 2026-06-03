@@ -221,6 +221,56 @@ const PLANUNG = (() => {
     if (footer) footer.style.removeProperty('display');
   }
 
+  // ── Auto-Scroll beim Ziehen ──────────────────────────────
+  // Damit man (v. a. auf dem Smartphone) Blöcke von der unten liegenden
+  // Sidebar in den oben stehenden Kalender ziehen kann, scrollt die Seite
+  // mit, sobald der Zeiger nahe an den oberen/unteren Rand kommt.
+  var _autoScrollDir = 0;        // -1 hoch, +1 runter, 0 aus
+  var _autoScrollRAF = null;
+  var _autoScrollSpeed = 0;
+
+  function _onDragAutoScroll(e) {
+    const EDGE = 90;             // px-Zone an Ober-/Unterkante
+    const MAX  = 22;             // max. px pro Frame
+    const h = window.innerHeight;
+    const y = e.clientY;
+    if (y <= 0 || y > h) { _autoScrollDir = 0; return; }  // außerhalb (z. B. dragleave)
+    if (y < EDGE) {
+      _autoScrollDir = -1;
+      _autoScrollSpeed = Math.ceil(((EDGE - y) / EDGE) * MAX);
+    } else if (y > h - EDGE) {
+      _autoScrollDir = 1;
+      _autoScrollSpeed = Math.ceil(((y - (h - EDGE)) / EDGE) * MAX);
+    } else {
+      _autoScrollDir = 0;
+    }
+    if (_autoScrollDir !== 0 && _autoScrollRAF === null) _autoScrollTick();
+  }
+
+  function _autoScrollTick() {
+    if (_autoScrollDir === 0) { _autoScrollRAF = null; return; }
+    window.scrollBy(0, _autoScrollDir * _autoScrollSpeed);
+    _autoScrollRAF = requestAnimationFrame(_autoScrollTick);
+  }
+
+  function _stopDragAutoScroll() {
+    _autoScrollDir = 0;
+    if (_autoScrollRAF !== null) { cancelAnimationFrame(_autoScrollRAF); _autoScrollRAF = null; }
+  }
+
+  function _bindDragAutoScroll() {
+    // addEventListener dedupliziert identische (Funktion+Typ)-Paare → idempotent
+    document.addEventListener('dragover', _onDragAutoScroll);
+    document.addEventListener('dragend',  _stopDragAutoScroll, true);
+    document.addEventListener('drop',     _stopDragAutoScroll, true);
+  }
+  function _unbindDragAutoScroll() {
+    document.removeEventListener('dragover', _onDragAutoScroll);
+    document.removeEventListener('dragend',  _stopDragAutoScroll, true);
+    document.removeEventListener('drop',     _stopDragAutoScroll, true);
+    _stopDragAutoScroll();
+  }
+
   // ── Einstieg ─────────────────────────────────────────────
   async function render(main) {
     if (!kalMonth) {
@@ -278,10 +328,12 @@ const PLANUNG = (() => {
 
     // Layout einfrieren: kein Seiten-Scroll, Wrap füllt genau den verbleibenden Raum
     _applyPlanungLayout();
+    _bindDragAutoScroll();
     window.addEventListener('resize', _applyPlanungLayout);
     const _offPlanung = () => {
       if (!(location.hash || '').startsWith('#planung')) {
         _clearPlanungLayout();
+        _unbindDragAutoScroll();
         window.removeEventListener('resize', _applyPlanungLayout);
         window.removeEventListener('hashchange', _offPlanung);
       }
