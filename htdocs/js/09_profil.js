@@ -14,6 +14,7 @@ const PROFIL = (() => {
   let _localWeg     = [];   // Arbeitskopie der Weg-Einträge
   let _alleGruppen  = [];   // alle verfügbaren Gruppen
   let _meineGruppen = [];   // eigene Gruppen-IDs (Set)
+  let _freigabeData = null; // profil/freigaben response (Trainer-Liste + Stufen)
 
   // _typOptions nutzt globales getTypen() aus 02_app.js
   function _typOptions() {
@@ -36,11 +37,12 @@ const PROFIL = (() => {
       '</div>';
 
     try {
-      [_prefsData, _wegData, _alleGruppen, _meineGruppen] = await Promise.all([
-        apiGet('pace/prefs',    { silent: true }),
-        apiGet('weg/prefs',     { silent: true }),
+      [_prefsData, _wegData, _alleGruppen, _meineGruppen, _freigabeData] = await Promise.all([
+        apiGet('pace/prefs',     { silent: true }),
+        apiGet('weg/prefs',      { silent: true }),
         GRUPPEN.laden(),
         GRUPPEN.ladeMeine(),
+        apiGet('profil/freigaben', { silent: true }).catch(() => ({ trainer: [] })),
       ]);
     } catch (e) {
       cont.innerHTML =
@@ -220,6 +222,39 @@ const PROFIL = (() => {
     return `<div class="profil-gruppen-list">${checks}</div>`;
   }
 
+  // ── Plan-Freigabe an Trainer/Admins ──────────────────────
+
+  function _rolleLabel(rolle) {
+    if (rolle === 'admin')   return 'Admin';
+    if (rolle === 'trainer') return 'Trainer';
+    return '';
+  }
+
+  function _buildFreigabeSection() {
+    const trainer = (_freigabeData && _freigabeData.trainer) || [];
+    if (!trainer.length) {
+      return '<div class="profil-hint">Keine Trainer oder Admins vorhanden, an die du deinen Plan freigeben könntest.</div>';
+    }
+    const rows = trainer.map(t => {
+      const opt = (val, label) =>
+        `<option value="${val}"${t.stufe === val ? ' selected' : ''}>${label}</option>`;
+      const rolle = _rolleLabel(t.rolle);
+      return `
+        <div class="profil-freigabe-row">
+          <div class="profil-freigabe-name">
+            ${escapeHtml(t.name)}
+            ${rolle ? `<span class="profil-freigabe-rolle">${rolle}</span>` : ''}
+          </div>
+          <select class="settings-input profil-freigabe-sel" data-trainer="${t.id}">
+            ${opt('nicht',  'Nicht freigegeben')}
+            ${opt('lesend', 'Lesend')}
+            ${opt('voll',   'Vollzugriff')}
+          </select>
+        </div>`;
+    }).join('');
+    return `<div class="profil-freigabe-list">${rows}</div>`;
+  }
+
   // DOM → _localWeg synchronisieren (vor jedem Re-Render aufrufen)
   function _syncWegFromDom() {
     _localWeg.forEach((entry, i) => {
@@ -286,6 +321,13 @@ const PROFIL = (() => {
             </p>
             ${_buildGruppenSection()}
             ` : ''}
+
+            <div class="profil-section-title" style="margin-top:28px">Trainingsplan freigeben</div>
+            <p class="profil-hint-global">
+              Lege fest, welche Trainer oder Admins deinen persönlichen Trainingsplan sehen
+              (<em>Lesend</em>) oder bearbeiten (<em>Vollzugriff</em>) dürfen. Ohne Freigabe hat niemand Zugriff.
+            </p>
+            ${_buildFreigabeSection()}
 
             <div class="modal-actions">
               <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
@@ -373,11 +415,21 @@ const PROFIL = (() => {
       .map(cb => parseInt(cb.value, 10))
       .filter(id => id > 0);
 
+    // Plan-Freigaben einlesen (nur lesend/voll werden gespeichert, 'nicht' = keine Zeile)
+    const freigaben = {};
+    document.querySelectorAll('.profil-freigabe-sel').forEach(sel => {
+      const tid = parseInt(sel.dataset.trainer, 10);
+      if (tid > 0 && (sel.value === 'lesend' || sel.value === 'voll')) {
+        freigaben[tid] = sel.value;
+      }
+    });
+
     try {
       await Promise.all([
-        apiPut('pace/prefs',    { prefs: newPrefs }),
-        apiPut('weg/prefs',     { config: newWeg }),
+        apiPut('pace/prefs',     { prefs: newPrefs }),
+        apiPut('weg/prefs',      { config: newWeg }),
         apiPut('profil/gruppen', { gruppen_ids: gruppenIds }),
+        apiPut('profil/freigaben', { freigaben }),
       ]);
       PACE.invalidate();
       WEG.invalidate();

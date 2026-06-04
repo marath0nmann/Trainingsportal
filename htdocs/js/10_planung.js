@@ -165,13 +165,18 @@ const PLANUNG = (() => {
   let _gruppen        = [];     // konfigurierte Gruppen des Trainers (sichtbar in Tabs)
   let _alleGruppen    = [];     // alle verfügbaren Gruppen (für Konfiguration)
   let _gruppenGeladen = false;  // true nach erstem Laden – verhindert erneutes Laden nach leerem Speichern
-  let _activeTab           = 'training'; // 'training' | 'wettkampf'
+  let _activeTab           = 'training'; // 'training' | 'wettkampf' | 'athleten'
+  let _athletSel           = null;       // beim Athleten-Tab gewählter Plan: { benutzer_id, name, stufe } | null
+  let _athletenCache       = {};         // benutzer_id → { name, stufe } (aus der Übersicht)
   let _wettkampfSerienCache = null;      // { ts: number, serien: [] } – 5-Min-Cache
   let _wkTermineCache       = {};        // 'YYYY-MM' → { ts, termine, statistikportal_url }
   let _statistikportalUrl   = '';        // aus API, gecacht
 
   // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
   function _applyPlanungLayout() {
+    // Athleten-Tab (Übersicht/fremder Plan) scrollt normal – kein Viewport-Lock.
+    if (_activeTab === 'athleten') { _clearPlanungLayout(); return; }
+
     // Auf schmalen Bildschirmen kein Viewport-Lock: das 100vh/overflow-hidden-
     // Layout lässt die Flex-Kalenderzeilen kollabieren und erzeugt eine
     // unbenutzbare Darstellung. Stattdessen normales Seiten-Scrollen erlauben
@@ -304,10 +309,16 @@ const PLANUNG = (() => {
       _gruppenGeladen = true;
     }
 
+    const istAthleten = _activeTab === 'athleten';
+
     main.innerHTML = `
-      <div class="planung-wrap">
+      <div class="planung-wrap${istAthleten ? ' planung-scroll' : ''}">
         ${istTrainer ? _renderGruppenTabs() : ''}
-        <div class="planung-split">
+        ${istAthleten
+          ? `<div class="planung-athleten" id="planung-athleten">
+               <div class="planung-bloecke-loading">Lade…</div>
+             </div>`
+          : `<div class="planung-split">
           <div class="planung-kal-col" id="planung-kal-col">
             <div class="planung-kal-loading">Lade Kalender…</div>
           </div>
@@ -323,12 +334,12 @@ const PLANUNG = (() => {
             </div>
             <div id="planung-bloecke-list" class="planung-bloecke-loading">Lade…</div>
           </aside>
-        </div>
+        </div>`}
       </div>`;
 
     // Layout einfrieren: kein Seiten-Scroll, Wrap füllt genau den verbleibenden Raum
     _applyPlanungLayout();
-    _bindDragAutoScroll();
+    if (!istAthleten) _bindDragAutoScroll();
     window.addEventListener('resize', _applyPlanungLayout);
     const _offPlanung = () => {
       if (!(location.hash || '').startsWith('#planung')) {
@@ -339,6 +350,11 @@ const PLANUNG = (() => {
       }
     };
     window.addEventListener('hashchange', _offPlanung);
+
+    if (istAthleten) {
+      await _renderAthleten();
+      return;
+    }
 
     // Kalenderfarben für die geplanten Gruppen injizieren (können von den
     // eigenen Mitgliedschaften des Trainers abweichen).
@@ -376,7 +392,18 @@ const PLANUNG = (() => {
     </span>`;
   }
 
+  // Schlichter Tab ohne Farb-Picker (für Athleten/Wettkämpfe-Bereiche).
+  function _plainTab(label, aktiv, onclick, title) {
+    const btnStyle = aktiv
+      ? 'border-bottom:3px solid var(--accent);color:var(--accent)'
+      : 'border-bottom:3px solid transparent';
+    return `<button class="planung-tab${aktiv ? ' planung-tab-aktiv' : ''}" style="${btnStyle}"
+      ${onclick}${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>`;
+  }
+
   function _renderGruppenTabs() {
+    const athletenTab = _plainTab('👥 Athleten', _activeTab === 'athleten',
+      `onclick="PLANUNG.wechsleTab('athleten')"`, 'Persönliche Trainingspläne der Athleten');
     const wkTab = _tab('wettkampf', '🏆 Wettkämpfe', _activeTab === 'wettkampf',
       `onclick="PLANUNG.wechsleTab('wettkampf')"`, 'Wettkampf-Planung');
 
@@ -385,6 +412,7 @@ const PLANUNG = (() => {
         <span class="planung-gruppen-hint">Kein Gruppenfilter aktiv –</span>
         <button class="btn btn-ghost btn-sm" onclick="PLANUNG.gruppenKonfigurieren()">Gruppen auswählen</button>
         <span class="planung-gruppen-sep"></span>
+        ${athletenTab}
         ${wkTab}
       </div>`;
     }
@@ -397,6 +425,7 @@ const PLANUNG = (() => {
       ${tabs}
       <button class="planung-tab planung-tab-config" onclick="PLANUNG.gruppenKonfigurieren()" title="Gruppen konfigurieren">⚙</button>
       <span class="planung-gruppen-sep"></span>
+      ${athletenTab}
       ${wkTab}
     </div>`;
   }
@@ -654,7 +683,16 @@ const PLANUNG = (() => {
 
   // ── Tab wechseln (Training ↔ Wettkämpfe) ─────────────────
   function wechsleTab(tab) {
+    // Wechsel von/zu Athleten ändert das Grundlayout (Split ↔ Scroll-Ansicht)
+    // → komplette Neudarstellung statt partiellem Update.
+    const layoutWechsel = (tab === 'athleten' || _activeTab === 'athleten');
     _activeTab = tab;
+    if (tab === 'athleten') _athletSel = null; // immer mit der Übersicht starten
+    if (layoutWechsel) {
+      const main = document.getElementById('main-content');
+      if (main) render(main);
+      return;
+    }
     // Tab-Bar neu zeichnen
     const bar = document.querySelector('.planung-gruppen-bar');
     if (bar) bar.outerHTML = _renderGruppenTabs();
@@ -683,6 +721,182 @@ const PLANUNG = (() => {
           : ''}
       </div>
       <span class="planung-sidebar-hint">${_activeTab === 'wettkampf' ? 'Auf Datum ziehen zum Verschieben' : 'Auf einen Kalendertag ziehen'}</span>`;
+  }
+
+  // ── Athleten: persönliche Trainingspläne ─────────────────
+  function _stufeLabel(stufe) {
+    if (stufe === 'voll')   return 'Vollzugriff';
+    if (stufe === 'lesend') return 'Lesend';
+    return 'Kein Zugriff';
+  }
+  function _stufeCls(stufe) {
+    if (stufe === 'voll')   return 'athlet-stufe-voll';
+    if (stufe === 'lesend') return 'athlet-stufe-lesend';
+    return 'athlet-stufe-nicht';
+  }
+  function _fmtKm(v) {
+    const n = Number(v);
+    if (!isFinite(n)) return '';
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+  }
+  function _fmtDatumKurz(d) {
+    if (!d) return '–';
+    const p = String(d).split('-');
+    return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : String(d);
+  }
+
+  async function _renderAthleten() {
+    const cont = document.getElementById('planung-athleten');
+    if (!cont) return;
+    if (_athletSel) { await _renderAthletPlan(cont); return; }
+    await _renderAthletenUebersicht(cont);
+  }
+
+  async function _renderAthletenUebersicht(cont) {
+    cont.innerHTML = `<div class="planung-bloecke-loading">Lade Athletenpläne…</div>`;
+    let data;
+    try {
+      data = await apiGet('mein-plan/uebersicht', { silent: true });
+    } catch (e) {
+      cont.innerHTML = `<div class="athleten-leer athleten-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
+      return;
+    }
+    const list = data.athleten || [];
+    _athletenCache = {};
+    list.forEach(a => { _athletenCache[a.benutzer_id] = { name: a.name, stufe: a.meine_stufe }; });
+
+    if (!list.length) {
+      cont.innerHTML = `<div class="athleten-wrap">
+        <h2 class="athleten-titel">Persönliche Trainingspläne</h2>
+        <div class="athleten-leer">Noch keine persönlichen Trainingspläne vorhanden. Sobald Athleten eigene Einheiten anlegen, erscheinen sie hier.</div>
+      </div>`;
+      return;
+    }
+    const rows = list.map(a => {
+      const hatZugriff = a.meine_stufe === 'lesend' || a.meine_stufe === 'voll';
+      const aktion = hatZugriff
+        ? `<button class="btn btn-ghost btn-sm" onclick="PLANUNG.oeffneAthletPlan(${a.benutzer_id})">Plan öffnen</button>`
+        : `<span class="athlet-kein-zugriff">—</span>`;
+      return `<tr class="${hatZugriff ? '' : 'athlet-row-disabled'}">
+        <td class="athlet-name">${escapeHtml(a.name)}${a.ich ? ' <span class="athlet-ich">(ich)</span>' : ''}</td>
+        <td class="athlet-anzahl">${a.anzahl}</td>
+        <td class="athlet-letztes">${escapeHtml(_fmtDatumKurz(a.letztes))}</td>
+        <td><span class="athlet-stufe-badge ${_stufeCls(a.meine_stufe)}">${_stufeLabel(a.meine_stufe)}</span></td>
+        <td class="athlet-aktion">${aktion}</td>
+      </tr>`;
+    }).join('');
+    cont.innerHTML = `
+      <div class="athleten-wrap">
+        <h2 class="athleten-titel">Persönliche Trainingspläne</h2>
+        <p class="athleten-intro">Athleten geben ihren Plan in ihrem Profil frei. Mit <em>Lesezugriff</em> kannst du ihn ansehen, mit <em>Vollzugriff</em> auch bearbeiten.</p>
+        <table class="athleten-table">
+          <thead><tr><th>Athlet</th><th>Einheiten</th><th>Letzte</th><th>Zugriff</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  async function _renderAthletPlan(cont) {
+    const sel      = _athletSel;
+    const darfEdit = sel.stufe === 'voll';
+    const y = kalMonth.getFullYear(), m = kalMonth.getMonth();
+
+    const firstDay  = new Date(y, m, 1);
+    const dow0      = (firstDay.getDay() + 6) % 7;
+    const gridStart = new Date(y, m, 1 - dow0);
+    const lastDay   = new Date(y, m + 1, 0);
+    const dowLast   = (lastDay.getDay() + 6) % 7;
+    const gridEnd   = new Date(y, m + 1, 6 - dowLast);
+    const todayKey  = ymd(new Date());
+
+    cont.innerHTML = `
+      <div class="athlet-plan-head">
+        <button class="btn btn-ghost btn-sm" onclick="PLANUNG.athletZurueck()">← Übersicht</button>
+        <span class="athlet-plan-name">${escapeHtml(sel.name)}</span>
+        <span class="athlet-stufe-badge ${_stufeCls(sel.stufe)}">${_stufeLabel(sel.stufe)}</span>
+      </div>
+      <div class="planung-kal-toolbar">
+        <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(-1)" aria-label="Vorheriger Monat">‹</button>
+        <h2 class="planung-kal-title">${MONATSNAMEN[m]} ${y}</h2>
+        <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(1)" aria-label="Nächster Monat">›</button>
+      </div>
+      <div id="athlet-plan-grid" class="planung-kal-loading">Lade…</div>`;
+
+    let pub = [], priv = [];
+    try {
+      const d = await apiGet(
+        `mein-plan/einheiten?fuer=${sel.benutzer_id}&von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`,
+        { silent: true });
+      pub  = d.einheiten || [];
+      priv = d.privat    || [];
+    } catch (e) {
+      const g = document.getElementById('athlet-plan-grid');
+      if (g) g.outerHTML = `<div id="athlet-plan-grid" class="athleten-error athleten-leer">Fehler: ${escapeHtml(e.message || '')}</div>`;
+      return;
+    }
+
+    const pubByDate = {};  pub.forEach(e  => (pubByDate[e.datum]  = pubByDate[e.datum]  || []).push(e));
+    const privByDate = {}; priv.forEach(e => (privByDate[e.datum] = privByDate[e.datum] || []).push(e));
+
+    const head = `<div class="kal-head">${WOCHENTAGE.map(w => `<div class="kal-head-cell">${w}</div>`).join('')}</div>`;
+    const rows = [];
+    let cursor = new Date(gridStart);
+    while (cursor <= gridEnd) {
+      const cells = [];
+      for (let i = 0; i < 7; i++) {
+        const k         = ymd(cursor);
+        const inMonth   = cursor.getMonth() === m;
+        const isToday   = k === todayKey;
+        const isWeekend = cursor.getDay() === 0 || cursor.getDay() === 6;
+
+        const pubHtml = (pubByDate[k] || []).map(e =>
+          `<div class="kal-item kal-typ-${escapeHtml(e.typ)}${e.status === 'abgesagt' ? ' is-cancelled' : ''}" title="${escapeHtml(e.titel)} (Teamplan)">
+            ${e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : ''}
+            <span class="kal-item-title">${escapeHtml(e.titel)}</span>
+          </div>`).join('');
+
+        const privHtml = (privByDate[k] || []).map(e => {
+          const km      = e.distanz_km != null ? `<span class="kal-item-km">${_fmtKm(e.distanz_km)} km</span>` : '';
+          const onclick = darfEdit ? ` onclick="MEINPLAN.bearbeitePrivat(${e.id}, ${sel.benutzer_id})" style="cursor:pointer"` : '';
+          const del     = darfEdit
+            ? `<button class="kal-item-del" onclick="event.stopPropagation();MEINPLAN.loeschePrivat(${e.id}, ${sel.benutzer_id})" title="Löschen">×</button>`
+            : '';
+          return `<div class="kal-item is-privat kal-typ-${escapeHtml(e.typ)}" data-privat-id="${e.id}"${onclick} title="${escapeHtml(e.titel)}">
+            ${e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : ''}
+            <span class="kal-item-title">${escapeHtml(e.titel)}</span>
+            ${km}
+            ${del}
+          </div>`;
+        }).join('');
+
+        const addBtn = (darfEdit && inMonth)
+          ? `<button class="kal-add-btn" onclick="MEINPLAN.neuePrivatEinheit('${k}', ${sel.benutzer_id})" title="Einheit hinzufügen">+</button>`
+          : '';
+
+        const dayCls = ['kal-cell', inMonth ? 'in-month' : 'out-month',
+          isToday ? 'is-today' : '', isWeekend ? 'weekend' : ''].filter(Boolean).join(' ');
+        cells.push(`
+          <div class="${dayCls}" data-datum="${k}">
+            <div class="kal-cell-head"><span class="kal-day-num">${cursor.getDate()}</span>${addBtn}</div>
+            <div class="kal-cell-items">${pubHtml}${privHtml}</div>
+          </div>`);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      rows.push(`<div class="kal-row">${cells.join('')}</div>`);
+    }
+    const grid = document.getElementById('athlet-plan-grid');
+    if (grid) grid.outerHTML = `<div id="athlet-plan-grid" class="kal-grid">${head}${rows.join('')}</div>`;
+  }
+
+  function oeffneAthletPlan(id) {
+    const a = _athletenCache[id];
+    if (!a) return;
+    _athletSel = { benutzer_id: id, name: a.name, stufe: a.stufe };
+    _renderAthleten();
+  }
+  function athletZurueck() {
+    _athletSel = null;
+    _renderAthleten();
   }
 
   // ── Wettkampf-Kalender ────────────────────────────────────
@@ -984,6 +1198,7 @@ const PLANUNG = (() => {
   function navigateMonth(dir) {
     kalMonth = new Date(kalMonth.getFullYear(), kalMonth.getMonth() + dir, 1);
     if (_activeTab === 'wettkampf') renderKalWettkampf();
+    else if (_activeTab === 'athleten') _renderAthleten();
     else renderKal();
   }
 
@@ -1329,5 +1544,6 @@ const PLANUNG = (() => {
     getAktivGruppe,
     wechsleTab, loescheWkDatum,
     setDefaultFarbe, resetDefaultFarbe,
+    oeffneAthletPlan, athletZurueck,
   };
 })();

@@ -2047,3 +2047,100 @@ body.planung-active #app-footer    { display: none; }
     background: color-mix(in srgb, var(--accent-light) 18%, var(--surf2));
   }
 }
+
+/* ============================================================
+   Trainingsportal – Plan-Freigabe (Profil) & Athletenpläne (Planung)
+   ============================================================ */
+
+/* ── Profil: Trainingsplan freigeben ── */
+.profil-freigabe-list { display: flex; flex-direction: column; }
+.profil-freigabe-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.profil-freigabe-row:last-child { border-bottom: none; }
+.profil-freigabe-name {
+  flex: 1; min-width: 0; font-size: 14px; color: var(--text);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.profil-freigabe-rolle {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 4px; padding: 1px 6px;
+}
+.profil-freigabe-sel { flex: 0 0 auto; width: 170px; max-width: 50%; }
+
+/* ── Planung: Athleten-Bereich scrollt normal (kein Viewport-Lock) ── */
+.planung-wrap.planung-scroll {
+  height: auto; overflow: visible; display: block;
+}
+.planung-athleten { padding: 18px 22px 48px; }
+@media (max-width: 720px) { .planung-athleten { padding: 12px 10px 32px; } }
+
+/* Übersichts-Tabelle */
+.athleten-wrap { max-width: 880px; margin: 0 auto; }
+.athleten-titel {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 24px; letter-spacing: .4px;
+  color: var(--text); margin: 0 0 4px;
+}
+.athleten-intro { font-size: 13px; color: var(--text2); margin: 0 0 18px; }
+.athleten-leer {
+  padding: 40px; text-align: center; color: var(--text2);
+  background: var(--surf2); border: 1px dashed var(--border);
+  border-radius: var(--radius); font-size: 14px;
+}
+.athleten-error { color: var(--primary); }
+
+.athleten-table {
+  width: 100%; border-collapse: collapse; font-size: 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+}
+.athleten-table th {
+  text-align: left; padding: 9px 14px;
+  font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--text2); background: var(--surf2);
+  border-bottom: 1px solid var(--border);
+}
+.athleten-table td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.athleten-table tbody tr:last-child td { border-bottom: none; }
+.athleten-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+.athlet-row-disabled { opacity: .6; }
+.athlet-name { font-weight: 600; color: var(--text); }
+.athlet-ich { font-size: 11px; color: var(--text2); font-weight: 400; }
+.athlet-anzahl, .athlet-letztes { color: var(--text2); white-space: nowrap; }
+.athlet-aktion { text-align: right; white-space: nowrap; }
+.athlet-kein-zugriff { color: var(--text2); }
+
+.athlet-stufe-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase;
+  border-radius: 4px; padding: 2px 8px; white-space: nowrap;
+}
+.athlet-stufe-voll {
+  color: var(--green, #1a8a3a);
+  background: color-mix(in srgb, var(--green, #1a8a3a) 14%, transparent);
+}
+.athlet-stufe-lesend {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.athlet-stufe-nicht {
+  color: var(--text2);
+  background: color-mix(in srgb, var(--text2) 12%, transparent);
+}
+
+/* Geöffneter Athletenplan (Kopfzeile über dem Kalender) */
+.athlet-plan-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.athlet-plan-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800; font-size: 20px; letter-spacing: .3px; color: var(--text);
+}

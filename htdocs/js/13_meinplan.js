@@ -28,27 +28,33 @@ const MEINPLAN = (() => {
     return (t && t.fallback_km != null) ? t.fallback_km : null;
   }
 
-  // ── Neue private Einheit (per Modal) ─────────────────────
-  function neuePrivatEinheit(datum) {
-    _openModal(null, datum);
+  // Query-Suffix für Trainer-Zugriff auf einen fremden, freigegebenen Plan.
+  // fuer = benutzer_id des Athleten (oder null/undefined = eigener Plan).
+  function _q(fuer) {
+    return (fuer != null && fuer !== '' && Number(fuer) > 0) ? `?fuer=${parseInt(fuer, 10)}` : '';
   }
 
-  async function bearbeitePrivat(id) {
+  // ── Neue private Einheit (per Modal) ─────────────────────
+  function neuePrivatEinheit(datum, fuer) {
+    _openModal(null, datum, null, fuer);
+  }
+
+  async function bearbeitePrivat(id, fuer) {
     try {
-      const data = await apiGet(`mein-plan/einheiten/${id}`, { silent: true });
-      _openModal(data.einheit, null);
+      const data = await apiGet(`mein-plan/einheiten/${id}${_q(fuer)}`, { silent: true });
+      _openModal(data.einheit, null, null, fuer);
     } catch (e) {
       _notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
-  async function loeschePrivat(id) {
+  async function loeschePrivat(id, fuer) {
     if (!confirm('Private Einheit löschen?')) return;
     schliesseModal();
     const el = document.querySelector(`.kal-item[data-privat-id="${id}"]`);
     if (el) el.remove();
     try {
-      await apiDel(`mein-plan/einheiten/${id}`);
+      await apiDel(`mein-plan/einheiten/${id}${_q(fuer)}`);
       _notify('Gelöscht.', 'ok');
     } catch (e) {
       _notify('Fehler: ' + (e.message || ''), 'err');
@@ -99,8 +105,9 @@ const MEINPLAN = (() => {
     }
   }
 
-  function _openModal(einheit, datum, prefill) {
+  function _openModal(einheit, datum, prefill, fuer) {
     const typenCfg = getTypen();
+    const fuerArg  = (fuer != null && fuer !== '' && Number(fuer) > 0) ? parseInt(fuer, 10) : null;
 
     const isNew    = !einheit;
     const e        = einheit || {};
@@ -157,10 +164,10 @@ const MEINPLAN = (() => {
             </div>
             <input type="hidden" id="mp-ref" value="${escapeHtml(String(d_ref))}">
             <div class="ed-footer">
-              <span>${!isNew ? `<button class="btn btn-ghost" onclick="MEINPLAN.loeschePrivat(${e.id})">Löschen</button>` : ''}</span>
+              <span>${!isNew ? `<button class="btn btn-ghost" onclick="MEINPLAN.loeschePrivat(${e.id}, ${fuerArg === null ? 'null' : fuerArg})">Löschen</button>` : ''}</span>
               <div class="ed-footer-right">
                 <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
-                <button class="btn btn-primary" onclick="MEINPLAN.speichern(${isNew ? 'null' : e.id})">${isNew ? 'Hinzufügen' : 'Speichern'}</button>
+                <button class="btn btn-primary" onclick="MEINPLAN.speichern(${isNew ? 'null' : e.id}, ${fuerArg === null ? 'null' : fuerArg})">${isNew ? 'Hinzufügen' : 'Speichern'}</button>
               </div>
             </div>
           </div>
@@ -168,7 +175,7 @@ const MEINPLAN = (() => {
       </div>`;
   }
 
-  async function speichern(id) {
+  async function speichern(id, fuer) {
     const datum = document.getElementById('mp-datum')?.value || '';
     const titel = (document.getElementById('mp-titel')?.value || '').trim();
     if (!datum) { _notify('Bitte Datum angeben.', 'err'); return; }
@@ -188,10 +195,10 @@ const MEINPLAN = (() => {
     };
     try {
       if (id) {
-        await apiPut(`mein-plan/einheiten/${id}`, body);
+        await apiPut(`mein-plan/einheiten/${id}${_q(fuer)}`, body);
         _notify('Gespeichert.', 'ok');
       } else {
-        await apiPost('mein-plan/einheiten', body);
+        await apiPost(`mein-plan/einheiten${_q(fuer)}`, body);
         _notify('Einheit hinzugefügt.', 'ok');
       }
       schliesseModal();

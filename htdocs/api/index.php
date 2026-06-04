@@ -771,6 +771,22 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig18: ' . $e->getMessage()); }
         },
 
+        // ── 19: Freigabe persönlicher Trainingspläne an Trainer/Admins ───────────────
+        // Athlet (besitzer_id) gibt seinen privaten Plan für einen Trainer/Admin
+        // (trainer_id) frei: stufe 'lesend' (nur ansehen) oder 'voll' (bearbeiten).
+        // Fehlt eine Zeile → kein Zugriff.
+        19 => [
+            "CREATE TABLE IF NOT EXISTS " . DB::tbl('training_plan_freigaben') . " (
+              besitzer_id  INT UNSIGNED NOT NULL,
+              trainer_id   INT UNSIGNED NOT NULL,
+              stufe        VARCHAR(10)  NOT NULL DEFAULT 'lesend',
+              erstellt_am  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              geaendert_am TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (besitzer_id, trainer_id),
+              KEY idx_trainer (trainer_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ],
+
     ];
 }
 
@@ -3990,6 +4006,31 @@ function validateEinheit(array $in): array {
 //   POST mein-plan/abo                  → Abo aktivieren + alle Zukunftseinheiten anlegen
 //   DEL  mein-plan/abo                  → Abo deaktivieren
 // ============================================================
+/** Anzeigename eines Benutzers (Vorname Nachname › E-Mail › Benutzername). */
+function _benutzerAnzeigename(array $b): string
+{
+    $vn = trim((string)(($b['vorname'] ?? '') . ' ' . ($b['nachname'] ?? '')));
+    if ($vn !== '') return $vn;
+    if (!empty($b['email']))        return (string)$b['email'];
+    if (!empty($b['benutzername'])) return (string)$b['benutzername'];
+    return '#' . (int)($b['id'] ?? 0);
+}
+
+/** Freigabe-Stufe, die $trainerId für den privaten Plan von $besitzerId hat. */
+function _planFreigabeStufe(int $besitzerId, int $trainerId): string
+{
+    if ($besitzerId === $trainerId) return 'voll';
+    try {
+        $row = DB::fetchOne(
+            'SELECT stufe FROM ' . DB::tbl('training_plan_freigaben') . '
+             WHERE besitzer_id = ? AND trainer_id = ?',
+            [$besitzerId, $trainerId]
+        );
+    } catch (Throwable $e) { return 'nicht'; }
+    $s = $row['stufe'] ?? '';
+    return in_array($s, ['lesend', 'voll'], true) ? $s : 'nicht';
+}
+
 function handleMeinPlan(string $method, string $tail): void
 {
     $user = Auth::check();
@@ -3999,6 +4040,60 @@ function handleMeinPlan(string $method, string $tail): void
         return;
     }
     $userId = (int)$user['id'];
+
+    // ── Übersicht aller persönlichen Pläne (nur Trainer/Admin) ──
+    // Listet ALLE Athleten mit ≥1 privater Einheit – auch ohne Zugriff.
+    if ($tail === 'uebersicht' && $method === 'GET') {
+        if (!in_array($user['rolle'] ?? '', ['admin', 'trainer'], true)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Nur Trainer/Admins']);
+            return;
+        }
+        $rows = DB::fetchAll(
+            'SELECT p.benutzer_id, COUNT(*) AS anzahl, MAX(p.datum) AS letztes,
+                    b.vorname, b.nachname, b.email, b.benutzername, b.rolle,
+                    f.stufe AS meine_stufe
+               FROM ' . DB::tbl('training_privat_einheiten') . ' p
+               JOIN ' . DB::tbl('benutzer') . ' b ON b.id = p.benutzer_id
+          LEFT JOIN ' . DB::tbl('training_plan_freigaben') . ' f
+                    ON f.besitzer_id = p.benutzer_id AND f.trainer_id = ?
+           GROUP BY p.benutzer_id
+           ORDER BY b.nachname, b.vorname, b.benutzername',
+            [$userId]
+        );
+        $athleten = array_map(function ($r) use ($userId) {
+            $bid   = (int)$r['benutzer_id'];
+            $stufe = $bid === $userId ? 'voll'
+                   : (in_array($r['meine_stufe'] ?? '', ['lesend', 'voll'], true) ? $r['meine_stufe'] : 'nicht');
+            return [
+                'benutzer_id' => $bid,
+                'name'        => _benutzerAnzeigename($r),
+                'rolle'       => $r['rolle'] ?? null,
+                'anzahl'      => (int)$r['anzahl'],
+                'letztes'     => $r['letztes'] ?? null,
+                'meine_stufe' => $stufe,
+                'ich'         => $bid === $userId,
+            ];
+        }, $rows);
+        echo json_encode(['ok' => true, 'athleten' => $athleten]);
+        return;
+    }
+
+    // ── Ziel-Benutzer auflösen: ?fuer=<id> erlaubt Trainern/Admins den
+    // Zugriff auf einen freigegebenen Plan eines Athleten. ──
+    $ownerId = $userId;
+    $fuer    = isset($_GET['fuer']) ? (int)$_GET['fuer'] : 0;
+    if ($fuer > 0 && $fuer !== $userId) {
+        $istTrainer = in_array($user['rolle'] ?? '', ['admin', 'trainer'], true);
+        $stufe      = $istTrainer ? _planFreigabeStufe($fuer, $userId) : 'nicht';
+        $schreibend = in_array($method, ['POST', 'PUT', 'DELETE'], true);
+        if ($stufe === 'nicht' || ($schreibend && $stufe !== 'voll')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Kein Zugriff auf diesen Plan']);
+            return;
+        }
+        $ownerId = $fuer;
+    }
 
     // ── Abo-Status ──────────────────────────────────────────
     if ($tail === 'abo' && $method === 'GET') {
@@ -4068,20 +4163,24 @@ function handleMeinPlan(string $method, string $tail): void
             return;
         }
 
-        // Aktive Abos des Nutzers laden
-        $aboRows = DB::fetchAll(
-            'SELECT typ FROM ' . DB::tbl('training_abos') . ' WHERE benutzer_id = ? AND aktiv = 1 AND typ != \'\'',
-            [$userId]
-        );
-        $aboTypen = array_column($aboRows, 'typ');
+        // Aktive Abos + Auto-Sync nur für den eigenen Plan (nicht beim
+        // Ansehen eines fremden, freigegebenen Plans).
+        $aboTypen = [];
+        if ($ownerId === $userId) {
+            $aboRows = DB::fetchAll(
+                'SELECT typ FROM ' . DB::tbl('training_abos') . ' WHERE benutzer_id = ? AND aktiv = 1 AND typ != \'\'',
+                [$userId]
+            );
+            $aboTypen = array_column($aboRows, 'typ');
 
-        // Abo-Auto-Sync: für jeden abonnierten Typ neue öffentliche Einheiten einpflegen
-        if ($aboTypen) {
-            $today    = date('Y-m-d');
-            $syncFrom = $von > $today ? $von : $today;
-            if ($syncFrom <= $bis) {
-                foreach ($aboTypen as $aboTyp) {
-                    _aboSync($userId, $syncFrom, $bis, $aboTyp);
+            // Abo-Auto-Sync: für jeden abonnierten Typ neue öffentliche Einheiten einpflegen
+            if ($aboTypen) {
+                $today    = date('Y-m-d');
+                $syncFrom = $von > $today ? $von : $today;
+                if ($syncFrom <= $bis) {
+                    foreach ($aboTypen as $aboTyp) {
+                        _aboSync($userId, $syncFrom, $bis, $aboTyp);
+                    }
                 }
             }
         }
@@ -4138,7 +4237,7 @@ function handleMeinPlan(string $method, string $tail): void
                LEFT JOIN ' . DB::tbl('training_einheiten') . ' e ON e.id = p.ref_einheit_id
               WHERE p.benutzer_id = ? AND p.datum BETWEEN ? AND ?
               ORDER BY p.datum',
-            [$userId, $von, $bis]
+            [$ownerId, $von, $bis]
         );
 
         // Segment-km für adoptierte Einheiten dynamisch berechnen (distanz_m + pause_m)
@@ -4185,7 +4284,7 @@ function handleMeinPlan(string $method, string $tail): void
         $id  = (int)$m[1];
         $row = DB::fetchOne(
             'SELECT * FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
-            [$id, $userId]
+            [$id, $ownerId]
         );
         if (!$row) {
             http_response_code(404);
@@ -4218,7 +4317,7 @@ function handleMeinPlan(string $method, string $tail): void
         if ($refId) {
             DB::query(
                 'DELETE FROM ' . DB::tbl('training_abo_skips') . ' WHERE benutzer_id = ? AND einheit_id = ?',
-                [$userId, $refId]
+                [$ownerId, $refId]
             );
         }
         $uhrzeitIn = isset($in['uhrzeit']) && preg_match('/^\d{2}:\d{2}$/', (string)$in['uhrzeit'])
@@ -4228,7 +4327,7 @@ function handleMeinPlan(string $method, string $tail): void
              (benutzer_id, datum, uhrzeit, typ, titel, distanz_km, bemerkung, ref_einheit_id)
              VALUES (?,?,?,?,?,?,?,?)',
             [
-                $userId,
+                $ownerId,
                 $in['datum'],
                 $uhrzeitIn,
                 isset($in['typ']) && $in['typ'] !== '' ? substr((string)$in['typ'], 0, 40) : 'dauerlauf',
@@ -4247,7 +4346,7 @@ function handleMeinPlan(string $method, string $tail): void
         $id  = (int)$m[1];
         $chk = DB::fetchOne(
             'SELECT id FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
-            [$id, $userId]
+            [$id, $ownerId]
         );
         if (!$chk) {
             http_response_code(404);
@@ -4284,7 +4383,7 @@ function handleMeinPlan(string $method, string $tail): void
                 (isset($in['bemerkung']) && $in['bemerkung'] !== '') ? (string)$in['bemerkung'] : null,
                 (isset($in['ref_einheit_id']) && $in['ref_einheit_id']) ? (int)$in['ref_einheit_id'] : null,
                 $id,
-                $userId,
+                $ownerId,
             ]
         );
         echo json_encode(['ok' => true]);
@@ -4298,18 +4397,18 @@ function handleMeinPlan(string $method, string $tail): void
         $privRow = DB::fetchOne(
             'SELECT ref_einheit_id FROM ' . DB::tbl('training_privat_einheiten') . '
              WHERE id = ? AND benutzer_id = ?',
-            [$id, $userId]
+            [$id, $ownerId]
         );
         if ($privRow && $privRow['ref_einheit_id']) {
             DB::query(
                 'INSERT IGNORE INTO ' . DB::tbl('training_abo_skips') . ' (benutzer_id, einheit_id)
                  VALUES (?, ?)',
-                [$userId, (int)$privRow['ref_einheit_id']]
+                [$ownerId, (int)$privRow['ref_einheit_id']]
             );
         }
         DB::query(
             'DELETE FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
-            [$id, $userId]
+            [$id, $ownerId]
         );
         echo json_encode(['ok' => true]);
         return;
@@ -4509,6 +4608,61 @@ function handleProfil(string $method, string $sub): void
                     [$userId, $gid]
                 );
             }
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── Plan-Freigaben: an welche Trainer/Admins gebe ich meinen Plan frei? ──
+    if ($sub === 'freigaben' && $method === 'GET') {
+        $trainerRows = DB::fetchAll(
+            "SELECT id, vorname, nachname, email, benutzername, rolle
+               FROM " . DB::tbl('benutzer') . "
+              WHERE rolle IN ('admin','trainer') AND aktiv = 1 AND id != ?
+              ORDER BY nachname, vorname, benutzername",
+            [$userId]
+        );
+        $freigRows = DB::fetchAll(
+            "SELECT trainer_id, stufe FROM " . DB::tbl('training_plan_freigaben') . " WHERE besitzer_id = ?",
+            [$userId]
+        );
+        $stufeMap = [];
+        foreach ($freigRows as $f) $stufeMap[(int)$f['trainer_id']] = $f['stufe'];
+
+        $trainer = array_map(function ($t) use ($stufeMap) {
+            $tid = (int)$t['id'];
+            return [
+                'id'    => $tid,
+                'name'  => _benutzerAnzeigename($t),
+                'rolle' => $t['rolle'] ?? null,
+                'stufe' => $stufeMap[$tid] ?? 'nicht',
+            ];
+        }, $trainerRows);
+        echo json_encode(['ok' => true, 'trainer' => $trainer]);
+        return;
+    }
+
+    if ($sub === 'freigaben' && $method === 'PUT') {
+        $in    = readJsonBody();
+        $freig = (isset($in['freigaben']) && is_array($in['freigaben'])) ? $in['freigaben'] : [];
+
+        // Gültige Trainer/Admin-IDs (gegen Manipulation absichern)
+        $validRows = DB::fetchAll(
+            "SELECT id FROM " . DB::tbl('benutzer') . "
+              WHERE rolle IN ('admin','trainer') AND aktiv = 1 AND id != ?",
+            [$userId]
+        );
+        $valid = array_map(fn($r) => (int)$r['id'], $validRows);
+
+        DB::query("DELETE FROM " . DB::tbl('training_plan_freigaben') . " WHERE besitzer_id = ?", [$userId]);
+        foreach ($freig as $tid => $stufe) {
+            $tid = (int)$tid;
+            if (!in_array($tid, $valid, true)) continue;
+            if (!in_array($stufe, ['lesend', 'voll'], true)) continue; // 'nicht' → keine Zeile
+            DB::query(
+                "INSERT INTO " . DB::tbl('training_plan_freigaben') . " (besitzer_id, trainer_id, stufe) VALUES (?,?,?)",
+                [$userId, $tid, $stufe]
+            );
         }
         echo json_encode(['ok' => true]);
         return;

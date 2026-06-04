@@ -1,6 +1,10 @@
 # Changelog
 
-## v213
+## v218
+- Plan-Freigabe: Athleten können ihren persönlichen Trainingsplan im Profil für einzelne Trainer/Admins freigeben (nicht / lesend / Vollzugriff). Neue Tabelle `training_plan_freigaben` (Migration 19) + Endpunkte `GET/PUT profil/freigaben`.
+- Trainingsplanung: neuer Tab „👥 Athleten" mit Übersicht aller persönlichen Trainingspläne (auch ohne Zugriff sichtbar). Freigegebene Pläne öffnen sich im Monatskalender – lesend schreibgeschützt, bei Vollzugriff mit Hinzufügen/Bearbeiten/Löschen.
+- API: `GET mein-plan/uebersicht` (Trainer/Admin) listet alle Athleten mit privatem Plan; `mein-plan/einheiten` akzeptiert `?fuer=<benutzerId>` für den Zugriff auf freigegebene Pläne (lesend = GET, voll = Schreibzugriff).
+
 ## v217
 - Wettkampfplanung: referenz_datum aus Notion-Export – 115 Serien erhalten ihr letztes bekanntes Datum; letztes_datum per GREATEST(Statistikportal, Notion) – Prognose jetzt auch ohne Statistikportal-Eintrag möglich
 
