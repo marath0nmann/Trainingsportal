@@ -1,5 +1,8 @@
 # Changelog
 
+## v219
+- Trainingsplanung: Untermenü im Admin-Stil mit drei Bereichen „Gruppen", „Athleten" und „Wettkämpfe" (Pill-Buttons). Die einzelnen Gruppen-Tabs liegen jetzt als zweite Ebene unter „Gruppen".
+
 ## v218
 - Plan-Freigabe: Athleten können ihren persönlichen Trainingsplan im Profil für einzelne Trainer/Admins freigeben (nicht / lesend / Vollzugriff). Neue Tabelle `training_plan_freigaben` (Migration 19) + Endpunkte `GET/PUT profil/freigaben`.
 - Trainingsplanung: neuer Tab „👥 Athleten" mit Übersicht aller persönlichen Trainingspläne (auch ohne Zugriff sichtbar). Freigegebene Pläne öffnen sich im Monatskalender – lesend schreibgeschützt, bei Vollzugriff mit Hinzufügen/Bearbeiten/Löschen.

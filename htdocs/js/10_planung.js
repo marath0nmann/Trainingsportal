@@ -313,7 +313,8 @@ const PLANUNG = (() => {
 
     main.innerHTML = `
       <div class="planung-wrap${istAthleten ? ' planung-scroll' : ''}">
-        ${istTrainer ? _renderGruppenTabs() : ''}
+        ${istTrainer ? _renderSectionBar() : ''}
+        ${istTrainer && _activeTab === 'training' ? _renderGruppenTabs() : ''}
         ${istAthleten
           ? `<div class="planung-athleten" id="planung-athleten">
                <div class="planung-bloecke-loading">Lade…</div>
@@ -392,28 +393,24 @@ const PLANUNG = (() => {
     </span>`;
   }
 
-  // Schlichter Tab ohne Farb-Picker (für Athleten/Wettkämpfe-Bereiche).
-  function _plainTab(label, aktiv, onclick, title) {
-    const btnStyle = aktiv
-      ? 'border-bottom:3px solid var(--accent);color:var(--accent)'
-      : 'border-bottom:3px solid transparent';
-    return `<button class="planung-tab${aktiv ? ' planung-tab-aktiv' : ''}" style="${btnStyle}"
-      ${onclick}${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>`;
+  // ── Untermenü (Admin-Stil): Gruppen · Athleten · Wettkämpfe ──
+  function _renderSectionBar() {
+    const item = (key, label, aktiv, title) =>
+      `<button class="btn btn-ghost planung-section-btn${aktiv ? ' active' : ''}"
+        onclick="PLANUNG.wechsleSection('${key}')"${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>`;
+    return `<div class="planung-section-bar">
+      ${item('training',  'Gruppen',    _activeTab === 'training',  'Trainingspläne der Gruppen')}
+      ${item('athleten',  'Athleten',   _activeTab === 'athleten',  'Persönliche Trainingspläne der Athleten')}
+      ${item('wettkampf', 'Wettkämpfe', _activeTab === 'wettkampf', 'Wettkampf-Planung')}
+    </div>`;
   }
 
+  // Gruppen-Tabs (nur innerhalb der Sektion „Gruppen") – ein Tab je Gruppe.
   function _renderGruppenTabs() {
-    const athletenTab = _plainTab('👥 Athleten', _activeTab === 'athleten',
-      `onclick="PLANUNG.wechsleTab('athleten')"`, 'Persönliche Trainingspläne der Athleten');
-    const wkTab = _tab('wettkampf', '🏆 Wettkämpfe', _activeTab === 'wettkampf',
-      `onclick="PLANUNG.wechsleTab('wettkampf')"`, 'Wettkampf-Planung');
-
     if (!_gruppen.length) {
       return `<div class="planung-gruppen-bar">
         <span class="planung-gruppen-hint">Kein Gruppenfilter aktiv –</span>
         <button class="btn btn-ghost btn-sm" onclick="PLANUNG.gruppenKonfigurieren()">Gruppen auswählen</button>
-        <span class="planung-gruppen-sep"></span>
-        ${athletenTab}
-        ${wkTab}
       </div>`;
     }
     const tabs = _gruppen.map(g =>
@@ -424,9 +421,6 @@ const PLANUNG = (() => {
     return `<div class="planung-gruppen-bar">
       ${tabs}
       <button class="planung-tab planung-tab-config" onclick="PLANUNG.gruppenKonfigurieren()" title="Gruppen konfigurieren">⚙</button>
-      <span class="planung-gruppen-sep"></span>
-      ${athletenTab}
-      ${wkTab}
     </div>`;
   }
 
@@ -682,6 +676,17 @@ const PLANUNG = (() => {
   }
 
   // ── Tab wechseln (Training ↔ Wettkämpfe) ─────────────────
+  // Untermenü-Wechsel (Gruppen/Athleten/Wettkämpfe) – komplette Neudarstellung,
+  // da sich Layout (Tab-Leiste, Split vs. Scroll-Ansicht) je Sektion unterscheidet.
+  function wechsleSection(key) {
+    if (key === _activeTab && key !== 'athleten') return;
+    _activeTab = key;
+    if (key === 'athleten') _athletSel = null;
+    if (key === 'training' && !aktivGruppe && _gruppen.length) aktivGruppe = _gruppen[0];
+    const main = document.getElementById('main-content');
+    if (main) render(main);
+  }
+
   function wechsleTab(tab) {
     // Wechsel von/zu Athleten ändert das Grundlayout (Split ↔ Scroll-Ansicht)
     // → komplette Neudarstellung statt partiellem Update.
@@ -1542,7 +1547,7 @@ const PLANUNG = (() => {
     reloadKal: renderKal,
     gruppeWechseln, gruppenKonfigurieren, gruppenKonfigSpeichern,
     getAktivGruppe,
-    wechsleTab, loescheWkDatum,
+    wechsleTab, wechsleSection, loescheWkDatum,
     setDefaultFarbe, resetDefaultFarbe,
     oeffneAthletPlan, athletZurueck,
   };

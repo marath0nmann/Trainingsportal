@@ -2144,3 +2144,13 @@ body.planung-active #app-footer    { display: none; }
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800; font-size: 20px; letter-spacing: .3px; color: var(--text);
 }
+
+/* ── Planung: Untermenü (Gruppen · Athleten · Wettkämpfe), Admin-Stil ── */
+.planung-section-bar {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 12px 16px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.planung-section-btn { margin-bottom: 12px; }
