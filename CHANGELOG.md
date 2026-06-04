@@ -1,5 +1,8 @@
 # Changelog
 
+## v223
+- Fix (Ursache "Lade Trainingsplan…"): ADMIN_WETTKAMPF-IIFE warf beim Laden einen ReferenceError, weil das return-Objekt drei in v217 entfernte Funktionen (_toggleDisz, _removeExtra, _addExtra) noch referenzierte → const blieb in der TDZ → typeof ADMIN_WETTKAMPF warf im Kalender. Tote Referenzen entfernt.
+
 ## v222
 - Untermenü-Buttons (Admin-Seite, Trainingsplanung-Sektionsleiste) auf `.subtab`/`.subtabs` umgestellt – identisches Look & Feel wie im Statistikportal (Barlow Condensed uppercase, aktiver Tab mit Primärfarbe gefüllt)
 - Tabellen-Kopfzeilen (`.athleten-table th`) an Statistikportal angeglichen: Barlow Condensed 12px, 2px border-bottom, letter-spacing 1px
