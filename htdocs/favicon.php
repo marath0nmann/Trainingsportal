@@ -19,6 +19,23 @@ require_once __DIR__ . '/../includes/settings.php';
 
 $size = max(16, min(512, (int)($_GET['size'] ?? 180)));
 
+// ── Fallback-Buchstabe aus login_portal_apps ermitteln ──────
+$fallbackLetter = mb_strtoupper(mb_substr(Settings::get('verein_kuerzel', 'T'), 0, 1, 'UTF-8'));
+try {
+    $apps = json_decode(Settings::get('login_portal_apps', '[]'), true) ?: [];
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    foreach ($apps as $app) {
+        $appHost = parse_url($app['url'] ?? '', PHP_URL_HOST) ?: '';
+        if ($appHost !== '' && $appHost === $host) {
+            $name = trim($app['name'] ?? '');
+            if ($name !== '') {
+                $fallbackLetter = mb_strtoupper(mb_substr($name, 0, 1, 'UTF-8'));
+            }
+            break;
+        }
+    }
+} catch (\Throwable) {}
+
 // ── Logo aus Statistikportal-Pfad auflösen ─────────────────
 $logoFile = Settings::get('logo_datei', '');
 $logoPath = null;
@@ -67,13 +84,13 @@ if ($logoPath !== null) {
         imagecopyresampled($out, $src, $dx, $dy, 0, 0, $dw, $dh, $sw, $sh);
         imagedestroy($src);
     } else {
-        _fallback($out, $size);
+        _fallback($out, $size, $fallbackLetter);
     }
 } else {
-    _fallback($out, $size);
+    _fallback($out, $size, $fallbackLetter);
 }
 
-function _fallback(GdImage $img, int $size): void
+function _fallback(GdImage $img, int $size, string $letter): void
 {
     $red   = imagecolorallocate($img, 204, 0, 0);
     $white = imagecolorallocate($img, 255, 255, 255);
@@ -82,7 +99,7 @@ function _fallback(GdImage $img, int $size): void
     $font = 5;
     $fw   = imagefontwidth($font);
     $fh   = imagefontheight($font);
-    imagestring($img, $font, (int)(($size - $fw) / 2), (int)(($size - $fh) / 2), 'T', $white);
+    imagestring($img, $font, (int)(($size - $fw) / 2), (int)(($size - $fh) / 2), $letter, $white);
 }
 
 // ── Ausgabe ─────────────────────────────────────────────────
