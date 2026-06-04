@@ -1,5 +1,8 @@
 # Changelog
 
+## v220
+- Fix: "Lade Trainingsplan…" blieb stehen wenn bei parallelen Render-Aufrufen kal-grid/liste-content nicht mehr im DOM war (Race-Condition-Guard + Fehler-Fallback auf main)
+
 ## v219
 - Trainingsplanung: Untermenü im Admin-Stil mit drei Bereichen „Gruppen", „Athleten" und „Wettkämpfe" (Pill-Buttons). Die einzelnen Gruppen-Tabs liegen jetzt als zweite Ebene unter „Gruppen".
 
@@ -10,7 +13,6 @@
 
 ## v217
 - Wettkampfplanung: referenz_datum aus Notion-Export – 115 Serien erhalten ihr letztes bekanntes Datum; letztes_datum per GREATEST(Statistikportal, Notion) – Prognose jetzt auch ohne Statistikportal-Eintrag möglich
-
 - Gäste ohne Share-Token sehen keine Daten mehr (Login-Hinweis-Seite)
 - Neuer "Teilen"-Button: Trainer/Admins können kryptische Gast-Links für Gruppen-Trainingspläne generieren und verwalten
 - "Abonnieren" und "Teilen" unter den Kalender/die Liste verschoben

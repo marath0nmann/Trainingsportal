@@ -664,7 +664,10 @@ async function renderKalender(main, monthArg) {
     }
   } catch (e) {
     const g = document.getElementById('kal-grid');
-    if (g) g.innerHTML = `<div class="kal-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
+    const errHtml = `<div class="kal-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
+    // kal-grid könnte durch einen zweiten render-Aufruf bereits ersetzt sein → Fallback auf main
+    if (g) g.innerHTML = errHtml;
+    else if (main) main.innerHTML = `<div class="kal-wrap">${errHtml}</div>`;
     return;
   }
 
@@ -888,7 +891,11 @@ async function renderKalender(main, monthArg) {
   // Vorherige Legende(n) entfernen – outerHTML ersetzt nur #kal-grid,
   // nicht dessen Geschwister-Elemente, sodass sich .kal-legend bei jedem Render aufaddieren würde.
   document.querySelectorAll('#kal-grid ~ .kal-legend').forEach(el => el.remove());
-  document.getElementById('kal-grid').outerHTML =
+  const kalGridEl = document.getElementById('kal-grid');
+  // Race-Condition-Guard: wenn der Nutzer den Monat schnell gewechselt hat, wurde das DOM
+  // bereits durch einen neueren renderKalender-Aufruf ersetzt → stale update ignorieren
+  if (!kalGridEl) return;
+  kalGridEl.outerHTML =
     `<div id="kal-grid" class="${gridCls}">${head}${rows}</div>${legendHtml}`;
 
   if (typeof KAL_POPOVER !== 'undefined') {
@@ -1900,8 +1907,10 @@ async function renderListe(main, quarterArg) {
   try {
     plan = await _buildPlanData(ymd(qStart), ymd(qEnd));
   } catch (e) {
-    document.getElementById('liste-content').innerHTML =
-      `<div class="liste-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
+    const lc = document.getElementById('liste-content');
+    const errHtml = `<div class="liste-error">Trainingsplan konnte nicht geladen werden: ${escapeHtml(e.message || '')}</div>`;
+    if (lc) lc.innerHTML = errHtml;
+    else if (main) main.innerHTML = `<div class="liste-wrap">${errHtml}</div>`;
     return;
   }
   const { byDate, wettkampfBeiDatum, kf, histByDate: listHistByDate, statistikUrl: listStatistikUrl } = plan;
@@ -2082,7 +2091,9 @@ async function renderListe(main, quarterArg) {
     html = '<div class="liste-empty">Keine Trainingseinheiten in diesem Quartal eingetragen.</div>';
   }
 
-  document.getElementById('liste-content').outerHTML =
+  const listeContentEl = document.getElementById('liste-content');
+  if (!listeContentEl) return; // stale render (Quartal gewechselt bevor dieser fertig war)
+  listeContentEl.outerHTML =
     `<div id="liste-content" class="liste-content">${html}</div>`;
 
   // Neu rendern, nachdem _wkPrivatMap befüllt ist → korrekte Aktiv-Zustände der Karten-Buttons
