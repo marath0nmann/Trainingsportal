@@ -126,7 +126,7 @@ async function renderAdminSystem(contentEl) {
     '</tr>';
   }).join('') || '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text2);font-size:13px">Keine Gast-Besucher</td></tr>';
 
-  function thStyle(t, extra) { return '<th style="padding:7px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px' + (extra||'') + '">' + t + '</th>'; }
+  function thStyle(t, extra) { return '<th' + (extra ? ' style="' + extra.replace(/^;/,'') + '"' : '') + '>' + t + '</th>'; }
 
   contentEl.innerHTML =
     '<h2 style="margin-bottom:18px">&#x1F5A5;&#xFE0E; System-Dashboard</h2>' +

@@ -157,15 +157,6 @@ const ADMIN_WETTKAMPF = (() => {
     renderTabelle();
   }
 
-  function _thStyle(col) {
-    const active = _sortCol === col;
-    return `text-align:left;padding:8px 10px;font-size:11px;font-weight:700;
-      text-transform:uppercase;letter-spacing:.4px;
-      color:${active ? 'var(--primary)' : 'var(--text2)'};
-      white-space:nowrap;cursor:pointer;user-select:none;
-      border-bottom:2px solid ${active ? 'var(--primary)' : 'transparent'};`;
-  }
-
   function _arrow(col) {
     if (_sortCol !== col) return '<span style="opacity:.3;font-size:10px"> ⇅</span>';
     return _sortDir === 'asc'
@@ -196,18 +187,17 @@ const ADMIN_WETTKAMPF = (() => {
       return;
     }
 
-    html += `<div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;min-width:640px">
+    html += `<div class="panel"><div class="table-scroll">
+    <table style="min-width:640px">
       <thead>
         <tr>
-          <th style="${_thStyle('name')}" onclick="ADMIN_WETTKAMPF.sortiereNach('name')">
+          <th class="${_sortCol==='name'?'sorted':''}" onclick="ADMIN_WETTKAMPF.sortiereNach('name')">
             Veranstaltung${_arrow('name')}</th>
-          <th style="${_thStyle('letzter')}" onclick="ADMIN_WETTKAMPF.sortiereNach('letzter')">
+          <th class="${_sortCol==='letzter'?'sorted':''}" onclick="ADMIN_WETTKAMPF.sortiereNach('letzter')">
             Letzter Wettkampf${_arrow('letzter')}</th>
-          <th style="${_thStyle('naechster')}" onclick="ADMIN_WETTKAMPF.sortiereNach('naechster')">
+          <th class="${_sortCol==='naechster'?'sorted':''}" onclick="ADMIN_WETTKAMPF.sortiereNach('naechster')">
             Nächster Termin${_arrow('naechster')}</th>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;
-                     text-transform:uppercase;letter-spacing:.4px;color:var(--text2)">Disziplinen</th>
+          <th>Disziplinen</th>
           <th style="width:80px"></th>
         </tr>
       </thead>
@@ -249,9 +239,9 @@ const ADMIN_WETTKAMPF = (() => {
       const rowOpacity = inaktiv ? 'opacity:.45' : '';
 
       html += `
-        <tr style="border-bottom:1px solid var(--border);cursor:pointer;${rowOpacity}"
+        <tr style="cursor:pointer;${rowOpacity}"
             onclick="ADMIN_WETTKAMPF.toggleExpand(${s.id})">
-          <td style="padding:10px">
+          <td>
             <strong>${safeHtml(s.name || s.kuerzel)}</strong>
             ${inaktiv ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--border);color:var(--text2);margin-left:6px">Inaktiv</span>' : ''}
             ${s.ort_letzter
@@ -262,16 +252,16 @@ const ADMIN_WETTKAMPF = (() => {
               ${s.erstes_datum ? ' &bull; seit ' + s.erstes_datum.slice(0, 4) : ''}
             </div>
           </td>
-          <td style="padding:10px;font-size:13px;white-space:nowrap">
+          <td style="white-space:nowrap">
             ${s.letztes_datum
               ? `<span title="Wochentag: ${letzterWt}">${fmtDate(s.letztes_datum)}</span>`
               : '<span style="color:var(--text2)">–</span>'}
           </td>
-          <td style="padding:10px">${nextCell}</td>
-          <td style="padding:10px">
-            ${chips || '<span style="color:var(--text2);font-size:13px">–</span>'}
+          <td style="white-space:nowrap">${nextCell}</td>
+          <td>
+            ${chips || '<span style="color:var(--text2)">–</span>'}
           </td>
-          <td style="padding:6px 8px;text-align:right;white-space:nowrap">
+          <td style="text-align:right;white-space:nowrap">
             ${admin ? `<button onclick="event.stopPropagation();ADMIN_WETTKAMPF.toggleAktiv(${s.id})"
               title="${inaktiv ? 'Aktivieren (erscheint wieder im Kalender)' : 'Deaktivieren (ausblenden im Kalender)'}"
               style="border:none;background:none;cursor:pointer;font-size:18px;
@@ -285,7 +275,7 @@ const ADMIN_WETTKAMPF = (() => {
       if (expanded) html += renderDetailZeile(s, disz, admin);
     });
 
-    html += `</tbody></table></div>`;
+    html += `</tbody></table></div></div>`;
     container.innerHTML = html;
   }
 

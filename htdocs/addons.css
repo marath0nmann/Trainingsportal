@@ -661,10 +661,10 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
 /* Breite Tabellen (Admin) horizontal scrollbar statt Layout sprengen */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-/* ── Wettkampfplanung-Tabelle: nutzt globale th/td-Regeln aus app.css ── */
-.wkp-table { width: 100%; border-collapse: collapse; min-width: 560px; }
-.wkp-th-cb { width: 36px; text-align: center !important; padding: 8px !important; }
-.wkp-td-cb { width: 36px; text-align: center; padding: 9px 8px !important; }
+/* ── Wettkampfplanung-Tabelle ── */
+/* Globale th/td-Regeln aus der shared app.css greifen; hier nur Spezifisches */
+.wkp-table { min-width: 560px; }
+.wkp-th-cb, .wkp-td-cb { width: 36px; text-align: center !important; }
 .wkp-url-link { font-size: 11px; color: var(--primary); text-decoration: none; }
 .wkp-ort { font-size: 12px; color: var(--text2); margin-top: 2px; }
 
@@ -2100,25 +2100,8 @@ body.planung-active #app-footer    { display: none; }
 }
 .athleten-error { color: var(--primary); }
 
-.athleten-table {
-  width: 100%; border-collapse: collapse; font-size: 14px;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
-}
-.athleten-table th {
-  text-align: left; padding: 10px 14px;
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
-  color: var(--text2); background: var(--surf2);
-  border-bottom: 2px solid var(--border);
-  cursor: default; white-space: nowrap; user-select: none;
-}
-.athleten-table td {
-  padding: 10px 14px; border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-.athleten-table tbody tr:last-child td { border-bottom: none; }
-.athleten-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+/* .athleten-table: Box-Stile kommen vom .panel-Wrapper; th/td von globaler app.css */
+.athleten-table { font-size: 14px; }
 .athlet-row-disabled { opacity: .6; }
 .athlet-name { font-weight: 600; color: var(--text); }
 .athlet-ich { font-size: 11px; color: var(--text2); font-weight: 400; }

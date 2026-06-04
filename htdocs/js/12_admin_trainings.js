@@ -93,12 +93,10 @@ const ADMIN_TRAININGS = (() => {
     const allChecked = data.length > 0 && data.every(e => selected.has(e.id));
     const selCount   = selected.size;
 
-    const thBase = 'padding:8px 10px;text-align:left;white-space:nowrap;cursor:pointer;' +
-                   'user-select:none;color:var(--text2);font-weight:600;font-size:12px;' +
-                   'border-bottom:2px solid var(--border)';
     const headerCols = COLS.map(c => {
       const arrow = sortKey === c.key ? (sortDir > 0 ? ' ↑' : ' ↓') : '';
-      return `<th style="${thBase}" onclick="ADMIN_TRAININGS.sort('${c.key}')">${escapeHtml(c.label)}${arrow}</th>`;
+      const sorted = sortKey === c.key ? ' sorted' : '';
+      return `<th class="${sorted}" onclick="ADMIN_TRAININGS.sort('${c.key}')">${escapeHtml(c.label)}${arrow}</th>`;
     }).join('');
 
     const rows = data.map(e => {
@@ -112,16 +110,15 @@ const ADMIN_TRAININGS = (() => {
       const rowStyle = abgesagt ? `${rowHover};opacity:.65` : rowHover;
       const statusSty = abgesagt ? 'color:var(--primary);font-weight:600' : 'color:var(--text2)';
 
-      const tdStyle  = 'padding:7px 10px;font-size:13px;border-bottom:1px solid var(--border)';
-      const tdClip   = tdStyle + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0';
+      const tdClip = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0';
 
       return `<tr style="${rowStyle}" onclick="ADMIN_TRAININGS.editRow(event,${e.id})">
-        <td style="${tdStyle};width:40px" onclick="event.stopPropagation()">
+        <td style="width:40px" onclick="event.stopPropagation()">
           <input type="checkbox" data-id="${e.id}"${chk} onchange="ADMIN_TRAININGS.toggle(${e.id})">
         </td>
         <td style="${tdClip}">${escapeHtml(datStr)}</td>
         <td style="${tdClip}">${escapeHtml(zeitStr)}</td>
-        <td style="${tdStyle};overflow:hidden;max-width:0">
+        <td style="overflow:hidden;max-width:0">
           <span class="liste-typ-badge liste-typ-${escapeHtml(e.typ)}"
             style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;white-space:nowrap"
           >${escapeHtml(typLbl)}</span>
@@ -129,7 +126,7 @@ const ADMIN_TRAININGS = (() => {
         <td style="${tdClip}" title="${escapeHtml(e.gruppe || '')}">${escapeHtml(e.gruppe || '–')}</td>
         <td style="${tdClip}" title="${escapeHtml(e.titel)}">${escapeHtml(e.titel)}</td>
         <td style="${tdClip}" title="${escapeHtml(e.treffpunkt || '')}">${escapeHtml(e.treffpunkt || '–')}</td>
-        <td style="${tdStyle};white-space:nowrap;${statusSty}">${abgesagt ? 'Abgesagt' : 'Geplant'}</td>
+        <td style="white-space:nowrap;${statusSty}">${abgesagt ? 'Abgesagt' : 'Geplant'}</td>
       </tr>`;
     }).join('');
 
@@ -197,8 +194,8 @@ const ADMIN_TRAININGS = (() => {
           </div>
         </div>
         ${aktionsleiste}
-        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-          <table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:700px">
+        <div class="table-scroll">
+          <table style="table-layout:fixed;min-width:700px">
             <colgroup>
               <col style="width:40px">
               <col style="width:155px">
@@ -211,7 +208,7 @@ const ADMIN_TRAININGS = (() => {
             </colgroup>
             <thead>
               <tr>
-                <th style="padding:8px 10px;border-bottom:2px solid var(--border);width:40px">
+                <th style="width:40px">
                   <input type="checkbox"${allChecked ? ' checked' : ''} onchange="ADMIN_TRAININGS.toggleAll(this.checked)">
                 </th>
                 ${headerCols}

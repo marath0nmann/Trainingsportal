@@ -1,5 +1,10 @@
 # Changelog
 
+## v225
+- Tabellengestaltung überall vereinheitlicht: alle Tabellen (Wettkampfplanung, Admin-Wettkampf, Admin-Trainings, Admin-System, Athleten-Plan) in `<div class="panel">` gewrappt – Box/Shadow/Border-Radius wie im Statistikportal
+- Inline-`_thStyle()`-Funktionen in `16_admin_wettkampf.js` und `14_admin_system.js` entfernt; `thBase`-String in `12_admin_trainings.js` entfernt – globale `th/td`-Regeln aus shared `app.css` greifen jetzt überall direkt
+- `addons.css`: redundante Box-Stile von `.athleten-table` und `.wkp-table` entfernt (werden von `.panel` + globaler `app.css` abgedeckt)
+
 ## v224
 - Fix: SQL-Fehler "Unknown column b.vorname" in GET mein-plan/uebersicht und profil/freigaben (vorname/nachname liegen in athleten-Tabelle, nicht in benutzer; JOIN via athlet_id)
 - Wettkampfplanung: Tabellengestaltung auf globale app.css-Regeln (th/td) umgestellt – inline-`_thStyle()` entfernt, `<table class="wkp-table">` statt inline-Styles; Kopfzeilen jetzt mit Barlow Condensed 12px, korrektem letter-spacing, `var(--surf2)`-Hintergrund wie im Statistikportal

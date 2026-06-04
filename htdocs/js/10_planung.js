@@ -794,10 +794,12 @@ const PLANUNG = (() => {
       <div class="athleten-wrap">
         <h2 class="athleten-titel">Persönliche Trainingspläne</h2>
         <p class="athleten-intro">Athleten geben ihren Plan in ihrem Profil frei. Mit <em>Lesezugriff</em> kannst du ihn ansehen, mit <em>Vollzugriff</em> auch bearbeiten.</p>
-        <table class="athleten-table">
-          <thead><tr><th>Athlet</th><th>Einheiten</th><th>Letzte</th><th>Zugriff</th><th></th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+        <div class="panel"><div class="table-scroll">
+          <table class="athleten-table">
+            <thead><tr><th>Athlet</th><th>Einheiten</th><th>Letzte</th><th>Zugriff</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div></div>
       </div>`;
   }
 

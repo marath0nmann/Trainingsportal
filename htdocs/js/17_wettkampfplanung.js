@@ -182,7 +182,7 @@ const WETTKAMPFPLANUNG = (() => {
       return;
     }
 
-    html += `<div class="table-scroll">
+    html += `<div class="panel"><div class="table-scroll">
       <table class="wkp-table">
         <thead>
           <tr>
@@ -285,7 +285,7 @@ const WETTKAMPFPLANUNG = (() => {
         </tr>`;
     });
 
-    html += `</tbody></table></div>`;
+    html += `</tbody></table></div></div>`;
 
     // Bulk-Action-Bar (sticky, erscheint wenn etwas ausgewählt)
     if (_selected.size > 0) {
