@@ -1,5 +1,9 @@
 # Changelog
 
+## v221
+- Render-Fehler werden jetzt sichtbar angezeigt (statt dauerhaftem "Lade Trainingsplan…"): renderKalender/renderListe-Aufrufe mit .catch + _showRenderError, Fehler zusätzlich in der Konsole
+- Fix: SHARE._copy nutzte undefiniertes showNotification → jetzt _wkNotify
+
 ## v220
 - Fix: "Lade Trainingsplan…" blieb stehen wenn bei parallelen Render-Aufrufen kal-grid/liste-content nicht mehr im DOM war (Race-Condition-Guard + Fehler-Fallback auf main)
 

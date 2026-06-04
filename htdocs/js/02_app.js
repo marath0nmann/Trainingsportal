@@ -241,11 +241,11 @@ function renderPage() {
   }
 
   if (state.tab === 'kalender') {
-    renderKalender(main, args && args[0]);
+    renderKalender(main, args && args[0]).catch(e => _showRenderError(main, e));
     return;
   }
   if (state.tab === 'liste') {
-    renderListe(main, args && args[0]);
+    renderListe(main, args && args[0]).catch(e => _showRenderError(main, e));
     return;
   }
   if (state.tab === 'bloecke') {
@@ -279,6 +279,16 @@ function renderPage() {
   // Unbekannte Route (z. B. #dashboard / #konto aus Statistikportal-Header)
   // → still auf die Startseite umleiten, statt 404 anzuzeigen
   location.replace(startHash());
+}
+
+// Zeigt unerwartete Render-Fehler sichtbar an, statt das DOM bei „Lade…" hängen zu lassen.
+function _showRenderError(main, e) {
+  console.error('[renderPage]', e);
+  const msg = (e && (e.message || e.toString())) || 'Unbekannter Fehler';
+  const grid = document.getElementById('kal-grid') || document.getElementById('liste-content');
+  const html = `<div class="kal-error">Anzeige-Fehler: ${escapeHtml(msg)}</div>`;
+  if (grid) grid.innerHTML = html;
+  else if (main) main.innerHTML = `<div class="kal-wrap">${html}</div>`;
 }
 
 function renderGastSeite(main) {
@@ -2485,7 +2495,7 @@ const SHARE = (() => {
 
   function _copy(url) {
     navigator.clipboard?.writeText(url).then(() => {
-      showNotification('Link kopiert!', 'success');
+      _wkNotify('Link kopiert!', true);
     }).catch(() => {
       prompt('Link zum Kopieren:', url);
     });
