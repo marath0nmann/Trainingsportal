@@ -737,6 +737,40 @@ function _migrationStmts(): array
             }
         },
 
+        // ── 18: Konsolidierung disziplinen_extra → wettbewerbe ───────────────────────
+        // disziplinen_extra aus training_wettkampf_planung in veranstaltung_serien.wettbewerbe mergen.
+        // disziplinen_ausgeschlossen entfällt (Admin entfernt Einträge direkt aus wettbewerbe).
+        18 => static function (): void {
+            $tws = DB::tbl('veranstaltung_serien');
+            $twp = DB::tbl('training_wettkampf_planung');
+            try {
+                $planungen = DB::fetchAll(
+                    "SELECT wp.serie_id, wp.disziplinen_extra FROM `{$twp}` wp
+                     WHERE wp.disziplinen_extra IS NOT NULL AND wp.disziplinen_extra != '[]'"
+                );
+                foreach ($planungen as $p) {
+                    $extras = json_decode((string)$p['disziplinen_extra'], true);
+                    if (!is_array($extras) || empty($extras)) continue;
+
+                    $serie = DB::fetchOne("SELECT wettbewerbe FROM `{$tws}` WHERE id=?", [$p['serie_id']]);
+                    if (!$serie) continue;
+                    $wb = ($serie['wettbewerbe'] && $serie['wettbewerbe'] !== '[]')
+                        ? json_decode((string)$serie['wettbewerbe'], true) : [];
+                    if (!is_array($wb)) $wb = [];
+
+                    $changed = false;
+                    foreach ($extras as $e) {
+                        $e = trim((string)$e);
+                        if ($e !== '' && !in_array($e, $wb, true)) { $wb[] = $e; $changed = true; }
+                    }
+                    if ($changed) {
+                        DB::query("UPDATE `{$tws}` SET wettbewerbe=? WHERE id=?",
+                            [json_encode(array_values($wb)), $p['serie_id']]);
+                    }
+                }
+            } catch (Throwable $e) { error_log('mig18: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -4754,17 +4788,12 @@ function handleWettkampf(string $method, string $tail): void
             $params[] = ($in['naechstes_datum'] !== null && $in['naechstes_datum'] !== '')
                         ? (string)$in['naechstes_datum'] : null;
         }
-        if (array_key_exists('disziplinen_extra', $in)) {
-            $arr      = is_array($in['disziplinen_extra']) ? $in['disziplinen_extra'] : [];
-            $arr      = array_values(array_filter(array_map('trim', $arr)));
-            $sets[]   = 'disziplinen_extra=?';
-            $params[] = count($arr) ? json_encode($arr) : null;
-        }
-        if (array_key_exists('disziplinen_ausgeschlossen', $in)) {
-            $arr      = is_array($in['disziplinen_ausgeschlossen']) ? $in['disziplinen_ausgeschlossen'] : [];
-            $arr      = array_values(array_filter(array_map('trim', $arr)));
-            $sets[]   = 'disziplinen_ausgeschlossen=?';
-            $params[] = count($arr) ? json_encode($arr) : null;
+        // wettbewerbe wird jetzt direkt auf der Serie gespeichert (konsolidierte Disziplinliste)
+        if (array_key_exists('wettbewerbe', $in)) {
+            $arr = is_array($in['wettbewerbe']) ? $in['wettbewerbe'] : [];
+            $arr = array_values(array_filter(array_map('trim', $arr)));
+            DB::query("UPDATE `{$tws}` SET wettbewerbe=? WHERE id=?",
+                [count($arr) ? json_encode($arr) : null, $serieId]);
         }
         if (array_key_exists('aktiv', $in)) {
             $sets[]   = 'aktiv=?';
@@ -4778,19 +4807,13 @@ function handleWettkampf(string $method, string $tail): void
                 DB::query("UPDATE $twp SET " . implode(',', $sets) . " WHERE id=?", $params);
             }
         } else {
-            $nd  = array_key_exists('naechstes_datum', $in)
+            $nd = array_key_exists('naechstes_datum', $in)
                 ? (($in['naechstes_datum'] !== null && $in['naechstes_datum'] !== '') ? (string)$in['naechstes_datum'] : null)
                 : null;
-            $de  = array_key_exists('disziplinen_extra', $in) && is_array($in['disziplinen_extra'])
-                ? json_encode(array_values(array_filter(array_map('trim', $in['disziplinen_extra']))))
-                : null;
-            $dau = array_key_exists('disziplinen_ausgeschlossen', $in) && is_array($in['disziplinen_ausgeschlossen'])
-                ? json_encode(array_values(array_filter(array_map('trim', $in['disziplinen_ausgeschlossen']))))
-                : null;
-            $ak  = array_key_exists('aktiv', $in) ? ($in['aktiv'] ? 1 : 0) : 1;
+            $ak = array_key_exists('aktiv', $in) ? ($in['aktiv'] ? 1 : 0) : 1;
             DB::query(
-                "INSERT INTO $twp (serie_id, naechstes_datum, disziplinen_extra, disziplinen_ausgeschlossen, aktiv) VALUES (?,?,?,?,?)",
-                [$serieId, $nd, $de, $dau, $ak]
+                "INSERT INTO $twp (serie_id, naechstes_datum, aktiv) VALUES (?,?,?)",
+                [$serieId, $nd, $ak]
             );
         }
         echo json_encode(['ok' => true]);

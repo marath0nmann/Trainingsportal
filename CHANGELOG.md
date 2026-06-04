@@ -1,7 +1,7 @@
 # Changelog
 
 ## v213
-## v216
+## v217
 - Wettkampfplanung: referenz_datum aus Notion-Export – 115 Serien erhalten ihr letztes bekanntes Datum; letztes_datum per GREATEST(Statistikportal, Notion) – Prognose jetzt auch ohne Statistikportal-Eintrag möglich
 
 - Gäste ohne Share-Token sehen keine Daten mehr (Login-Hinweis-Seite)

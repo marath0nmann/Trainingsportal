@@ -110,12 +110,9 @@ const ADMIN_WETTKAMPF = (() => {
            ['admin', 'trainer'].includes(state.user.rolle);
   }
 
+  // Disziplinen-Quelle: wettbewerbe (einzige editierbare Quelle)
   function allesDisziplinen(serie) {
-    const ausgeschlossen = new Set(serie.disziplinen_ausgeschlossen || []);
-    const set = new Set();
-    (serie.disziplinen || []).forEach(d => { if (!ausgeschlossen.has(d)) set.add(d); });
-    (serie.disziplinen_extra || []).forEach(d => set.add(d));
-    return [...set];
+    return [...(serie.wettbewerbe || [])];
   }
 
   function benachrichtigen(text, art) {
@@ -225,10 +222,8 @@ const ADMIN_WETTKAMPF = (() => {
       const MAX  = 4;
       let chips  = '';
       disz.slice(0, MAX).forEach(d => {
-        const extra = (s.disziplinen_extra || []).includes(d);
         chips += `<span style="display:inline-block;padding:1px 7px;border-radius:10px;
-          font-size:11px;background:var(--border);color:var(--text);margin:1px 2px;
-          ${extra ? 'border:1px dashed var(--text2)' : ''}">${escapeHtml(d)}</span>`;
+          font-size:11px;background:var(--border);color:var(--text);margin:1px 2px">${escapeHtml(d)}</span>`;
       });
       if (disz.length > MAX)
         chips += `<span style="font-size:11px;color:var(--text2)">+${disz.length - MAX}</span>`;
@@ -304,7 +299,7 @@ const ADMIN_WETTKAMPF = (() => {
           <div style="background:var(--bg2);border-top:1px solid var(--border);padding:20px 16px">
             <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">`;
 
-    // ── Alle Disziplinen ─────────────────────────────────────
+    // ── Disziplinen (aus wettbewerbe) ────────────────────────
     html += `<div style="flex:1;min-width:220px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;
                   letter-spacing:.5px;color:var(--text2);margin-bottom:10px">Disziplinen</div>`;
@@ -314,12 +309,17 @@ const ADMIN_WETTKAMPF = (() => {
     } else {
       html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
       disz.forEach(d => {
-        const extra = (serie.disziplinen_extra || []).includes(d);
         html += `<span style="padding:3px 10px;border-radius:12px;font-size:13px;
-          background:var(--border);color:var(--text);
-          ${extra ? 'border:1px dashed var(--text2)' : ''}">${escapeHtml(d)}</span>`;
+          background:var(--border);color:var(--text)">${escapeHtml(d)}</span>`;
       });
       html += '</div>';
+    }
+    // Historische Disziplinen aus Statistikportal (schreibgeschützt)
+    if (serie.disziplinen && serie.disziplinen.length) {
+      html += `<div style="margin-top:8px;font-size:11px;color:var(--text2)">
+        Historisch aus Statistikportal:
+        ${serie.disziplinen.map(d => escapeHtml(d)).join(', ')}
+      </div>`;
     }
     html += '</div>';
 
@@ -393,9 +393,8 @@ const ADMIN_WETTKAMPF = (() => {
     if (_alleDisziplinen !== null && _alleDisziplinen.length === 0) _alleDisziplinen = null;
     _edit = {
       serieId,
-      extrahiert:    serie.disziplinen || [],
-      ausgeschlossen: new Set(serie.disziplinen_ausgeschlossen || []),
-      extras:        [...(serie.disziplinen_extra || [])],
+      wettbewerbe: [...(serie.wettbewerbe || [])],   // editierbare Disziplinliste
+      historisch:  serie.disziplinen || [],           // schreibgeschützt (Statistikportal)
     };
 
     const prognose = predictNextDate(serie.letztes_datum);
@@ -475,43 +474,17 @@ const ADMIN_WETTKAMPF = (() => {
 
     let html = '';
 
-    // ── Aus Ergebnissen extrahierte Disziplinen ──
-    if (_edit.extrahiert.length) {
+    // ── Aktuelle Disziplinliste (wettbewerbe) ──
+    if (_edit.wettbewerbe.length) {
       html += `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">
-        Aus Ergebnissen &ndash; klicken zum Ein-/Ausblenden:</div>
+        Aktuelle Disziplinen &ndash; × zum Entfernen:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">`;
-      _edit.extrahiert.forEach(d => {
-        const ex  = _edit.ausgeschlossen.has(d);
-        const dJ  = escapeHtml(JSON.stringify(d));
-        if (ex) {
-          html += `<span onclick="ADMIN_WETTKAMPF._toggleDisz(${dJ})" title="Einschließen"
-            style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
-              border-radius:12px;font-size:13px;cursor:pointer;user-select:none;
-              background:var(--bg);border:1px solid var(--border);
-              color:var(--text2);text-decoration:line-through">
-            <span style="font-size:11px">✗</span>${escapeHtml(d)}</span>`;
-        } else {
-          html += `<span onclick="ADMIN_WETTKAMPF._toggleDisz(${dJ})" title="Ausblenden"
-            style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
-              border-radius:12px;font-size:13px;cursor:pointer;user-select:none;
-              background:rgba(46,204,113,.15);border:1px solid #27ae60;color:var(--text)">
-            <span style="font-size:11px;color:#27ae60">✓</span>${escapeHtml(d)}</span>`;
-        }
-      });
-      html += `</div>`;
-    }
-
-    // ── Manuell hinzugefügte Disziplinen ──
-    if (_edit.extras.length) {
-      html += `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">
-        Manuell hinzugefügt:</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">`;
-      _edit.extras.forEach(d => {
+      _edit.wettbewerbe.forEach(d => {
         const dJ = escapeHtml(JSON.stringify(d));
         html += `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
           border-radius:12px;font-size:13px;background:var(--border);color:var(--text)">
           ${escapeHtml(d)}
-          <button onclick="ADMIN_WETTKAMPF._removeExtra(${dJ})"
+          <button onclick="ADMIN_WETTKAMPF._removeWb(${dJ})"
             style="border:none;background:none;cursor:pointer;color:var(--text2);
                    font-size:16px;line-height:1;padding:0 0 0 2px;margin:0"
             title="Entfernen">&times;</button>
@@ -520,15 +493,15 @@ const ADMIN_WETTKAMPF = (() => {
       html += `</div>`;
     }
 
-    if (!_edit.extrahiert.length && !_edit.extras.length) {
+    if (!_edit.wettbewerbe.length) {
       html += `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">
-        Noch keine Disziplinen aus Ergebnissen vorhanden.</div>`;
+        Noch keine Disziplinen eingetragen.</div>`;
     }
 
-    // ── Disziplin aus Statistikportal hinzufügen ──
+    // ── Disziplin hinzufügen (aus Statistikportal-Liste oder Freitext) ──
     html += `<div style="margin-top:4px">
       <div style="font-size:11px;color:var(--text2);margin-bottom:6px">
-        Disziplin aus Statistikportal hinzufügen:</div>`;
+        Disziplin hinzufügen:</div>`;
 
     if (_alleDisziplinen === null) {
       html += `<div style="font-size:13px;color:var(--text2)">
@@ -536,11 +509,7 @@ const ADMIN_WETTKAMPF = (() => {
           border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;
           vertical-align:middle;margin-right:6px"></span>Lade Disziplinen&hellip;</div>`;
     } else {
-      // Schon aktive Disziplinen (sichtbar in extrahiert oder in extras)
-      const bereitsAktiv = new Set([
-        ..._edit.extrahiert.filter(d => !_edit.ausgeschlossen.has(d)),
-        ..._edit.extras,
-      ]);
+      const bereitsAktiv = new Set(_edit.wettbewerbe);
 
       const suchterm = _diszFilter.trim().toLowerCase();
       const gefiltert = _alleDisziplinen.filter(d =>
@@ -568,22 +537,9 @@ const ADMIN_WETTKAMPF = (() => {
         gefiltert.slice(0, MAX_LIST).forEach(d => {
           const dJ = escapeHtml(JSON.stringify(d));
           if (bereitsAktiv.has(d)) {
-            // Bereits aktiv – grau mit Häkchen, nicht klickbar
             html += `<div style="padding:5px 10px;font-size:13px;color:var(--text2);
               display:flex;align-items:center;gap:6px">
               <span style="color:#27ae60;font-size:11px">✓</span>${escapeHtml(d)}</div>`;
-          } else if (_edit.extrahiert.includes(d) && _edit.ausgeschlossen.has(d)) {
-            // In Ergebnissen, aber ausgeblendet → Klick blendet wieder ein
-            html += `<div onclick="ADMIN_WETTKAMPF._addDiszFromList(${dJ})"
-              title="Wieder einblenden"
-              style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px;
-                     display:flex;align-items:center;gap:6px;"
-              onmouseover="this.style.background='var(--border)'"
-              onmouseout="this.style.background=''">
-              <span style="font-size:11px;color:var(--text2)">↩</span>
-              <span style="text-decoration:line-through;color:var(--text2)">${escapeHtml(d)}</span>
-              <span style="font-size:10px;color:var(--text2)">(ausgeblendet)</span>
-            </div>`;
           } else {
             html += `<div onclick="ADMIN_WETTKAMPF._addDiszFromList(${dJ})"
               style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px"
@@ -605,48 +561,19 @@ const ADMIN_WETTKAMPF = (() => {
     area.innerHTML = html;
   }
 
-  // Extrahierte Disziplin ein-/ausblenden
-  function _toggleDisz(d) {
+  // Disziplin aus wettbewerbe entfernen
+  function _removeWb(d) {
     if (!_edit) return;
-    if (_edit.ausgeschlossen.has(d)) _edit.ausgeschlossen.delete(d);
-    else _edit.ausgeschlossen.add(d);
+    _edit.wettbewerbe = _edit.wettbewerbe.filter(x => x !== d);
     _renderDiszArea();
   }
 
-  // Manuell hinzugefügte Disziplin entfernen
-  function _removeExtra(d) {
-    if (!_edit) return;
-    _edit.extras = _edit.extras.filter(x => x !== d);
-    _renderDiszArea();
-  }
-
-  // Neue Disziplin hinzufügen (oder ausgeschlossene wieder einschließen)
-  function _addExtra() {
-    if (!_edit) return;
-    const inp = document.getElementById('planung-disz-neu');
-    if (!inp) return;
-    const val = inp.value.trim();
-    inp.value = '';
-    if (!val) return;
-    if (_edit.extrahiert.includes(val)) {
-      _edit.ausgeschlossen.delete(val);
-    } else if (!_edit.extras.includes(val)) {
-      _edit.extras.push(val);
-    }
-    _renderDiszArea();
-  }
-
-  // Disziplin aus Statistikportal-Liste hinzufügen / wieder einblenden
+  // Disziplin zu wettbewerbe hinzufügen (aus Picker oder Freitext)
   function _addDiszFromList(d) {
     if (!_edit) return;
-    if (_edit.extrahiert.includes(d)) {
-      _edit.ausgeschlossen.delete(d);
-    } else if (!_edit.extras.includes(d)) {
-      _edit.extras.push(d);
-    }
+    if (!_edit.wettbewerbe.includes(d)) _edit.wettbewerbe.push(d);
     _diszFilter = '';
     _renderDiszArea();
-    // Fokus zurück auf Suchfeld
     setTimeout(() => document.getElementById('disz-filter-inp')?.focus(), 0);
   }
 
@@ -663,10 +590,12 @@ const ADMIN_WETTKAMPF = (() => {
     const datum = (document.getElementById('planung-datum')?.value || '').trim() || null;
     try {
       await apiPut(`wettkampf/${serieId}/planung`, {
-        naechstes_datum:             datum,
-        disziplinen_extra:           _edit ? _edit.extras : [],
-        disziplinen_ausgeschlossen:  _edit ? [..._edit.ausgeschlossen] : [],
+        naechstes_datum: datum,
+        wettbewerbe:     _edit ? _edit.wettbewerbe : [],
       });
+      // Lokales Serien-Objekt sofort aktualisieren
+      const serie = serien.find(s => s.id === serieId);
+      if (serie && _edit) serie.wettbewerbe = [..._edit.wettbewerbe];
       schliesseModal();
       _edit = null;
       benachrichtigen('Planung gespeichert.', 'ok');
