@@ -686,7 +686,6 @@ const ADMIN_WETTKAMPF = (() => {
   return {
     render, toggleExpand,
     showPlanungModal, savePlanung,
-    _toggleDisz, _removeExtra, _addExtra,
     _addDiszFromList, _setDiszFilter,
     toggleAktiv, saveDatumInline, clearDatumInline,
     imKalenderEintragen, predictNextDate, sortiereNach,
