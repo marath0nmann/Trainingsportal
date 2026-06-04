@@ -661,6 +661,13 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
 /* Breite Tabellen (Admin) horizontal scrollbar statt Layout sprengen */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+/* ── Wettkampfplanung-Tabelle: nutzt globale th/td-Regeln aus app.css ── */
+.wkp-table { width: 100%; border-collapse: collapse; min-width: 560px; }
+.wkp-th-cb { width: 36px; text-align: center !important; padding: 8px !important; }
+.wkp-td-cb { width: 36px; text-align: center; padding: 9px 8px !important; }
+.wkp-url-link { font-size: 11px; color: var(--primary); text-decoration: none; }
+.wkp-ort { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
 /* Admin → System: responsives Spaltenlayout */
 .admin-sys-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
 .admin-sys-cols  { display: grid; grid-template-columns: 3fr 7fr; gap: 16px; margin-bottom: 24px; }
@@ -2156,3 +2163,28 @@ body.planung-active #app-footer    { display: none; }
   flex-shrink: 0;
 }
 .planung-section-bar .subtab { margin-bottom: 0; }
+
+/* ── Athleten-Sidebar (Karten) + Plan-Subheader ─────────────────────── */
+.athlet-cards { display: flex; flex-direction: column; gap: 0; }
+.athlet-card {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background .12s;
+}
+.athlet-card:last-child { border-bottom: none; }
+.athlet-card:hover:not(.is-disabled) { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.athlet-card.is-active { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.athlet-card.is-disabled { opacity: .55; cursor: default; }
+.athlet-card-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;
+}
+.athlet-card-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; }
+.athlet-card-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.planung-athleten-leer { padding: 20px 14px; font-size: 13px; color: var(--text2); }
+
+/* Subheader im Athletenplan-Kalender (Name + Zugriffstyp unterhalb Monatsnavigation) */
+.athlet-plan-subhead {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 0 0 8px; margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}

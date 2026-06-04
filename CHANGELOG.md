@@ -1,5 +1,9 @@
 # Changelog
 
+## v224
+- Fix: SQL-Fehler "Unknown column b.vorname" in GET mein-plan/uebersicht und profil/freigaben (vorname/nachname liegen in athleten-Tabelle, nicht in benutzer; JOIN via athlet_id)
+- CSS: fehlende Stile fuer Athleten-Karten-Sidebar und athlet-plan-subhead ergaenzt
+
 ## v223
 - Fix (Ursache "Lade Trainingsplan…"): ADMIN_WETTKAMPF-IIFE warf beim Laden einen ReferenceError, weil das return-Objekt drei in v217 entfernte Funktionen (_toggleDisz, _removeExtra, _addExtra) noch referenzierte → const blieb in der TDZ → typeof ADMIN_WETTKAMPF warf im Kalender. Tote Referenzen entfernt.
 

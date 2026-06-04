@@ -4049,16 +4049,18 @@ function handleMeinPlan(string $method, string $tail): void
             echo json_encode(['ok' => false, 'fehler' => 'Nur Trainer/Admins']);
             return;
         }
+        // vorname/nachname liegen in der athleten-Tabelle (via athlet_id), nicht in benutzer
         $rows = DB::fetchAll(
             'SELECT p.benutzer_id, COUNT(*) AS anzahl, MAX(p.datum) AS letztes,
-                    b.vorname, b.nachname, b.email, b.benutzername, b.rolle,
+                    a.vorname, a.nachname, b.email, b.benutzername, b.rolle,
                     f.stufe AS meine_stufe
                FROM ' . DB::tbl('training_privat_einheiten') . ' p
                JOIN ' . DB::tbl('benutzer') . ' b ON b.id = p.benutzer_id
+          LEFT JOIN ' . DB::tbl('athleten') . ' a ON a.id = b.athlet_id
           LEFT JOIN ' . DB::tbl('training_plan_freigaben') . ' f
                     ON f.besitzer_id = p.benutzer_id AND f.trainer_id = ?
            GROUP BY p.benutzer_id
-           ORDER BY b.nachname, b.vorname, b.benutzername',
+           ORDER BY a.nachname, a.vorname, b.benutzername',
             [$userId]
         );
         $athleten = array_map(function ($r) use ($userId) {
@@ -4615,11 +4617,13 @@ function handleProfil(string $method, string $sub): void
 
     // ── Plan-Freigaben: an welche Trainer/Admins gebe ich meinen Plan frei? ──
     if ($sub === 'freigaben' && $method === 'GET') {
+        // vorname/nachname kommen aus athleten (via athlet_id), nicht aus benutzer
         $trainerRows = DB::fetchAll(
-            "SELECT id, vorname, nachname, email, benutzername, rolle
-               FROM " . DB::tbl('benutzer') . "
-              WHERE rolle IN ('admin','trainer') AND aktiv = 1 AND id != ?
-              ORDER BY nachname, vorname, benutzername",
+            "SELECT b.id, a.vorname, a.nachname, b.email, b.benutzername, b.rolle
+               FROM " . DB::tbl('benutzer') . " b
+          LEFT JOIN " . DB::tbl('athleten') . " a ON a.id = b.athlet_id
+              WHERE b.rolle IN ('admin','trainer') AND b.aktiv = 1 AND b.id != ?
+              ORDER BY a.nachname, a.vorname, b.benutzername",
             [$userId]
         );
         $freigRows = DB::fetchAll(
