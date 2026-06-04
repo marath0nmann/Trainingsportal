@@ -1,6 +1,7 @@
 # Changelog
 
-## v226
+## v227
+- favicon.ico via .htaccess auf favicon.php?size=32 umgeleitet; ICO-Link aus index.html entfernt – Browser nutzen jetzt einheitlich das dynamische PNG-Favicon
 - Favicon vereinheitlicht: dynamischer Fallback-Buchstabe aus `login_portal_apps` (Hostname-Abgleich) statt hardcoded 'T'
 - Tabellengestaltung überall vereinheitlicht: alle Tabellen (Wettkampfplanung, Admin-Wettkampf, Admin-Trainings, Admin-System, Athleten-Plan) in `<div class="panel">` gewrappt – Box/Shadow/Border-Radius wie im Statistikportal
 - Inline-`_thStyle()`-Funktionen in `16_admin_wettkampf.js` und `14_admin_system.js` entfernt; `thBase`-String in `12_admin_trainings.js` entfernt – globale `th/td`-Regeln aus shared `app.css` greifen jetzt überall direkt
