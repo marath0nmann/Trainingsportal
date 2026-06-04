@@ -1,5 +1,9 @@
 # Changelog
 
+## v222
+- Untermenü-Buttons (Admin-Seite, Trainingsplanung-Sektionsleiste) auf `.subtab`/`.subtabs` umgestellt – identisches Look & Feel wie im Statistikportal (Barlow Condensed uppercase, aktiver Tab mit Primärfarbe gefüllt)
+- Tabellen-Kopfzeilen (`.athleten-table th`) an Statistikportal angeglichen: Barlow Condensed 12px, 2px border-bottom, letter-spacing 1px
+
 ## v221
 - Render-Fehler werden jetzt sichtbar angezeigt (statt dauerhaftem "Lade Trainingsplan…"): renderKalender/renderListe-Aufrufe mit .catch + _showRenderError, Fehler zusätzlich in der Konsole
 - Fix: SHARE._copy nutzte undefiniertes showNotification → jetzt _wkNotify

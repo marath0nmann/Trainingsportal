@@ -329,16 +329,16 @@ function renderAdminPage(main, subTab) {
 
   main.innerHTML = `
     <div style="max-width:1400px;margin:0 auto;padding:16px">
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:10px">
-        <button class="btn btn-ghost${tab === 'system' ? ' active' : ''}"
+      <div class="subtabs">
+        <button class="subtab${tab === 'system' ? ' active' : ''}"
           onclick="navigateAdmin('system')">&#x1F5A5;&#xFE0E; System</button>
-        <button class="btn btn-ghost${tab === 'einstellungen' ? ' active' : ''}"
+        <button class="subtab${tab === 'einstellungen' ? ' active' : ''}"
           onclick="navigateAdmin('einstellungen')">Einstellungen</button>
-        <button class="btn btn-ghost${tab === 'trainings' ? ' active' : ''}"
+        <button class="subtab${tab === 'trainings' ? ' active' : ''}"
           onclick="navigateAdmin('trainings')">Trainings</button>
-        <button class="btn btn-ghost${tab === 'wettkampf' ? ' active' : ''}"
+        <button class="subtab${tab === 'wettkampf' ? ' active' : ''}"
           onclick="navigateAdmin('wettkampf')">Wettkämpfe</button>
-        <button class="btn btn-ghost${tab === 'treffpunkte' ? ' active' : ''}"
+        <button class="subtab${tab === 'treffpunkte' ? ' active' : ''}"
           onclick="navigateAdmin('treffpunkte')">Treffpunkte</button>
       </div>
       <div id="admin-content"></div>

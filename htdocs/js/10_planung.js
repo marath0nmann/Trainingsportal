@@ -396,7 +396,7 @@ const PLANUNG = (() => {
   // ── Untermenü (Admin-Stil): Gruppen · Athleten · Wettkämpfe ──
   function _renderSectionBar() {
     const item = (key, label, aktiv, title) =>
-      `<button class="btn btn-ghost planung-section-btn${aktiv ? ' active' : ''}"
+      `<button class="subtab${aktiv ? ' active' : ''}"
         onclick="PLANUNG.wechsleSection('${key}')"${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>`;
     return `<div class="planung-section-bar">
       ${item('training',  'Gruppen',    _activeTab === 'training',  'Trainingspläne der Gruppen')}
