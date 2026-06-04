@@ -2,6 +2,7 @@
 
 ## v224
 - Fix: SQL-Fehler "Unknown column b.vorname" in GET mein-plan/uebersicht und profil/freigaben (vorname/nachname liegen in athleten-Tabelle, nicht in benutzer; JOIN via athlet_id)
+- Wettkampfplanung: Tabellengestaltung auf globale app.css-Regeln (th/td) umgestellt – inline-`_thStyle()` entfernt, `<table class="wkp-table">` statt inline-Styles; Kopfzeilen jetzt mit Barlow Condensed 12px, korrektem letter-spacing, `var(--surf2)`-Hintergrund wie im Statistikportal
 - CSS: fehlende Stile fuer Athleten-Karten-Sidebar und athlet-plan-subhead ergaenzt
 
 ## v223

@@ -182,26 +182,23 @@ const WETTKAMPFPLANUNG = (() => {
       return;
     }
 
-    html += `<div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;min-width:560px">
+    html += `<div class="table-scroll">
+      <table class="wkp-table">
         <thead>
-          <tr style="border-bottom:2px solid var(--border)">
-            <th style="padding:8px 8px;width:36px;text-align:center">
+          <tr>
+            <th class="wkp-th-cb">
               <input type="checkbox" class="wkp-check-all"
                 onchange="WETTKAMPFPLANUNG._toggleAll(this.checked)"
                 style="cursor:pointer;width:15px;height:15px;accent-color:var(--primary)">
             </th>
-            <th onclick="WETTKAMPFPLANUNG._toggleSort('name')"
-                style="${_thStyle()}cursor:pointer;user-select:none">
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('name')" class="${_sortKey==='name'?'sorted':''}">
               Veranstaltung${si('name')}
             </th>
-            <th onclick="WETTKAMPFPLANUNG._toggleSort('datum')"
-                style="${_thStyle()}cursor:pointer;user-select:none;white-space:nowrap">
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('datum')" class="${_sortKey==='datum'?'sorted':''}">
               Datum ${_jahr}${si('datum')}
             </th>
-            <th style="${_thStyle()}">Disziplinen</th>
-            <th onclick="WETTKAMPFPLANUNG._toggleSort('status')"
-                style="${_thStyle()}cursor:pointer;user-select:none">
+            <th>Disziplinen</th>
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('status')" class="${_sortKey==='status'?'sorted':''}">
               Status${si('status')}
             </th>
           </tr>
@@ -259,25 +256,25 @@ const WETTKAMPFPLANUNG = (() => {
       const rowBg  = isSelected ? 'background:color-mix(in srgb,var(--primary) 8%,transparent);' : '';
 
       html += `
-        <tr style="border-bottom:1px solid var(--border);${rowOp}${rowBg}">
-          <td style="padding:9px 8px;text-align:center;width:36px">
+        <tr${rowOp || rowBg ? ` style="${rowOp}${rowBg}"` : ''}>
+          <td class="wkp-td-cb">
             <input type="checkbox" class="wkp-check" data-id="${s.id}"
               ${isSelected ? 'checked' : ''}
               onchange="WETTKAMPFPLANUNG._toggleSelect(${s.id}, this.checked)"
               style="cursor:pointer;width:15px;height:15px;accent-color:var(--primary)">
           </td>
-          <td style="padding:9px 10px">
+          <td>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <strong style="font-size:13px">${escapeHtml(s.name)}</strong>
+              <strong>${escapeHtml(s.name)}</strong>
               ${s.url ? `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener"
-                  style="font-size:11px;color:var(--primary);text-decoration:none" title="${escapeHtml(s.url)}">↗</a>` : ''}
+                  class="wkp-url-link" title="${escapeHtml(s.url)}">↗</a>` : ''}
             </div>
-            ${s.ort ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">${escapeHtml(s.ort)}</div>` : ''}
+            ${s.ort ? `<div class="wkp-ort">${escapeHtml(s.ort)}</div>` : ''}
             ${anmHtml}
           </td>
-          <td style="padding:9px 10px;white-space:nowrap">${datumHtml}</td>
-          <td style="padding:9px 10px">${wbHtml || '<span style="color:var(--text2);font-size:12px">–</span>'}</td>
-          <td style="padding:9px 10px;white-space:nowrap">
+          <td style="white-space:nowrap">${datumHtml}</td>
+          <td>${wbHtml || '<span style="color:var(--text2)">–</span>'}</td>
+          <td style="white-space:nowrap">
             <button class="wkp-status-btn"
               onclick="WETTKAMPFPLANUNG._openPopper(${s.id}, this)"
               style="background:${st.bg};color:${st.text};border:none;border-radius:12px;
@@ -334,10 +331,6 @@ const WETTKAMPFPLANUNG = (() => {
     }
   }
 
-  function _thStyle() {
-    return 'text-align:left;padding:8px 10px;font-size:11px;font-weight:700;' +
-           'text-transform:uppercase;letter-spacing:.4px;color:var(--text2);white-space:nowrap;';
-  }
 
   // ── Sort ─────────────────────────────────────────────────────
   function _toggleSort(key) {
