@@ -787,6 +787,152 @@ function _migrationStmts(): array
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         ],
 
+        // ── 21: wettbewerbe wiederherstellen ────────────────────────────────────────────
+        // Migration 20 hat wettbewerbe für alle Serien geleert.
+        // Serien MIT Statistikportal-Ergebnissen: wettbewerbe aus ergebnisse befüllen.
+        // Serien OHNE Ergebnisse: vordefinierte Disziplinliste (aus Notion-CSV gemappt).
+        21 => static function (): void {
+            $tws = DB::tbl('veranstaltung_serien');
+            $tvv = DB::tbl('veranstaltungen');
+            $ter = DB::tbl('ergebnisse');
+            $tdm = DB::tbl('disziplin_mapping');
+
+            // 1. Disziplinen aus Statistikportal-Ergebnissen ermitteln
+            $diszBySerie = [];
+            try {
+                $rows = DB::fetchAll("
+                    SELECT v.serie_id,
+                           COALESCE(dm.anzeige_name, e.disziplin) AS disziplin,
+                           COUNT(*) AS anz
+                    FROM `{$ter}` e
+                    JOIN `{$tvv}` v  ON v.id  = e.veranstaltung_id
+                    LEFT JOIN `{$tdm}` dm ON dm.id = e.disziplin_mapping_id
+                    WHERE e.geloescht_am IS NULL
+                      AND v.geloescht_am IS NULL
+                      AND v.genehmigt    = 1
+                      AND e.disziplin    IS NOT NULL
+                    GROUP BY v.serie_id, COALESCE(dm.anzeige_name, e.disziplin)
+                    ORDER BY v.serie_id, COUNT(*) DESC
+                ");
+                $seen = [];
+                foreach ($rows as $r) {
+                    $sid = (int)$r['serie_id'];
+                    if (!isset($seen[$sid])) $seen[$sid] = [];
+                    $d = trim((string)$r['disziplin']);
+                    if ($d !== '' && !in_array($d, $seen[$sid], true)) {
+                        $seen[$sid][]     = $d;
+                        $diszBySerie[$sid][] = $d;
+                    }
+                }
+            } catch (Throwable $ignored) {}
+
+            // 2. wettbewerbe für Serien MIT Ergebnissen setzen
+            foreach ($diszBySerie as $sid => $disz) {
+                try {
+                    DB::query("UPDATE `{$tws}` SET wettbewerbe=? WHERE id=? AND (wettbewerbe IS NULL OR wettbewerbe='' OR wettbewerbe='[]')",
+                        [json_encode($disz), $sid]);
+                } catch (Throwable $e) { error_log('mig21a: ' . $e->getMessage()); }
+            }
+
+            // 3. Vordefinierte Disziplinliste für Serien OHNE Statistikportal-Ergebnisse
+            // Bereits auf Statistikportal-Bezeichnungen gemappt (10km Straße → 10km usw.)
+            $mitErgebnissen = array_keys($diszBySerie);
+            $serien = [
+                'Herbstlauf Niederrhein'               => ['10km','5km'],
+                'Die Kö-Meile'                         => ['1 Meile','5km'],
+                'Rheinuferlauf Duisburg'               => ['10km','5km','Halbmarathon'],
+                'Nikolauslauf der TSG Dülmen'          => ['10km','5km'],
+                'Vivawest Marathon'                    => ['Marathon'],
+                'Ratinger Neujahrslauf'                => ['10km','5km'],
+                'DO it fast Winter'                    => ['10km','5km'],
+                'Berliner Halbmarathon'                => ['Halbmarathon'],
+                'ADAC Marathon Hannover'               => ['10km','Halbmarathon','Marathon'],
+                'Deutsche Post Marathon Bonn'          => ['Halbmarathon','Marathon'],
+                'NN Marathon Rotterdam'                => ['Marathon'],
+                'Boston Marathon'                      => ['Marathon'],
+                'Schneider Electric Marathon de Paris' => ['Marathon'],
+                'TCS London Marathon'                  => ['Marathon'],
+                'Schloss-Dyck-Lauf'                    => ['10km'],
+                'ING Night Marathon Luxembourg'        => ['Halbmarathon','Marathon'],
+                'Benrather Schlosslauf'                => ['10km','5km'],
+                'Neusser Sommernachtslauf'             => ['10km','5km'],
+                'Himmelgeister Brückenlauf'            => ['Halbmarathon'],
+                'Grevenbroicher Citylauf'              => ['10km','5km'],
+                'EVL-Halbmarathon Leverkusen'          => ['Halbmarathon'],
+                'NEW-Citylauf Erkelenz'                => ['10km'],
+                'Move&Groove Run'                      => ['5km'],
+                'Schloss Wickrath Lauf'                => ['10km','5km'],
+                'Hella-Halbmarathon Hamburg'           => ['Halbmarathon'],
+                'Dr. Ernst van Aaken Gedächtnislauf Waldniel' => ['5.000m'],
+                'Lank läuft'                           => ['10km','5km'],
+                'DO it fast Sommer'                    => ['10km','5km'],
+                'Stadtwerke Halbmarathon Bochum'       => ['10km','5km','Halbmarathon'],
+                'Sparkassen-Stadtlauf Wachtendonk'     => ['10km','5km'],
+                'Welterbelauf Zollverein'              => ['10km','5km'],
+                'Bunerts Lichterlauf'                  => ['10km','5km'],
+                'Gelderner Citylauf'                   => ['5km'],
+                'PSD Bank Halbmarathon Hamburg'        => ['Halbmarathon'],
+                'Münster Marathon'                     => ['Marathon'],
+                'NRZ Klosterlauf'                      => ['Halbmarathon'],
+                'Bridge2bridge Run Venlo'              => ['5km'],
+                'Chicago Marathon'                     => ['Marathon'],
+                'Sparkasse 3-Länder-Marathon'          => ['Halbmarathon','Marathon','Viertelmarathon'],
+                'Drei-Brücken-Lauf Bonn'              => ['10km','15km','30km'],
+                'München Marathon'                     => ['10km','Halbmarathon','Marathon'],
+                'Herbstlauf Köln'                      => ['10km'],
+                'TCS Amsterdam Marathon'               => ['Halbmarathon','Marathon'],
+                'Mainova Frankfurt Marathon'           => ['Marathon'],
+                'New York Marathon'                    => ['Marathon'],
+                'Martinslauf Düsseldorf'              => ['10km'],
+                'Schmachtendorfer Nikolauslauf'        => ['10km','5km'],
+                'Seattle Marathon'                     => ['Marathon'],
+                'Neusser Silvesterlauf'                => ['10km'],
+                'Barbara-Runde Bergkamen'              => ['5km'],
+                'Essener Silvesterlauf'                => ['10km','5km'],
+                'Gutenberg Halbmarathon Mainz'         => ['Halbmarathon'],
+                'Mailauf Osterrath'                    => ['10km','5km'],
+                'S25 Berlin'                           => ['10km','25km','5km','Halbmarathon'],
+                'Rosellener Abendlauf'                 => ['10km','5km'],
+                'Wessumer Klumpenlauf'                 => ['10km','5km'],
+                'Westenergie-Marathon Essen'           => ['Marathon'],
+                'Salzkotten Marathon'                  => ['10km','5km','Halbmarathon','Marathon'],
+                'Fun Run Jüchen'                       => ['10km'],
+                'GVG-Abteilauf Brauweiler'            => ['10km','5km'],
+                'Sommerlauf Hochneukirch'              => ['10km','5km'],
+                'Stadtlauf Jüchen'                     => ['10km','5km'],
+                'Volkslauf TV Schwafheim'              => ['10km','5km','Halbmarathon'],
+                'ENNI-Donkenlauf Neukirchen-Vluyn'    => ['10km','5km'],
+                'Eschweiler Citylauf'                  => ['10km','5km'],
+                'Gocher Steintorlauf'                  => ['5km'],
+                'adidas Runners City Night Berlin'     => ['10km','5km'],
+                'Kölner Halbmarathon'                 => ['Halbmarathon'],
+                '10k Hamburg / Elbe'                  => ['10km'],
+                'Citylauf Siegburg'                    => ['10km','5km'],
+                '10k Hamburg / Volkspark'             => ['10km'],
+                '10k Hamburg / Rotherbaum'            => ['10km'],
+                'Hamminkelner Abendlauf'               => ['10km','5km'],
+                'Michaelislauf Gronau-Epe'             => ['10km','5km'],
+                'Berliner Morgenpost Great 10k'        => ['10km'],
+                'Bottroper Herbstwaldlauf'             => ['10km','25km'],
+                'Mallorca Marathon'                    => ['10km','Halbmarathon','Marathon'],
+                'Hockenheimringlauf'                   => ['10km','5km'],
+                'Brüssel Marathon'                     => ['Halbmarathon','Marathon'],
+                'Orion Nieuwjaarsloop'                 => ['10km','5km'],
+                'Neusser Osterlauf'                    => ['10km','5km'],
+            ];
+
+            foreach ($serien as $name => $disz) {
+                try {
+                    $row = DB::fetchOne("SELECT id FROM `{$tws}` WHERE name = ?", [$name]);
+                    if (!$row) continue;
+                    $sid = (int)$row['id'];
+                    if (in_array($sid, $mitErgebnissen, true)) continue; // hat Statistikportal-Daten
+                    DB::query("UPDATE `{$tws}` SET wettbewerbe=? WHERE id=? AND (wettbewerbe IS NULL OR wettbewerbe='' OR wettbewerbe='[]')",
+                        [json_encode($disz), $sid]);
+                } catch (Throwable $e) { error_log('mig21b: ' . $e->getMessage()); }
+            }
+        },
+
         // ── 20: CSV-Disziplinen bereinigen → auf Statistikportal-Namen mappen ────────────
         // Für Serien ohne Statistikportal-Ergebnisse: wettbewerbe-CSV-Bezeichnungen
         // (z. B. „10km Straße") auf Statistikportal-Namen (z. B. „10km") abbilden und
