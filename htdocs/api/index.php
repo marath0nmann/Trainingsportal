@@ -787,6 +787,109 @@ function _migrationStmts(): array
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         ],
 
+        // ── 20: CSV-Disziplinen bereinigen → auf Statistikportal-Namen mappen ────────────
+        // Für Serien ohne Statistikportal-Ergebnisse: wettbewerbe-CSV-Bezeichnungen
+        // (z. B. „10km Straße") auf Statistikportal-Namen (z. B. „10km") abbilden und
+        // als disziplinen_extra in training_wettkampf_planung eintragen.
+        // Serien mit Statistikportal-Ergebnissen brauchen keine Extras –
+        // die echten Disziplinen kommen aus ergebnisse.
+        // Abschließend: wettbewerbe-Spalte für alle Serien leeren.
+        20 => static function (): void {
+            $tws = DB::tbl('veranstaltung_serien');
+            $tvv = DB::tbl('veranstaltungen');
+            $ter = DB::tbl('ergebnisse');
+            $twp = DB::tbl('training_wettkampf_planung');
+
+            // Mapping: CSV-Bezeichnung → Statistikportal-Bezeichnung
+            // (nur Einträge, die im Statistikportal tatsächlich als Disziplinnamen vorkommen)
+            $map = [
+                '10km Straße'     => '10km',
+                '5km Straße'      => '5km',
+                '15km Straße'     => '15km',
+                '25km Straße'     => '25km',
+                '30km Straße'     => '30km',
+                '7,5km Straße'    => '7,5km',
+                'Halbmarathon'    => 'Halbmarathon',
+                'Marathon'        => 'Marathon',
+                'Viertelmarathon' => 'Viertelmarathon',
+                '5.000m Bahn'     => '5.000m',
+                '3.000m Bahn'     => '3.000m',
+                '1 Meile'         => '1 Meile',
+                // Kein Statistikportal-Äquivalent → nicht eintragen:
+                // Firmenlauf, Trail, Landschaftslauf, geführter Landschaftslauf
+            ];
+            $csvNamen = array_keys($map); // zum Bereinigen aus disziplinen_extra
+
+            // Serien mit Statistikportal-Ergebnissen (brauchen keine CSV-Extras)
+            $mitErgebnissen = [];
+            try {
+                $rows = DB::fetchAll("
+                    SELECT DISTINCT v.serie_id
+                    FROM `{$ter}` e
+                    JOIN `{$tvv}` v ON v.id = e.veranstaltung_id
+                    WHERE v.serie_id   IS NOT NULL
+                      AND e.geloescht_am IS NULL
+                      AND v.geloescht_am IS NULL
+                      AND v.genehmigt    = 1
+                ");
+                foreach ($rows as $r) { $mitErgebnissen[(int)$r['serie_id']] = true; }
+            } catch (Throwable $ignored) {}
+
+            // Alle Serien + aktuelle Planung laden
+            $serien = DB::fetchAll("
+                SELECT vs.id, vs.wettbewerbe,
+                       wp.id AS planung_id, wp.disziplinen_extra
+                FROM `{$tws}` vs
+                LEFT JOIN `{$twp}` wp ON wp.serie_id = vs.id
+            ");
+
+            foreach ($serien as $s) {
+                $serieId   = (int)$s['id'];
+                $hatErgebn = isset($mitErgebnissen[$serieId]);
+                $planungId = $s['planung_id'] ? (int)$s['planung_id'] : null;
+                $csvDisz   = ($s['wettbewerbe'] && $s['wettbewerbe'] !== 'null')
+                             ? (json_decode((string)$s['wettbewerbe'], true) ?: []) : [];
+                $vorExtras = ($s['disziplinen_extra'] && $s['disziplinen_extra'] !== 'null')
+                             ? (json_decode((string)$s['disziplinen_extra'], true) ?: []) : [];
+
+                // 1. CSV-Bezeichnungen aus bestehenden Extras entfernen
+                $neu = array_values(array_filter($vorExtras,
+                    fn($d) => !in_array($d, $csvNamen, true)
+                ));
+
+                // 2. Gemappte Disziplinen hinzufügen – nur für Serien ohne Statistikportal-Daten
+                if (!$hatErgebn) {
+                    foreach ($csvDisz as $csvName) {
+                        $statistikName = $map[$csvName] ?? null;
+                        if ($statistikName && !in_array($statistikName, $neu, true)) {
+                            $neu[] = $statistikName;
+                        }
+                    }
+                }
+
+                // 3. Schreiben wenn sich etwas geändert hat
+                sort($neu);
+                sort($vorExtras);
+                if ($neu === $vorExtras) continue; // keine Änderung
+
+                $json = count($neu) ? json_encode(array_values($neu)) : null;
+                try {
+                    if ($planungId) {
+                        DB::query("UPDATE `{$twp}` SET disziplinen_extra = ? WHERE id = ?",
+                            [$json, $planungId]);
+                    } elseif (count($neu) > 0) {
+                        DB::query("INSERT INTO `{$twp}` (serie_id, disziplinen_extra) VALUES (?, ?)",
+                            [$serieId, $json]);
+                    }
+                } catch (Throwable $e) { error_log('mig20: ' . $e->getMessage()); }
+            }
+
+            // 4. wettbewerbe-Spalte leeren (CSV-Daten sind jetzt in disziplinen_extra)
+            try {
+                DB::query("UPDATE `{$tws}` SET wettbewerbe = NULL");
+            } catch (Throwable $e) { error_log('mig20: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
