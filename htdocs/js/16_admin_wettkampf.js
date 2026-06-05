@@ -304,13 +304,6 @@ const ADMIN_WETTKAMPF = (() => {
       });
       html += '</div>';
     }
-    // Historische Disziplinen aus Statistikportal (schreibgeschützt)
-    if (serie.disziplinen && serie.disziplinen.length) {
-      html += `<div style="margin-top:8px;font-size:11px;color:var(--text2)">
-        Historisch aus Statistikportal:
-        ${serie.disziplinen.map(d => escapeHtml(d)).join(', ')}
-      </div>`;
-    }
     html += '</div>';
 
     // ── Admin: Planung ──────────────────────────────────────
@@ -676,7 +669,7 @@ const ADMIN_WETTKAMPF = (() => {
   return {
     render, toggleExpand,
     showPlanungModal, savePlanung,
-    _addDiszFromList, _setDiszFilter,
+    _removeWb, _addDiszFromList, _setDiszFilter,
     toggleAktiv, saveDatumInline, clearDatumInline,
     imKalenderEintragen, predictNextDate, sortiereNach,
   };
