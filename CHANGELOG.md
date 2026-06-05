@@ -1,6 +1,6 @@
 # Changelog
 
-## v227
+## v228
 - favicon.ico via .htaccess auf favicon.php?size=32 umgeleitet; ICO-Link aus index.html entfernt – Browser nutzen jetzt einheitlich das dynamische PNG-Favicon
 - Favicon vereinheitlicht: dynamischer Fallback-Buchstabe aus `login_portal_apps` (Hostname-Abgleich) statt hardcoded 'T'
 - Tabellengestaltung überall vereinheitlicht: alle Tabellen (Wettkampfplanung, Admin-Wettkampf, Admin-Trainings, Admin-System, Athleten-Plan) in `<div class="panel">` gewrappt – Box/Shadow/Border-Radius wie im Statistikportal

@@ -5301,6 +5301,50 @@ function handleWettkampfplanung(string $method, string $tail): void
             $anmBySerie[(int)$a['serie_id']][] = $a['disziplin'];
         }
 
+        // ── Disziplinen aus dem Statistikportal (hat Vorrang vor CSV-wettbewerbe) ──────────
+        // COALESCE(anzeige_name, e.disziplin) liefert den normierten Anzeigenamen;
+        // Admin-Ausschlüsse (disziplinen_ausgeschlossen) und Extras (disziplinen_extra)
+        // werden aus training_wettkampf_planung angewendet.
+        $ter2 = DB::tbl('ergebnisse');
+        $tdm2 = DB::tbl('disziplin_mapping');
+        $rawDiszBySerie = [];
+        try {
+            $diszRows = DB::fetchAll("
+                SELECT v.serie_id,
+                       COALESCE(dm.anzeige_name, e.disziplin) AS disziplin,
+                       COUNT(*)                                AS anz
+                FROM `{$ter2}` e
+                JOIN `{$tvv}` v  ON v.id  = e.veranstaltung_id
+                LEFT JOIN `{$tdm2}` dm ON dm.id = e.disziplin_mapping_id
+                WHERE e.geloescht_am IS NULL
+                  AND v.geloescht_am IS NULL
+                  AND v.genehmigt    = 1
+                  AND e.disziplin    IS NOT NULL
+                GROUP BY v.serie_id, COALESCE(dm.anzeige_name, e.disziplin)
+                ORDER BY v.serie_id, COUNT(*) DESC
+            ");
+            $seenD = [];
+            foreach ($diszRows as $d) {
+                $sid = (int)$d['serie_id'];
+                if (!isset($seenD[$sid])) $seenD[$sid] = [];
+                if (!in_array($d['disziplin'], $seenD[$sid], true)) {
+                    $seenD[$sid][]        = $d['disziplin'];
+                    $rawDiszBySerie[$sid][] = $d['disziplin'];
+                }
+            }
+        } catch (\Throwable $ignored) {}
+
+        // Admin-Planung (Ausschlüsse + Extras) pro Serie
+        $planungBySerie = [];
+        try {
+            $pRows = DB::fetchAll(
+                "SELECT serie_id, disziplinen_ausgeschlossen, disziplinen_extra FROM `{$twp}`"
+            );
+            foreach ($pRows as $p) {
+                $planungBySerie[(int)$p['serie_id']] = $p;
+            }
+        } catch (\Throwable $ignored) {}
+
         // Serien mit Ergebnissen im Statistikportal ermitteln (auto-absolviert)
         $serien_absolviert = [];
         $bRow = DB::fetchOne("SELECT athlet_id FROM `" . DB::tbl('benutzer') . "` WHERE id = ?", [$userId]);
@@ -5373,12 +5417,29 @@ function handleWettkampfplanung(string $method, string $tail): void
             // Vorhandene Anmeldungen überschreiben den Standard-Status
             if (!empty($anm) && in_array($st, ['passt_nicht', 'offen'], true)) $st = 'angemeldet';
 
+            // Effektive Disziplinliste: Statistikportal-Daten (sortiert nach Häufigkeit)
+            // minus Admin-Ausschlüsse plus Admin-Extras.  wettbewerbe (CSV) bleibt als
+            // Fallback für Serien ohne Statistikportal-Ergebnisse.
+            $rawDisz    = $rawDiszBySerie[$sid] ?? [];
+            $pl         = $planungBySerie[$sid] ?? null;
+            $ausgescbl  = ($pl && $pl['disziplinen_ausgeschlossen'])
+                          ? (json_decode((string)$pl['disziplinen_ausgeschlossen'], true) ?? []) : [];
+            $extras     = ($pl && $pl['disziplinen_extra'])
+                          ? (json_decode((string)$pl['disziplinen_extra'], true) ?? []) : [];
+            $disziplinen = array_values(array_unique(array_merge(
+                array_filter($rawDisz, fn($d) => !in_array($d, $ausgescbl, true)),
+                $extras
+            )));
+
             $result[] = [
                 'id'                    => $sid,
                 'name'                  => $s['name'],
                 'ort'                   => $s['ort'] ?: null,
                 'sortierindex'          => $s['sortierindex'] !== null ? (int)$s['sortierindex'] : null,
                 'url'                   => $s['url'],
+                // Statistikportal-Disziplinen (angereichert durch Admin); leer = kein Eintrag im Statistikportal
+                'disziplinen'           => $disziplinen,
+                // CSV-Metadaten (Fallback wenn keine Statistikportal-Ergebnisse vorhanden)
                 'wettbewerbe'           => $s['wettbewerbe'] ? json_decode((string)$s['wettbewerbe'], true) : [],
                 'aktiv'                 => (int)$s['aktiv'],
                 'letztes_datum'           => $s['letztes_datum'],

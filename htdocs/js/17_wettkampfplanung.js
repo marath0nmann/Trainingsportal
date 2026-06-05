@@ -212,7 +212,11 @@ const WETTKAMPFPLANUNG = (() => {
       const vergangen   = datum && datum < heute;
       const isSelected  = _selected.has(s.id);
 
-      const wb = Array.isArray(s.wettbewerbe) ? s.wettbewerbe : [];
+      // Disziplinen: Statistikportal-Daten haben Vorrang (echte Ergebnisse, admin-kuratiert).
+      // CSV-wettbewerbe nur als Fallback für Serien ohne Statistikportal-Einträge.
+      const wb = (Array.isArray(s.disziplinen) && s.disziplinen.length)
+        ? s.disziplinen
+        : (Array.isArray(s.wettbewerbe) ? s.wettbewerbe : []);
       const MAX_WB = 3;
       let wbHtml = '';
       wb.slice(0, MAX_WB).forEach(w => {
