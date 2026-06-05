@@ -28,7 +28,7 @@ const PROFIL = (() => {
     if (!state.user) return;
     const cont = document.getElementById('modal-container');
     cont.innerHTML =
-      '<div class="modal-overlay" onclick="schliesseModal(event)">' +
+      '<div class="modal-overlay">' +
         '<div class="modal-card">' +
           '<div class="modal-body" style="padding:32px;text-align:center">' +
             '<div style="color:var(--text2);font-size:14px">Lade…</div>' +
@@ -46,7 +46,7 @@ const PROFIL = (() => {
       ]);
     } catch (e) {
       cont.innerHTML =
-        '<div class="modal-overlay" onclick="schliesseModal(event)">' +
+        '<div class="modal-overlay">' +
           '<div class="modal-card"><div class="modal-body">Fehler: ' + escapeHtml(e.message || '') + '</div></div>' +
         '</div>';
       return;
@@ -287,7 +287,7 @@ const PROFIL = (() => {
       || u.rolle || '';
 
     cont.innerHTML = `
-      <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-overlay">
         <div class="modal-card" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div>

@@ -400,7 +400,7 @@ const ADMIN_WETTKAMPF = (() => {
     const cont = document.getElementById('modal-container');
     if (!cont) return;
     cont.innerHTML = `
-      <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-overlay">
         <div class="modal-card" onclick="event.stopPropagation()" style="max-width:560px">
           <div class="modal-head">
             <div>

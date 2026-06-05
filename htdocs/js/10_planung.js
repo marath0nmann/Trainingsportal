@@ -484,7 +484,7 @@ const PLANUNG = (() => {
       </label>`;
     }).join('');
     cont.innerHTML = `
-      <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-overlay">
         <div class="modal-card" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div><div class="modal-eyebrow">Planungsansicht</div><div class="modal-title">Trainingsgruppen konfigurieren</div></div>
@@ -1363,7 +1363,7 @@ const PLANUNG = (() => {
 
     const cont = document.getElementById('modal-container');
     cont.innerHTML = `
-      <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-overlay">
         <div class="modal-card" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div>

@@ -59,7 +59,7 @@ const ICS = (() => {
   async function open() {
     const cont = document.getElementById('modal-container');
     cont.innerHTML = `
-      <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-overlay">
         <div class="modal-card" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div>

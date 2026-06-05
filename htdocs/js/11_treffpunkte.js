@@ -152,7 +152,7 @@ const TREFFPUNKTE = (() => {
     const istNeu = !t;
     const cont = document.getElementById('modal-container');
     cont.innerHTML = `
-      <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-overlay">
         <div class="modal-card modal-wide" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div>

@@ -456,7 +456,7 @@ function editLegalPage(type) {
   var cont = document.getElementById('modal-container');
   if (!cont) return;
   cont.innerHTML =
-    '<div class="modal-overlay" onclick="schliesseModal(event)">' +
+    '<div class="modal-overlay">' +
       '<div class="modal-card" onclick="event.stopPropagation()">' +
         '<div class="modal-head">' +
           '<div><div class="modal-title">' + escapeHtml(meta.titel) + ' bearbeiten</div></div>' +
@@ -1504,7 +1504,7 @@ async function oeffneTerminModal(einheit) {
     tpListe.map(t => '<option value="' + t.id + '"' + (t.id === curTpId ? ' selected' : '') + '>' + escapeHtml(t.name) + '</option>').join('');
 
   const cont = document.getElementById('modal-container');
-  cont.innerHTML = '<div class="modal-overlay" onclick="schliesseModal(event)">' +
+  cont.innerHTML = '<div class="modal-overlay">' +
     '<div class="modal-card" onclick="event.stopPropagation()">' +
       '<div class="modal-head">' +
         '<div>' +
@@ -2112,7 +2112,7 @@ async function renderListe(main, quarterArg) {
 
 async function zeigeEinheit(id) {
   const cont = document.getElementById('modal-container');
-  cont.innerHTML = `<div class="modal-overlay" onclick="schliesseModal(event)"><div class="modal-card"><div class="loading">Lade…</div></div></div>`;
+  cont.innerHTML = `<div class="modal-overlay"><div class="modal-card"><div class="loading">Lade…</div></div></div>`;
   try {
     const data = await apiGet(`einheiten/${id}`, { silent: true });
     const e = data.einheit;
@@ -2164,7 +2164,7 @@ async function zeigeEinheit(id) {
     }
 
     cont.innerHTML = `
-      <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-overlay">
         <div class="modal-card" onclick="event.stopPropagation()">
           <div class="modal-head">
             <div>
@@ -2204,7 +2204,7 @@ async function zeigeEinheit(id) {
         </div>
       </div>`;
   } catch (err) {
-    cont.innerHTML = `<div class="modal-overlay" onclick="schliesseModal(event)"><div class="modal-card"><div class="modal-body">Fehler: ${escapeHtml(err.message || '')}</div></div></div>`;
+    cont.innerHTML = `<div class="modal-overlay"><div class="modal-card"><div class="modal-body">Fehler: ${escapeHtml(err.message || '')}</div></div></div>`;
   }
 }
 
