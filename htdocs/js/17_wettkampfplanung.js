@@ -14,11 +14,27 @@ const WETTKAMPFPLANUNG = (() => {
   let _bulkPopper   = null;
 
   // Filter / Sort / Select state
-  let _filterText   = '';
-  let _filterStatus = new Set();   // leer = alle Status anzeigen
-  let _sortKey      = 'datum';     // 'name' | 'datum' | 'status'
-  let _sortDir      = 'asc';
-  let _selected     = new Set();   // ausgewählte Serie-IDs
+  let _filterText      = '';
+  let _filterStatus    = new Set();   // leer = alle Status anzeigen
+  let _sortKey         = 'datum';     // 'name' | 'datum' | 'status'
+  let _sortDir         = 'asc';
+  let _selected        = new Set();   // ausgewählte Serie-IDs
+  let _hideVergangen   = false;       // vergangene Veranstaltungen ausblenden
+  let _hidePasstNicht  = false;       // "passt nicht"-Einträge ausblenden
+
+  // ── Einstellungen (localStorage) ─────────────────────────────
+  function _loadPrefs() {
+    try {
+      _hideVergangen  = localStorage.getItem('wkp_hide_vergangen')   === '1';
+      _hidePasstNicht = localStorage.getItem('wkp_hide_passt_nicht') === '1';
+    } catch (e) { /* kein localStorage */ }
+  }
+  function _savePrefs() {
+    try {
+      localStorage.setItem('wkp_hide_vergangen',   _hideVergangen   ? '1' : '0');
+      localStorage.setItem('wkp_hide_passt_nicht', _hidePasstNicht  ? '1' : '0');
+    } catch (e) { /* kein localStorage */ }
+  }
 
   // ── Statuskonfiguration ──────────────────────────────────────
   const ST = {
@@ -43,6 +59,7 @@ const WETTKAMPFPLANUNG = (() => {
   async function render(el) {
     _container = el;
     if (!_container) return;
+    _loadPrefs();
     _container.innerHTML = '<div class="loading"><div class="spinner"></div>Lade Wettkampfplanung&hellip;</div>';
     try {
       await _lade();
@@ -73,6 +90,18 @@ const WETTKAMPFPLANUNG = (() => {
 
     if (_filterStatus.size > 0) {
       arr = arr.filter(s => _filterStatus.has(s.status));
+    }
+
+    if (_hidePasstNicht) {
+      arr = arr.filter(s => s.status !== 'passt_nicht');
+    }
+
+    if (_hideVergangen) {
+      const heute = (new Date()).toISOString().slice(0, 10);
+      arr = arr.filter(s => {
+        const datum = _datumFuerJahr(s, _jahr);
+        return !datum || datum >= heute;
+      });
     }
 
     if (_sortKey) {
@@ -171,6 +200,22 @@ const WETTKAMPFPLANUNG = (() => {
           <button onclick="WETTKAMPFPLANUNG._resetFilter()"
             style="padding:4px 8px;border:none;background:none;color:var(--text2);
                    font-size:12px;cursor:pointer">✕ zurücksetzen</button>` : ''}
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;
+                       color:${_hideVergangen ? 'var(--primary)' : 'var(--text2)'};
+                       cursor:pointer;white-space:nowrap;user-select:none">
+          <input type="checkbox" ${_hideVergangen ? 'checked' : ''}
+            onchange="WETTKAMPFPLANUNG._toggleHideVergangen(this.checked)"
+            style="accent-color:var(--primary);width:13px;height:13px;cursor:pointer">
+          Vergangene ausblenden
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;
+                       color:${_hidePasstNicht ? 'var(--primary)' : 'var(--text2)'};
+                       cursor:pointer;white-space:nowrap;user-select:none">
+          <input type="checkbox" ${_hidePasstNicht ? 'checked' : ''}
+            onchange="WETTKAMPFPLANUNG._toggleHidePasstNicht(this.checked)"
+            style="accent-color:var(--primary);width:13px;height:13px;cursor:pointer">
+          „passt nicht" ausblenden
+        </label>
         ${sichtbar.length !== _serien.length
           ? `<span style="font-size:12px;color:var(--text2)">${sichtbar.length} von ${_serien.length}</span>`
           : ''}
@@ -425,6 +470,20 @@ const WETTKAMPFPLANUNG = (() => {
     _renderListe();
   }
 
+  function _toggleHideVergangen(val) {
+    _hideVergangen = !!val;
+    _savePrefs();
+    _selected.clear();
+    _renderListe();
+  }
+
+  function _toggleHidePasstNicht(val) {
+    _hidePasstNicht = !!val;
+    _savePrefs();
+    _selected.clear();
+    _renderListe();
+  }
+
   // ── Auswahl ──────────────────────────────────────────────────
   function _toggleSelect(serieId, checked) {
     if (checked) _selected.add(serieId);
@@ -635,6 +694,7 @@ const WETTKAMPFPLANUNG = (() => {
     _openPopper, _waehleStatus,
     _toggleSort,
     _setFilter, _resetFilter, _openFilterPopper, _toggleFilterStatus, _resetStatusFilter,
+    _toggleHideVergangen, _toggleHidePasstNicht,
     _toggleSelect, _toggleAll, _clearSelection,
     _openBulkPopper, _bulkSetStatus,
   };
