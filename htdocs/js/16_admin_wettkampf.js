@@ -101,7 +101,10 @@ const ADMIN_WETTKAMPF = (() => {
     if (serie.naechstes_datum && serie.naechstes_datum >= _heute()) {
       return { datum: serie.naechstes_datum, modus: 'manuell' };
     }
-    const p = predictNextDate(serie.letztes_datum);
+    // naechstes_datum gesetzt aber vergangen → als Prognose-Basis nutzen
+    // (Admin hat damit dokumentiert, wann der Wettkampf stattfand)
+    const basis = serie.naechstes_datum || serie.letztes_datum;
+    const p = predictNextDate(basis);
     return p ? { datum: p, modus: 'prognose' } : null;
   }
 
@@ -579,6 +582,7 @@ const ADMIN_WETTKAMPF = (() => {
                   : prognose
                     ? `Prognose: <strong>${WT_KURZ[new Date(prognose+'T00:00:00').getDay()]}, ${fmtDate(prognose)}</strong>${wtInfo ? ' &bull; ' + escapeHtml(wtInfo) : ''}`
                     : 'Leer lassen = kein Termin'}
+                &ndash; Vergangene Daten möglich (korrigiert die Prognose für das Folgejahr)
               </div>
             </div>
 
