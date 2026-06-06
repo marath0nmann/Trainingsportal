@@ -165,12 +165,9 @@ const PLANUNG = (() => {
   let _gruppen        = [];     // konfigurierte Gruppen des Trainers (sichtbar in Tabs)
   let _alleGruppen    = [];     // alle verfügbaren Gruppen (für Konfiguration)
   let _gruppenGeladen = false;  // true nach erstem Laden – verhindert erneutes Laden nach leerem Speichern
-  let _activeTab           = 'training'; // 'training' | 'wettkampf' | 'athleten'
-  let _athletSel           = null;       // beim Athleten-Tab gewählter Plan: { benutzer_id, name, stufe } | null
-  let _athletenCache       = {};         // benutzer_id → { name, stufe } (aus der Übersicht)
-  let _wettkampfSerienCache = null;      // { ts: number, serien: [] } – 5-Min-Cache
-  let _wkTermineCache       = {};        // 'YYYY-MM' → { ts, termine, statistikportal_url }
-  let _statistikportalUrl   = '';        // aus API, gecacht
+  let _activeTab     = 'training'; // 'training' | 'athleten'
+  let _athletSel     = null;       // beim Athleten-Tab gewählter Plan: { benutzer_id, name, stufe } | null
+  let _athletenCache = {};         // benutzer_id → { name, stufe } (aus der Übersicht)
 
   // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
   function _applyPlanungLayout() {
@@ -326,12 +323,12 @@ const PLANUNG = (() => {
           <aside class="planung-sidebar" id="planung-sidebar">
             <div class="planung-sidebar-head">
               <div class="planung-sidebar-head-top">
-                <span class="planung-sidebar-title">${_activeTab === 'wettkampf' ? 'Wettkämpfe' : 'Trainingsblöcke'}</span>
-                ${istTrainer && _activeTab !== 'wettkampf'
+                <span class="planung-sidebar-title">Trainingsblöcke</span>
+                ${istTrainer
                   ? `<button class="btn btn-primary btn-sm" onclick="BLOECKE.neuerBlock()">+ Neu</button>`
                   : ''}
               </div>
-              <span class="planung-sidebar-hint">${_activeTab === 'wettkampf' ? 'Auf Datum ziehen zum Verschieben' : 'Auf einen Kalendertag ziehen'}</span>
+              <span class="planung-sidebar-hint">Auf einen Kalendertag ziehen</span>
             </div>
             <div id="planung-bloecke-list" class="planung-bloecke-loading">Lade…</div>
           </aside>
@@ -363,10 +360,7 @@ const PLANUNG = (() => {
       applyKalenderFarben(_gruppen.map(g => 'g' + g.id));
     }
 
-    await Promise.all([
-      _activeTab === 'wettkampf' ? renderKalWettkampf() : renderKal(),
-      _activeTab === 'wettkampf' ? renderSidebarWettkampf() : ladeBlocke(),
-    ]);
+    await Promise.all([renderKal(), ladeBlocke()]);
   }
 
   // ── Gruppen-Tabs ──────────────────────────────────────────
@@ -393,15 +387,14 @@ const PLANUNG = (() => {
     </span>`;
   }
 
-  // ── Untermenü (Admin-Stil): Gruppen · Athleten · Wettkämpfe ──
+  // ── Untermenü (Admin-Stil): Gruppen · Athleten ───────────
   function _renderSectionBar() {
     const item = (key, label, aktiv, title) =>
       `<button class="subtab${aktiv ? ' active' : ''}"
         onclick="PLANUNG.wechsleSection('${key}')"${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>`;
     return `<div class="planung-section-bar">
-      ${item('training',  'Gruppen',    _activeTab === 'training',  'Trainingspläne der Gruppen')}
-      ${item('athleten',  'Athleten',   _activeTab === 'athleten',  'Persönliche Trainingspläne der Athleten')}
-      ${item('wettkampf', 'Wettkämpfe', _activeTab === 'wettkampf', 'Wettkampf-Planung')}
+      ${item('training', 'Gruppen',  _activeTab === 'training', 'Trainingspläne der Gruppen')}
+      ${item('athleten', 'Athleten', _activeTab === 'athleten', 'Persönliche Trainingspläne der Athleten')}
     </div>`;
   }
 
@@ -675,9 +668,8 @@ const PLANUNG = (() => {
     KAL_POPOVER.initItems(document.querySelectorAll('.planung-kal-cell .kal-item[data-einheit-id]'));
   }
 
-  // ── Tab wechseln (Training ↔ Wettkämpfe) ─────────────────
-  // Untermenü-Wechsel (Gruppen/Athleten/Wettkämpfe) – komplette Neudarstellung,
-  // da sich Layout (Tab-Leiste, Split vs. Scroll-Ansicht) je Sektion unterscheidet.
+  // ── Untermenü-Wechsel (Gruppen/Athleten) ─────────────────
+  // Komplette Neudarstellung, da sich Layout (Split vs. Scroll-Ansicht) je Sektion unterscheidet.
   function wechsleSection(key) {
     if (key === _activeTab && key !== 'athleten') return;
     _activeTab = key;
@@ -687,32 +679,6 @@ const PLANUNG = (() => {
     if (main) render(main);
   }
 
-  function wechsleTab(tab) {
-    // Wechsel von/zu Athleten ändert das Grundlayout (Split ↔ Scroll-Ansicht)
-    // → komplette Neudarstellung statt partiellem Update.
-    const layoutWechsel = (tab === 'athleten' || _activeTab === 'athleten');
-    _activeTab = tab;
-    if (tab === 'athleten') _athletSel = null; // immer mit der Übersicht starten
-    if (layoutWechsel) {
-      const main = document.getElementById('main-content');
-      if (main) render(main);
-      return;
-    }
-    // Tab-Bar neu zeichnen
-    const bar = document.querySelector('.planung-gruppen-bar');
-    if (bar) bar.outerHTML = _renderGruppenTabs();
-    // Sidebar-Kopf anpassen
-    _aktualisiereSidebarKopf();
-    // Inhalt laden
-    if (tab === 'wettkampf') {
-      renderKalWettkampf();
-      renderSidebarWettkampf();
-    } else {
-      renderKal();
-      ladeBlocke();
-    }
-  }
-
   // Sidebar-Kopf (Titel, Hint, "+ Neu"-Button) anpassen
   function _aktualisiereSidebarKopf() {
     const head = document.querySelector('.planung-sidebar-head');
@@ -720,12 +686,12 @@ const PLANUNG = (() => {
     const istTrainer = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
     head.innerHTML = `
       <div class="planung-sidebar-head-top">
-        <span class="planung-sidebar-title">${_activeTab === 'wettkampf' ? 'Wettkämpfe' : 'Trainingsblöcke'}</span>
-        ${istTrainer && _activeTab !== 'wettkampf'
+        <span class="planung-sidebar-title">Trainingsblöcke</span>
+        ${istTrainer
           ? `<button class="btn btn-primary btn-sm" onclick="BLOECKE.neuerBlock()">+ Neu</button>`
           : ''}
       </div>
-      <span class="planung-sidebar-hint">${_activeTab === 'wettkampf' ? 'Auf Datum ziehen zum Verschieben' : 'Auf einen Kalendertag ziehen'}</span>`;
+      <span class="planung-sidebar-hint">Auf einen Kalendertag ziehen</span>`;
   }
 
   // ── Athleten: persönliche Trainingspläne ─────────────────
@@ -906,308 +872,9 @@ const PLANUNG = (() => {
     _renderAthleten();
   }
 
-  // ── Wettkampf-Kalender ────────────────────────────────────
-  async function renderKalWettkampf() {
-    const col = document.getElementById('planung-kal-col');
-    if (!col) return;
-
-    const y = kalMonth.getFullYear();
-    const m = kalMonth.getMonth();
-
-    const firstDay  = new Date(y, m, 1);
-    const dow0      = (firstDay.getDay() + 6) % 7;
-    const gridStart = new Date(y, m, 1 - dow0);
-
-    const lastDay = new Date(y, m + 1, 0);
-    const dowLast = (lastDay.getDay() + 6) % 7;
-    const gridEnd = new Date(y, m + 1, 6 - dowLast);
-
-    col.innerHTML = `
-      <div class="planung-kal-toolbar">
-        <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(-1)" aria-label="Vorheriger Monat">‹</button>
-        <h2 class="planung-kal-title">${MONATSNAMEN[m]} ${y}</h2>
-        <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(1)" aria-label="Nächster Monat">›</button>
-      </div>
-      <div id="planung-kal-grid" class="planung-kal-loading">Lade Wettkämpfe…</div>`;
-
-    const von = ymd(gridStart);
-    const bis = ymd(gridEnd);
-
-    // Serien (Forecast) + vergangene Termine parallel laden
-    const [serien, terminData] = await Promise.all([
-      _ladeWettkampfSerien(),
-      _ladeWettkampfTermine(von, bis),
-    ]);
-    const termine       = terminData.termine || [];
-    const statistikUrl  = terminData.statistikportal_url || _statistikportalUrl || '';
-    const todayKey      = ymd(new Date());
-
-    // Forecast-Map: nur aktive Serien mit zukünftigem Datum
-    const wkByDate = {};
-    if (typeof ADMIN_WETTKAMPF !== 'undefined') {
-      serien.forEach(s => {
-        if (s.aktiv === 0) return;
-        const manuell = s.naechstes_datum && s.naechstes_datum >= todayKey ? s.naechstes_datum : null;
-        const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
-        if (datum && datum >= von && datum <= bis) {
-          (wkByDate[datum] = wkByDate[datum] || []).push({ ...s, _isFest: !!manuell });
-        }
-      });
-    }
-
-    // Historisch-Map: vergangene Veranstaltungen aus Statistikportal
-    const histByDate = {};
-    termine.forEach(t => {
-      if (t.datum <= todayKey) {
-        (histByDate[t.datum] = histByDate[t.datum] || []).push(t);
-      }
-    });
-
-    const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
-    const decFn    = typeof _decodeHtml === 'function' ? _decodeHtml : (s => s);
-
-    const head = `<div class="kal-head">${WOCHENTAGE.map(w =>
-      `<div class="kal-head-cell">${w}</div>`).join('')}</div>`;
-
-    const rows = [];
-    let cursor = new Date(gridStart);
-    while (cursor <= gridEnd) {
-      const cells = [];
-      for (let i = 0; i < 7; i++) {
-        const k       = ymd(cursor);
-        const inMonth = cursor.getMonth() === m;
-        const isToday = k === todayKey;
-        const items    = wkByDate[k]  || [];
-        const histItems = histByDate[k] || [];
-
-        const dayCls = [
-          'kal-cell', 'planung-kal-cell',
-          inMonth ? 'in-month' : 'out-month',
-          isToday ? 'is-today' : '',
-          (cursor.getDay() === 0 || cursor.getDay() === 6) ? 'weekend' : '',
-        ].filter(Boolean).join(' ');
-
-        // Forecast-Chips (zukünftige / heutige Wettkämpfe)
-        const itemsHtml = items.map(s => {
-          const name    = decFn(s.name || s.kuerzel || '');
-          const manuell = !!s._isFest;
-          const delBtn  = (kannEdit && manuell)
-            ? `<button class="kal-item-del"
-                onclick="event.stopPropagation();PLANUNG.loescheWkDatum(${s.id})"
-                title="Manuelles Datum entfernen – Prognose wird wieder verwendet">×</button>`
-            : '';
-          return `<div class="kal-item" data-serie-id="${s.id}"
-            draggable="${kannEdit}"
-            title="${escapeHtml(name)}${manuell ? ' (manuell)' : ' (Prognose)'}"
-            style="background:rgba(46,204,113,.15);border-left:3px solid #27ae60;
-                   color:var(--text);cursor:${kannEdit ? 'grab' : 'default'}">
-            <span class="kal-item-title">🏆 ${escapeHtml(name)}</span>
-            ${delBtn}
-          </div>`;
-        }).join('');
-
-        // Historische Chips (vergangene Veranstaltungen aus Statistikportal)
-        const histHtml = histItems.map(t => {
-          const name = decFn(t.serie_name || '');
-          const href = statistikUrl ? `${statistikUrl}/#veranstaltung/${t.id}` : null;
-          const tag  = href ? 'a' : 'div';
-          const attrs = href
-            ? ` href="${escapeHtml(href)}" target="_blank" rel="noopener" title="Im Statistikportal öffnen"`
-            : '';
-          return `<${tag} class="kal-item wk-hist-item"${attrs}>
-            <span class="kal-item-title">🏆 ${escapeHtml(name)}${href ? ' <span class="wk-hist-arrow">↗</span>' : ''}</span>
-          </${tag}>`;
-        }).join('');
-
-        cells.push(`
-          <div class="${dayCls}" data-datum="${k}">
-            <div class="kal-cell-head"><span class="kal-day-num">${cursor.getDate()}</span></div>
-            <div class="kal-cell-items">
-              ${histHtml}${itemsHtml}
-              ${inMonth ? '<div class="planung-drop-hint">Hier ablegen</div>' : ''}
-            </div>
-          </div>`);
-        cursor.setDate(cursor.getDate() + 1);
-      }
-      rows.push(`<div class="kal-row">${cells.join('')}</div>`);
-    }
-
-    const grid = document.getElementById('planung-kal-grid');
-    if (grid) {
-      grid.outerHTML = `<div id="planung-kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
-    }
-
-    if (!kannEdit) return;
-
-    // DnD: Drag von Kalender-Items (verschieben)
-    document.querySelectorAll('.planung-kal-cell .kal-item[data-serie-id]').forEach(item => {
-      item.addEventListener('dragstart', e => {
-        e.stopPropagation();
-        e.dataTransfer.setData('text/x-serie-id', item.dataset.serieId);
-        e.dataTransfer.effectAllowed = 'move';
-        item.classList.add('kal-item-dragging');
-      });
-      item.addEventListener('dragend', () => item.classList.remove('kal-item-dragging'));
-    });
-
-    // DnD: Drop auf Tages-Zellen
-    document.querySelectorAll('.planung-kal-cell.in-month').forEach(cell => {
-      const datum = cell.dataset.datum;
-      cell.addEventListener('dragover', e => {
-        if (!e.dataTransfer.types.includes('text/x-serie-id')) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        cell.classList.add('planung-drag-over');
-      });
-      cell.addEventListener('dragleave', () => cell.classList.remove('planung-drag-over'));
-      cell.addEventListener('drop', e => {
-        if (!e.dataTransfer.types.includes('text/x-serie-id')) return;
-        e.preventDefault();
-        cell.classList.remove('planung-drag-over');
-        const serieId = parseInt(e.dataTransfer.getData('text/x-serie-id') || '', 10);
-        if (serieId) verschiebeSerie(serieId, datum);
-      });
-    });
-  }
-
-  // ── Wettkampf-Sidebar ─────────────────────────────────────
-  async function renderSidebarWettkampf() {
-    const cont = document.getElementById('planung-bloecke-list');
-    if (!cont) return;
-
-    cont.innerHTML = '<div class="planung-bloecke-loading">Lade…</div>';
-    const serien = await _ladeWettkampfSerien();
-
-    if (!serien.length) {
-      cont.innerHTML = '<div class="bloecke-leer">Keine Wettkampfserien gefunden.</div>';
-      return;
-    }
-
-    const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
-    const decFn    = typeof _decodeHtml === 'function' ? _decodeHtml : (s => s);
-    const MN       = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-
-    let html = '';
-    serien.forEach(s => {
-      const name    = decFn(s.name || s.kuerzel || '');
-      const inaktiv = s.aktiv === 0;
-      let nextInfo  = '';
-      if (typeof ADMIN_WETTKAMPF !== 'undefined') {
-        const _tK = ymd(new Date());
-        const _ndManuell = s.naechstes_datum && s.naechstes_datum >= _tK ? s.naechstes_datum : null;
-        const nd = _ndManuell || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
-        if (nd) {
-          const d       = new Date(nd + 'T00:00:00');
-          const manuell = !!_ndManuell;
-          nextInfo = `<div class="pblock-meta" style="color:${manuell ? '#27ae60' : 'var(--text2)'}">
-            ${d.getDate()}. ${MN[d.getMonth()]} ${d.getFullYear()}
-            <span style="font-size:10px">${manuell ? '✓ fest' : '~ Prognose'}</span>
-          </div>`;
-        } else {
-          nextInfo = `<div class="pblock-meta" style="color:var(--text2);font-size:11px">Kein Termin berechenbar</div>`;
-        }
-      }
-      html += `
-        <div class="pblock-card" data-serie-id="${s.id}" draggable="${kannEdit}"
-             style="${inaktiv ? 'opacity:.4' : ''}"
-             title="${escapeHtml(name)}${inaktiv ? ' (Inaktiv – nicht im Kalender)' : ''}">
-          <div class="pblock-drag-handle" aria-hidden="true">⠿</div>
-          <div class="pblock-info">
-            <div class="pblock-titel">🏆 ${escapeHtml(name)}</div>
-            ${nextInfo}
-          </div>
-        </div>`;
-    });
-
-    cont.innerHTML = html;
-
-    if (!kannEdit) return;
-
-    cont.querySelectorAll('.pblock-card[data-serie-id]').forEach(card => {
-      card.addEventListener('dragstart', e => {
-        e.dataTransfer.setData('text/x-serie-id', card.dataset.serieId);
-        e.dataTransfer.effectAllowed = 'copy';
-        card.classList.add('pblock-dragging');
-      });
-      card.addEventListener('dragend', () => card.classList.remove('pblock-dragging'));
-    });
-  }
-
-  // ── Interne Cache-Hilfsfunktion für Wettkampf-Serien ─────
-  async function _ladeWettkampfSerien() {
-    const CACHE_MS = 5 * 60 * 1000;
-    if (_wettkampfSerienCache && (Date.now() - _wettkampfSerienCache.ts) < CACHE_MS) {
-      return _wettkampfSerienCache.serien;
-    }
-    try {
-      const resp = await apiGet('wettkampf', { silent: true });
-      const serien = resp.serien || [];
-      _wettkampfSerienCache = { ts: Date.now(), serien };
-      return serien;
-    } catch (_) {
-      return [];
-    }
-  }
-
-  // ── Vergangene Veranstaltungen aus dem Statistikportal ───
-  async function _ladeWettkampfTermine(von, bis) {
-    const CACHE_MS  = 5 * 60 * 1000;
-    // Schlüssel: Monat (YYYY-MM) des Von-Datums genügt für Monats-Cache
-    const key = von.slice(0, 7);
-    const hit = _wkTermineCache[key];
-    if (hit && (Date.now() - hit.ts) < CACHE_MS) return hit;
-    try {
-      const resp = await apiGet(`wettkampf/termine?von=${von}&bis=${bis}`, { silent: true });
-      const entry = { ts: Date.now(), termine: resp.termine || [], statistikportal_url: resp.statistikportal_url || '' };
-      _wkTermineCache[key] = entry;
-      if (entry.statistikportal_url) _statistikportalUrl = entry.statistikportal_url;
-      return entry;
-    } catch (_) {
-      return { termine: [], statistikportal_url: '' };
-    }
-  }
-
-  // ── Wettkampf-Termin verschieben (DnD) ───────────────────
-  async function verschiebeSerie(serieId, neuesDatum) {
-    // Optimistisches DOM-Update
-    const el = document.querySelector(`.planung-kal-cell .kal-item[data-serie-id="${serieId}"]`);
-    const zielItems = document.querySelector(`.planung-kal-cell[data-datum="${neuesDatum}"] .kal-cell-items`);
-    if (el && zielItems) {
-      const hint = zielItems.querySelector('.planung-drop-hint');
-      hint ? zielItems.insertBefore(el, hint) : zielItems.appendChild(el);
-    }
-    try {
-      await apiPut(`wettkampf/${serieId}/planung`, { naechstes_datum: neuesDatum });
-      // Caches invalidieren
-      _wettkampfSerienCache = null;
-      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
-      notify('Wettkampf verschoben.', 'ok');
-      renderKalWettkampf();
-      renderSidebarWettkampf();
-    } catch (err) {
-      notify('Fehler: ' + (err.message || ''), 'err');
-      renderKalWettkampf();
-    }
-  }
-
-  // ── Manuelles Wettkampf-Datum entfernen ──────────────────
-  async function loescheWkDatum(serieId) {
-    try {
-      await apiPut(`wettkampf/${serieId}/planung`, { naechstes_datum: null });
-      _wettkampfSerienCache = null;
-      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
-      notify('Manuelles Datum entfernt – Prognose wird verwendet.', 'ok');
-      renderKalWettkampf();
-      renderSidebarWettkampf();
-    } catch (err) {
-      notify('Fehler: ' + (err.message || ''), 'err');
-    }
-  }
-
   function navigateMonth(dir) {
     kalMonth = new Date(kalMonth.getFullYear(), kalMonth.getMonth() + dir, 1);
-    if (_activeTab === 'wettkampf') renderKalWettkampf();
-    else if (_activeTab === 'athleten') _renderAthleten();
+    if (_activeTab === 'athleten') _renderAthleten();
     else renderKal();
   }
 
@@ -1551,7 +1218,7 @@ const PLANUNG = (() => {
     reloadKal: renderKal,
     gruppeWechseln, gruppenKonfigurieren, gruppenKonfigSpeichern,
     getAktivGruppe,
-    wechsleTab, wechsleSection, loescheWkDatum,
+    wechsleSection,
     setDefaultFarbe, resetDefaultFarbe,
     oeffneAthletPlan, athletZurueck,
   };
