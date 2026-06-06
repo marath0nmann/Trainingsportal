@@ -1,6 +1,7 @@
 # Changelog
 
-## v245
+## v246
+- Trainingsplanung Gruppen: Untermenü-Position an Athleten-Tab angeglichen – Gruppen-Tab kompensiert jetzt das durch Viewport-Lock weggenommene `main`-Padding (24px 28px), Gruppen-Tabs linksbündig mit Pill-Buttons
 - Trainingsplanung: Untermenü auf Admin-Stil umgestellt – Pill-Buttons (`.subtab`/`.subtabs`) statt weißem Balken, konsistente Position in allen Sektionen; Athleten-Ansicht mit Panel-Boxen (`.panel`-Header + Tabelle, Kalender als Box); Athleten-Content im max-width-Container
 - Trainingsplanung: Untermenüpunkt „Wettkämpfe" vollständig entfernt – Abschnitt existiert nur noch mit „Gruppen" und „Athleten"
 - favicon.ico via .htaccess auf favicon.php?size=32 umgeleitet; ICO-Link aus index.html entfernt – Browser nutzen jetzt einheitlich das dynamische PNG-Favicon

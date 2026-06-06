@@ -1958,10 +1958,13 @@ body.planung-active #app-footer    { display: none; }
 /* Underline-Tabs: kein Box-Styling, passt zu Light- und Dark-Theme */
 .planung-gruppen-bar {
   display: flex; align-items: center; gap: 0;
-  padding: 6px 10px 0;
+  padding: 6px 28px 0;   /* links bündig mit .planung-section-nav in Gruppen-Modus */
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
+}
+@media (max-width: 720px) {
+  .planung-gruppen-bar { padding-left: 8px; padding-right: 8px; }
 }
 .planung-tab {
   padding: 8px 14px;
@@ -2170,11 +2173,21 @@ body.planung-active #app-footer    { display: none; }
 
 /* ── Planung: Untermenü (Admin-Stil, konsistent mit Admin-Seite) ── */
 .planung-section-nav {
+  /* Athleten-Tab: #main-content hat normales padding (24px 28px aus app.css),
+     daher nur geringes Zusatz-Padding nötig */
   padding: 14px 18px 0;
   flex-shrink: 0;
 }
+/* Gruppen-Tab: _applyPlanungLayout() setzt #main-content auf padding:0,
+   daher fehlendes main-Padding (24px 28px) hier selbst kompensieren */
+.planung-wrap:not(.planung-scroll) .planung-section-nav {
+  padding: 24px 28px 0;
+}
 .planung-section-nav .subtabs {
   margin-bottom: 0;
+}
+@media (max-width: 720px) {
+  .planung-wrap:not(.planung-scroll) .planung-section-nav { padding: 12px 8px 0; }
 }
 
 /* ── Athleten-Sidebar (Karten) + Plan-Subheader ─────────────────────── */
