@@ -1,6 +1,7 @@
 # Changelog
 
-## v244
+## v245
+- Trainingsplanung: Untermenü auf Admin-Stil umgestellt – Pill-Buttons (`.subtab`/`.subtabs`) statt weißem Balken, konsistente Position in allen Sektionen; Athleten-Ansicht mit Panel-Boxen (`.panel`-Header + Tabelle, Kalender als Box); Athleten-Content im max-width-Container
 - Trainingsplanung: Untermenüpunkt „Wettkämpfe" vollständig entfernt – Abschnitt existiert nur noch mit „Gruppen" und „Athleten"
 - favicon.ico via .htaccess auf favicon.php?size=32 umgeleitet; ICO-Link aus index.html entfernt – Browser nutzen jetzt einheitlich das dynamische PNG-Favicon
 - Favicon vereinheitlicht: dynamischer Fallback-Buchstabe aus `login_portal_apps` (Hostname-Abgleich) statt hardcoded 'T'

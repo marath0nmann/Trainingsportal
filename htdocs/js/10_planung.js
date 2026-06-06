@@ -392,9 +392,11 @@ const PLANUNG = (() => {
     const item = (key, label, aktiv, title) =>
       `<button class="subtab${aktiv ? ' active' : ''}"
         onclick="PLANUNG.wechsleSection('${key}')"${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>`;
-    return `<div class="planung-section-bar">
-      ${item('training', 'Gruppen',  _activeTab === 'training', 'Trainingspläne der Gruppen')}
-      ${item('athleten', 'Athleten', _activeTab === 'athleten', 'Persönliche Trainingspläne der Athleten')}
+    return `<div class="planung-section-nav">
+      <div class="subtabs">
+        ${item('training', 'Gruppen',  _activeTab === 'training', 'Trainingspläne der Gruppen')}
+        ${item('athleten', 'Athleten', _activeTab === 'athleten', 'Persönliche Trainingspläne der Athleten')}
+      </div>
     </div>`;
   }
 
@@ -737,9 +739,13 @@ const PLANUNG = (() => {
     list.forEach(a => { _athletenCache[a.benutzer_id] = { name: a.name, stufe: a.meine_stufe }; });
 
     if (!list.length) {
-      cont.innerHTML = `<div class="athleten-wrap">
-        <h2 class="athleten-titel">Persönliche Trainingspläne</h2>
-        <div class="athleten-leer">Noch keine persönlichen Trainingspläne vorhanden. Sobald Athleten eigene Einheiten anlegen, erscheinen sie hier.</div>
+      cont.innerHTML = `<div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Persönliche Trainingspläne</span>
+        </div>
+        <div style="padding:40px;text-align:center;color:var(--text2)">
+          Noch keine persönlichen Trainingspläne vorhanden. Sobald Athleten eigene Einheiten anlegen, erscheinen sie hier.
+        </div>
       </div>`;
       return;
     }
@@ -757,15 +763,18 @@ const PLANUNG = (() => {
       </tr>`;
     }).join('');
     cont.innerHTML = `
-      <div class="athleten-wrap">
-        <h2 class="athleten-titel">Persönliche Trainingspläne</h2>
-        <p class="athleten-intro">Athleten geben ihren Plan in ihrem Profil frei. Mit <em>Lesezugriff</em> kannst du ihn ansehen, mit <em>Vollzugriff</em> auch bearbeiten.</p>
-        <div class="panel"><div class="table-scroll">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Persönliche Trainingspläne</span>
+          <span class="panel-count">${list.length} Athlet${list.length !== 1 ? 'en' : ''}</span>
+        </div>
+        <p class="athleten-intro" style="padding:10px 20px 0;margin:0">Athleten geben ihren Plan in ihrem Profil frei. Mit <em>Lesezugriff</em> kannst du ihn ansehen, mit <em>Vollzugriff</em> auch bearbeiten.</p>
+        <div class="table-scroll">
           <table class="athleten-table">
             <thead><tr><th>Athlet</th><th>Einheiten</th><th>Letzte</th><th>Zugriff</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
-        </div></div>
+        </div>
       </div>`;
   }
 
@@ -783,17 +792,21 @@ const PLANUNG = (() => {
     const todayKey  = ymd(new Date());
 
     cont.innerHTML = `
-      <div class="athlet-plan-head">
-        <button class="btn btn-ghost btn-sm" onclick="PLANUNG.athletZurueck()">← Übersicht</button>
-        <span class="athlet-plan-name">${escapeHtml(sel.name)}</span>
-        <span class="athlet-stufe-badge ${_stufeCls(sel.stufe)}">${_stufeLabel(sel.stufe)}</span>
-      </div>
-      <div class="planung-kal-toolbar">
-        <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(-1)" aria-label="Vorheriger Monat">‹</button>
-        <h2 class="planung-kal-title">${MONATSNAMEN[m]} ${y}</h2>
-        <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(1)" aria-label="Nächster Monat">›</button>
-      </div>
-      <div id="athlet-plan-grid" class="planung-kal-loading">Lade…</div>`;
+      <div class="athlet-plan-wrap">
+        <div class="athlet-plan-head">
+          <button class="btn btn-ghost btn-sm" onclick="PLANUNG.athletZurueck()">← Übersicht</button>
+          <span class="athlet-plan-name">${escapeHtml(sel.name)}</span>
+          <span class="athlet-stufe-badge ${_stufeCls(sel.stufe)}">${_stufeLabel(sel.stufe)}</span>
+        </div>
+        <div class="panel">
+          <div class="athlet-plan-kal-head">
+            <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(-1)" aria-label="Vorheriger Monat">‹</button>
+            <h2 class="planung-kal-title">${MONATSNAMEN[m]} ${y}</h2>
+            <button class="btn btn-ghost" onclick="PLANUNG.navigateMonth(1)" aria-label="Nächster Monat">›</button>
+          </div>
+          <div id="athlet-plan-grid" class="planung-kal-loading">Lade…</div>
+        </div>
+      </div>`;
 
     let pub = [], priv = [];
     try {

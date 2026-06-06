@@ -1958,9 +1958,8 @@ body.planung-active #app-footer    { display: none; }
 /* Underline-Tabs: kein Box-Styling, passt zu Light- und Dark-Theme */
 .planung-gruppen-bar {
   display: flex; align-items: center; gap: 0;
-  padding: 0 10px;
+  padding: 6px 10px 0;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -2106,16 +2105,16 @@ body.planung-active #app-footer    { display: none; }
 .planung-wrap.planung-scroll {
   height: auto; overflow: visible; display: block;
 }
-.planung-athleten { padding: 18px 22px 48px; }
+/* Athleten-Bereich: admin-ähnlicher Content-Container */
+.planung-athleten {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 18px 48px;
+}
 @media (max-width: 720px) { .planung-athleten { padding: 12px 10px 32px; } }
 
 /* Übersichts-Tabelle */
 .athleten-wrap { max-width: 880px; margin: 0 auto; }
-.athleten-titel {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 800; font-size: 24px; letter-spacing: .4px;
-  color: var(--text); margin: 0 0 4px;
-}
 .athleten-intro { font-size: 13px; color: var(--text2); margin: 0 0 18px; }
 .athleten-leer {
   padding: 40px; text-align: center; color: var(--text2);
@@ -2151,25 +2150,32 @@ body.planung-active #app-footer    { display: none; }
   background: color-mix(in srgb, var(--text2) 12%, transparent);
 }
 
-/* Geöffneter Athletenplan (Kopfzeile über dem Kalender) */
+/* Geöffneter Athletenplan */
+.athlet-plan-wrap { max-width: 1000px; margin: 0 auto; }
 .athlet-plan-head {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .athlet-plan-name {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800; font-size: 20px; letter-spacing: .3px; color: var(--text);
 }
+/* Kalender-Toolbar innerhalb der Panel-Box */
+.athlet-plan-kal-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surf2);
+}
 
-/* ── Planung: Untermenü (Gruppen · Athleten · Wettkämpfe) ── */
-.planung-section-bar {
-  display: flex; flex-wrap: wrap; gap: 4px;
-  padding: 12px 16px 0;
-  border-bottom: 2px solid var(--border);
-  background: var(--surface);
+/* ── Planung: Untermenü (Admin-Stil, konsistent mit Admin-Seite) ── */
+.planung-section-nav {
+  padding: 14px 18px 0;
   flex-shrink: 0;
 }
-.planung-section-bar .subtab { margin-bottom: 0; }
+.planung-section-nav .subtabs {
+  margin-bottom: 0;
+}
 
 /* ── Athleten-Sidebar (Karten) + Plan-Subheader ─────────────────────── */
 .athlet-cards { display: flex; flex-direction: column; gap: 0; }
@@ -2194,4 +2200,17 @@ body.planung-active #app-footer    { display: none; }
   padding: 0 0 8px; margin-bottom: 2px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+/* Athletenplan-Kalender innerhalb des panels: kein eigener border-radius */
+.athlet-plan-wrap .panel .kal-grid {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+.athlet-plan-wrap .panel .kal-loading,
+.athlet-plan-wrap .panel .planung-kal-loading {
+  padding: 40px;
+  border: none;
+  border-radius: 0;
 }
