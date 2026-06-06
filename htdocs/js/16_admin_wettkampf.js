@@ -340,10 +340,10 @@ const ADMIN_WETTKAMPF = (() => {
 
     let html = '';
 
-    // Aktuell gewählter Ort
     if (aktOrt) {
+      // Gewählter Ort anzeigen – kein Suchfeld
       const label = aktOrt.display_name || [aktOrt.name, aktOrt.region, aktOrt.land].filter(Boolean).join(', ');
-      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;
+      html += `<div style="display:flex;align-items:center;gap:8px;
                            padding:6px 10px;background:var(--bg);border:1px solid var(--border);
                            border-radius:6px;font-size:13px">
         <span style="flex:1">${escapeHtml(label)}</span>
@@ -352,21 +352,18 @@ const ADMIN_WETTKAMPF = (() => {
                  font-size:16px;line-height:1;padding:0"
           title="Ort entfernen">&times;</button>
       </div>`;
-    }
-
-    // Suche
-    if (_alleOrte === null) {
+    } else if (_alleOrte === null) {
+      // Noch am Laden
       html += `<div style="font-size:13px;color:var(--text2)">
         <span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border);
           border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;
           vertical-align:middle;margin-right:6px"></span>Lade Orte&hellip;</div>`;
     } else {
-      const term     = _ortFilter.trim().toLowerCase();
-      const gefiltert = orte.filter(o => {
-        if (_edit.ort_id && o.id === _edit.ort_id) return false; // schon oben
-        if (!term) return true;
-        return (o.name + ' ' + (o.region||'') + ' ' + (o.land||'')).toLowerCase().includes(term);
-      });
+      // Suchfeld + Liste (kein Ort gewählt)
+      const term      = _ortFilter.trim().toLowerCase();
+      const gefiltert = orte.filter(o =>
+        !term || (o.name + ' ' + (o.region||'') + ' ' + (o.land||'')).toLowerCase().includes(term)
+      );
 
       html += `<input type="text" id="ort-filter-inp"
         placeholder="Ort suchen…"
@@ -380,28 +377,24 @@ const ADMIN_WETTKAMPF = (() => {
         html += `<div style="font-size:13px;color:var(--text2)">Keine Orte im Statistikportal vorhanden.</div>`;
       } else if (gefiltert.length === 0 && term) {
         html += `<div style="font-size:13px;color:var(--text2)">Keine passenden Orte gefunden.</div>`;
-      } else {
+      } else if (gefiltert.length > 0) {
         const MAX = 8;
-        const show = term ? gefiltert.slice(0, MAX) : gefiltert.slice(0, MAX);
-        if (show.length > 0) {
-          html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
-            border-radius:6px;padding:3px">`;
-          show.forEach(o => {
-            const label = o.display_name || [o.name, o.region, o.land].filter(Boolean).join(', ');
-            html += `<div onclick="ADMIN_WETTKAMPF._waehleOrt(${o.id})"
-              style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px"
-              onmouseover="this.style.background='var(--border)'"
-              onmouseout="this.style.background=''">
-              <strong>${escapeHtml(o.name)}</strong>
-              ${o.region ? `<span style="color:var(--text2);margin-left:4px">${escapeHtml(o.region)}</span>` : ''}
-            </div>`;
-          });
-          if (gefiltert.length > MAX) {
-            html += `<div style="padding:5px 10px;font-size:11px;color:var(--text2)">
-              + ${gefiltert.length - MAX} weitere &ndash; Suche verfeinern</div>`;
-          }
-          html += `</div>`;
+        html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
+          border-radius:6px;padding:3px">`;
+        gefiltert.slice(0, MAX).forEach(o => {
+          html += `<div onclick="ADMIN_WETTKAMPF._waehleOrt(${o.id})"
+            style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px"
+            onmouseover="this.style.background='var(--border)'"
+            onmouseout="this.style.background=''">
+            <strong>${escapeHtml(o.name)}</strong>
+            ${o.region ? `<span style="color:var(--text2);margin-left:4px">${escapeHtml(o.region)}</span>` : ''}
+          </div>`;
+        });
+        if (gefiltert.length > MAX) {
+          html += `<div style="padding:5px 10px;font-size:11px;color:var(--text2)">
+            + ${gefiltert.length - MAX} weitere &ndash; Suche verfeinern</div>`;
         }
+        html += `</div>`;
       }
     }
 
