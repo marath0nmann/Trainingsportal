@@ -948,7 +948,7 @@ const PLANUNG = (() => {
       serien.forEach(s => {
         if (s.aktiv === 0) return;
         const manuell = s.naechstes_datum && s.naechstes_datum >= todayKey ? s.naechstes_datum : null;
-        const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+        const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
         if (datum && datum >= von && datum <= bis) {
           (wkByDate[datum] = wkByDate[datum] || []).push({ ...s, _isFest: !!manuell });
         }
@@ -1093,10 +1093,12 @@ const PLANUNG = (() => {
       const inaktiv = s.aktiv === 0;
       let nextInfo  = '';
       if (typeof ADMIN_WETTKAMPF !== 'undefined') {
-        const nd = s.naechstes_datum || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+        const _tK = ymd(new Date());
+        const _ndManuell = s.naechstes_datum && s.naechstes_datum >= _tK ? s.naechstes_datum : null;
+        const nd = _ndManuell || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
         if (nd) {
           const d       = new Date(nd + 'T00:00:00');
-          const manuell = !!s.naechstes_datum;
+          const manuell = !!_ndManuell;
           nextInfo = `<div class="pblock-meta" style="color:${manuell ? '#27ae60' : 'var(--text2)'}">
             ${d.getDate()}. ${MN[d.getMonth()]} ${d.getFullYear()}
             <span style="font-size:10px">${manuell ? '✓ fest' : '~ Prognose'}</span>

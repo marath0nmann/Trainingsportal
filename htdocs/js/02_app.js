@@ -737,9 +737,9 @@ async function renderKalender(main, monthArg) {
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
     wettkampfSerien.forEach(s => {
       if (s.aktiv === 0) return; // Deaktivierte Wettkämpfe ausblenden
-      // Vergangenes manuelles Datum ignorieren → Prognose verwenden
+      // Vergangenes manuelles Datum als Prognose-Basis nutzen (korrigierter Termin)
       const manuell = s.naechstes_datum && s.naechstes_datum >= _heute ? s.naechstes_datum : null;
-      const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+      const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
       // Doppeleintrag nur unterdrücken wenn ein privater Eintrag für genau diese Serie existiert
       const sNorm = _decodeHtml(s.name || s.kuerzel || '');
@@ -1255,7 +1255,7 @@ async function ladeWettkampfSektionInto(containerId) {
       if (s.naechstes_datum && s.naechstes_datum >= _heuteS) {
         datum = s.naechstes_datum; modus = 'manuell';
       } else if (typeof ADMIN_WETTKAMPF !== 'undefined') {
-        datum = ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+        datum = ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
       }
       return { s, datum, modus };
     })
@@ -1842,7 +1842,7 @@ async function _buildPlanData(von, bis) {
     wettkampfRaw.forEach(s => {
       if (s.aktiv === 0) return;
       const manuellL = s.naechstes_datum && s.naechstes_datum >= _heuteListe ? s.naechstes_datum : null;
-      const datum    = manuellL || ADMIN_WETTKAMPF.predictNextDate(s.letztes_datum);
+      const datum    = manuellL || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
       // Doppeleintrag nur unterdrücken wenn privater Eintrag für genau diese Serie existiert
       const sNormL = _decodeHtml(s.name || s.kuerzel || '');
@@ -2545,7 +2545,7 @@ function _wkPopoverShow(serieId, anchorEl) {
   const _heuteStr = ymd(new Date());
   const manuell = serie.naechstes_datum && serie.naechstes_datum >= _heuteStr ? serie.naechstes_datum : null;
   const datum   = manuell
-    || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.letztes_datum) : null);
+    || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.naechstes_datum || serie.letztes_datum) : null);
   if (!datum) { _wkNotify('Kein Termin berechenbar.', false); return; }
 
   const isFest   = !!manuell;
@@ -2668,7 +2668,7 @@ async function _wkEintragen(serieId, disziplin) {
   const _heuteWk = ymd(new Date());
   const manuellWk = serie.naechstes_datum && serie.naechstes_datum >= _heuteWk ? serie.naechstes_datum : null;
   const datum = manuellWk
-    || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.letztes_datum) : null);
+    || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.naechstes_datum || serie.letztes_datum) : null);
   if (!datum) return;
 
   const name  = _decodeHtml(serie.name || serie.kuerzel || '');
