@@ -601,6 +601,13 @@ const ADMIN_WETTKAMPF = (() => {
                        background:var(--bg);color:var(--text)">
             </div>
 
+            <!-- Disziplinen -->
+            <div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                          letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Disziplinen</div>
+              <div id="planung-disz-area"></div>
+            </div>
+
             <!-- Ort -->
             <div>
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;
@@ -623,13 +630,6 @@ const ADMIN_WETTKAMPF = (() => {
               <div id="wkm-map" style="width:100%;height:260px;border-radius:8px;
                 border:1px solid var(--border);background:var(--bg2)"></div>
               <div id="wkm-coords" style="font-size:11px;color:var(--text2);margin-top:4px;display:none"></div>
-            </div>
-
-            <!-- Disziplinen -->
-            <div>
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;
-                          letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Disziplinen</div>
-              <div id="planung-disz-area"></div>
             </div>
 
           </div>
