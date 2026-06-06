@@ -262,19 +262,22 @@ const WETTKAMPFPLANUNG = (() => {
       const meineAnm    = s.meine_anmeldungen || [];      // [{id, disziplin}]
       const liste       = wb.length ? wb : [null];        // null = allgemeine Teilnahme
 
+      const stBg   = st.bg;
+      const stText2 = st.text;
       let wbHtml = '';
       liste.forEach(w => {
         const key   = w === null ? '' : w;
         const label = w === null ? 'Teilnahme eintragen' : w;
         const anm   = meineAnm.find(a => (a.disziplin || '') === key) || null;
+        const baseStyle = `font-size:11px;padding:2px 8px;margin:1px 2px;border-color:${stBg}`;
         if (anm) {
-          wbHtml += `<button class="wk-pop-btn wk-pop-btn--active"
+          wbHtml += `<button class="wk-pop-btn"
             onclick="WETTKAMPFPLANUNG._abDisziplin(${s.id},${anm.id})"
-            style="font-size:11px;padding:2px 8px;margin:1px 2px">✓ ${escapeHtml(label)}</button>`;
+            style="${baseStyle};background:${stBg};color:${stText2}">✓ ${escapeHtml(label)}</button>`;
         } else {
           wbHtml += `<button class="wk-pop-btn"
             onclick="WETTKAMPFPLANUNG._anDisziplin(${s.id},${escapeHtml(JSON.stringify(key))})"
-            style="font-size:11px;padding:2px 8px;margin:1px 2px">${escapeHtml(label)}</button>`;
+            style="${baseStyle};background:color-mix(in srgb,${stBg} 15%,transparent)">${escapeHtml(label)}</button>`;
         }
       });
       const anmHtml = '';
