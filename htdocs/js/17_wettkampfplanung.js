@@ -257,27 +257,27 @@ const WETTKAMPFPLANUNG = (() => {
       const vergangen   = datum && datum < heute;
       const isSelected  = _selected.has(s.id);
 
-      // Disziplinen: Statistikportal-Daten haben Vorrang (echte Ergebnisse, admin-kuratiert).
-      // CSV-wettbewerbe nur als Fallback für Serien ohne Statistikportal-Einträge.
-      const wb = (Array.isArray(s.disziplinen) && s.disziplinen.length)
-        ? s.disziplinen
-        : (Array.isArray(s.wettbewerbe) ? s.wettbewerbe : []);
-      const MAX_WB = 3;
-      let wbHtml = '';
-      wb.slice(0, MAX_WB).forEach(w => {
-        wbHtml += `<span style="display:inline-block;padding:1px 7px;border-radius:10px;
-          font-size:11px;background:var(--border);color:var(--text);margin:1px 2px">${escapeHtml(w)}</span>`;
-      });
-      if (wb.length > MAX_WB) wbHtml += `<span style="font-size:11px;color:var(--text2)">+${wb.length - MAX_WB}</span>`;
+      // Disziplinen: wettbewerbe als klickbare An-/Abmelde-Buttons
+      const wb          = Array.isArray(s.wettbewerbe) ? s.wettbewerbe : [];
+      const meineAnm    = s.meine_anmeldungen || [];      // [{id, disziplin}]
+      const liste       = wb.length ? wb : [null];        // null = allgemeine Teilnahme
 
-      const anmDisz = s.angemeldet_disziplinen || [];
-      let anmHtml = '';
-      if (anmDisz.length) {
-        anmHtml = `<div style="margin-top:3px">` +
-          anmDisz.map(d => `<span style="font-size:10px;padding:1px 5px;border-radius:6px;
-            background:#27ae6022;color:#27ae60;margin-right:3px">✓ ${escapeHtml(d)}</span>`).join('') +
-          `</div>`;
-      }
+      let wbHtml = '';
+      liste.forEach(w => {
+        const key   = w === null ? '' : w;
+        const label = w === null ? 'Teilnahme eintragen' : w;
+        const anm   = meineAnm.find(a => (a.disziplin || '') === key) || null;
+        if (anm) {
+          wbHtml += `<button class="wk-pop-btn wk-pop-btn--active"
+            onclick="WETTKAMPFPLANUNG._abDisziplin(${s.id},${anm.id})"
+            style="font-size:11px;padding:2px 8px;margin:1px 2px">✓ ${escapeHtml(label)}</button>`;
+        } else {
+          wbHtml += `<button class="wk-pop-btn"
+            onclick="WETTKAMPFPLANUNG._anDisziplin(${s.id},${escapeHtml(JSON.stringify(key))})"
+            style="font-size:11px;padding:2px 8px;margin:1px 2px">${escapeHtml(label)}</button>`;
+        }
+      });
+      const anmHtml = '';
 
       const y = String(_jahr);
       // Prognose = kein naechstes_datum für dieses Jahr UND Statistikportal
@@ -322,7 +322,7 @@ const WETTKAMPFPLANUNG = (() => {
             ${anmHtml}
           </td>
           <td style="white-space:nowrap">${datumHtml}</td>
-          <td>${wbHtml || '<span style="color:var(--text2)">–</span>'}</td>
+          <td><div style="display:flex;flex-wrap:wrap;gap:2px">${wbHtml}</div></td>
           <td style="white-space:nowrap">
             <button class="wkp-status-btn"
               onclick="WETTKAMPFPLANUNG._openPopper(${s.id}, this)"
@@ -642,6 +642,48 @@ const WETTKAMPFPLANUNG = (() => {
     }
   }
 
+  // ── Disziplin-Anmeldung ──────────────────────────────────────
+  async function _anDisziplin(serieId, disziplin) {
+    const serie = _serien.find(s => s.id === serieId);
+    if (!serie) return;
+    const datum = _datumFuerJahr(serie, _jahr);
+
+    try {
+      // Formale Anmeldung (Teilnehmerliste)
+      await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '' });
+
+      // Kalender-Eintrag (Mein Plan)
+      if (datum) {
+        const name  = serie.name || serie.kuerzel || '';
+        const titel = ('🏆 ' + name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
+        try {
+          await apiPost('mein-plan/einheiten', {
+            datum,
+            typ:        'wettkampf',
+            titel,
+            distanz_km: null,
+            bemerkung:  disziplin || null,
+          });
+        } catch (_) { /* Plan-Eintrag ist optional */ }
+      }
+
+      await _lade();
+      _renderListe();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function _abDisziplin(serieId, anmId) {
+    try {
+      await apiDel(`wettkampf/anmeldungen/${anmId}`);
+      await _lade();
+      _renderListe();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
   // ── Datum für ein bestimmtes Jahr berechnen ──────────────────
   // Prognose: gleicher N-ter Wochentag im gleichen Monat des Zieljahres
   // (identische Logik zu predictNextDate in 16_admin_wettkampf.js)
@@ -697,5 +739,6 @@ const WETTKAMPFPLANUNG = (() => {
     _toggleHideVergangen, _toggleHidePasstNicht,
     _toggleSelect, _toggleAll, _clearSelection,
     _openBulkPopper, _bulkSetStatus,
+    _anDisziplin, _abDisziplin,
   };
 })();

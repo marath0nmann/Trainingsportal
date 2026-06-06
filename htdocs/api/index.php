@@ -5650,9 +5650,9 @@ function handleWettkampfplanung(string $method, string $tail): void
             ORDER BY COALESCE(vs.sortierindex, 9999) ASC, vs.name ASC
         ", [$userId, $jahr]);
 
-        // Discipline registrations per serie for this user
+        // Discipline registrations per serie for this user (inkl. ID zum Löschen)
         $anmeldungen = DB::fetchAll("
-            SELECT wp.serie_id, twa.disziplin
+            SELECT wp.serie_id, twa.id AS anm_id, twa.disziplin
             FROM `{$twa}` twa
             JOIN `{$twp}` wp ON wp.id = twa.planung_id
             WHERE twa.benutzer_id = ?
@@ -5660,7 +5660,10 @@ function handleWettkampfplanung(string $method, string $tail): void
 
         $anmBySerie = [];
         foreach ($anmeldungen as $a) {
-            $anmBySerie[(int)$a['serie_id']][] = $a['disziplin'];
+            $anmBySerie[(int)$a['serie_id']][] = [
+                'id'        => (int)$a['anm_id'],
+                'disziplin' => $a['disziplin'],
+            ];
         }
 
         // ── Disziplinen aus dem Statistikportal (hat Vorrang vor CSV-wettbewerbe) ──────────
@@ -5808,7 +5811,10 @@ function handleWettkampfplanung(string $method, string $tail): void
                 'letztes_datum_statistik' => $s['letztes_datum_statistik'],
                 'naechstes_datum'         => $s['naechstes_datum'],
                 'status'                => $st,
-                'angemeldet_disziplinen' => $anm,
+                // [{id, disziplin}] – für An-/Abmelde-Buttons im Frontend
+                'meine_anmeldungen'      => $anm,
+                // Nur Disziplinnamen (Abwärtskompatibilität + einfache Checks)
+                'angemeldet_disziplinen' => array_column($anm, 'disziplin'),
             ];
         }
 
