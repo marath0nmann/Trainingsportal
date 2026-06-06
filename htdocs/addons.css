@@ -1958,13 +1958,14 @@ body.planung-active #app-footer    { display: none; }
 /* Underline-Tabs: kein Box-Styling, passt zu Light- und Dark-Theme */
 .planung-gruppen-bar {
   display: flex; align-items: center; gap: 0;
-  padding: 6px 28px 0;   /* links bündig mit .planung-section-nav in Gruppen-Modus */
+  padding: 6px 10px 0;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
-@media (max-width: 720px) {
-  .planung-gruppen-bar { padding-left: 8px; padding-right: 8px; }
+/* Desktop: bündig mit section-nav (46px links) */
+@media (min-width: 901px) {
+  .planung-gruppen-bar { padding-left: 46px; padding-right: 28px; }
 }
 .planung-tab {
   padding: 8px 14px;
@@ -2172,22 +2173,26 @@ body.planung-active #app-footer    { display: none; }
 }
 
 /* ── Planung: Untermenü (Admin-Stil, konsistent mit Admin-Seite) ── */
+/*
+ * Athleten-Tab: #main-content behält sein CSS-Padding (24px 28px aus app.css).
+ *   Subtab-Position = 24px(main-top) + 14px(nav) = 38px  /  28px(main-left) + 18px(nav) = 46px
+ *
+ * Gruppen-Tab: _applyPlanungLayout() setzt #main-content padding:0 (Desktop, >900px).
+ *   Damit die Subtabs visuell exakt an derselben Position erscheinen, übernimmt
+ *   .planung-section-nav die Summe selbst: 24+14 = 38px oben, 28+18 = 46px links.
+ *   (Auf Mobile ≤900px greift der Viewport-Lock nicht, daher kein Override nötig.)
+ */
 .planung-section-nav {
-  /* Athleten-Tab: #main-content hat normales padding (24px 28px aus app.css),
-     daher nur geringes Zusatz-Padding nötig */
-  padding: 14px 18px 0;
+  padding: 14px 18px 0;   /* Athleten-Tab: main-Padding bereits aktiv */
   flex-shrink: 0;
 }
-/* Gruppen-Tab: _applyPlanungLayout() setzt #main-content auf padding:0,
-   daher fehlendes main-Padding (24px 28px) hier selbst kompensieren */
-.planung-wrap:not(.planung-scroll) .planung-section-nav {
-  padding: 24px 28px 0;
+@media (min-width: 901px) {
+  .planung-wrap:not(.planung-scroll) .planung-section-nav {
+    padding: 38px 46px 0; /* Gruppen-Tab Desktop: main-Padding (24/28) + nav-Padding (14/18) */
+  }
 }
 .planung-section-nav .subtabs {
   margin-bottom: 0;
-}
-@media (max-width: 720px) {
-  .planung-wrap:not(.planung-scroll) .planung-section-nav { padding: 12px 8px 0; }
 }
 
 /* ── Athleten-Sidebar (Karten) + Plan-Subheader ─────────────────────── */
