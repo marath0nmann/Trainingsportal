@@ -25,6 +25,22 @@ let _wettkampfCache = null;  // { ts: number, data: [] } – Wettkampf-Serien-Ca
 window.addEventListener('DOMContentLoaded', init);
 window.addEventListener('hashchange', renderPage);
 
+// ── Wettkampf-Anzeigeeinstellungen (gemeinsam mit Wettkampfplanung-Seite) ──
+// Schlüssel identisch mit 17_wettkampfplanung.js → ein localStorage-Eintrag für beide Views.
+function _wkPrefs() {
+  let hideVergangen = false, hidePasstNicht = false;
+  try {
+    hideVergangen  = localStorage.getItem('wkp_hide_vergangen')   === '1';
+    hidePasstNicht = localStorage.getItem('wkp_hide_passt_nicht') === '1';
+  } catch (e) {}
+  return { hideVergangen, hidePasstNicht };
+}
+function _wkTogglePref(key, val) {
+  try { localStorage.setItem(key, val ? '1' : '0'); } catch (e) {}
+  _wettkampfCache = null;  // Status neu laden
+  renderPage();
+}
+
 async function init() {
   // Optik aus Statistikportal-Einstellungen ziehen (Farben, Logo, Verein)
   await CONFIG.load();
@@ -734,9 +750,11 @@ async function renderKalender(main, monthArg) {
   const wettkampfBeiDatum  = {}; // für Forecast-Chips (gefiltert)
   const wkSerieDatumMap    = {}; // datum → [serien] für ALLE aktiven (für persönliche WK-Einträge)
   const _heute = ymd(new Date());
+  const _wkPr  = _wkPrefs();
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
     wettkampfSerien.forEach(s => {
       if (s.aktiv === 0) return; // Deaktivierte Wettkämpfe ausblenden
+      if (_wkPr.hidePasstNicht && s.status === 'passt_nicht') return;
       // Vergangenes manuelles Datum als Prognose-Basis nutzen (korrigierter Termin)
       const manuell = s.naechstes_datum && s.naechstes_datum >= _heute ? s.naechstes_datum : null;
       const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
@@ -745,6 +763,7 @@ async function renderKalender(main, monthArg) {
       const sNorm = _decodeHtml(s.name || s.kuerzel || '');
       if ((_wkPrivatMap[datum] || []).some(ev => (ev.titel || '').startsWith('🏆 ' + sNorm))) return;
       if (datum && datum >= von && datum <= bis) {
+        if (_wkPr.hideVergangen && datum < _heute) return;
         (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);
       }
     });
@@ -958,9 +977,17 @@ function _legendItem(key, checked, label, toggleAttr) {
   </span>`;
 }
 
+function _legendChkItem(id, checked, label, onchange) {
+  return `<span class="kal-legend-item">
+    <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} ${onchange}>
+    <label for="${id}" class="kal-legend-name">${escapeHtml(label)}</label>
+  </span>`;
+}
+
 function _renderKalLegend() {
   const kf      = state.kalFilter;
   const gruppen = state.meineGruppen || [];
+  const prefs   = _wkPrefs();
   let items;
   if (!gruppen.length) {
     items = [
@@ -977,6 +1004,11 @@ function _renderKalLegend() {
       _legendItem('wettkampf', !kf || kf.wettkampf !== false, 'Wettkämpfe', `onchange="toggleKalPlan('wettkampf', this.checked)"`),
     );
   }
+  // Wettkampf-Anzeigefilter (shared mit Wettkampfplanung-Seite)
+  items.push(
+    _legendChkItem('kal-cb-wk-vergangen',   prefs.hideVergangen,  'Vergangene ausblenden',  `onchange="_wkTogglePref('wkp_hide_vergangen',   this.checked)"`),
+    _legendChkItem('kal-cb-wk-passtnicht',  prefs.hidePasstNicht, '„passt nicht" ausblenden', `onchange="_wkTogglePref('wkp_hide_passt_nicht', this.checked)"`),
+  );
   return `<div class="kal-legend">${items.join('')}</div>`;
 }
 
@@ -1247,8 +1279,10 @@ async function ladeWettkampfSektionInto(containerId) {
     ? ymd(new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + 1))
     : heute;
   const angemeldet = !!state.user;
+  const _prefs     = _wkPrefs();
   const mitDatum   = serien
     .filter(s => s.aktiv !== 0 && s.aktiv !== false)
+    .filter(s => !_prefs.hidePasstNicht || s.status !== 'passt_nicht')
     .map(s => {
       let datum = null, modus = 'prognose';
       const _heuteS = ymd(new Date());
@@ -1837,10 +1871,12 @@ async function _buildPlanData(von, bis) {
   });
   const wettkampfBeiDatum = {};
   const wkSerieDatumMap   = {};
+  const _wkPrL            = _wkPrefs();
   if (typeof ADMIN_WETTKAMPF !== 'undefined') {
     const _heuteListe = ymd(new Date());
     wettkampfRaw.forEach(s => {
       if (s.aktiv === 0) return;
+      if (_wkPrL.hidePasstNicht && s.status === 'passt_nicht') return;
       const manuellL = s.naechstes_datum && s.naechstes_datum >= _heuteListe ? s.naechstes_datum : null;
       const datum    = manuellL || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
@@ -1848,6 +1884,7 @@ async function _buildPlanData(von, bis) {
       const sNormL = _decodeHtml(s.name || s.kuerzel || '');
       if ((_wkPrivatMap[datum] || []).some(ev => (ev.titel || '').startsWith('🏆 ' + sNormL))) return;
       if (datum && datum >= von && datum <= bis) {
+        if (_wkPrL.hideVergangen && datum < _heuteListe) return;
         (wettkampfBeiDatum[datum] = wettkampfBeiDatum[datum] || []).push(s);
       }
     });

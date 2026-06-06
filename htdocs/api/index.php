@@ -5295,6 +5295,8 @@ function handleWettkampf(string $method, string $tail): void
 
     // ── GET /wettkampf ────────────────────────────────────────────
     if ($method === 'GET' && $tail === '') {
+        $tst     = DB::tbl('training_wettkampf_status');
+        $curYear = (int)date('Y');
         try {
             $serien = DB::fetchAll(
                 "SELECT vs.id, vs.name, vs.kuerzel, vs.wettbewerbe,
@@ -5318,19 +5320,24 @@ function handleWettkampf(string $method, string $tail): void
                         wp.naechstes_datum,
                         wp.disziplinen_extra,
                         wp.disziplinen_ausgeschlossen,
-                        wp.aktiv
+                        wp.aktiv,
+                        tst.status
                  FROM $tws vs
                  LEFT JOIN $tvv v  ON v.serie_id = vs.id
                                    AND v.geloescht_am IS NULL
                                    AND v.genehmigt   = 1
                  LEFT JOIN $twp wp ON wp.serie_id = vs.id
+                 LEFT JOIN $tst tst ON tst.serie_id    = vs.id
+                                    AND tst.benutzer_id = ?
+                                    AND tst.jahr        = ?
                  GROUP BY vs.id, vs.name, vs.kuerzel, vs.wettbewerbe, vs.referenz_datum,
                           vs.url, vs.ort_id, vs.lat, vs.lon,
                           wp.id, wp.naechstes_datum, wp.disziplinen_extra,
-                          wp.disziplinen_ausgeschlossen, wp.aktiv
+                          wp.disziplinen_ausgeschlossen, wp.aktiv, tst.status
                  ORDER BY MONTH(COALESCE(MAX(v.datum), vs.referenz_datum)) ASC,
                           DAY(COALESCE(MAX(v.datum), vs.referenz_datum))   ASC,
-                          vs.name             ASC"
+                          vs.name             ASC",
+                [$userId, $curYear]
             );
         } catch (\Throwable $e) {
             http_response_code(500);
@@ -5458,6 +5465,7 @@ function handleWettkampf(string $method, string $tail): void
                 'planung_id'               => $pid,
                 'aktiv'                    => $s['aktiv'] !== null ? (int)$s['aktiv'] : 1,
                 'naechstes_datum'     => $s['naechstes_datum'],
+                'status'              => $s['status'] ?? null,
                 'url'                 => $s['url'] ?? null,
                 'ort_id'              => isset($s['ort_id']) && $s['ort_id'] !== null ? (int)$s['ort_id'] : null,
                 'lat'                 => isset($s['lat'])    && $s['lat']    !== null ? (float)$s['lat']    : null,
