@@ -679,12 +679,10 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   // Datum im Modal löschen (zurück zur Prognose)
-  async function _clearDatumModal(serieId) {
+  function _clearDatumModal(serieId) {
     const inp = document.getElementById('planung-datum');
-    const prognose = predictNextDate((serien.find(s => s.id === serieId) || {}).letztes_datum);
-    if (inp) inp.value = prognose || '';
-    // Markierung: nach dem Save wird erkannt dass kein manuelles Datum gesetzt ist
-    _edit._clearDatum = true;
+    if (inp) inp.value = ''; // leer → savePlanung schickt null → Prognose wird wieder verwendet
+    if (_edit) delete _edit._clearDatum;
   }
 
   // ── Disziplin-Bereich ─────────────────────────────────────────
