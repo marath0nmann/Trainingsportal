@@ -1278,6 +1278,7 @@ async function ladeWettkampfSektionInto(containerId) {
   const minDatum   = _now.getHours() >= 12
     ? ymd(new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + 1))
     : heute;
+  const maxDatum   = ymd(new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + 30));
   const angemeldet = !!state.user;
   const _prefs     = _wkPrefs();
   const mitDatum   = serien
@@ -1293,9 +1294,8 @@ async function ladeWettkampfSektionInto(containerId) {
       }
       return { s, datum, modus };
     })
-    .filter(e => e.datum && e.datum >= minDatum)
-    .sort((a, b) => a.datum.localeCompare(b.datum))
-    .slice(0, 3);
+    .filter(e => e.datum && e.datum >= minDatum && e.datum <= maxDatum)
+    .sort((a, b) => a.datum.localeCompare(b.datum));
 
   if (!mitDatum.length) return;
 
@@ -1380,7 +1380,7 @@ async function ladeWettkampfSektionInto(containerId) {
   const count    = mitDatum.length;
   const countCls = count === 1 ? ' heute-cards-1' : count === 2 ? ' heute-cards-2' : '';
   el.innerHTML   = `<div class="wettkampf-sektion">
-    <div class="heute-heading">Nächste Wettkämpfe</div>
+    <div class="heute-heading">Nächste Wettkämpfe <span class="wk-zeitraum-hint">(nächste 30 Tage)</span></div>
     <div class="heute-cards${countCls}">${cards}</div>
   </div>`;
 }
