@@ -1,28 +1,39 @@
 // ============================================================
 // Trainingsportal – Wettkämpfe (Admin-Ansicht)
 // Zeigt alle regelmäßigen Veranstaltungsserien aus dem Statistikportal,
-// extrahiert Disziplinen aus Ergebnissen, erlaubt Admin-Planung.
+// extrahiert Disziplinen aus Ergebnissen, erlaubt Admin-Planung per Modal.
 // ============================================================
 
 const ADMIN_WETTKAMPF = (() => {
   let serien     = [];
   let container  = null;
-  let expandedId = null;
-  // Zustand des aktuell offenen Planungs-Modals
-  let _edit      = null; // { serieId, ausgeschlossen: Set, extras: [] , extrahiert: [] }
-  // Disziplin-Auswahl im Modal
-  let _alleDisziplinen = null; // null = noch nicht geladen, [] = leer / Fehler
+
+  // Planungs-Modal-Zustand
+  let _edit = null;
+  // { serieId, wettbewerbe: [], url: '', ort_id: null, lat: null, lon: null }
+
+  // Disziplin-Picker
+  let _alleDisziplinen = null; // null = noch nicht geladen
   let _diszFilter      = '';
+
+  // Ort-Picker
+  let _alleOrte = null; // null = noch nicht geladen
+  let _ortFilter = '';
+
+  // Leaflet
+  let _wkmMap    = null;
+  let _wkmMarker = null;
+  let _leafletLoading = false;
+
   // Sortierzustand
-  let _sortCol   = 'naechster'; // 'name' | 'letzter' | 'naechster'
-  let _sortDir   = 'asc';
+  let _sortCol = 'naechster'; // 'name' | 'letzter' | 'naechster'
+  let _sortDir = 'asc';
 
   const WT_KURZ = ['So','Mo','Di','Mi','Do','Fr','Sa'];
   const WT_LANG = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
   const MONATE  = ['Januar','Februar','März','April','Mai','Juni','Juli',
                    'August','September','Oktober','November','Dezember'];
 
-  // Decodes HTML-entities stored in DB (e.g. &quot; → ")
   function decodeHtml(s) {
     if (!s) return '';
     const el = document.createElement('textarea');
@@ -30,7 +41,6 @@ const ADMIN_WETTKAMPF = (() => {
     return el.value;
   }
 
-  // Escape for safe HTML output (after entity decoding)
   function safeHtml(s) {
     return escapeHtml(decodeHtml(s));
   }
@@ -55,7 +65,6 @@ const ADMIN_WETTKAMPF = (() => {
 
   /**
    * Prognose: N. Wochentag des gleichen Monats im laufenden/nächsten Jahr.
-   * Exportiert, damit der Kalender die Funktion direkt nutzen kann.
    */
   function predictNextDate(letztesDateStr) {
     if (!letztesDateStr) return null;
@@ -74,8 +83,6 @@ const ADMIN_WETTKAMPF = (() => {
       if (tag > tage) tag -= 7;
       const kandidat = new Date(yr, month, tag);
       if (kandidat >= heute) {
-        // toISOString() würde UTC liefern und in UTC+1/+2 einen Tag zurückspringen
-        // → lokale Datumsteile verwenden
         const yyyy = kandidat.getFullYear();
         const mm   = String(kandidat.getMonth() + 1).padStart(2, '0');
         const dd   = String(kandidat.getDate()).padStart(2, '0');
@@ -91,7 +98,6 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   function naechstesDatum(serie) {
-    // Manuell gesetzter Termin nur verwenden, wenn er noch nicht vergangen ist
     if (serie.naechstes_datum && serie.naechstes_datum >= _heute()) {
       return { datum: serie.naechstes_datum, modus: 'manuell' };
     }
@@ -110,7 +116,6 @@ const ADMIN_WETTKAMPF = (() => {
            ['admin', 'trainer'].includes(state.user.rolle);
   }
 
-  // Disziplinen-Quelle: wettbewerbe (einzige editierbare Quelle)
   function allesDisziplinen(serie) {
     return [...(serie.wettbewerbe || [])];
   }
@@ -135,7 +140,7 @@ const ADMIN_WETTKAMPF = (() => {
       } else if (_sortCol === 'letzter') {
         va = a.letztes_datum || '';
         vb = b.letztes_datum || '';
-      } else { // naechster – Prognose bei Inaktiven wie in der Anzeige ignorieren
+      } else {
         const na = naechstesDatum(a);
         const nb = naechstesDatum(b);
         va = (na && (a.aktiv !== 0 || na.modus === 'manuell')) ? na.datum : '9999-99-99';
@@ -198,19 +203,19 @@ const ADMIN_WETTKAMPF = (() => {
           <th class="${_sortCol==='naechster'?'sorted':''}" onclick="ADMIN_WETTKAMPF.sortiereNach('naechster')">
             Nächster Termin${_arrow('naechster')}</th>
           <th>Disziplinen</th>
-          <th style="width:80px"></th>
+          <th style="width:60px"></th>
         </tr>
       </thead>
       <tbody>`;
 
     _sortiereSerien().forEach(s => {
-      const next     = naechstesDatum(s);
-      const disz     = allesDisziplinen(s);
-      const expanded = expandedId === s.id;
+      const next    = naechstesDatum(s);
+      const disz    = allesDisziplinen(s);
+      const inaktiv = s.aktiv === 0;
 
       // Disziplin-Chips (max 4 + Überhang)
-      const MAX  = 4;
-      let chips  = '';
+      const MAX = 4;
+      let chips = '';
       disz.slice(0, MAX).forEach(d => {
         chips += `<span style="display:inline-block;padding:1px 7px;border-radius:10px;
           font-size:11px;background:var(--border);color:var(--text);margin:1px 2px">${escapeHtml(d)}</span>`;
@@ -218,13 +223,10 @@ const ADMIN_WETTKAMPF = (() => {
       if (disz.length > MAX)
         chips += `<span style="font-size:11px;color:var(--text2)">+${disz.length - MAX}</span>`;
 
-      // Letzten Wochentag für Tooltip
       const letzterWt = s.letztes_datum
         ? WT_KURZ[new Date(s.letztes_datum + 'T00:00:00').getDay()] : '';
 
-      // Nächster-Termin-Zelle (bei deaktivierten Serien keine Prognose anzeigen)
       let nextCell = '<span style="color:var(--text2);font-size:13px">–</span>';
-      const inaktiv    = s.aktiv === 0;
       if (next && (!inaktiv || next.modus === 'manuell')) {
         const nd = new Date(next.datum + 'T00:00:00');
         const wt = WT_KURZ[nd.getDay()];
@@ -238,15 +240,29 @@ const ADMIN_WETTKAMPF = (() => {
 
       const rowOpacity = inaktiv ? 'opacity:.45' : '';
 
+      // URL-Link im Namen (nur wenn vorhanden)
+      const urlLink = s.url
+        ? ` <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer"
+              onclick="event.stopPropagation()"
+              title="${escapeHtml(s.url)}"
+              style="font-size:12px;color:var(--primary);text-decoration:none;vertical-align:middle">↗</a>`
+        : '';
+
+      // Ort-Name ermitteln (ort_id → _alleOrte oder ort_letzter)
+      const ortName = s.ort_letzter
+        ? `<span style="font-size:12px;color:var(--text2);margin-left:6px">${safeHtml(s.ort_letzter)}</span>`
+        : '';
+
+      const rowClick = admin
+        ? `onclick="ADMIN_WETTKAMPF.showPlanungModal(${s.id})"`
+        : '';
+
       html += `
-        <tr style="cursor:pointer;${rowOpacity}"
-            onclick="ADMIN_WETTKAMPF.toggleExpand(${s.id})">
+        <tr style="cursor:${admin ? 'pointer' : 'default'};${rowOpacity}" ${rowClick}>
           <td>
-            <strong>${safeHtml(s.name || s.kuerzel)}</strong>
+            <strong>${safeHtml(s.name || s.kuerzel)}</strong>${urlLink}
             ${inaktiv ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--border);color:var(--text2);margin-left:6px">Inaktiv</span>' : ''}
-            ${s.ort_letzter
-              ? `<span style="font-size:12px;color:var(--text2);margin-left:6px">${safeHtml(s.ort_letzter)}</span>`
-              : ''}
+            ${ortName}
             <div style="font-size:11px;color:var(--text2);margin-top:1px">
               ${s.anz_veranstaltungen} Ausgabe${s.anz_veranstaltungen !== 1 ? 'n' : ''}
               ${s.erstes_datum ? ' &bull; seit ' + s.erstes_datum.slice(0, 4) : ''}
@@ -263,126 +279,259 @@ const ADMIN_WETTKAMPF = (() => {
           </td>
           <td style="text-align:right;white-space:nowrap">
             ${admin ? `<button onclick="event.stopPropagation();ADMIN_WETTKAMPF.toggleAktiv(${s.id})"
-              title="${inaktiv ? 'Aktivieren (erscheint wieder im Kalender)' : 'Deaktivieren (ausblenden im Kalender)'}"
+              title="${inaktiv ? 'Aktivieren' : 'Deaktivieren'}"
               style="border:none;background:none;cursor:pointer;font-size:18px;
                      color:${inaktiv ? 'var(--text2)' : '#27ae60'};padding:0 4px;vertical-align:middle">
               ${inaktiv ? '◯' : '●'}</button>` : ''}
-            <span style="display:inline-block;transition:transform .18s;color:var(--text2);
-              transform:${expanded ? 'rotate(90deg)' : 'rotate(0deg)'}">›</span>
           </td>
         </tr>`;
-
-      if (expanded) html += renderDetailZeile(s, disz, admin);
     });
 
     html += `</tbody></table></div></div>`;
     container.innerHTML = html;
   }
 
-  // ── Detail-Panel ──────────────────────────────────────────────
-  function renderDetailZeile(serie, disz, admin) {
-    const next = naechstesDatum(serie);
-
-    let html = `
-      <tr>
-        <td colspan="5" style="padding:0;border-bottom:2px solid var(--primary)">
-          <div style="background:var(--bg2);border-top:1px solid var(--border);padding:20px 16px">
-            <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">`;
-
-    // ── Disziplinen (aus wettbewerbe) ────────────────────────
-    html += `<div style="flex:1;min-width:220px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;
-                  letter-spacing:.5px;color:var(--text2);margin-bottom:10px">Disziplinen</div>`;
-
-    if (!disz.length) {
-      html += '<div style="font-size:13px;color:var(--text2)">Keine Disziplinen erfasst.</div>';
-    } else {
-      html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
-      disz.forEach(d => {
-        html += `<span style="padding:3px 10px;border-radius:12px;font-size:13px;
-          background:var(--border);color:var(--text)">${escapeHtml(d)}</span>`;
-      });
-      html += '</div>';
+  // ── Ort-Verwaltung ────────────────────────────────────────────
+  async function _ladeOrte() {
+    if (_alleOrte !== null) return;
+    try {
+      const resp = await apiGet('wettkampf/orte', { silent: true });
+      _alleOrte = resp.orte || [];
+    } catch (_) {
+      _alleOrte = [];
     }
-    html += '</div>';
+  }
 
-    // ── Admin: Planung ──────────────────────────────────────
-    if (admin) {
-      const prognose = predictNextDate(serie.letztes_datum);
-      let prognoseHint = '';
-      if (serie.letztes_datum) {
-        const ld   = new Date(serie.letztes_datum + 'T00:00:00');
-        const nthL = Math.floor((ld.getDate() - 1) / 7) + 1;
-        const ordL = ['', '1.', '2.', '3.', '4.', '5.'][Math.min(nthL, 5)];
-        const regel = `${ordL} ${WT_LANG[ld.getDay()]} im ${MONATE[ld.getMonth()]}`;
-        prognoseHint = prognose
-          ? `<div style="font-size:11px;color:var(--text2);margin-top:3px">
-              Prognose: ${WT_KURZ[new Date(prognose + 'T00:00:00').getDay()]}, ${fmtDate(prognose)}
-              &bull; ${escapeHtml(regel)}
-             </div>`
-          : '';
-      }
+  function _setOrtFilter(val) {
+    _ortFilter = val;
+    _renderOrtSektion();
+    const inp = document.getElementById('ort-filter-inp');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
 
-      html += `<div style="flex:0 0 auto;min-width:220px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;
-                    letter-spacing:.5px;color:var(--text2);margin-bottom:10px">Planung</div>
+  function _waehleOrt(id) {
+    if (!_edit) return;
+    const ort = (_alleOrte || []).find(o => o.id === id);
+    if (!ort) return;
+    _edit.ort_id = ort.id;
+    // Koordinaten aus Ort übernehmen
+    if (ort.lat != null && ort.lon != null) {
+      _edit.lat = ort.lat;
+      _edit.lon = ort.lon;
+    }
+    _ortFilter = '';
+    _renderOrtSektion();
+    // Karte updaten
+    _updateMap();
+  }
 
-        <div style="margin-bottom:12px">
-          <div style="font-size:12px;color:var(--text2);margin-bottom:5px">Nächster Termin (manuell festlegen)</div>
-          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-            <input type="date" id="inline-datum-${serie.id}"
-              style="border:1px solid var(--border);border-radius:6px;padding:4px 7px;
-                     font-size:13px;background:var(--bg);color:var(--text);flex:1;min-width:130px"
-              value="${escapeHtml(serie.naechstes_datum || '')}">
-            <button class="btn btn-sm btn-primary"
-              onclick="ADMIN_WETTKAMPF.saveDatumInline(${serie.id})">✓&nbsp;OK</button>
-            ${serie.naechstes_datum
-              ? `<button class="btn btn-sm btn-ghost"
-                  onclick="ADMIN_WETTKAMPF.clearDatumInline(${serie.id})"
-                  title="Manuelles Datum löschen – Prognose wird wieder verwendet">↺</button>`
-              : ''}
-          </div>
-          ${prognoseHint}
-        </div>
+  function _clearOrt() {
+    if (!_edit) return;
+    _edit.ort_id = null;
+    _renderOrtSektion();
+  }
 
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <button class="btn btn-sm btn-ghost"
-            onclick="ADMIN_WETTKAMPF.showPlanungModal(${serie.id})">Disziplinen&nbsp;bearbeiten</button>
-          ${next
-            ? `<button class="btn btn-sm btn-ghost"
-                onclick="ADMIN_WETTKAMPF.imKalenderEintragen(${serie.id})">Im&nbsp;Kalender&nbsp;eintragen</button>`
-            : ''}
-        </div>
+  function _renderOrtSektion() {
+    const area = document.getElementById('ort-sektion');
+    if (!area || !_edit) return;
+
+    const orte  = _alleOrte || [];
+    const aktOrt = orte.find(o => o.id === _edit.ort_id);
+
+    let html = '';
+
+    // Aktuell gewählter Ort
+    if (aktOrt) {
+      const label = aktOrt.display_name || [aktOrt.name, aktOrt.region, aktOrt.land].filter(Boolean).join(', ');
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;
+                           padding:6px 10px;background:var(--bg);border:1px solid var(--border);
+                           border-radius:6px;font-size:13px">
+        <span style="flex:1">${escapeHtml(label)}</span>
+        <button onclick="ADMIN_WETTKAMPF._clearOrt()"
+          style="border:none;background:none;cursor:pointer;color:var(--text2);
+                 font-size:16px;line-height:1;padding:0"
+          title="Ort entfernen">&times;</button>
       </div>`;
     }
 
-    html += '</div></div></td></tr>';
-    return html;
+    // Suche
+    if (_alleOrte === null) {
+      html += `<div style="font-size:13px;color:var(--text2)">
+        <span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border);
+          border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;
+          vertical-align:middle;margin-right:6px"></span>Lade Orte&hellip;</div>`;
+    } else {
+      const term     = _ortFilter.trim().toLowerCase();
+      const gefiltert = orte.filter(o => {
+        if (_edit.ort_id && o.id === _edit.ort_id) return false; // schon oben
+        if (!term) return true;
+        return (o.name + ' ' + (o.region||'') + ' ' + (o.land||'')).toLowerCase().includes(term);
+      });
+
+      html += `<input type="text" id="ort-filter-inp"
+        placeholder="Ort suchen…"
+        value="${escapeHtml(_ortFilter)}"
+        oninput="ADMIN_WETTKAMPF._setOrtFilter(this.value)"
+        style="width:100%;box-sizing:border-box;border:1px solid var(--border);
+               border-radius:6px;padding:5px 8px;font-size:13px;
+               background:var(--bg);color:var(--text);margin-bottom:6px">`;
+
+      if (orte.length === 0) {
+        html += `<div style="font-size:13px;color:var(--text2)">Keine Orte im Statistikportal vorhanden.</div>`;
+      } else if (gefiltert.length === 0 && term) {
+        html += `<div style="font-size:13px;color:var(--text2)">Keine passenden Orte gefunden.</div>`;
+      } else {
+        const MAX = 8;
+        const show = term ? gefiltert.slice(0, MAX) : gefiltert.slice(0, MAX);
+        if (show.length > 0) {
+          html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
+            border-radius:6px;padding:3px">`;
+          show.forEach(o => {
+            const label = o.display_name || [o.name, o.region, o.land].filter(Boolean).join(', ');
+            html += `<div onclick="ADMIN_WETTKAMPF._waehleOrt(${o.id})"
+              style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px"
+              onmouseover="this.style.background='var(--border)'"
+              onmouseout="this.style.background=''">
+              <strong>${escapeHtml(o.name)}</strong>
+              ${o.region ? `<span style="color:var(--text2);margin-left:4px">${escapeHtml(o.region)}</span>` : ''}
+            </div>`;
+          });
+          if (gefiltert.length > MAX) {
+            html += `<div style="padding:5px 10px;font-size:11px;color:var(--text2)">
+              + ${gefiltert.length - MAX} weitere &ndash; Suche verfeinern</div>`;
+          }
+          html += `</div>`;
+        }
+      }
+    }
+
+    area.innerHTML = html;
   }
 
-  // ── Auf-/Zuklappen ────────────────────────────────────────────
-  function toggleExpand(id) {
-    expandedId = (expandedId === id) ? null : id;
-    renderTabelle();
+  // ── Leaflet-Karte ─────────────────────────────────────────────
+  function _loadLeaflet() {
+    return new Promise((resolve) => {
+      if (window.L) { resolve(); return; }
+      if (_leafletLoading) {
+        // Warten bis geladen
+        const poll = setInterval(() => { if (window.L) { clearInterval(poll); resolve(); } }, 100);
+        return;
+      }
+      _leafletLoading = true;
+      // CSS
+      const link = document.createElement('link');
+      link.rel  = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+      // JS
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => { _leafletLoading = false; resolve(); };
+      script.onerror = () => { _leafletLoading = false; resolve(); };
+      document.head.appendChild(script);
+    });
+  }
+
+  async function _initMap(lat, lon) {
+    const mapEl = document.getElementById('wkm-map');
+    if (!mapEl) return;
+    await _loadLeaflet();
+    if (!window.L) return;
+
+    if (_wkmMap) {
+      _wkmMap.remove();
+      _wkmMap = null;
+      _wkmMarker = null;
+    }
+
+    const centerLat = lat ?? 51.5;
+    const centerLon = lon ?? 8.0;
+    const zoom      = (lat != null && lon != null) ? 13 : 6;
+
+    _wkmMap = L.map(mapEl).setView([centerLat, centerLon], zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(_wkmMap);
+
+    if (lat != null && lon != null) {
+      _wkmMarker = L.marker([lat, lon], { draggable: true }).addTo(_wkmMap);
+      _wkmMarker.on('dragend', () => {
+        const pos = _wkmMarker.getLatLng();
+        if (_edit) { _edit.lat = pos.lat; _edit.lon = pos.lng; }
+        _updateCoordsDisplay();
+      });
+    }
+
+    // Klick auf Karte setzt Marker
+    _wkmMap.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      if (!_edit) return;
+      _edit.lat = lat;
+      _edit.lon = lng;
+      if (_wkmMarker) {
+        _wkmMarker.setLatLng([lat, lng]);
+      } else {
+        _wkmMarker = L.marker([lat, lng], { draggable: true }).addTo(_wkmMap);
+        _wkmMarker.on('dragend', () => {
+          const pos = _wkmMarker.getLatLng();
+          if (_edit) { _edit.lat = pos.lat; _edit.lon = pos.lng; }
+          _updateCoordsDisplay();
+        });
+      }
+      _updateCoordsDisplay();
+    });
+  }
+
+  function _updateMap() {
+    if (!_wkmMap || !window.L || !_edit) return;
+    const lat = _edit.lat;
+    const lon = _edit.lon;
+    if (lat == null || lon == null) return;
+    if (_wkmMarker) {
+      _wkmMarker.setLatLng([lat, lon]);
+    } else {
+      _wkmMarker = L.marker([lat, lon], { draggable: true }).addTo(_wkmMap);
+      _wkmMarker.on('dragend', () => {
+        const pos = _wkmMarker.getLatLng();
+        if (_edit) { _edit.lat = pos.lat; _edit.lon = pos.lng; }
+        _updateCoordsDisplay();
+      });
+    }
+    _wkmMap.flyTo([lat, lon], 13);
+    _updateCoordsDisplay();
+  }
+
+  function _updateCoordsDisplay() {
+    const el = document.getElementById('wkm-coords');
+    if (!el || !_edit) return;
+    if (_edit.lat != null && _edit.lon != null) {
+      el.textContent = `${_edit.lat.toFixed(5)}, ${_edit.lon.toFixed(5)}`;
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
   }
 
   // ── Modal: Planung bearbeiten ─────────────────────────────────
   async function showPlanungModal(serieId) {
+    if (!istAdmin()) return;
     const serie = serien.find(s => s.id === serieId);
     if (!serie) return;
 
+    // State zurücksetzen
     _diszFilter = '';
-    // Leeren Cache zurücksetzen, damit ein erneutes Öffnen einen Reload auslöst
+    _ortFilter  = '';
     if (_alleDisziplinen !== null && _alleDisziplinen.length === 0) _alleDisziplinen = null;
-    _edit = {
-      serieId,
-      wettbewerbe: [...(serie.wettbewerbe || [])],   // editierbare Disziplinliste
-      historisch:  serie.disziplinen || [],           // schreibgeschützt (Statistikportal)
-    };
+    _wkmMap    = null;
+    _wkmMarker = null;
 
+    // Prognose ermitteln
     const prognose = predictNextDate(serie.letztes_datum);
-    const manuell  = serie.naechstes_datum || '';
-    let   wtInfo   = '';
+    // Datum-Vorschlag: manuell gesetzt oder Prognose (für direktes OK)
+    const datumVorschlag = serie.naechstes_datum || prognose || '';
+
+    let wtInfo = '';
     if (serie.letztes_datum) {
       const ld  = new Date(serie.letztes_datum + 'T00:00:00');
       const nth = Math.floor((ld.getDate() - 1) / 7) + 1;
@@ -390,11 +539,24 @@ const ADMIN_WETTKAMPF = (() => {
       wtInfo = `${ord} ${WT_LANG[ld.getDay()]} im ${MONATE[ld.getMonth()]}`;
     }
 
+    const istPrognose = !serie.naechstes_datum && !!prognose;
+
+    _edit = {
+      serieId,
+      wettbewerbe: [...(serie.wettbewerbe || [])],
+      url:    serie.url    || '',
+      ort_id: serie.ort_id ?? null,
+      lat:    serie.lat    ?? null,
+      lon:    serie.lon    ?? null,
+    };
+
     const cont = document.getElementById('modal-container');
     if (!cont) return;
+
     cont.innerHTML = `
       <div class="modal-overlay">
-        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:560px">
+        <div class="modal-card" onclick="event.stopPropagation()"
+             style="max-width:600px;max-height:90vh;overflow-y:auto">
           <div class="modal-head">
             <div>
               <div class="modal-eyebrow">Planung bearbeiten</div>
@@ -402,28 +564,71 @@ const ADMIN_WETTKAMPF = (() => {
             </div>
             <button class="modal-close" onclick="schliesseModal()">&times;</button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:20px">
 
-            <div class="modal-row" style="align-items:flex-start">
-              <div class="modal-label" style="padding-top:6px">Nächster Termin</div>
-              <div style="flex:1">
+            <!-- Nächster Termin -->
+            <div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                          letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Nächster Termin</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                 <input type="date" id="planung-datum"
-                  style="width:100%;border:1px solid var(--border);border-radius:6px;
+                  style="flex:1;min-width:150px;border:1px solid var(--border);border-radius:6px;
                          padding:6px 8px;font-size:13px;background:var(--bg);color:var(--text)"
-                  value="${escapeHtml(manuell)}">
-                <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                  ${prognose
-                    ? `Prognose: <strong>${WT_KURZ[new Date(prognose + 'T00:00:00').getDay()]}, ${fmtDate(prognose)}</strong>`
-                      + (wtInfo ? ` &bull; ${escapeHtml(wtInfo)}` : '')
-                      + `<br>Leer lassen = Prognose verwenden`
+                  value="${escapeHtml(datumVorschlag)}">
+                ${serie.naechstes_datum
+                  ? `<button class="btn btn-sm btn-ghost" title="Manuelles Datum entfernen – Prognose wird wieder verwendet"
+                      onclick="ADMIN_WETTKAMPF._clearDatumModal(${serieId})">↺ Datum löschen</button>`
+                  : ''}
+              </div>
+              <div style="font-size:11px;color:var(--text2);margin-top:4px">
+                ${istPrognose
+                  ? `Datum basiert auf Prognose (${escapeHtml(wtInfo)}) &ndash; Leer lassen = Prognose weiter verwenden`
+                  : prognose
+                    ? `Prognose: <strong>${WT_KURZ[new Date(prognose+'T00:00:00').getDay()]}, ${fmtDate(prognose)}</strong>${wtInfo ? ' &bull; ' + escapeHtml(wtInfo) : ''}`
                     : 'Leer lassen = kein Termin'}
-                </div>
               </div>
             </div>
 
-            <div style="margin-top:20px">
+            <!-- URL -->
+            <div>
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;
-                          letter-spacing:.5px;color:var(--text2);margin-bottom:10px">Disziplinen</div>
+                          letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Website / Wettkampfseite</div>
+              <input type="url" id="planung-url"
+                placeholder="https://…"
+                value="${escapeHtml(_edit.url)}"
+                style="width:100%;box-sizing:border-box;border:1px solid var(--border);
+                       border-radius:6px;padding:6px 8px;font-size:13px;
+                       background:var(--bg);color:var(--text)">
+            </div>
+
+            <!-- Ort -->
+            <div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                          letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Ort</div>
+              <div id="ort-sektion">
+                <div style="font-size:13px;color:var(--text2)">Lade Orte&hellip;</div>
+              </div>
+            </div>
+
+            <!-- Karte -->
+            <div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                          letter-spacing:.5px;color:var(--text2);margin-bottom:6px">
+                Exakter Ort auf der Karte
+                <span style="font-size:10px;font-weight:400;text-transform:none;
+                             letter-spacing:0;color:var(--text2)">
+                  (Klick oder Marker ziehen zum Verfeinern)
+                </span>
+              </div>
+              <div id="wkm-map" style="width:100%;height:260px;border-radius:8px;
+                border:1px solid var(--border);background:var(--bg2)"></div>
+              <div id="wkm-coords" style="font-size:11px;color:var(--text2);margin-top:4px;display:none"></div>
+            </div>
+
+            <!-- Disziplinen -->
+            <div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                          letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Disziplinen</div>
               <div id="planung-disz-area"></div>
             </div>
 
@@ -437,27 +642,45 @@ const ADMIN_WETTKAMPF = (() => {
       </div>`;
 
     _renderDiszArea();
+    _renderOrtSektion();
 
-    // Disziplin-Liste nachladen (gecacht) – Modal ist bereits sichtbar
-    if (_alleDisziplinen === null) {
-      try {
-        const resp = await apiGet('wettkampf/disziplinen', { silent: true });
-        _alleDisziplinen = resp.disziplinen || [];
-      } catch (_) {
-        _alleDisziplinen = [];
+    // Karte initialisieren
+    _initMap(_edit.lat, _edit.lon).then(() => _updateCoordsDisplay());
+
+    // Disziplinen & Orte nachladen
+    const loadDisz = async () => {
+      if (_alleDisziplinen === null) {
+        try {
+          const resp = await apiGet('wettkampf/disziplinen', { silent: true });
+          _alleDisziplinen = resp.disziplinen || [];
+        } catch (_) { _alleDisziplinen = []; }
+        _renderDiszArea();
       }
-      _renderDiszArea();
-    }
+    };
+    const loadOrte = async () => {
+      await _ladeOrte();
+      _renderOrtSektion();
+    };
+    loadDisz();
+    loadOrte();
   }
 
-  // Disziplin-Bereich im Modal neu zeichnen
+  // Datum im Modal löschen (zurück zur Prognose)
+  async function _clearDatumModal(serieId) {
+    const inp = document.getElementById('planung-datum');
+    const prognose = predictNextDate((serien.find(s => s.id === serieId) || {}).letztes_datum);
+    if (inp) inp.value = prognose || '';
+    // Markierung: nach dem Save wird erkannt dass kein manuelles Datum gesetzt ist
+    _edit._clearDatum = true;
+  }
+
+  // ── Disziplin-Bereich ─────────────────────────────────────────
   function _renderDiszArea() {
     const area = document.getElementById('planung-disz-area');
     if (!area || !_edit) return;
 
     let html = '';
 
-    // ── Aktuelle Disziplinliste (wettbewerbe) ──
     if (_edit.wettbewerbe.length) {
       html += `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">
         Aktuelle Disziplinen &ndash; × zum Entfernen:</div>
@@ -474,17 +697,13 @@ const ADMIN_WETTKAMPF = (() => {
         </span>`;
       });
       html += `</div>`;
-    }
-
-    if (!_edit.wettbewerbe.length) {
+    } else {
       html += `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">
         Noch keine Disziplinen eingetragen.</div>`;
     }
 
-    // ── Disziplin hinzufügen (aus Statistikportal-Liste oder Freitext) ──
-    html += `<div style="margin-top:4px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">
-        Disziplin hinzufügen:</div>`;
+    html += `<div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Disziplin hinzufügen:</div>`;
 
     if (_alleDisziplinen === null) {
       html += `<div style="font-size:13px;color:var(--text2)">
@@ -493,9 +712,8 @@ const ADMIN_WETTKAMPF = (() => {
           vertical-align:middle;margin-right:6px"></span>Lade Disziplinen&hellip;</div>`;
     } else {
       const bereitsAktiv = new Set(_edit.wettbewerbe);
-
-      const suchterm = _diszFilter.trim().toLowerCase();
-      const gefiltert = _alleDisziplinen.filter(d =>
+      const suchterm     = _diszFilter.trim().toLowerCase();
+      const gefiltert    = _alleDisziplinen.filter(d =>
         !suchterm || d.toLowerCase().includes(suchterm)
       );
       const MAX_LIST = 40;
@@ -544,14 +762,12 @@ const ADMIN_WETTKAMPF = (() => {
     area.innerHTML = html;
   }
 
-  // Disziplin aus wettbewerbe entfernen
   function _removeWb(d) {
     if (!_edit) return;
     _edit.wettbewerbe = _edit.wettbewerbe.filter(x => x !== d);
     _renderDiszArea();
   }
 
-  // Disziplin zu wettbewerbe hinzufügen (aus Picker oder Freitext)
   function _addDiszFromList(d) {
     if (!_edit) return;
     if (!_edit.wettbewerbe.includes(d)) _edit.wettbewerbe.push(d);
@@ -560,25 +776,48 @@ const ADMIN_WETTKAMPF = (() => {
     setTimeout(() => document.getElementById('disz-filter-inp')?.focus(), 0);
   }
 
-  // Suchfilter im Disziplin-Picker aktualisieren
   function _setDiszFilter(val) {
     _diszFilter = val;
     _renderDiszArea();
-    // Fokus & Cursorposition erhalten
     const inp = document.getElementById('disz-filter-inp');
     if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
 
+  // ── Speichern ─────────────────────────────────────────────────
   async function savePlanung(serieId) {
-    const datum = (document.getElementById('planung-datum')?.value || '').trim() || null;
+    if (!_edit) return;
+
+    const datumInp = document.getElementById('planung-datum');
+    const urlInp   = document.getElementById('planung-url');
+
+    // Datum: wenn Feld leer → null (Prognose) oder wenn _clearDatum gesetzt
+    const datumVal = (datumInp?.value || '').trim();
+    // Prüfen ob der Wert dem Prognose-Vorschlag entspricht → als manuell speichern
+    const datum = datumVal || null;
+
+    const url = (urlInp?.value || '').trim() || null;
+
     try {
       await apiPut(`wettkampf/${serieId}/planung`, {
         naechstes_datum: datum,
-        wettbewerbe:     _edit ? _edit.wettbewerbe : [],
+        wettbewerbe:     _edit.wettbewerbe,
+        url,
+        ort_id: _edit.ort_id,
+        lat:    _edit.lat,
+        lon:    _edit.lon,
       });
-      // Lokales Serien-Objekt sofort aktualisieren
+
+      // Lokal sofort aktualisieren
       const serie = serien.find(s => s.id === serieId);
-      if (serie && _edit) serie.wettbewerbe = [..._edit.wettbewerbe];
+      if (serie && _edit) {
+        serie.wettbewerbe    = [..._edit.wettbewerbe];
+        serie.naechstes_datum = datum;
+        serie.url            = url;
+        serie.ort_id         = _edit.ort_id;
+        serie.lat            = _edit.lat;
+        serie.lon            = _edit.lon;
+      }
+
       schliesseModal();
       _edit = null;
       benachrichtigen('Planung gespeichert.', 'ok');
@@ -597,37 +836,10 @@ const ADMIN_WETTKAMPF = (() => {
       await apiPut(`wettkampf/${serieId}/planung`, { aktiv: neuAktiv });
       serie.aktiv = neuAktiv;
       renderTabelle();
-      benachrichtigen(neuAktiv ? 'Aktiviert – erscheint wieder im Kalender.' : 'Deaktiviert – ausgeblendet im Kalender.', 'ok');
-      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
-    } catch (e) {
-      benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
-    }
-  }
-
-  // ── Datum inline speichern ────────────────────────────────────
-  async function saveDatumInline(serieId) {
-    const inp = document.getElementById(`inline-datum-${serieId}`);
-    const datum = (inp?.value || '').trim() || null;
-    try {
-      await apiPut(`wettkampf/${serieId}/planung`, { naechstes_datum: datum });
-      const serie = serien.find(s => s.id === serieId);
-      if (serie) serie.naechstes_datum = datum;
-      benachrichtigen('Termin gespeichert.', 'ok');
-      renderTabelle();
-      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
-    } catch (e) {
-      benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
-    }
-  }
-
-  // ── Manuelles Datum löschen (zurück zur Prognose) ─────────────
-  async function clearDatumInline(serieId) {
-    try {
-      await apiPut(`wettkampf/${serieId}/planung`, { naechstes_datum: null });
-      const serie = serien.find(s => s.id === serieId);
-      if (serie) serie.naechstes_datum = null;
-      benachrichtigen('Manuelles Datum entfernt – Prognose wird verwendet.', 'ok');
-      renderTabelle();
+      benachrichtigen(
+        neuAktiv ? 'Aktiviert – erscheint wieder im Kalender.' : 'Deaktiviert – ausgeblendet im Kalender.',
+        'ok'
+      );
       if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
     } catch (e) {
       benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
@@ -667,10 +879,12 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   return {
-    render, toggleExpand,
+    render,
     showPlanungModal, savePlanung,
     _removeWb, _addDiszFromList, _setDiszFilter,
-    toggleAktiv, saveDatumInline, clearDatumInline,
-    imKalenderEintragen, predictNextDate, sortiereNach,
+    _clearOrt, _setOrtFilter, _waehleOrt,
+    _clearDatumModal,
+    toggleAktiv, imKalenderEintragen,
+    predictNextDate, sortiereNach,
   };
 })();

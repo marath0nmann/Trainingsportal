@@ -1036,6 +1036,59 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig20: ' . $e->getMessage()); }
         },
 
+        // ── 22: ort_id / lat / lon zu veranstaltung_serien hinzufügen ─────────────────
+        // Neue Spalten für Ort-Verknüpfung und exakte GPS-Koordinaten.
+        // Ort wird aus der letzten bekannten Veranstaltung der Serie vorbelegt.
+        22 => static function (): void {
+            $tws = DB::tbl('veranstaltung_serien');
+            $tvv = DB::tbl('veranstaltungen');
+            $tor = DB::tbl('orte');
+
+            // Spalten anlegen (idempotent: ignoriert Fehler wenn bereits vorhanden)
+            foreach ([
+                "ALTER TABLE `{$tws}` ADD COLUMN `ort_id` INT NULL DEFAULT NULL",
+                "ALTER TABLE `{$tws}` ADD COLUMN `lat`    DECIMAL(9,6) NULL DEFAULT NULL",
+                "ALTER TABLE `{$tws}` ADD COLUMN `lon`    DECIMAL(9,6) NULL DEFAULT NULL",
+            ] as $sql) {
+                try { DB::query($sql); } catch (Throwable $ignored) {}
+            }
+
+            // ort_id aus letzter Veranstaltung vorbelegen
+            try {
+                $rows = DB::fetchAll("
+                    SELECT vs.id AS serie_id, v.ort_id
+                    FROM `{$tws}` vs
+                    JOIN `{$tvv}` v ON v.id = (
+                        SELECT v2.id FROM `{$tvv}` v2
+                        WHERE v2.serie_id     = vs.id
+                          AND v2.ort_id      IS NOT NULL
+                          AND v2.geloescht_am IS NULL
+                          AND v2.genehmigt    = 1
+                        ORDER BY v2.datum DESC
+                        LIMIT 1
+                    )
+                    WHERE vs.ort_id IS NULL
+                ");
+                foreach ($rows as $r) {
+                    DB::query("UPDATE `{$tws}` SET ort_id=? WHERE id=? AND ort_id IS NULL",
+                        [(int)$r['ort_id'], (int)$r['serie_id']]);
+                }
+            } catch (Throwable $e) { error_log('mig22a: ' . $e->getMessage()); }
+
+            // lat/lon aus orte-Tabelle befüllen
+            try {
+                DB::query("
+                    UPDATE `{$tws}` vs
+                    JOIN `{$tor}` o ON o.id = vs.ort_id
+                    SET vs.lat = o.lat, vs.lon = o.lon
+                    WHERE vs.ort_id IS NOT NULL
+                      AND vs.lat IS NULL
+                      AND vs.lon IS NULL
+                      AND o.lat IS NOT NULL
+                ");
+            } catch (Throwable $e) { error_log('mig22b: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -5195,12 +5248,25 @@ function handleWettkampf(string $method, string $tail): void
             $params[] = ($in['naechstes_datum'] !== null && $in['naechstes_datum'] !== '')
                         ? (string)$in['naechstes_datum'] : null;
         }
-        // wettbewerbe wird jetzt direkt auf der Serie gespeichert (konsolidierte Disziplinliste)
+        // Metadaten direkt auf veranstaltung_serien speichern
         if (array_key_exists('wettbewerbe', $in)) {
             $arr = is_array($in['wettbewerbe']) ? $in['wettbewerbe'] : [];
             $arr = array_values(array_filter(array_map('trim', $arr)));
             DB::query("UPDATE `{$tws}` SET wettbewerbe=? WHERE id=?",
                 [count($arr) ? json_encode($arr) : null, $serieId]);
+        }
+        if (array_key_exists('url', $in)) {
+            $url = trim((string)($in['url'] ?? '')) ?: null;
+            DB::query("UPDATE `{$tws}` SET url=? WHERE id=?", [$url, $serieId]);
+        }
+        if (array_key_exists('ort_id', $in)) {
+            $ortId = ($in['ort_id'] !== null && $in['ort_id'] !== '') ? (int)$in['ort_id'] : null;
+            DB::query("UPDATE `{$tws}` SET ort_id=? WHERE id=?", [$ortId, $serieId]);
+        }
+        if (array_key_exists('lat', $in) || array_key_exists('lon', $in)) {
+            $lat = (isset($in['lat']) && is_numeric($in['lat'])) ? (float)$in['lat'] : null;
+            $lon = (isset($in['lon']) && is_numeric($in['lon'])) ? (float)$in['lon'] : null;
+            DB::query("UPDATE `{$tws}` SET lat=?, lon=? WHERE id=?", [$lat, $lon, $serieId]);
         }
         if (array_key_exists('aktiv', $in)) {
             $sets[]   = 'aktiv=?';
@@ -5232,6 +5298,7 @@ function handleWettkampf(string $method, string $tail): void
         try {
             $serien = DB::fetchAll(
                 "SELECT vs.id, vs.name, vs.kuerzel, vs.wettbewerbe,
+                        vs.url, vs.ort_id, vs.lat, vs.lon,
                         COUNT(DISTINCT v.id)      AS anz_veranstaltungen,
                         MIN(v.datum)              AS erstes_datum,
                         MAX(v.datum)              AS letztes_datum_statistik,
@@ -5258,6 +5325,7 @@ function handleWettkampf(string $method, string $tail): void
                                    AND v.genehmigt   = 1
                  LEFT JOIN $twp wp ON wp.serie_id = vs.id
                  GROUP BY vs.id, vs.name, vs.kuerzel, vs.wettbewerbe, vs.referenz_datum,
+                          vs.url, vs.ort_id, vs.lat, vs.lon,
                           wp.id, wp.naechstes_datum, wp.disziplinen_extra,
                           wp.disziplinen_ausgeschlossen, wp.aktiv
                  ORDER BY MONTH(COALESCE(MAX(v.datum), vs.referenz_datum)) ASC,
@@ -5390,6 +5458,10 @@ function handleWettkampf(string $method, string $tail): void
                 'planung_id'               => $pid,
                 'aktiv'                    => $s['aktiv'] !== null ? (int)$s['aktiv'] : 1,
                 'naechstes_datum'     => $s['naechstes_datum'],
+                'url'                 => $s['url'] ?? null,
+                'ort_id'              => isset($s['ort_id']) && $s['ort_id'] !== null ? (int)$s['ort_id'] : null,
+                'lat'                 => isset($s['lat'])    && $s['lat']    !== null ? (float)$s['lat']    : null,
+                'lon'                 => isset($s['lon'])    && $s['lon']    !== null ? (float)$s['lon']    : null,
                 'anmeldungen'         => $anmeldungen,
                 'meine_anmeldung_id'  => $meineAnmId,
                 'meine_disziplin'     => $meineDisziplin,
@@ -5437,6 +5509,39 @@ function handleWettkampf(string $method, string $tail): void
             echo json_encode(['ok' => true, 'disziplinen' => array_values($alle)]);
         } catch (\Throwable $e) {
             echo json_encode(['ok' => true, 'disziplinen' => [], '_debug' => $e->getMessage()]);
+        }
+        return;
+    }
+
+    // ── GET /wettkampf/orte ───────────────────────────────────────
+    // Alle Orte aus dem Statistikportal (für Ort-Picker im Admin-Modal).
+    // Nur für eingeloggte Nutzer.
+    if ($method === 'GET' && $tail === 'orte') {
+        if (!$userId) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Login erforderlich']);
+            return;
+        }
+        try {
+            $tor  = DB::tbl('orte');
+            $rows = DB::fetchAll(
+                "SELECT id, name, region, land, land_code, lat, lon, display_name
+                   FROM `{$tor}`
+                  ORDER BY name ASC"
+            );
+            $orte = array_map(fn($r) => [
+                'id'           => (int)$r['id'],
+                'name'         => $r['name'],
+                'region'       => $r['region'],
+                'land'         => $r['land'],
+                'land_code'    => $r['land_code'],
+                'lat'          => $r['lat'] !== null ? (float)$r['lat'] : null,
+                'lon'          => $r['lon'] !== null ? (float)$r['lon'] : null,
+                'display_name' => $r['display_name'],
+            ], $rows);
+            echo json_encode(['ok' => true, 'orte' => $orte]);
+        } catch (\Throwable $e) {
+            echo json_encode(['ok' => true, 'orte' => [], '_debug' => $e->getMessage()]);
         }
         return;
     }
