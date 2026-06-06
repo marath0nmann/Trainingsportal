@@ -25,6 +25,9 @@ const ADMIN_WETTKAMPF = (() => {
   let _wkmMarker = null;
   let _leafletLoading = false;
 
+  // Ort-Refresh-Timer (Debounce beim Tippen)
+  let _ortRefreshTimer = null;
+
   // Sortierzustand
   let _sortCol = 'naechster'; // 'name' | 'letzter' | 'naechster'
   let _sortDir = 'asc';
@@ -307,7 +310,20 @@ const ADMIN_WETTKAMPF = (() => {
 
   function _setOrtFilter(val) {
     _ortFilter = val;
-    _renderOrtSektion();
+    _renderOrtSektion(); // sofort mit gecachten Daten rendern
+
+    // Nach 400 ms Tipp-Pause: Cache leeren und neu laden
+    // (damit parallel im Statistikportal angelegte Orte erscheinen)
+    clearTimeout(_ortRefreshTimer);
+    _ortRefreshTimer = setTimeout(async () => {
+      _alleOrte = null;
+      await _ladeOrte();
+      _renderOrtSektion();
+      // Fokus & Cursor erhalten
+      const inp = document.getElementById('ort-filter-inp');
+      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    }, 400);
+
     const inp = document.getElementById('ort-filter-inp');
     if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
