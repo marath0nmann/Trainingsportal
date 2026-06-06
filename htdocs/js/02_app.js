@@ -977,9 +977,10 @@ function _legendItem(key, checked, label, toggleAttr) {
   </span>`;
 }
 
-function _legendChkItem(id, checked, label, onchange) {
-  return `<span class="kal-legend-item">
-    <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} ${onchange}>
+function _legendChkItem(id, checked, label, onchange, disabled = false) {
+  const dis = disabled ? 'disabled' : '';
+  return `<span class="kal-legend-item${disabled ? ' kal-legend-item--disabled' : ''}">
+    <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} ${dis} ${onchange}>
     <label for="${id}" class="kal-legend-name">${escapeHtml(label)}</label>
   </span>`;
 }
@@ -988,28 +989,32 @@ function _renderKalLegend() {
   const kf      = state.kalFilter;
   const gruppen = state.meineGruppen || [];
   const prefs   = _wkPrefs();
+  const wkAktiv = !kf || kf.wettkampf !== false;
+
   let items;
   if (!gruppen.length) {
     items = [
-      _legendItem('teamplan',  kf && kf.teamplan  !== false, 'Teamplan',   `onchange="toggleKalPlan('teamplan', this.checked)"`),
-      _legendItem('meinplan',  !kf || kf.meinPlan  !== false, 'Mein Plan',  `onchange="toggleKalPlan('meinPlan', this.checked)"`),
-      _legendItem('wettkampf', !kf || kf.wettkampf !== false, 'Wettkämpfe', `onchange="toggleKalPlan('wettkampf', this.checked)"`),
+      _legendItem('teamplan', kf && kf.teamplan !== false, 'Teamplan', `onchange="toggleKalPlan('teamplan', this.checked)"`),
+      _legendItem('meinplan', !kf || kf.meinPlan !== false, 'Mein Plan', `onchange="toggleKalPlan('meinPlan', this.checked)"`),
     ];
   } else {
     items = gruppen.map(g =>
       _legendItem('g' + g.id, !!(kf && kf.gruppen.has(g.id)), g.name,
         `onchange="toggleKalPlan('gruppe', ${g.id}, this.checked)"`));
     items.push(
-      _legendItem('meinplan',  !kf || kf.meinPlan  !== false, 'Mein Plan',  `onchange="toggleKalPlan('meinPlan', false, this.checked)"`),
-      _legendItem('wettkampf', !kf || kf.wettkampf !== false, 'Wettkämpfe', `onchange="toggleKalPlan('wettkampf', this.checked)"`),
+      _legendItem('meinplan', !kf || kf.meinPlan !== false, 'Mein Plan', `onchange="toggleKalPlan('meinPlan', false, this.checked)"`),
     );
   }
-  // Wettkampf-Anzeigefilter (shared mit Wettkampfplanung-Seite)
-  items.push(
-    _legendChkItem('kal-cb-wk-vergangen',   prefs.hideVergangen,  'Vergangene ausblenden',  `onchange="_wkTogglePref('wkp_hide_vergangen',   this.checked)"`),
-    _legendChkItem('kal-cb-wk-passtnicht',  prefs.hidePasstNicht, '„passt nicht" ausblenden', `onchange="_wkTogglePref('wkp_hide_passt_nicht', this.checked)"`),
-  );
-  return `<div class="kal-legend">${items.join('')}</div>`;
+
+  // Wettkampf-Gruppe: alle drei WK-Optionen in einer Box
+  const wkGroup = `<div class="kal-legend-wk-group">
+    ${_legendItem('wettkampf', wkAktiv, 'Wettkämpfe', `onchange="toggleKalPlan('wettkampf', this.checked)"`)}
+    <div class="kal-legend-wk-sep"></div>
+    ${_legendChkItem('kal-cb-wk-vergangen',  prefs.hideVergangen,  'Vergangene ausblenden',    `onchange="_wkTogglePref('wkp_hide_vergangen',   this.checked)"`, !wkAktiv)}
+    ${_legendChkItem('kal-cb-wk-passtnicht', prefs.hidePasstNicht, '„passt nicht" ausblenden', `onchange="_wkTogglePref('wkp_hide_passt_nicht', this.checked)"`, !wkAktiv)}
+  </div>`;
+
+  return `<div class="kal-legend">${items.join('')}${wkGroup}</div>`;
 }
 
 // ── Persönliche Kalenderfarbe setzen / zurücksetzen ──────
@@ -1280,10 +1285,8 @@ async function ladeWettkampfSektionInto(containerId) {
     : heute;
   const maxDatum   = ymd(new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + 30));
   const angemeldet = !!state.user;
-  const _prefs     = _wkPrefs();
   const mitDatum   = serien
     .filter(s => s.aktiv !== 0 && s.aktiv !== false)
-    .filter(s => !_prefs.hidePasstNicht || s.status !== 'passt_nicht')
     .map(s => {
       let datum = null, modus = 'prognose';
       const _heuteS = ymd(new Date());

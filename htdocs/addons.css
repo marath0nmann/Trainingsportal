@@ -1716,6 +1716,27 @@ body.planung-active #app-footer    { display: none; }
 .kal-legend-reset:hover { background: var(--primary); color: var(--on-primary, #fff); border-color: var(--primary); }
 .kal-legend-name { cursor: pointer; }
 
+/* Wettkampf-Gruppe: Box die alle drei WK-Optionen zusammenfasst */
+.kal-legend-wk-group {
+  display: flex; align-items: center; gap: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surf2);
+  overflow: hidden;
+}
+.kal-legend-wk-group .kal-legend-item {
+  border: none; border-radius: 0; background: transparent;
+  padding: 3px 10px 3px 8px;
+}
+.kal-legend-wk-group .kal-legend-item:hover { background: var(--surf3, var(--bg2)); }
+.kal-legend-wk-sep {
+  width: 1px; align-self: stretch; background: var(--border); flex-shrink: 0;
+}
+.kal-legend-item--disabled {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
 /* Rückwärtskompatibilität (alte Klassen werden nicht mehr gerendert, aber defensive Keep) */
 .meinplan-legend { display: none; }
 
