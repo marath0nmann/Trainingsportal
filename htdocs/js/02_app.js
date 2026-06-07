@@ -878,9 +878,16 @@ async function renderKalender(main, monthArg) {
             <button class="kal-item-del" onclick="event.stopPropagation();MEINPLAN.loeschePrivat(${e.id})" title="Löschen">×</button>
           </div>`;
         }
-        const cls = `kal-item kal-cal-${kalKeyFor(e)}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
+        const abgesagt = e.status === 'abgesagt';
+        const cls = `kal-item kal-cal-${kalKeyFor(e)}${abgesagt ? ' is-cancelled' : ''}`;
         const time = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
-        return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>`;
+        const absageNotizHtml = abgesagt && e.absage_notiz
+          ? `<span class="kal-item-absage-notiz" title="${escapeHtml(e.absage_notiz)}">⚠ ${escapeHtml(e.absage_notiz)}</span>`
+          : '';
+        return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})">
+          <div class="kal-item-top">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>
+          ${absageNotizHtml}
+        </div>`;
       }).join('');
 
       // Wettkampf-Einträge für diesen Tag
@@ -1141,8 +1148,17 @@ function renderHeuteSektionHtml(items, privatItems = [], heading = 'Heute') {
     const intern = e.sichtbarkeit === 'intern';
     const tp = e.treffpunkt;
     const treffpunktName = tp ? (tp.name || null) : null;
-    // Karte nur wenn Koordinaten vorhanden UND kein Komoot-Link vorhanden
-    const hasMap = !e.komoot_url && !!(tp && tp.lat && tp.lng);
+    // Karte nur wenn Koordinaten vorhanden UND kein Komoot-Link vorhanden UND nicht abgesagt
+    const hasMap = !abgesagt && !e.komoot_url && !!(tp && tp.lat && tp.lng);
+
+    // Absagegrund-Zeile mit Autor
+    const absageAutor = e.abgesagt_von_name ? ` (${escapeHtml(e.abgesagt_von_name)})` : '';
+    const absageInfoHtml = abgesagt
+      ? `<div class="heute-card-info heute-absage-info">
+           ⚠ ${e.absage_notiz ? escapeHtml(e.absage_notiz) + absageAutor : 'Abgesagt' + absageAutor}
+         </div>`
+      : '';
+
     return `
       <div class="heute-card kal-cal-${kalKeyFor(e)}${abgesagt ? ' is-cancelled' : ''}${hasMap ? ' heute-card-has-map' : ''}">
         <div class="heute-card-main">
@@ -1152,8 +1168,11 @@ function renderHeuteSektionHtml(items, privatItems = [], heading = 'Heute') {
             ${intern ? '<span class="heute-badge heute-badge-intern">Intern</span>' : ''}
           </div>
           <div class="heute-card-titel">${escapeHtml(e.titel)}</div>
-          ${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">${escapeHtml(treffpunktName)}</div>` : ''}
-          ${e.bemerkung    ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}
+          ${abgesagt
+            ? absageInfoHtml
+            : `${treffpunktName ? `<div class="heute-card-info heute-treffpunkt">${escapeHtml(treffpunktName)}</div>` : ''}
+               ${e.bemerkung ? `<div class="heute-card-info">${escapeHtml(e.bemerkung)}</div>` : ''}`
+          }
           <div id="heute-segs-${e.id}" class="heute-segs"></div>
         </div>
         ${hasMap ? _renderHeuteMap(tp) : ''}

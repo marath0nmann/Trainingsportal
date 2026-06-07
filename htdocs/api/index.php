@@ -1089,6 +1089,14 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig22b: ' . $e->getMessage()); }
         },
 
+        // ── 25: abgesagt_von in training_einheiten ──────────────────────────────────────
+        25 => static function (): void {
+            try {
+                DB::query("ALTER TABLE " . DB::tbl('training_einheiten') . "
+                    ADD COLUMN IF NOT EXISTS abgesagt_von INT UNSIGNED NULL DEFAULT NULL");
+            } catch (Throwable $e) { error_log('mig25: ' . $e->getMessage()); }
+        },
+
         // ── 24: absage_notiz in training_einheiten ──────────────────────────────────────
         // Ermöglicht das sichtbare Absagen eines Trainings mit Begründung.
         24 => static function (): void {
@@ -1336,10 +1344,13 @@ function handleEinheiten(string $method, string $sub): void
 
         $rows = DB::fetchAll(
             'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
-                    e.bemerkung, e.absage_notiz, e.sichtbarkeit, e.status, e.serie_id, e.gruppe_id,
-                    t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
+                    e.bemerkung, e.absage_notiz, e.abgesagt_von, e.sichtbarkeit, e.status, e.serie_id, e.gruppe_id,
+                    t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng,
+                    COALESCE(CONCAT(av_a.vorname, \' \', av_a.nachname), av_b.benutzername) AS abgesagt_von_name
                FROM ' . DB::tbl('training_einheiten') . ' e
                LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
+               LEFT JOIN ' . DB::tbl('benutzer') . ' av_b ON av_b.id = e.abgesagt_von
+               LEFT JOIN ' . DB::tbl('athleten')  . ' av_a ON av_a.id = av_b.athlet_id
               WHERE ' . $where . '
            ORDER BY e.datum, e.uhrzeit',
             $params
@@ -1473,15 +1484,16 @@ function handleEinheiten(string $method, string $sub): void
             $neuStatus = $aktion === 'absagen' ? 'abgesagt' : 'geplant';
             $neuNotiz  = $aktion === 'absagen' ? $notiz : null;
 
+            $neuAbgesagtVon = ($aktion === 'absagen') ? (int)$user['id'] : null;
             if ($scope === 'einzel' || !$row['serie_id']) {
-                DB::query("UPDATE $te SET status=?, absage_notiz=? WHERE id=?",
-                    [$neuStatus, $neuNotiz, $eid]);
+                DB::query("UPDATE $te SET status=?, absage_notiz=?, abgesagt_von=? WHERE id=?",
+                    [$neuStatus, $neuNotiz, $neuAbgesagtVon, $eid]);
             } elseif ($scope === 'abjetzt') {
-                DB::query("UPDATE $te SET status=?, absage_notiz=? WHERE serie_id=? AND datum>=?",
-                    [$neuStatus, $neuNotiz, (int)$row['serie_id'], $row['datum']]);
+                DB::query("UPDATE $te SET status=?, absage_notiz=?, abgesagt_von=? WHERE serie_id=? AND datum>=?",
+                    [$neuStatus, $neuNotiz, $neuAbgesagtVon, (int)$row['serie_id'], $row['datum']]);
             } else { // alle
-                DB::query("UPDATE $te SET status=?, absage_notiz=? WHERE serie_id=?",
-                    [$neuStatus, $neuNotiz, (int)$row['serie_id']]);
+                DB::query("UPDATE $te SET status=?, absage_notiz=?, abgesagt_von=? WHERE serie_id=?",
+                    [$neuStatus, $neuNotiz, $neuAbgesagtVon, (int)$row['serie_id']]);
             }
             echo json_encode(['ok' => true]);
             return;
@@ -4374,9 +4386,10 @@ function mapEinheit(array $r): array {
         'titel'        => $r['titel'],
         'treffpunkt'   => $tp,
         'komoot_url'   => $r['komoot_url'] ?? null,
-        'bemerkung'     => $r['bemerkung'],
-        'absage_notiz'  => $r['absage_notiz'] ?? null,
-        'sichtbarkeit'  => $r['sichtbarkeit'] ?? 'oeffentlich',
+        'bemerkung'        => $r['bemerkung'],
+        'absage_notiz'     => $r['absage_notiz'] ?? null,
+        'abgesagt_von_name'=> $r['abgesagt_von_name'] ?? null,
+        'sichtbarkeit'     => $r['sichtbarkeit'] ?? 'oeffentlich',
         'status'        => $r['status'] ?? 'geplant',
         'serie_id'      => isset($r['serie_id']) && $r['serie_id'] !== null ? (int)$r['serie_id'] : null,
         'gruppe_id'     => isset($r['gruppe_id']) && $r['gruppe_id'] !== null ? (int)$r['gruppe_id'] : null,

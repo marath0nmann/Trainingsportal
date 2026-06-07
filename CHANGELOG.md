@@ -1,6 +1,7 @@
 # Changelog
 
-## v253
+## v254
+- Absagegrund im Hauptkalender und Heute/Morgen: abgesagte Trainings zeigen den Grund mit Autor; Heute/Morgen-Karte: Titel durchgestrichen, Absagegrund + Autor statt Treffpunkt; Hauptkalender: Absagegrund unter durchgestrichenem Titel; DB-Migration 25 (abgesagt_von auf training_einheiten), API gibt abgesagt_von_name zurück
 - Training absagen: Trainer können ein Training sichtbar absagen statt löschen – ⚠-Button am Kalendereintrag öffnet Dialog mit optionalem Absagegrund; abgesagte Trainings bleiben durchgestrichen im Kalender und zeigen den Grund; ↩-Button stellt wieder her; Serien-Scope (einzel/ab jetzt/alle); ICS-Abo enthält Absagegrund in DESCRIPTION + COMMENT; DB-Migration 24 (absage_notiz auf training_einheiten)
 - Tagesnotizen: Trainer/Admins können pro Tag (optional gruppenspezifisch) Notizen im Planungskalender hinterlegen; Notizen erscheinen für alle Athleten gelb hinterlegt und landen im ICS-Abo als ganztägiger Termin (📋); DB-Migration 23 (training_tagesnotizen); API GET/POST/PUT/DELETE /tagesnotizen
 - Fix: `replaceBlockGruppen()` war aufgerufen aber nie definiert → "Call to undefined function"-Serverfehler beim Speichern eines Trainingsblocks; Funktion ergänzt (DELETE + INSERT IGNORE in training_block_gruppen)

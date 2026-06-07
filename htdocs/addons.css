@@ -136,7 +136,8 @@
   overflow: hidden; position: relative;
 }
 .kal-item:hover { background: color-mix(in srgb, var(--accent) 10%, var(--surf2)); }
-.kal-item.is-cancelled { opacity: .55; text-decoration: line-through; }
+.kal-item.is-cancelled { opacity: .7; }
+.kal-item.is-cancelled .kal-item-title { text-decoration: line-through; }
 .kal-item[draggable="true"] { cursor: grab; }
 .kal-item[draggable="true"]:active { cursor: grabbing; }
 .kal-item.kal-item-dragging { opacity: .4; }
@@ -381,7 +382,12 @@
   background: color-mix(in srgb, var(--accent) 5%, var(--surface));
   box-shadow: 0 4px 16px rgba(0,0,0,.12);
 }
-.heute-card.is-cancelled { opacity: .6; }
+.heute-card.is-cancelled { opacity: .75; }
+.heute-card.is-cancelled .heute-card-titel { text-decoration: line-through; color: var(--text2); }
+.heute-absage-info {
+  color: var(--primary); font-size: 13px; font-weight: 500;
+  margin-top: 2px; line-height: 1.4;
+}
 .heute-card-eyebrow {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
