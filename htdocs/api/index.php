@@ -1170,7 +1170,7 @@ try {
         exit;
     }
     if ($head === 'trainingsgruppen') {
-        handleTrainingsgruppen($method);
+        handleTrainingsgruppen($method, $tail ?? '');
         exit;
     }
     if ($head === 'profil') {
@@ -4803,7 +4803,7 @@ function mapPrivatEinheit(array $r): array
 // ============================================================
 // GET /trainingsgruppen → alle Gruppen aus der Statistikportal-Tabelle
 // ============================================================
-function handleTrainingsgruppen(string $method): void
+function handleTrainingsgruppen(string $method, string $sub = ''): void
 {
     $user = Auth::check();
     if (!$user) {
@@ -4811,19 +4811,91 @@ function handleTrainingsgruppen(string $method): void
         echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
         return;
     }
-    if ($method !== 'GET') {
-        http_response_code(405);
-        echo json_encode(['ok' => false, 'fehler' => 'Nur GET']);
+
+    $tbl = DB::tbl('gruppen');
+
+    // ── GET /trainingsgruppen → alle Gruppen ────────────────────────────────
+    if ($method === 'GET') {
+        $gruppen = [];
+        try {
+            $rows    = DB::fetchAll("SELECT id, name FROM $tbl ORDER BY name");
+            $gruppen = array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name']], $rows);
+        } catch (Throwable $e) {
+            // Tabelle existiert nicht (Statistikportal nicht verknüpft) → leere Liste
+        }
+        echo json_encode(['ok' => true, 'gruppen' => $gruppen]);
         return;
     }
-    $gruppen = [];
-    try {
-        $rows    = DB::fetchAll("SELECT id, name FROM " . DB::tbl('gruppen') . " ORDER BY name");
-        $gruppen = array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name']], $rows);
-    } catch (Throwable $e) {
-        // Tabelle existiert nicht (Statistikportal nicht verknüpft) → leere Liste
+
+    // Schreibzugriff: nur Admins
+    if (($user['rolle'] ?? '') !== 'admin') {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'fehler' => 'Nur Admins dürfen Trainingsgruppen verwalten']);
+        return;
     }
-    echo json_encode(['ok' => true, 'gruppen' => $gruppen]);
+
+    $in = json_decode(file_get_contents('php://input'), true) ?? [];
+
+    // ── POST /trainingsgruppen → neue Gruppe anlegen ────────────────────────
+    if ($method === 'POST') {
+        $name = trim($in['name'] ?? '');
+        if ($name === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Name darf nicht leer sein']);
+            return;
+        }
+        try {
+            // Duplikat prüfen
+            $exists = DB::fetchOne("SELECT id FROM $tbl WHERE name = ?", [$name]);
+            if ($exists) {
+                http_response_code(409);
+                echo json_encode(['ok' => false, 'fehler' => 'Eine Gruppe mit diesem Namen existiert bereits']);
+                return;
+            }
+            DB::execute("INSERT INTO $tbl (name) VALUES (?)", [$name]);
+            $id = (int)DB::lastInsertId();
+            echo json_encode(['ok' => true, 'gruppe' => ['id' => $id, 'name' => $name]]);
+        } catch (Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'fehler' => 'Datenbankfehler: ' . $e->getMessage()]);
+        }
+        return;
+    }
+
+    // ── PUT /trainingsgruppen/{id} → Gruppe umbenennen ──────────────────────
+    if ($method === 'PUT' && ctype_digit($sub)) {
+        $id   = (int)$sub;
+        $name = trim($in['name'] ?? '');
+        if ($name === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Name darf nicht leer sein']);
+            return;
+        }
+        try {
+            $row = DB::fetchOne("SELECT id FROM $tbl WHERE id = ?", [$id]);
+            if (!$row) {
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'fehler' => 'Gruppe nicht gefunden']);
+                return;
+            }
+            // Duplikat prüfen (anderer Datensatz)
+            $exists = DB::fetchOne("SELECT id FROM $tbl WHERE name = ? AND id != ?", [$name, $id]);
+            if ($exists) {
+                http_response_code(409);
+                echo json_encode(['ok' => false, 'fehler' => 'Eine Gruppe mit diesem Namen existiert bereits']);
+                return;
+            }
+            DB::execute("UPDATE $tbl SET name = ? WHERE id = ?", [$name, $id]);
+            echo json_encode(['ok' => true, 'gruppe' => ['id' => $id, 'name' => $name]]);
+        } catch (Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'fehler' => 'Datenbankfehler: ' . $e->getMessage()]);
+        }
+        return;
+    }
+
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
 }
 
 // ============================================================

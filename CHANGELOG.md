@@ -1,6 +1,7 @@
 # Changelog
 
-## v249
+## v250
+- Admin: neuer Subtab „Gruppen" – Trainingsgruppen anlegen (POST /trainingsgruppen) und umbenennen (PUT /trainingsgruppen/{id}); Inline-Edit mit Enter/Escape, Duplikat-Prüfung, GRUPPEN-Cache-Invalidierung nach jeder Änderung
 - Fix: Untermenü-Position Gruppen-Tab exakt an Athleten-Tab angeglichen – section-nav kompensiert jetzt die vollständige Summe aus main-Padding (24px/28px) + base-nav-Padding (14px/18px) = 38px oben / 46px links (nur Desktop >900px wo Viewport-Lock greift); gruppen-bar-Tabs linksbündig mit Pill-Buttons
 - Trainingsplanung: Untermenü auf Admin-Stil umgestellt – Pill-Buttons (`.subtab`/`.subtabs`) statt weißem Balken, konsistente Position in allen Sektionen; Athleten-Ansicht mit Panel-Boxen (`.panel`-Header + Tabelle, Kalender als Box); Athleten-Content im max-width-Container
 - Trainingsplanung: Untermenüpunkt „Wettkämpfe" vollständig entfernt – Abschnitt existiert nur noch mit „Gruppen" und „Athleten"

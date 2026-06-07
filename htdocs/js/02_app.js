@@ -356,6 +356,8 @@ function renderAdminPage(main, subTab) {
           onclick="navigateAdmin('wettkampf')">Wettkämpfe</button>
         <button class="subtab${tab === 'treffpunkte' ? ' active' : ''}"
           onclick="navigateAdmin('treffpunkte')">Treffpunkte</button>
+        <button class="subtab${tab === 'gruppen' ? ' active' : ''}"
+          onclick="navigateAdmin('gruppen')">Gruppen</button>
       </div>
       <div id="admin-content"></div>
     </div>`;
@@ -369,6 +371,8 @@ function renderAdminPage(main, subTab) {
     ADMIN_WETTKAMPF.render(contentEl);
   } else if (tab === 'treffpunkte') {
     TREFFPUNKTE.render(contentEl);
+  } else if (tab === 'gruppen') {
+    ADMIN_GRUPPEN.render(contentEl);
   } else {
     SETTINGS.render(contentEl);
   }
