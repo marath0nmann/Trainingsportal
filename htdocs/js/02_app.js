@@ -663,7 +663,7 @@ async function renderKalender(main, monthArg) {
   const von = ymd(gridStart);
   const bis = ymd(gridEnd);
   let oeffentlich = [], privat = [], feiertage = [], wettkampfRaw = [];
-  let termineRaw = [], statistikUrlKal = '';
+  let termineRaw = [], statistikUrlKal = '', notizen = [];
   try {
     const needPrefs = angemeldet && state.kalFilter === null;
     const einheitenUrl = angemeldet
@@ -684,6 +684,7 @@ async function renderKalender(main, monthArg) {
     wettkampfRaw   = Array.isArray(d4) ? d4 : [];
     termineRaw     = d5.termine || [];
     statistikUrlKal = d5.statistikportal_url || _statistikportalUrl || '';
+    notizen        = d6.notizen || [];
     if (angemeldet) {
       MEINPLAN.setAbo(d1.abo_typen || []);
       state.meineGruppen = d1.meine_gruppen || [];
@@ -736,7 +737,7 @@ async function renderKalender(main, monthArg) {
   );
 
   // Tagesnotizen nach Datum gruppieren (gefiltert nach kalFilter)
-  const notizenRoh = d6.notizen || [];
+  const notizenRoh = notizen;
   const notizenGefiltert = notizenRoh.filter(n => {
     if (!kf) return true;
     if (n.gruppe_id == null) return true; // allgemeine Notiz immer zeigen
