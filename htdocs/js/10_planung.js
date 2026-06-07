@@ -119,6 +119,9 @@ const KAL_POPOVER = (() => {
         </div>` : ''}
         ${kannEdit ? `<div class="kal-pop-actions">
           <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeiten(${einheitId})">Bearbeiten</button>
+          ${e.status === 'abgesagt'
+            ? `<button class="btn btn-ghost btn-sm" onclick="KAL_POPOVER.hide();PLANUNG.wiederherstellenEinheit(${einheitId})">↩ Wiederherstellen</button>`
+            : `<button class="btn btn-warning btn-sm" onclick="KAL_POPOVER.hide();PLANUNG.absagenEinheit(${einheitId})">⚠ Absagen</button>`}
         </div>` : ''}`;
 
       _position(pop, anchorEl.getBoundingClientRect());
