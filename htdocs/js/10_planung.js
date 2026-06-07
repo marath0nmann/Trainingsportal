@@ -632,14 +632,24 @@ const PLANUNG = (() => {
           : '';
 
         const itemsHtml = items.map(e => {
-          const cls    = `kal-item kal-cal-${kalKeyFor(e)}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
-          const delBtn = kannEdit
-            ? `<button class="kal-item-del" onclick="event.stopPropagation();PLANUNG.loescheEinheit(${e.id})" title="Eintrag löschen">×</button>`
+          const abgesagt = e.status === 'abgesagt';
+          const cls = `kal-item kal-cal-${kalKeyFor(e)}${abgesagt ? ' is-cancelled' : ''}`;
+          const aktionsButtons = kannEdit ? `
+            ${abgesagt
+              ? `<button class="kal-item-wiederherstellen" onclick="event.stopPropagation();PLANUNG.wiederherstellenEinheit(${e.id})" title="Absage aufheben">↩</button>`
+              : `<button class="kal-item-absagen" onclick="event.stopPropagation();PLANUNG.absagenEinheit(${e.id})" title="Training absagen">⚠</button>`
+            }
+            <button class="kal-item-del" onclick="event.stopPropagation();PLANUNG.loescheEinheit(${e.id})" title="Eintrag löschen">×</button>` : '';
+          const absageNotizHtml = abgesagt && e.absage_notiz
+            ? `<span class="kal-item-absage-notiz" title="${escapeHtml(e.absage_notiz)}">⚠ ${escapeHtml(e.absage_notiz)}</span>`
             : '';
-          return `<div class="${cls}" data-einheit-id="${e.id}" draggable="${kannEdit}" title="${escapeHtml(e.titel)}">
-            ${e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : ''}
-            <span class="kal-item-title">${escapeHtml(e.titel)}</span>
-            ${delBtn}
+          return `<div class="${cls}" data-einheit-id="${e.id}" draggable="${kannEdit && !abgesagt}" title="${escapeHtml(e.titel)}">
+            <div class="kal-item-top">
+              ${e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : ''}
+              <span class="kal-item-title">${escapeHtml(e.titel)}</span>
+              ${aktionsButtons}
+            </div>
+            ${absageNotizHtml}
           </div>`;
         }).join('');
 
@@ -1255,6 +1265,151 @@ const PLANUNG = (() => {
 
   function getAktivGruppe() { return aktivGruppe; }
 
+  // ── Training absagen / wiederherstellen ──────────────────────
+  async function absagenEinheit(einheitId) {
+    // Seriendaten laden um ggf. Scope-Auswahl zu zeigen
+    let serieFeld = null;
+    try {
+      const d = await apiGet(`einheiten/${einheitId}`, { silent: true });
+      serieFeld = d.einheit?.serie_id || null;
+    } catch (_) {}
+    _absagenDialog(einheitId, serieFeld);
+  }
+
+  function _absagenDialog(einheitId, serie_id) {
+    const mc = document.getElementById('modal-container');
+    if (!mc) return;
+
+    const serieHinweis = serie_id ? `
+      <div id="absage-scope-wrap" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text2)">Welche Termine absagen?</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+            <input type="radio" name="absage-scope" value="einzel" checked> Nur dieser Termin
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+            <input type="radio" name="absage-scope" value="abjetzt"> Dieser und alle folgenden
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+            <input type="radio" name="absage-scope" value="alle"> Gesamte Serie
+          </label>
+        </div>
+      </div>` : '';
+
+    mc.innerHTML = `
+      <div class="modal-overlay" onclick="PLANUNG.absageDialogSchliessen()">
+        <div class="modal-box" onclick="event.stopPropagation()" style="max-width:440px">
+          <div class="modal-header">
+            <span class="modal-title">Training absagen</span>
+            <button class="modal-close" onclick="PLANUNG.absageDialogSchliessen()">×</button>
+          </div>
+          <div class="modal-body" style="padding:20px">
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">
+              Absagegrund <span style="font-weight:400;color:var(--text2)">(optional)</span>
+            </label>
+            <textarea id="absage-notiz-input" class="settings-input" rows="3"
+              style="width:100%;resize:vertical;font-size:14px;line-height:1.5"
+              placeholder="z. B. Schlechtes Wetter, Halle nicht verfügbar…"></textarea>
+            <p style="font-size:12px;color:var(--text2);margin:8px 0 0">
+              Das Training bleibt sichtbar und wird im Kalender durchgestrichen. Der Grund erscheint für alle Athleten.
+            </p>
+            ${serieHinweis}
+          </div>
+          <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--border)">
+            <button class="btn btn-ghost" onclick="PLANUNG.absageDialogSchliessen()">Abbrechen</button>
+            <button class="btn btn-warning" onclick="PLANUNG.absagenSpeichern(${einheitId})">Training absagen</button>
+          </div>
+        </div>
+      </div>`;
+    setTimeout(() => document.getElementById('absage-notiz-input')?.focus(), 50);
+  }
+
+  function absageDialogSchliessen() {
+    const mc = document.getElementById('modal-container');
+    if (mc) mc.innerHTML = '';
+  }
+
+  async function absagenSpeichern(einheitId) {
+    const notiz = document.getElementById('absage-notiz-input')?.value?.trim() || null;
+    const scopeEl = document.querySelector('input[name="absage-scope"]:checked');
+    const scope   = scopeEl ? scopeEl.value : 'einzel';
+    try {
+      await apiPost(`einheiten/${einheitId}/absagen`, { notiz, scope });
+      absageDialogSchliessen();
+      notify('Training abgesagt.', 'ok');
+      renderKal();
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function wiederherstellenEinheit(einheitId) {
+    // Seriendaten prüfen
+    let serieFeld = null;
+    try {
+      const d = await apiGet(`einheiten/${einheitId}`, { silent: true });
+      serieFeld = d.einheit?.serie_id || null;
+    } catch (_) {}
+
+    if (serieFeld) {
+      _wiederherstellenDialog(einheitId);
+    } else {
+      if (!confirm('Absage aufheben und Training wieder als geplant markieren?')) return;
+      try {
+        await apiPost(`einheiten/${einheitId}/wiederherstellen`, { scope: 'einzel' });
+        notify('Absage aufgehoben.', 'ok');
+        renderKal();
+      } catch (e) {
+        notify('Fehler: ' + (e.message || ''), 'err');
+      }
+    }
+  }
+
+  function _wiederherstellenDialog(einheitId) {
+    const mc = document.getElementById('modal-container');
+    if (!mc) return;
+    mc.innerHTML = `
+      <div class="modal-overlay" onclick="PLANUNG.absageDialogSchliessen()">
+        <div class="modal-box" onclick="event.stopPropagation()" style="max-width:400px">
+          <div class="modal-header">
+            <span class="modal-title">Absage aufheben</span>
+            <button class="modal-close" onclick="PLANUNG.absageDialogSchliessen()">×</button>
+          </div>
+          <div class="modal-body" style="padding:20px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text2)">Welche Termine wiederherstellen?</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <input type="radio" name="wh-scope" value="einzel" checked> Nur dieser Termin
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <input type="radio" name="wh-scope" value="abjetzt"> Dieser und alle folgenden
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <input type="radio" name="wh-scope" value="alle"> Gesamte Serie
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--border)">
+            <button class="btn btn-ghost" onclick="PLANUNG.absageDialogSchliessen()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="PLANUNG.wiederherstellenSpeichern(${einheitId})">Wiederherstellen</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  async function wiederherstellenSpeichern(einheitId) {
+    const scopeEl = document.querySelector('input[name="wh-scope"]:checked');
+    const scope   = scopeEl ? scopeEl.value : 'einzel';
+    try {
+      await apiPost(`einheiten/${einheitId}/wiederherstellen`, { scope });
+      absageDialogSchliessen();
+      notify('Absage aufgehoben.', 'ok');
+      renderKal();
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
   // ── Tagesnotizen ─────────────────────────────────────────────
   function notizHinzufuegen(datum) {
     _oeffneNotizDialog({ datum, inhalt: '', id: null });
@@ -1344,5 +1499,7 @@ const PLANUNG = (() => {
     oeffneAthletPlan, athletZurueck,
     notizHinzufuegen, notizBearbeiten, notizSpeichern,
     notizLoeschen, notizDialogSchliessen,
+    absagenEinheit, absagenSpeichern, absageDialogSchliessen,
+    wiederherstellenEinheit, wiederherstellenSpeichern,
   };
 })();

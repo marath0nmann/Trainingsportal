@@ -1089,6 +1089,15 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig22b: ' . $e->getMessage()); }
         },
 
+        // ── 24: absage_notiz in training_einheiten ──────────────────────────────────────
+        // Ermöglicht das sichtbare Absagen eines Trainings mit Begründung.
+        24 => static function (): void {
+            try {
+                DB::query("ALTER TABLE " . DB::tbl('training_einheiten') . "
+                    ADD COLUMN IF NOT EXISTS absage_notiz TEXT NULL DEFAULT NULL");
+            } catch (Throwable $e) { error_log('mig24: ' . $e->getMessage()); }
+        },
+
         // ── 23: Tagesnotizen ────────────────────────────────────────────────────────────
         // Trainer/Admins können pro Tag (optional pro Gruppe) Notizen hinterlegen.
         // Diese erscheinen im Planungskalender und im ICS-Export als ganztägiger Termin.
@@ -1327,7 +1336,7 @@ function handleEinheiten(string $method, string $sub): void
 
         $rows = DB::fetchAll(
             'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
-                    e.bemerkung, e.sichtbarkeit, e.status, e.serie_id, e.gruppe_id,
+                    e.bemerkung, e.absage_notiz, e.sichtbarkeit, e.status, e.serie_id, e.gruppe_id,
                     t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
                FROM ' . DB::tbl('training_einheiten') . ' e
                LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
@@ -1403,7 +1412,7 @@ function handleEinheiten(string $method, string $sub): void
         try {
             DB::query(
                 'UPDATE ' . DB::tbl('training_einheiten') . '
-                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, komoot_url=?, bemerkung=?, sichtbarkeit=?, status=?, gruppe_id=?
+                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, komoot_url=?, bemerkung=?, absage_notiz=?, sichtbarkeit=?, status=?, gruppe_id=?
                   WHERE id=?',
                 [
                     $in['datum'],
@@ -1414,6 +1423,7 @@ function handleEinheiten(string $method, string $sub): void
                         ? (int)$in['treffpunkt_id'] : null,
                     isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
                     $in['bemerkung'] ?? null,
+                    isset($in['absage_notiz']) && $in['absage_notiz'] !== '' ? $in['absage_notiz'] : null,
                     $in['sichtbarkeit'] ?? 'oeffentlich',
                     $in['status'] ?? 'geplant',
                     isset($in['gruppe_id']) && $in['gruppe_id'] !== '' && $in['gruppe_id'] !== null
@@ -1438,6 +1448,44 @@ function handleEinheiten(string $method, string $sub): void
         DB::query('DELETE FROM ' . DB::tbl('training_einheiten') . ' WHERE id = ?', [$id]);
         echo json_encode(['ok' => true]);
         return;
+    }
+
+    // ── POST /einheiten/{id}/absagen  → sichtbar absagen (optional mit Notiz, Serien-Scope)
+    // ── POST /einheiten/{id}/wiederherstellen → Absage aufheben
+    if ($method === 'POST') {
+        $parts = explode('/', $sub, 2);
+        $eid   = ctype_digit($parts[0]) ? (int)$parts[0] : 0;
+        $aktion = $parts[1] ?? '';
+        if ($eid > 0 && ($aktion === 'absagen' || $aktion === 'wiederherstellen')) {
+            $in    = readJsonBody();
+            $scope = in_array($in['scope'] ?? '', ['abjetzt', 'alle'], true) ? $in['scope'] : 'einzel';
+            $notiz = ($aktion === 'absagen' && isset($in['notiz']) && trim($in['notiz']) !== '')
+                     ? trim($in['notiz']) : null;
+
+            $te  = DB::tbl('training_einheiten');
+            $row = DB::fetchOne("SELECT id, serie_id, datum FROM $te WHERE id = ?", [$eid]);
+            if (!$row) {
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'fehler' => 'Einheit nicht gefunden']);
+                return;
+            }
+
+            $neuStatus = $aktion === 'absagen' ? 'abgesagt' : 'geplant';
+            $neuNotiz  = $aktion === 'absagen' ? $notiz : null;
+
+            if ($scope === 'einzel' || !$row['serie_id']) {
+                DB::query("UPDATE $te SET status=?, absage_notiz=? WHERE id=?",
+                    [$neuStatus, $neuNotiz, $eid]);
+            } elseif ($scope === 'abjetzt') {
+                DB::query("UPDATE $te SET status=?, absage_notiz=? WHERE serie_id=? AND datum>=?",
+                    [$neuStatus, $neuNotiz, (int)$row['serie_id'], $row['datum']]);
+            } else { // alle
+                DB::query("UPDATE $te SET status=?, absage_notiz=? WHERE serie_id=?",
+                    [$neuStatus, $neuNotiz, (int)$row['serie_id']]);
+            }
+            echo json_encode(['ok' => true]);
+            return;
+        }
     }
 
     http_response_code(404);
@@ -2886,9 +2934,16 @@ function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid =
     if (($e['status'] ?? '') === 'abgesagt') {
         $lines[] = 'STATUS:CANCELLED';
     }
+    if (!empty($e['absage_notiz'])) {
+        $lines[] = 'COMMENT:' . icsEsc('⚠ Absagegrund: ' . $e['absage_notiz']);
+    }
 
-    // Beschreibung: Bemerkung + Segmente (mit Pace, falls Bestzeiten vorhanden)
+    // Beschreibung: Absagegrund + Bemerkung + Segmente (mit Pace, falls Bestzeiten vorhanden)
     $descLines = [];
+    if (!empty($e['absage_notiz'])) {
+        $descLines[] = '⚠ ABGESAGT: ' . $e['absage_notiz'];
+        $descLines[] = '';
+    }
     if (!empty($e['bemerkung'])) {
         $descLines[] = $e['bemerkung'];
     }
@@ -4319,11 +4374,12 @@ function mapEinheit(array $r): array {
         'titel'        => $r['titel'],
         'treffpunkt'   => $tp,
         'komoot_url'   => $r['komoot_url'] ?? null,
-        'bemerkung'    => $r['bemerkung'],
-        'sichtbarkeit' => $r['sichtbarkeit'] ?? 'oeffentlich',
-        'status'       => $r['status'] ?? 'geplant',
-        'serie_id'     => isset($r['serie_id']) && $r['serie_id'] !== null ? (int)$r['serie_id'] : null,
-        'gruppe_id'    => isset($r['gruppe_id']) && $r['gruppe_id'] !== null ? (int)$r['gruppe_id'] : null,
+        'bemerkung'     => $r['bemerkung'],
+        'absage_notiz'  => $r['absage_notiz'] ?? null,
+        'sichtbarkeit'  => $r['sichtbarkeit'] ?? 'oeffentlich',
+        'status'        => $r['status'] ?? 'geplant',
+        'serie_id'      => isset($r['serie_id']) && $r['serie_id'] !== null ? (int)$r['serie_id'] : null,
+        'gruppe_id'     => isset($r['gruppe_id']) && $r['gruppe_id'] !== null ? (int)$r['gruppe_id'] : null,
     ];
 }
 function mapSegment(array $r): array {

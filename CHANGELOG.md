@@ -1,6 +1,7 @@
 # Changelog
 
-## v252
+## v253
+- Training absagen: Trainer können ein Training sichtbar absagen statt löschen – ⚠-Button am Kalendereintrag öffnet Dialog mit optionalem Absagegrund; abgesagte Trainings bleiben durchgestrichen im Kalender und zeigen den Grund; ↩-Button stellt wieder her; Serien-Scope (einzel/ab jetzt/alle); ICS-Abo enthält Absagegrund in DESCRIPTION + COMMENT; DB-Migration 24 (absage_notiz auf training_einheiten)
 - Tagesnotizen: Trainer/Admins können pro Tag (optional gruppenspezifisch) Notizen im Planungskalender hinterlegen; Notizen erscheinen für alle Athleten gelb hinterlegt und landen im ICS-Abo als ganztägiger Termin (📋); DB-Migration 23 (training_tagesnotizen); API GET/POST/PUT/DELETE /tagesnotizen
 - Fix: `replaceBlockGruppen()` war aufgerufen aber nie definiert → "Call to undefined function"-Serverfehler beim Speichern eines Trainingsblocks; Funktion ergänzt (DELETE + INSERT IGNORE in training_block_gruppen)
 - Admin: neuer Subtab „Gruppen" – Trainingsgruppen anlegen (POST /trainingsgruppen) und umbenennen (PUT /trainingsgruppen/{id}); Inline-Edit mit Enter/Escape, Duplikat-Prüfung, GRUPPEN-Cache-Invalidierung nach jeder Änderung
