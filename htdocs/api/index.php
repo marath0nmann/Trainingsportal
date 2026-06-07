@@ -4692,9 +4692,12 @@ function handleMeinPlan(string $method, string $tail): void
         $meineGruppenIds = array_column($meineGruppen, 'id');
 
         $rows = DB::fetchAll(
-            'SELECT e.*, t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng
+            'SELECT e.*, t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng,
+                    COALESCE(CONCAT(av_a.vorname, \' \', av_a.nachname), av_b.benutzername) AS abgesagt_von_name
                FROM ' . DB::tbl('training_einheiten') . ' e
-               LEFT JOIN ' . DB::tbl('training_treffpunkte') . " t ON t.id = e.treffpunkt_id
+               LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
+               LEFT JOIN ' . DB::tbl('benutzer') . ' av_b ON av_b.id = e.abgesagt_von
+               LEFT JOIN ' . DB::tbl('athleten')  . " av_a ON av_a.id = av_b.athlet_id
               WHERE e.datum BETWEEN ? AND ?
                 AND e.sichtbarkeit IN ('oeffentlich','intern')
            ORDER BY e.datum, e.uhrzeit",
