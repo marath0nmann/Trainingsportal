@@ -1185,8 +1185,8 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   flex: 1; overflow-wrap: break-word; word-break: break-word; min-width: 0;
 }
 .kal-notiz-autor {
-  flex-shrink: 0; font-size: 9px; opacity: .65;
-  white-space: nowrap; margin-left: 2px;
+  flex: 0 0 100%; font-size: 9px; opacity: .65;
+  white-space: nowrap; padding-left: 13px;
 }
 .kal-notiz[draggable="true"] { cursor: grab; }
 .kal-notiz-dragging { opacity: .35; }
