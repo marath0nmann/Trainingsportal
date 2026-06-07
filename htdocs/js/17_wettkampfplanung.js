@@ -292,15 +292,20 @@ const WETTKAMPFPLANUNG = (() => {
 
       let datumHtml = '<span style="color:var(--text2);font-size:13px">–</span>';
       if (datum) {
-        const d = new Date(datum + 'T00:00:00');
-        const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+        const d   = new Date(datum + 'T00:00:00');
+        const WT  = ['So','Mo','Di','Mi','Do','Fr','Sa'];
         const fmt = `${WT[d.getDay()]}, ${d.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' })}`;
+        // ISO-Kalenderwoche
+        const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+        const kw  = Math.ceil(((tmp - new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7);
+        const kwHtml = `<span style="font-size:11px;color:var(--text2);display:block;margin-top:1px">KW ${kw}</span>`;
         if (istPrognose) {
           const wt = fmt.split(',')[0];
           datumHtml = `<span style="font-size:13px;color:var(--text2);font-style:italic"
-            title="Prognose – gleicher ${wt} im gleichen Monat wie letztes Jahr">~ ${fmt}</span>`;
+            title="Prognose – gleicher ${wt} im gleichen Monat wie letztes Jahr">~ ${fmt}</span>${kwHtml}`;
         } else {
-          datumHtml = `<span style="font-size:13px${vergangen ? ';color:var(--text2)' : ';font-weight:600'}">${fmt}</span>`;
+          datumHtml = `<span style="font-size:13px${vergangen ? ';color:var(--text2)' : ';font-weight:600'}">${fmt}</span>${kwHtml}`;
         }
       }
 
