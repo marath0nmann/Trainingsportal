@@ -1089,6 +1089,23 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig22b: ' . $e->getMessage()); }
         },
 
+        // ── 23: Tagesnotizen ────────────────────────────────────────────────────────────
+        // Trainer/Admins können pro Tag (optional pro Gruppe) Notizen hinterlegen.
+        // Diese erscheinen im Planungskalender und im ICS-Export als ganztägiger Termin.
+        23 => static function (): void {
+            DB::query("CREATE TABLE IF NOT EXISTS " . DB::tbl('training_tagesnotizen') . " (
+                id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                datum         DATE         NOT NULL,
+                inhalt        TEXT         NOT NULL,
+                gruppe_id     INT UNSIGNED NULL DEFAULT NULL,
+                erstellt_von  INT UNSIGNED NOT NULL,
+                erstellt_am   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                geaendert_am  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                KEY idx_datum  (datum),
+                KEY idx_gruppe (gruppe_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        },
+
     ];
 }
 
@@ -1171,6 +1188,10 @@ try {
     }
     if ($head === 'trainingsgruppen') {
         handleTrainingsgruppen($method, $tail ?? '');
+        exit;
+    }
+    if ($head === 'tagesnotizen') {
+        handleTagesnotizen($method, $tail ?? '');
         exit;
     }
     if ($head === 'profil') {
@@ -2693,6 +2714,18 @@ function buildIcsPublic(bool $mitUhrzeit = false): string {
         $e['_dauer_min'] = $typenDauer[$e['typ']] ?? null;
         $events[] = bauVevent($e, [], [], null, $mitUhrzeit);
     }
+    // Tagesnotizen (ohne Gruppen-Einschränkung, da öffentlicher Feed)
+    try {
+        $notizRows = DB::fetchAll(
+            "SELECT * FROM " . DB::tbl('training_tagesnotizen') . "
+              WHERE datum >= (CURDATE() - INTERVAL 60 DAY)
+                AND datum <= (CURDATE() + INTERVAL 365 DAY)
+           ORDER BY datum, id"
+        );
+        foreach ($notizRows as $n) {
+            $events[] = bauNotizVevent($n);
+        }
+    } catch (Throwable $e) { /* Tabelle existiert noch nicht */ }
     return wickleIcs($events, 'TuS Oedt – Trainingsplan');
 }
 
@@ -2761,7 +2794,60 @@ function buildIcsForUser(int $userId, bool $mitUhrzeit = false): string {
         $uid = 'privat-' . (int)$p['id'] . '@training.tus-oedt.de';
         $events[] = bauVevent($p, $segs, $bestzeiten, $uid, $mitUhrzeit);
     }
+    // Tagesnotizen: global (kein gruppe_id) + alle Gruppen des Nutzers
+    try {
+        $gruppenIds = [];
+        if (!empty($user['athlet_id'])) {
+            $gRows = DB::fetchAll(
+                "SELECT gruppe_id FROM " . DB::tbl('athlet_gruppen') . " WHERE athlet_id = ?",
+                [(int)$user['athlet_id']]
+            );
+            $gruppenIds = array_map(fn($r) => (int)$r['gruppe_id'], $gRows);
+        }
+        if (empty($gruppenIds)) {
+            $notizRows = DB::fetchAll(
+                "SELECT * FROM " . DB::tbl('training_tagesnotizen') . "
+                  WHERE gruppe_id IS NULL
+                    AND datum >= (CURDATE() - INTERVAL 60 DAY)
+                    AND datum <= (CURDATE() + INTERVAL 365 DAY)
+               ORDER BY datum, id"
+            );
+        } else {
+            $in = implode(',', array_fill(0, count($gruppenIds), '?'));
+            $notizRows = DB::fetchAll(
+                "SELECT * FROM " . DB::tbl('training_tagesnotizen') . "
+                  WHERE (gruppe_id IS NULL OR gruppe_id IN ($in))
+                    AND datum >= (CURDATE() - INTERVAL 60 DAY)
+                    AND datum <= (CURDATE() + INTERVAL 365 DAY)
+               ORDER BY datum, id",
+                $gruppenIds
+            );
+        }
+        foreach ($notizRows as $n) {
+            $events[] = bauNotizVevent($n);
+        }
+    } catch (Throwable $e) { /* Tabelle existiert noch nicht */ }
     return wickleIcs($events, 'TuS Oedt – Mein Trainingsplan');
+}
+
+function bauNotizVevent(array $n): string {
+    $uid   = 'notiz-' . (int)$n['id'] . '@training.tus-oedt.de';
+    $stamp = gmdate('Ymd\\THis\\Z');
+    $datum = preg_replace('/-/', '', $n['datum']);
+    $endTs = strtotime($n['datum'] . ' +1 day');
+
+    $lines = [
+        'BEGIN:VEVENT',
+        'UID:'      . $uid,
+        'DTSTAMP:'  . $stamp,
+        'SEQUENCE:' . (int)strtotime($n['geaendert_am'] ?? $n['erstellt_am'] ?? 'now'),
+        'DTSTART;VALUE=DATE:' . $datum,
+        'DTEND;VALUE=DATE:'   . date('Ymd', $endTs),
+        'SUMMARY:📋 ' . icsEsc($n['inhalt']),
+        'CATEGORIES:Notiz',
+    ];
+    $lines[] = 'END:VEVENT';
+    return implode("\r\n", array_map('icsFold', $lines));
 }
 
 function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid = null, bool $mitUhrzeit = false): string {
@@ -4813,6 +4899,145 @@ function mapPrivatEinheit(array $r): array
 // ============================================================
 // GET /trainingsgruppen → alle Gruppen aus der Statistikportal-Tabelle
 // ============================================================
+// ============================================================
+// GET    /tagesnotizen?von=&bis=[&gruppe_id=] → Liste
+// POST   /tagesnotizen                        → anlegen (Trainer/Admin)
+// PUT    /tagesnotizen/{id}                   → bearbeiten (Trainer/Admin)
+// DELETE /tagesnotizen/{id}                   → löschen (Trainer/Admin)
+// ============================================================
+function handleTagesnotizen(string $method, string $sub = ''): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+
+    $tbl       = DB::tbl('training_tagesnotizen');
+    $istTrainer = in_array($user['rolle'] ?? '', ['admin', 'trainer'], true);
+
+    // ── GET /tagesnotizen ────────────────────────────────────────────────────
+    if ($method === 'GET' && $sub === '') {
+        $von      = $_GET['von']      ?? null;
+        $bis      = $_GET['bis']      ?? null;
+        $gruppeId = isset($_GET['gruppe_id']) && ctype_digit((string)$_GET['gruppe_id'])
+                    ? (int)$_GET['gruppe_id'] : null;
+
+        $where  = '1=1';
+        $params = [];
+        if ($von) { $where .= ' AND datum >= ?'; $params[] = $von; }
+        if ($bis) { $where .= ' AND datum <= ?'; $params[] = $bis; }
+        // Gruppe: liefere Notizen ohne Gruppe (global) + Notizen der angefragten Gruppe
+        if ($gruppeId !== null) {
+            $where .= ' AND (gruppe_id IS NULL OR gruppe_id = ?)';
+            $params[] = $gruppeId;
+        }
+
+        $rows = DB::fetchAll(
+            "SELECT n.id, n.datum, n.inhalt, n.gruppe_id, n.erstellt_von, n.erstellt_am, n.geaendert_am,
+                    CONCAT(a.vorname, ' ', a.nachname) AS ersteller_name
+               FROM $tbl n
+               LEFT JOIN " . DB::tbl('benutzer') . " b ON b.id = n.erstellt_von
+               LEFT JOIN " . DB::tbl('athleten')  . " a ON a.id = b.athlet_id
+              WHERE $where
+           ORDER BY n.datum, n.id",
+            $params
+        );
+
+        $notizen = array_map(fn($r) => [
+            'id'            => (int)$r['id'],
+            'datum'         => $r['datum'],
+            'inhalt'        => $r['inhalt'],
+            'gruppe_id'     => $r['gruppe_id'] !== null ? (int)$r['gruppe_id'] : null,
+            'erstellt_von'  => (int)$r['erstellt_von'],
+            'ersteller_name'=> $r['ersteller_name'] ?? null,
+            'erstellt_am'   => $r['erstellt_am'],
+            'geaendert_am'  => $r['geaendert_am'],
+        ], $rows);
+
+        echo json_encode(['ok' => true, 'notizen' => $notizen]);
+        return;
+    }
+
+    // Schreibzugriff: nur Trainer/Admins
+    if (!$istTrainer) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'fehler' => 'Nur Trainer und Admins dürfen Tagesnotizen verwalten']);
+        return;
+    }
+
+    $in = json_decode(file_get_contents('php://input'), true) ?? [];
+
+    // ── POST /tagesnotizen ────────────────────────────────────────────────────
+    if ($method === 'POST' && $sub === '') {
+        $datum  = trim($in['datum']  ?? '');
+        $inhalt = trim($in['inhalt'] ?? '');
+        if (!$datum || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Ungültiges Datum']);
+            return;
+        }
+        if ($inhalt === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Notiz darf nicht leer sein']);
+            return;
+        }
+        $gruppeId = isset($in['gruppe_id']) && $in['gruppe_id'] !== null && $in['gruppe_id'] !== ''
+                    ? (int)$in['gruppe_id'] : null;
+
+        DB::query(
+            "INSERT INTO $tbl (datum, inhalt, gruppe_id, erstellt_von) VALUES (?,?,?,?)",
+            [$datum, $inhalt, $gruppeId, (int)$user['id']]
+        );
+        $id = (int)DB::lastInsertId();
+        echo json_encode(['ok' => true, 'notiz' => [
+            'id'        => $id,
+            'datum'     => $datum,
+            'inhalt'    => $inhalt,
+            'gruppe_id' => $gruppeId,
+        ]]);
+        return;
+    }
+
+    // ── PUT /tagesnotizen/{id} ────────────────────────────────────────────────
+    if ($method === 'PUT' && ctype_digit($sub)) {
+        $id     = (int)$sub;
+        $inhalt = trim($in['inhalt'] ?? '');
+        if ($inhalt === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Notiz darf nicht leer sein']);
+            return;
+        }
+        $row = DB::fetchOne("SELECT id FROM $tbl WHERE id = ?", [$id]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Notiz nicht gefunden']);
+            return;
+        }
+        DB::query("UPDATE $tbl SET inhalt = ? WHERE id = ?", [$inhalt, $id]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── DELETE /tagesnotizen/{id} ─────────────────────────────────────────────
+    if ($method === 'DELETE' && ctype_digit($sub)) {
+        $id  = (int)$sub;
+        $row = DB::fetchOne("SELECT id FROM $tbl WHERE id = ?", [$id]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Notiz nicht gefunden']);
+            return;
+        }
+        DB::query("DELETE FROM $tbl WHERE id = ?", [$id]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+}
+
 function handleTrainingsgruppen(string $method, string $sub = ''): void
 {
     $user = Auth::check();

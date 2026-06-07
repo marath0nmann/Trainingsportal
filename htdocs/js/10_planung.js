@@ -544,19 +544,25 @@ const PLANUNG = (() => {
       </div>
       <div id="planung-kal-grid" class="planung-kal-loading">Lade…</div>`;
 
-    let einheiten = [], feiertage = [];
+    let einheiten = [], feiertage = [], notizen = [];
     try {
       // Kein Gruppenfilter → keine Einheiten laden (sicherstellen dass alle Einheiten zugeordnet sind)
       const feiertagePromise = apiGet(`feiertage?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }).catch(() => ({ feiertage: [] }));
+      const notizParams = aktivGruppe ? `&gruppe_id=${aktivGruppe.id}` : '';
+      const notizenPromise = apiGet(`tagesnotizen?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}${notizParams}`, { silent: true }).catch(() => ({ notizen: [] }));
       if (aktivGruppe) {
-        const [d1, d2] = await Promise.all([
+        const [d1, d2, d3] = await Promise.all([
           apiGet(`einheiten?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}&gruppe_id=${aktivGruppe.id}`, { silent: true }),
           feiertagePromise,
+          notizenPromise,
         ]);
         einheiten = d1.einheiten || [];
         feiertage = d2.feiertage || [];
+        notizen   = d3.notizen   || [];
       } else {
-        feiertage = (await feiertagePromise).feiertage || [];
+        const [d2, d3] = await Promise.all([feiertagePromise, notizenPromise]);
+        feiertage = d2.feiertage || [];
+        notizen   = d3.notizen   || [];
       }
     } catch (e) {
       // Nicht still verschlucken: leerer Kalender bei API-Fehler ist sonst nicht diagnostizierbar
@@ -565,6 +571,9 @@ const PLANUNG = (() => {
 
     const byDate = {};
     einheiten.forEach(e => { (byDate[e.datum] = byDate[e.datum] || []).push(e); });
+
+    const notizenByDate = {};
+    notizen.forEach(n => { (notizenByDate[n.datum] = notizenByDate[n.datum] || []).push(n); });
 
     const feiertageByDate = {};
     feiertage.forEach(f => {
@@ -589,6 +598,7 @@ const PLANUNG = (() => {
         const isToday  = k === todayKey;
         const items    = byDate[k] || [];
         const ferien   = feiertageByDate[k] || [];
+        const tagNotizen = notizenByDate[k] || [];
 
         const dayCls = [
           'kal-cell', 'planung-kal-cell',
@@ -604,6 +614,23 @@ const PLANUNG = (() => {
         }).join('');
 
         const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
+
+        // Tagesnotizen
+        const notizenHtml = tagNotizen.map(n =>
+          `<div class="kal-notiz" title="${escapeHtml(n.inhalt)}">
+            <span class="kal-notiz-icon">📋</span>
+            <span class="kal-notiz-text">${escapeHtml(n.inhalt)}</span>
+            ${kannEdit
+              ? `<button class="kal-notiz-edit" onclick="event.stopPropagation();PLANUNG.notizBearbeiten(${n.id},'${escapeHtml(n.inhalt).replace(/'/g,"&#39;")}')" title="Notiz bearbeiten">✎</button>
+                 <button class="kal-notiz-del" onclick="event.stopPropagation();PLANUNG.notizLoeschen(${n.id})" title="Notiz löschen">×</button>`
+              : ''}
+          </div>`
+        ).join('');
+
+        const notizAddBtn = kannEdit && inMonth
+          ? `<button class="kal-notiz-add" onclick="event.stopPropagation();PLANUNG.notizHinzufuegen('${k}')" title="Notiz hinzufügen">📋+</button>`
+          : '';
+
         const itemsHtml = items.map(e => {
           const cls    = `kal-item kal-cal-${kalKeyFor(e)}${e.status === 'abgesagt' ? ' is-cancelled' : ''}`;
           const delBtn = kannEdit
@@ -618,8 +645,12 @@ const PLANUNG = (() => {
 
         cells.push(`
           <div class="${dayCls}" data-datum="${k}">
-            <div class="kal-cell-head"><span class="kal-day-num">${cursor.getDate()}</span></div>
+            <div class="kal-cell-head">
+              <span class="kal-day-num">${cursor.getDate()}</span>
+              ${notizAddBtn}
+            </div>
             ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
+            ${notizenHtml ? `<div class="kal-notiz-list">${notizenHtml}</div>` : ''}
             <div class="kal-cell-items">
               ${itemsHtml}
               ${inMonth ? '<div class="planung-drop-hint">Hier ablegen</div>' : ''}
@@ -1224,6 +1255,83 @@ const PLANUNG = (() => {
 
   function getAktivGruppe() { return aktivGruppe; }
 
+  // ── Tagesnotizen ─────────────────────────────────────────────
+  function notizHinzufuegen(datum) {
+    _oeffneNotizDialog({ datum, inhalt: '', id: null });
+  }
+
+  function notizBearbeiten(id, inhalt) {
+    _oeffneNotizDialog({ id, inhalt, datum: null });
+  }
+
+  function _oeffneNotizDialog({ datum, inhalt, id }) {
+    const mc = document.getElementById('modal-container');
+    if (!mc) return;
+    const titel = id ? 'Notiz bearbeiten' : `Notiz für ${datum}`;
+    mc.innerHTML = `
+      <div class="modal-overlay" onclick="PLANUNG.notizDialogSchliessen()">
+        <div class="modal-box" onclick="event.stopPropagation()" style="max-width:480px">
+          <div class="modal-header">
+            <span class="modal-title">${escapeHtml(titel)}</span>
+            <button class="modal-close" onclick="PLANUNG.notizDialogSchliessen()">×</button>
+          </div>
+          <div class="modal-body" style="padding:20px">
+            <textarea id="notiz-inhalt" class="settings-input" rows="4"
+              style="width:100%;resize:vertical;font-size:14px;line-height:1.5"
+              placeholder="Notiz eingeben…">${escapeHtml(inhalt)}</textarea>
+            <p style="font-size:12px;color:var(--text2);margin:8px 0 0">
+              Erscheint bei allen Athleten im Kalender und im ICS-Abo als ganztägiger Termin.
+            </p>
+          </div>
+          <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--border)">
+            <button class="btn btn-ghost" onclick="PLANUNG.notizDialogSchliessen()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="PLANUNG.notizSpeichern(${id ? id : 'null'},'${datum || ''}')">Speichern</button>
+          </div>
+        </div>
+      </div>`;
+    setTimeout(() => {
+      const ta = document.getElementById('notiz-inhalt');
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }, 50);
+  }
+
+  function notizDialogSchliessen() {
+    const mc = document.getElementById('modal-container');
+    if (mc) mc.innerHTML = '';
+  }
+
+  async function notizSpeichern(id, datum) {
+    const ta = document.getElementById('notiz-inhalt');
+    if (!ta) return;
+    const inhalt = ta.value.trim();
+    if (!inhalt) { notify('Notiz darf nicht leer sein.', 'warn'); ta.focus(); return; }
+
+    try {
+      if (id) {
+        await apiPut(`tagesnotizen/${id}`, { inhalt });
+      } else {
+        const gruppeId = aktivGruppe ? aktivGruppe.id : null;
+        await apiPost('tagesnotizen', { datum, inhalt, gruppe_id: gruppeId });
+      }
+      notizDialogSchliessen();
+      notify('Notiz gespeichert.', 'ok');
+      renderKal();
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function notizLoeschen(id) {
+    if (!confirm('Notiz wirklich löschen?')) return;
+    try {
+      await apiDel(`tagesnotizen/${id}`);
+      notify('Notiz gelöscht.', 'ok');
+      renderKal();
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
   return {
     render, navigateMonth, reloadSidebar, loescheEinheit,
     einheitBearbeiten, einheitBearbeitenSpeichern,
@@ -1234,5 +1342,7 @@ const PLANUNG = (() => {
     wechsleSection,
     setDefaultFarbe, resetDefaultFarbe,
     oeffneAthletPlan, athletZurueck,
+    notizHinzufuegen, notizBearbeiten, notizSpeichern,
+    notizLoeschen, notizDialogSchliessen,
   };
 })();

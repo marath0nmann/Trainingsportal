@@ -1,6 +1,7 @@
 # Changelog
 
-## v251
+## v252
+- Tagesnotizen: Trainer/Admins können pro Tag (optional gruppenspezifisch) Notizen im Planungskalender hinterlegen; Notizen erscheinen für alle Athleten gelb hinterlegt und landen im ICS-Abo als ganztägiger Termin (📋); DB-Migration 23 (training_tagesnotizen); API GET/POST/PUT/DELETE /tagesnotizen
 - Fix: `replaceBlockGruppen()` war aufgerufen aber nie definiert → "Call to undefined function"-Serverfehler beim Speichern eines Trainingsblocks; Funktion ergänzt (DELETE + INSERT IGNORE in training_block_gruppen)
 - Admin: neuer Subtab „Gruppen" – Trainingsgruppen anlegen (POST /trainingsgruppen) und umbenennen (PUT /trainingsgruppen/{id}); Inline-Edit mit Enter/Escape, Duplikat-Prüfung, GRUPPEN-Cache-Invalidierung nach jeder Änderung
 - Fix: Untermenü-Position Gruppen-Tab exakt an Athleten-Tab angeglichen – section-nav kompensiert jetzt die vollständige Summe aus main-Padding (24px/28px) + base-nav-Padding (14px/18px) = 38px oben / 46px links (nur Desktop >900px wo Viewport-Lock greift); gruppen-bar-Tabs linksbündig mit Pill-Buttons
