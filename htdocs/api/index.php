@@ -4185,6 +4185,16 @@ function replaceBlockSegmente(int $blockId, $segmente): void {
     }
 }
 
+function replaceBlockGruppen(int $blockId, array $gruppenIds): void {
+    $tbl = DB::tbl('training_block_gruppen');
+    DB::query("DELETE FROM $tbl WHERE block_id = ?", [$blockId]);
+    foreach ($gruppenIds as $gid) {
+        $gid = (int)$gid;
+        if ($gid <= 0) continue;
+        DB::query("INSERT IGNORE INTO $tbl (block_id, gruppe_id) VALUES (?,?)", [$blockId, $gid]);
+    }
+}
+
 function validateBlock(array $in): array {
     $errs = [];
     if (empty($in['titel']) || !is_string($in['titel'])) {
