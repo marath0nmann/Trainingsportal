@@ -5075,10 +5075,16 @@ function handleTagesnotizen(string $method, string $sub = ''): void
     // ── PUT /tagesnotizen/{id} ────────────────────────────────────────────────
     if ($method === 'PUT' && ctype_digit($sub)) {
         $id     = (int)$sub;
-        $inhalt = trim($in['inhalt'] ?? '');
-        if ($inhalt === '') {
+        $inhalt = isset($in['inhalt']) ? trim($in['inhalt']) : null;
+        $datum  = isset($in['datum'])  ? trim($in['datum'])  : null;
+        if ($inhalt !== null && $inhalt === '') {
             http_response_code(400);
             echo json_encode(['ok' => false, 'fehler' => 'Notiz darf nicht leer sein']);
+            return;
+        }
+        if ($datum !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Ungültiges Datum']);
             return;
         }
         $row = DB::fetchOne("SELECT id FROM $tbl WHERE id = ?", [$id]);
@@ -5087,7 +5093,13 @@ function handleTagesnotizen(string $method, string $sub = ''): void
             echo json_encode(['ok' => false, 'fehler' => 'Notiz nicht gefunden']);
             return;
         }
-        DB::query("UPDATE $tbl SET inhalt = ? WHERE id = ?", [$inhalt, $id]);
+        $sets = []; $vals = [];
+        if ($inhalt !== null) { $sets[] = 'inhalt = ?'; $vals[] = $inhalt; }
+        if ($datum  !== null) { $sets[] = 'datum = ?';  $vals[] = $datum; }
+        if ($sets) {
+            $vals[] = $id;
+            DB::query("UPDATE $tbl SET " . implode(', ', $sets) . " WHERE id = ?", $vals);
+        }
         echo json_encode(['ok' => true]);
         return;
     }

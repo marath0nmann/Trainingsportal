@@ -624,7 +624,8 @@ const PLANUNG = (() => {
           const autorHtml = n.ersteller_name
             ? `<span class="kal-notiz-autor">${escapeHtml(n.ersteller_name)}</span>`
             : '';
-          return `<div class="kal-notiz kal-cal-${notizKey}" title="${escapeHtml(n.inhalt)}">
+          return `<div class="kal-notiz kal-cal-${notizKey}" title="${escapeHtml(n.inhalt)}"
+            data-notiz-id="${n.id}"${kannEdit ? ' draggable="true"' : ''}>
             <span class="kal-notiz-icon">📋</span>
             <span class="kal-notiz-text">${escapeHtml(n.inhalt)}</span>
             ${autorHtml}
@@ -696,12 +697,25 @@ const PLANUNG = (() => {
       item.addEventListener('dragend', () => item.classList.remove('kal-item-dragging'));
     });
 
+    // DnD: Drag von Tagesnotizen
+    document.querySelectorAll('.planung-kal-cell .kal-notiz[draggable="true"]').forEach(notiz => {
+      notiz.addEventListener('dragstart', e => {
+        e.stopPropagation();
+        e.dataTransfer.setData('text/x-notiz-id', notiz.dataset.notizId);
+        e.dataTransfer.effectAllowed = 'move';
+        notiz.classList.add('kal-notiz-dragging');
+      });
+      notiz.addEventListener('dragend', () => notiz.classList.remove('kal-notiz-dragging'));
+    });
+
     // DnD: Drop auf Tages-Zellen
     document.querySelectorAll('.planung-kal-cell.in-month').forEach(cell => {
       const datum = cell.dataset.datum;
       cell.addEventListener('dragover', e => {
         e.preventDefault();
-        e.dataTransfer.dropEffect = e.dataTransfer.types.includes('text/x-einheit-id') ? 'move' : 'copy';
+        const isEinheit = e.dataTransfer.types.includes('text/x-einheit-id');
+        const isNotiz   = e.dataTransfer.types.includes('text/x-notiz-id');
+        e.dataTransfer.dropEffect = (isEinheit || isNotiz) ? 'move' : 'copy';
         cell.classList.add('planung-drag-over');
       });
       cell.addEventListener('dragleave', () => cell.classList.remove('planung-drag-over'));
@@ -710,6 +724,8 @@ const PLANUNG = (() => {
         cell.classList.remove('planung-drag-over');
         const einheitId = parseInt(e.dataTransfer.getData('text/x-einheit-id') || '', 10);
         if (einheitId) { verschiebeEinheit(einheitId, datum); return; }
+        const notizId = parseInt(e.dataTransfer.getData('text/x-notiz-id') || '', 10);
+        if (notizId) { verschiebeNotiz(notizId, datum); return; }
         const blockId = parseInt(e.dataTransfer.getData('text/plain') || '', 10);
         if (blockId) BLOECKE.anwenden(blockId, datum, aktivGruppe ? aktivGruppe.id : null);
       });
@@ -1049,6 +1065,21 @@ const PLANUNG = (() => {
         status: e.status || 'geplant',
       });
       notify('Training verschoben.', 'ok');
+    } catch (err) {
+      notify('Fehler: ' + (err.message || ''), 'err');
+      renderKal();
+    }
+  }
+
+  async function verschiebeNotiz(notizId, neuesDatum) {
+    // Optimistisch: Element sofort in Zielzelle verschieben
+    const el        = document.querySelector(`.kal-notiz[data-notiz-id="${notizId}"]`);
+    const zielList  = document.querySelector(`.planung-kal-cell[data-datum="${neuesDatum}"] .kal-notiz-list`);
+    if (el && zielList) zielList.prepend(el);
+    try {
+      await apiPut(`tagesnotizen/${notizId}`, { datum: neuesDatum });
+      notify('Notiz verschoben.', 'ok');
+      renderKal(); // neu laden damit Gruppen-Filterpositionen stimmen
     } catch (err) {
       notify('Fehler: ' + (err.message || ''), 'err');
       renderKal();
