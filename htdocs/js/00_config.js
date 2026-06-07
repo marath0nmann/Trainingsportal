@@ -183,6 +183,7 @@ function applyKalenderFarben(extraKeys) {
     // Kalender (Monat) + Heute-Card + Listenansicht
     lines.push('.kal-item.kal-cal-'          + s + ' { border-left-color: var(--cf) !important; }');
     lines.push('.kal-item.is-privat.kal-cal-' + s + ' { background: color-mix(in srgb, var(--cf) 14%, var(--surface)) !important; }');
+    lines.push('.kal-notiz.kal-cal-'          + s + ' { border-left-color: var(--cf) !important; background: color-mix(in srgb, var(--cf) 15%, transparent) !important; color: color-mix(in srgb, var(--cf) 80%, var(--text)) !important; }');
     lines.push('.heute-card.kal-cal-'         + s + ' { border-left-color: var(--cf) !important; }');
     lines.push('.liste-row.kal-cal-'          + s + ' { border-left-color: var(--cf) !important; }');
     // Wettkampf-Kalender-Popover (wk-popover trägt kal-cal-wettkampf)

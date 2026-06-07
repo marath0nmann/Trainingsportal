@@ -616,16 +616,17 @@ const PLANUNG = (() => {
         const kannEdit = state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
 
         // Tagesnotizen
-        const notizenHtml = tagNotizen.map(n =>
-          `<div class="kal-notiz" title="${escapeHtml(n.inhalt)}">
+        const notizenHtml = tagNotizen.map(n => {
+          const notizKey = n.gruppe_id ? 'g' + n.gruppe_id : 'teamplan';
+          return `<div class="kal-notiz kal-cal-${notizKey}" title="${escapeHtml(n.inhalt)}">
             <span class="kal-notiz-icon">📋</span>
             <span class="kal-notiz-text">${escapeHtml(n.inhalt)}</span>
             ${kannEdit
               ? `<button class="kal-notiz-edit" onclick="event.stopPropagation();PLANUNG.notizBearbeiten(${n.id},'${escapeHtml(n.inhalt).replace(/'/g,"&#39;")}')" title="Notiz bearbeiten">✎</button>
                  <button class="kal-notiz-del" onclick="event.stopPropagation();PLANUNG.notizLoeschen(${n.id})" title="Notiz löschen">×</button>`
               : ''}
-          </div>`
-        ).join('');
+          </div>`;
+        }).join('');
 
         const notizAddBtn = kannEdit && inMonth
           ? `<button class="kal-notiz-add" onclick="event.stopPropagation();PLANUNG.notizHinzufuegen('${k}')" title="Notiz hinzufügen">📋+</button>`
@@ -1298,8 +1299,8 @@ const PLANUNG = (() => {
 
     mc.innerHTML = `
       <div class="modal-overlay" onclick="PLANUNG.absageDialogSchliessen()">
-        <div class="modal-box" onclick="event.stopPropagation()" style="max-width:440px">
-          <div class="modal-header">
+        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:440px">
+          <div class="modal-head">
             <span class="modal-title">Training absagen</span>
             <button class="modal-close" onclick="PLANUNG.absageDialogSchliessen()">×</button>
           </div>
@@ -1370,8 +1371,8 @@ const PLANUNG = (() => {
     if (!mc) return;
     mc.innerHTML = `
       <div class="modal-overlay" onclick="PLANUNG.absageDialogSchliessen()">
-        <div class="modal-box" onclick="event.stopPropagation()" style="max-width:400px">
-          <div class="modal-header">
+        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:400px">
+          <div class="modal-head">
             <span class="modal-title">Absage aufheben</span>
             <button class="modal-close" onclick="PLANUNG.absageDialogSchliessen()">×</button>
           </div>
@@ -1425,8 +1426,8 @@ const PLANUNG = (() => {
     const titel = id ? 'Notiz bearbeiten' : `Notiz für ${datum}`;
     mc.innerHTML = `
       <div class="modal-overlay" onclick="PLANUNG.notizDialogSchliessen()">
-        <div class="modal-box" onclick="event.stopPropagation()" style="max-width:480px">
-          <div class="modal-header">
+        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:480px">
+          <div class="modal-head">
             <span class="modal-title">${escapeHtml(titel)}</span>
             <button class="modal-close" onclick="PLANUNG.notizDialogSchliessen()">×</button>
           </div>
