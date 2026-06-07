@@ -1185,6 +1185,10 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   flex: 1; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap;
 }
+.kal-notiz-autor {
+  flex-shrink: 0; font-size: 9px; opacity: .65;
+  white-space: nowrap; margin-left: 2px;
+}
 .kal-notiz-edit,
 .kal-notiz-del {
   display: none; flex-shrink: 0;

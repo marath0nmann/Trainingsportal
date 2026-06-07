@@ -1,6 +1,8 @@
 # Changelog
 
-## v255
+## v256
+- Tagesnotizen im Hauptkalender (Startseite): werden jetzt parallel zu den Einheiten geladen und in Kalenderfarbe mit Autorenname angezeigt; Absage-Autor im Hauptkalender sichtbar
+- Autorenname in Tagesnotizen: wird in beiden Kalendern (Haupt + Planung) neben dem Notiztext angezeigt
 - Fix: Neue Modals (Tagesnotiz, Absagen, Wiederherstellen) waren transparent – falsche CSS-Klassen `modal-box`/`modal-header` durch `modal-card`/`modal-head` ersetzt
 - Tagesnotizen jetzt in Gruppenkalenderfarbe eingefärbt statt hartcodiertem Amber; `applyKalenderFarben()` erzeugt `.kal-notiz.kal-cal-{key}`-Regeln mit `--cf`; Basis-CSS neutral (Fallback auf `--border`)
 - Absagegrund im Hauptkalender und Heute/Morgen: abgesagte Trainings zeigen den Grund mit Autor; Heute/Morgen-Karte: Titel durchgestrichen, Absagegrund + Autor statt Treffpunkt; Hauptkalender: Absagegrund unter durchgestrichenem Titel; DB-Migration 25 (abgesagt_von auf training_einheiten), API gibt abgesagt_von_name zurück

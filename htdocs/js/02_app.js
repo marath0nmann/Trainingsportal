@@ -669,12 +669,13 @@ async function renderKalender(main, monthArg) {
     const einheitenUrl = angemeldet
       ? `mein-plan/einheiten?von=${von}&bis=${bis}`
       : `einheiten?von=${von}&bis=${bis}${state.shareToken ? `&share_token=${state.shareToken}` : ''}`;
-    const [d1, d2, d3, d4, d5] = await Promise.all([
+    const [d1, d2, d3, d4, d5, d6] = await Promise.all([
       apiGet(einheitenUrl, { silent: true }),
       apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
       needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
       angemeldet ? _ladeWettkampfDaten().catch(() => []) : Promise.resolve([]),
       angemeldet ? _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })) : Promise.resolve({ termine: [], statistikportal_url: '' }),
+      angemeldet ? apiGet(`tagesnotizen?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ notizen: [] })) : Promise.resolve({ notizen: [] }),
     ]);
     oeffentlich    = d1.einheiten || [];
     privat         = angemeldet ? (d1.privat || []) : [];
@@ -733,6 +734,16 @@ async function renderKalender(main, monthArg) {
   Object.values(byDate).forEach(arr =>
     arr.sort((a, b) => a._privat !== b._privat ? (a._privat ? 1 : -1) : (a.uhrzeit || '99:99').localeCompare(b.uhrzeit || '99:99'))
   );
+
+  // Tagesnotizen nach Datum gruppieren (gefiltert nach kalFilter)
+  const notizenRoh = d6.notizen || [];
+  const notizenGefiltert = notizenRoh.filter(n => {
+    if (!kf) return true;
+    if (n.gruppe_id == null) return true; // allgemeine Notiz immer zeigen
+    return kf.gruppen && kf.gruppen.has(n.gruppe_id);
+  });
+  const notizenByDate = {};
+  notizenGefiltert.forEach(n => { (notizenByDate[n.datum] = notizenByDate[n.datum] || []).push(n); });
 
   const feiertageByDate = {};
   feiertage.forEach(f => {
@@ -881,12 +892,30 @@ async function renderKalender(main, monthArg) {
         const abgesagt = e.status === 'abgesagt';
         const cls = `kal-item kal-cal-${kalKeyFor(e)}${abgesagt ? ' is-cancelled' : ''}`;
         const time = e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : '';
-        const absageNotizHtml = abgesagt && e.absage_notiz
-          ? `<span class="kal-item-absage-notiz" title="${escapeHtml(e.absage_notiz)}">⚠ ${escapeHtml(e.absage_notiz)}</span>`
+        const absageParts = [];
+        if (abgesagt && e.absage_notiz) absageParts.push(escapeHtml(e.absage_notiz));
+        if (abgesagt && e.abgesagt_von_name) absageParts.push(`(${escapeHtml(e.abgesagt_von_name)})`);
+        const absageTxt = absageParts.length ? absageParts.join(' ') : (abgesagt ? 'Abgesagt' : '');
+        const absageNotizHtml = abgesagt
+          ? `<span class="kal-item-absage-notiz" title="${absageTxt}">⚠ ${absageTxt}</span>`
           : '';
         return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})">
           <div class="kal-item-top">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>
           ${absageNotizHtml}
+        </div>`;
+      }).join('');
+
+      // Tagesnotizen für diesen Tag
+      const tagNotizen = notizenByDate[k] || [];
+      const notizenHtml = tagNotizen.map(n => {
+        const notizKey  = n.gruppe_id ? 'g' + n.gruppe_id : 'teamplan';
+        const autorHtml = n.ersteller_name
+          ? `<span class="kal-notiz-autor">${escapeHtml(n.ersteller_name)}</span>`
+          : '';
+        return `<div class="kal-notiz kal-cal-${notizKey}" title="${escapeHtml(n.inhalt)}">
+          <span class="kal-notiz-icon">📋</span>
+          <span class="kal-notiz-text">${escapeHtml(n.inhalt)}</span>
+          ${autorHtml}
         </div>`;
       }).join('');
 
@@ -919,7 +948,7 @@ async function renderKalender(main, monthArg) {
           ${addBtn}
         </div>
         ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
-        <div class="kal-cell-items">${_histHtml(histByDate[k], statistikUrlKal)}${itemsHtml}${wkHtml}</div>
+        <div class="kal-cell-items">${_histHtml(histByDate[k], statistikUrlKal)}${notizenHtml ? `<div class="kal-notiz-list">${notizenHtml}</div>` : ''}${itemsHtml}${wkHtml}</div>
       </div>`;
     }).join('');
 

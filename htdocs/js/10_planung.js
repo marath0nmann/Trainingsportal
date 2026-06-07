@@ -618,9 +618,13 @@ const PLANUNG = (() => {
         // Tagesnotizen
         const notizenHtml = tagNotizen.map(n => {
           const notizKey = n.gruppe_id ? 'g' + n.gruppe_id : 'teamplan';
+          const autorHtml = n.ersteller_name
+            ? `<span class="kal-notiz-autor">${escapeHtml(n.ersteller_name)}</span>`
+            : '';
           return `<div class="kal-notiz kal-cal-${notizKey}" title="${escapeHtml(n.inhalt)}">
             <span class="kal-notiz-icon">📋</span>
             <span class="kal-notiz-text">${escapeHtml(n.inhalt)}</span>
+            ${autorHtml}
             ${kannEdit
               ? `<button class="kal-notiz-edit" onclick="event.stopPropagation();PLANUNG.notizBearbeiten(${n.id},'${escapeHtml(n.inhalt).replace(/'/g,"&#39;")}')" title="Notiz bearbeiten">✎</button>
                  <button class="kal-notiz-del" onclick="event.stopPropagation();PLANUNG.notizLoeschen(${n.id})" title="Notiz löschen">×</button>`
