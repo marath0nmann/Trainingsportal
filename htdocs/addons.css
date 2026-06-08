@@ -2028,15 +2028,16 @@ body.planung-active #app-footer    { display: none; }
   border-radius: 10px; margin-left: 2px;
 }
 
-/* ── Gruppen konfigurieren Modal ───────────────────────────────────────── */
-.gk-gruppen-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+/* ── Trainingsgruppen Vollseite ─────────────────────────────────────────── */
+.gk-page { padding: 16px; max-width: 680px; }
+.gk-gruppen-list { display: flex; flex-direction: column; gap: 0; }
 .gk-gruppe-row {
-  border: 1px solid var(--border); border-radius: 8px;
-  overflow: hidden;
+  border-bottom: 1px solid var(--border);
 }
+.gk-gruppe-row:last-child { border-bottom: none; }
 .gk-gruppe-head {
   display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px; background: var(--surface2, var(--bg2));
+  padding: 10px 16px;
 }
 .gk-tab-label { flex: 1; margin: 0; background: none; border: none; padding: 0; }
 .gk-name { font-weight: 500; font-size: 13px; }
@@ -2053,7 +2054,7 @@ body.planung-active #app-footer    { display: none; }
   border-radius: 9px; font-size: 10px; font-weight: 600;
   margin-right: 2px;
 }
-.gk-mitglieder-panel { padding: 10px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+.gk-mitglieder-panel { padding: 10px 16px 14px; border-top: 1px solid var(--border); background: var(--bg2, var(--surface2)); }
 .gk-mitglied-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .gk-mitglied-tag {
   display: inline-flex; align-items: center; gap: 4px;

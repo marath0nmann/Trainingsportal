@@ -309,15 +309,21 @@ const PLANUNG = (() => {
       _gruppenGeladen = true;
     }
 
-    const istAthleten = _activeTab === 'athleten';
+    const istAthleten         = _activeTab === 'athleten';
+    const istTrainingsgruppen = _activeTab === 'trainingsgruppen';
+    const istScroll           = istAthleten || istTrainingsgruppen;
 
     main.innerHTML = `
-      <div class="planung-wrap${istAthleten ? ' planung-scroll' : ''}">
+      <div class="planung-wrap${istScroll ? ' planung-scroll' : ''}">
         ${istTrainer ? _renderSectionBar() : ''}
         ${istTrainer && _activeTab === 'training' ? _renderGruppenTabs() : ''}
         ${istAthleten
           ? `<div class="planung-athleten" id="planung-athleten">
                <div class="planung-bloecke-loading">Lade…</div>
+             </div>`
+          : istTrainingsgruppen
+          ? `<div class="planung-trainingsgruppen" id="planung-trainingsgruppen">
+               <div class="planung-bloecke-loading">Lade Gruppen…</div>
              </div>`
           : `<div class="planung-split">
           <div class="planung-kal-col" id="planung-kal-col">
@@ -340,7 +346,7 @@ const PLANUNG = (() => {
 
     // Layout einfrieren: kein Seiten-Scroll, Wrap füllt genau den verbleibenden Raum
     _applyPlanungLayout();
-    if (!istAthleten) _bindDragAutoScroll();
+    if (!istScroll) _bindDragAutoScroll();
     window.addEventListener('resize', _applyPlanungLayout);
     const _offPlanung = () => {
       if (!(location.hash || '').startsWith('#planung')) {
@@ -354,6 +360,11 @@ const PLANUNG = (() => {
 
     if (istAthleten) {
       await _renderAthleten();
+      return;
+    }
+
+    if (istTrainingsgruppen) {
+      await _renderTrainingsgruppen();
       return;
     }
 
@@ -465,11 +476,18 @@ const PLANUNG = (() => {
   }
 
   // Gruppen-Konfiguration: Trainer wählt, welche Gruppen er sieht
-  // ── Gruppen konfigurieren Modal ───────────────────────────
+  // ── Trainingsgruppen Vollseite ────────────────────────────
   // State für aufgeklappte Gruppen und geladene Mitglieder
   const _gkState = { expanded: new Set(), mitglieder: {}, verfuegbar: {} };
 
-  async function gruppenKonfigurieren() {
+  // gruppenKonfigurieren: navigiert zur Vollseite (kein Modal mehr)
+  function gruppenKonfigurieren() {
+    wechsleSection('trainingsgruppen');
+  }
+
+  async function _renderTrainingsgruppen() {
+    const cont = document.getElementById('planung-trainingsgruppen');
+    if (!cont) return;
     if (!_alleGruppen.length) {
       try { _alleGruppen = await GRUPPEN.laden(); } catch (_) { _alleGruppen = []; }
     }
@@ -477,9 +495,10 @@ const PLANUNG = (() => {
   }
 
   function _gkRender() {
-    const isAdmin    = state.user && state.user.rolle === 'admin';
+    const isAdmin     = state.user && state.user.rolle === 'admin';
     const ausgewaehlt = new Set(_gruppen.map(g => g.id));
-    const cont = document.getElementById('modal-container');
+    const cont        = document.getElementById('planung-trainingsgruppen');
+    if (!cont) return;
 
     const gruppenHtml = _alleGruppen.map(g => {
       const chk      = ausgewaehlt.has(g.id) ? ' checked' : '';
@@ -525,27 +544,29 @@ const PLANUNG = (() => {
     }).join('');
 
     const neueGruppeHtml = isAdmin ? `
-      <div class="gk-neue-gruppe">
-        <input id="gk-neu-name" class="ed-input" type="text" placeholder="Name der neuen Gruppe" style="flex:1">
-        <button class="btn btn-ghost btn-sm" onclick="PLANUNG._gkNeuAnlegen()">+ Anlegen</button>
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-header">Neue Gruppe anlegen</div>
+        <div style="display:flex;gap:8px;align-items:center;padding:12px 16px">
+          <input id="gk-neu-name" class="ed-input" type="text" placeholder="Gruppenname"
+            style="flex:1" onkeydown="if(event.key==='Enter')PLANUNG._gkNeuAnlegen()">
+          <button class="btn btn-primary btn-sm" onclick="PLANUNG._gkNeuAnlegen()">+ Anlegen</button>
+        </div>
       </div>` : '';
 
     cont.innerHTML = `
-      <div class="modal-overlay">
-        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:560px">
-          <div class="modal-head">
-            <div><div class="modal-eyebrow">Planungsansicht</div><div class="modal-title">Trainingsgruppen konfigurieren</div></div>
-            <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
+      <div class="gk-page">
+        <div class="panel">
+          <div class="panel-header" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Gruppen &amp; Mitglieder</span>
+            <span style="font-size:12px;color:var(--text2);font-weight:400">Tab-Auswahl ✓ = im Gruppenplan sichtbar</span>
           </div>
-          <div class="modal-body">
-            <p class="profil-hint-global">Wähle die Gruppen (Tab-Auswahl) und verwalte Mitglieder (👥).</p>
-            <div class="gk-gruppen-list">${gruppenHtml || '<p class="gk-no-more">Keine Gruppen vorhanden.</p>'}</div>
-            ${neueGruppeHtml}
+          <div class="gk-gruppen-list" style="padding:8px 0">
+            ${gruppenHtml || '<p class="gk-no-more" style="padding:12px 16px">Keine Gruppen vorhanden.</p>'}
           </div>
-          <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--border)">
-            <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
-            <button class="btn btn-primary" onclick="PLANUNG.gruppenKonfigSpeichern()">Speichern</button>
-          </div>
+        </div>
+        ${neueGruppeHtml}
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+          <button class="btn btn-primary" onclick="PLANUNG.gruppenKonfigSpeichern()">Tab-Auswahl speichern</button>
         </div>
       </div>`;
   }
@@ -641,11 +662,9 @@ const PLANUNG = (() => {
         aktivGruppe = _gruppen[0] || null;
       }
       _gruppenGeladen = true;
-      // State zurücksetzen für nächsten Öffnen
-      _gkState.expanded.clear();
-      Object.keys(_gkState.mitglieder).forEach(k => delete _gkState.mitglieder[k]);
-      Object.keys(_gkState.verfuegbar).forEach(k => delete _gkState.verfuegbar[k]);
-      schliesseModal();
+      notify('Tab-Auswahl gespeichert.', 'ok');
+      // Zur Gruppenpläne-Sektion wechseln
+      _activeTab = 'training';
       const main = document.getElementById('main-content');
       if (main) await render(main);
     } catch (e) {
@@ -867,13 +886,18 @@ const PLANUNG = (() => {
     KAL_POPOVER.initItems(document.querySelectorAll('.planung-kal-cell .kal-item[data-einheit-id]'));
   }
 
-  // ── Untermenü-Wechsel (Gruppen/Athleten) ─────────────────
-  // Komplette Neudarstellung, da sich Layout (Split vs. Scroll-Ansicht) je Sektion unterscheidet.
+  // ── Untermenü-Wechsel ─────────────────────────────────────
   function wechsleSection(key) {
-    if (key === _activeTab && key !== 'athleten') return;
+    if (key === _activeTab && key !== 'athleten' && key !== 'trainingsgruppen') return;
     _activeTab = key;
     if (key === 'athleten') _athletSel = null;
     if (key === 'training' && !aktivGruppe && _gruppen.length) aktivGruppe = _gruppen[0];
+    if (key === 'trainingsgruppen') {
+      // State zurücksetzen damit Mitglieder frisch geladen werden
+      _gkState.expanded.clear();
+      Object.keys(_gkState.mitglieder).forEach(k => delete _gkState.mitglieder[k]);
+      Object.keys(_gkState.verfuegbar).forEach(k => delete _gkState.verfuegbar[k]);
+    }
     const main = document.getElementById('main-content');
     if (main) render(main);
   }
