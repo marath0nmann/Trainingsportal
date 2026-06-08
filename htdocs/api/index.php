@@ -5146,80 +5146,49 @@ function handleTrainingsgruppen(string $method, string $sub = ''): void
         return;
     }
 
-    // ── GET /trainingsgruppen/{id}/mitglieder → Mitglieder einer Gruppe + alle Nutzer ──
+    // ── GET /trainingsgruppen/{id}/mitglieder → Mitglieder + verfügbare Athleten ──
+    // Einzige Quelle: athlet_gruppen (dieselbe Tabelle wie Statistikportal).
+    // IDs sind immer athlet_id.
     if ($method === 'GET' && preg_match('/^(\d+)\/mitglieder$/', $sub, $m)) {
         $gruppeId = (int)$m[1];
-        $tbug     = DB::tbl('training_benutzer_gruppen');
         $tbAthGr  = DB::tbl('athlet_gruppen');
-        $tbBen    = DB::tbl('benutzer');
         $tbAth    = DB::tbl('athleten');
 
-        $mitglieder = [];
-        $benIdsMitglied = [];  // benutzer_ids die bereits Mitglied sind (zur Duplikat-Vermeidung)
-
-        // 1) Athleten aus Statistikportal (athlet_gruppen), ggf. mit Benutzer-Link
+        // Aktuelle Mitglieder
+        $mitglieder   = [];
+        $athIdsMitgl  = [];
         try {
-            $athRows = DB::fetchAll(
-                "SELECT a.id AS athlet_id, a.vorname, a.nachname,
-                        b.id AS benutzer_id, b.benutzername, b.email
+            $rows = DB::fetchAll(
+                "SELECT a.id AS athlet_id, a.vorname, a.nachname
                    FROM $tbAthGr ag
                    JOIN $tbAth a ON a.id = ag.athlet_id
-              LEFT JOIN $tbBen b ON b.athlet_id = a.id AND b.aktiv = 1 AND b.geloescht_am IS NULL
                   WHERE ag.gruppe_id = ?
                ORDER BY a.nachname, a.vorname",
                 [$gruppeId]
             );
-            foreach ($athRows as $r) {
+            foreach ($rows as $r) {
                 $name = trim(($r['vorname'] ?? '') . ' ' . ($r['nachname'] ?? ''));
-                if ($name === '') $name = $r['benutzername'] ?? ('#A' . $r['athlet_id']);
-                $mitglieder[] = [
-                    'id'         => (int)$r['athlet_id'],
-                    'benutzer_id'=> $r['benutzer_id'] ? (int)$r['benutzer_id'] : null,
-                    'name'       => $name,
-                    'quelle'     => 'statistikportal',
-                ];
-                if ($r['benutzer_id']) $benIdsMitglied[(int)$r['benutzer_id']] = true;
+                if ($name === '') $name = '#A' . $r['athlet_id'];
+                $mitglieder[]             = ['id' => (int)$r['athlet_id'], 'name' => $name];
+                $athIdsMitgl[(int)$r['athlet_id']] = true;
             }
         } catch (Throwable $_) {}
 
-        // 2) Manuell hinzugefügte Benutzer (training_benutzer_gruppen), die nicht schon oben erfasst sind
-        try {
-            $bugRows = DB::fetchAll(
-                "SELECT b.id, b.benutzername, b.email, b.rolle, a.vorname, a.nachname
-                   FROM $tbug bug
-                   JOIN $tbBen b ON b.id = bug.benutzer_id AND b.aktiv = 1 AND b.geloescht_am IS NULL
-              LEFT JOIN $tbAth a ON a.id = b.athlet_id
-                  WHERE bug.gruppe_id = ?
-               ORDER BY a.nachname, a.vorname, b.benutzername",
-                [$gruppeId]
-            );
-            foreach ($bugRows as $r) {
-                $benId = (int)$r['id'];
-                if (isset($benIdsMitglied[$benId])) continue; // schon via athlet_gruppen erfasst
-                $mitglieder[] = [
-                    'id'     => $benId,
-                    'name'   => _benutzerAnzeigename($r),
-                    'quelle' => 'manuell',
-                ];
-                $benIdsMitglied[$benId] = true;
-            }
-        } catch (Throwable $_) {}
-
-        // 3) Verfügbare Benutzer (nicht Mitglied)
-        $alleNutzer = DB::fetchAll(
-            "SELECT b.id, b.benutzername, b.email, b.rolle, a.vorname, a.nachname
-               FROM $tbBen b
-          LEFT JOIN $tbAth a ON a.id = b.athlet_id
-              WHERE b.aktiv = 1 AND b.geloescht_am IS NULL
-           ORDER BY a.nachname, a.vorname, b.benutzername"
-        );
+        // Verfügbare Athleten (noch nicht in dieser Gruppe)
         $verfuegbar = [];
-        foreach ($alleNutzer as $n) {
-            $id = (int)$n['id'];
-            if (!isset($benIdsMitglied[$id])) {
-                $verfuegbar[] = ['id' => $id, 'name' => _benutzerAnzeigename($n), 'rolle' => $n['rolle'] ?? null];
+        try {
+            $alle = DB::fetchAll(
+                "SELECT id, vorname, nachname FROM $tbAth ORDER BY nachname, vorname"
+            );
+            foreach ($alle as $a) {
+                $id = (int)$a['id'];
+                if (!isset($athIdsMitgl[$id])) {
+                    $name = trim(($a['vorname'] ?? '') . ' ' . ($a['nachname'] ?? ''));
+                    if ($name === '') $name = '#A' . $id;
+                    $verfuegbar[] = ['id' => $id, 'name' => $name];
+                }
             }
-        }
+        } catch (Throwable $_) {}
 
         echo json_encode(['ok' => true, 'mitglieder' => $mitglieder, 'verfuegbar' => $verfuegbar]);
         return;
@@ -5234,28 +5203,27 @@ function handleTrainingsgruppen(string $method, string $sub = ''): void
 
     $in = json_decode(file_get_contents('php://input'), true) ?? [];
 
-    // ── PUT /trainingsgruppen/{id}/mitglieder → Mitglieder hinzufügen/entfernen (Admin) ──
-    // Felder (alle optional):
-    //   benutzer_add:       [benutzer_id, ...]  → in training_benutzer_gruppen eintragen
-    //   benutzer_remove:    [benutzer_id, ...]  → aus training_benutzer_gruppen entfernen
-    //   athlet_remove:      [athlet_id, ...]    → aus athlet_gruppen entfernen (Statistikportal)
+    // ── PUT /trainingsgruppen/{id}/mitglieder → Mitglieder hinzufügen/entfernen ──
+    // add:    [athlet_id, ...]  → INSERT IGNORE in athlet_gruppen
+    // remove: [athlet_id, ...]  → DELETE aus athlet_gruppen
     if ($method === 'PUT' && preg_match('/^(\d+)\/mitglieder$/', $sub, $m)) {
-        $gruppeId   = (int)$m[1];
-        $tbug       = DB::tbl('training_benutzer_gruppen');
-        $tbAthGr    = DB::tbl('athlet_gruppen');
+        $gruppeId = (int)$m[1];
+        $tbAthGr  = DB::tbl('athlet_gruppen');
 
-        $benAdd     = array_map('intval', $in['benutzer_add']    ?? []);
-        $benRemove  = array_map('intval', $in['benutzer_remove'] ?? []);
-        $athRemove  = array_map('intval', $in['athlet_remove']   ?? []);
+        $add    = array_map('intval', $in['add']    ?? []);
+        $remove = array_map('intval', $in['remove'] ?? []);
 
-        foreach ($benAdd as $benId) {
-            if ($benId > 0) DB::query("INSERT IGNORE INTO $tbug (benutzer_id, gruppe_id) VALUES (?,?)", [$benId, $gruppeId]);
+        foreach ($add as $athId) {
+            if ($athId > 0) DB::query(
+                "INSERT IGNORE INTO $tbAthGr (athlet_id, gruppe_id) VALUES (?,?)",
+                [$athId, $gruppeId]
+            );
         }
-        foreach ($benRemove as $benId) {
-            if ($benId > 0) DB::query("DELETE FROM $tbug WHERE benutzer_id = ? AND gruppe_id = ?", [$benId, $gruppeId]);
-        }
-        foreach ($athRemove as $athId) {
-            if ($athId > 0) DB::query("DELETE FROM $tbAthGr WHERE athlet_id = ? AND gruppe_id = ?", [$athId, $gruppeId]);
+        foreach ($remove as $athId) {
+            if ($athId > 0) DB::query(
+                "DELETE FROM $tbAthGr WHERE athlet_id = ? AND gruppe_id = ?",
+                [$athId, $gruppeId]
+            );
         }
 
         echo json_encode(['ok' => true]);

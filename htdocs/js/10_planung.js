@@ -509,7 +509,7 @@ const PLANUNG = (() => {
       const mitglHtml = mitgl === null ? '' : (() => {
         const tags = mitgl.map(m => {
           const delBtn = isAdmin
-            ? `<button class="gk-mitglied-del" onclick="event.stopPropagation();PLANUNG._gkMitgliedEntfernen(${g.id},'${m.quelle}',${m.id})" title="Entfernen">×</button>`
+            ? `<button class="gk-mitglied-del" onclick="event.stopPropagation();PLANUNG._gkMitgliedEntfernen(${g.id},${m.id})" title="Entfernen">×</button>`
             : '';
           return `<span class="gk-mitglied-tag">${escapeHtml(m.name)}${delBtn}</span>`;
         }).join('');
@@ -517,8 +517,8 @@ const PLANUNG = (() => {
         const addHtml = isAdmin ? `
           <div class="gk-add-row">
             <select class="gk-add-select" id="gk-add-${g.id}">
-              <option value="">— Benutzer hinzufügen —</option>
-              ${verfg.map(u => `<option value="${u.id}">${escapeHtml(u.name)}${u.rolle && u.rolle !== 'athlet' ? ' (' + escapeHtml(u.rolle) + ')' : ''}</option>`).join('')}
+              <option value="">— Athlet hinzufügen —</option>
+              ${verfg.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('')}
             </select>
             <button class="btn btn-primary btn-sm" onclick="PLANUNG._gkMitgliedHinzufuegen(${g.id})">+ Hinzufügen</button>
           </div>` : '';
@@ -598,23 +598,20 @@ const PLANUNG = (() => {
 
   async function _gkMitgliedHinzufuegen(gruppeId) {
     const sel = document.getElementById('gk-add-' + gruppeId);
-    const benId = sel ? parseInt(sel.value, 10) : 0;
-    if (!benId) return;
+    const athId = sel ? parseInt(sel.value, 10) : 0;
+    if (!athId) return;
     const m = (_gkState.mitglieder[gruppeId] || []);
     const v = (_gkState.verfuegbar[gruppeId] || []);
-    const idx = v.findIndex(u => u.id === benId);
+    const idx = v.findIndex(u => u.id === athId);
     if (idx === -1) return;
-    const nutzer = { ...v[idx], quelle: 'manuell' };
+    const athlet = v[idx];
     // Optimistisch aktualisieren
-    _gkState.mitglieder[gruppeId] = [...m, nutzer];
+    _gkState.mitglieder[gruppeId] = [...m, athlet].sort((a, b) => a.name.localeCompare(b.name));
     _gkState.verfuegbar[gruppeId] = v.filter((_, i) => i !== idx);
     _gkRender();
     try {
-      await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, {
-        benutzer_add: [benId]
-      });
+      await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, { add: [athId] });
     } catch (e) {
-      // Rollback
       _gkState.mitglieder[gruppeId] = m;
       _gkState.verfuegbar[gruppeId] = v;
       _gkRender();
@@ -622,23 +619,17 @@ const PLANUNG = (() => {
     }
   }
 
-  async function _gkMitgliedEntfernen(gruppeId, quelle, memberId) {
+  async function _gkMitgliedEntfernen(gruppeId, athId) {
     const m = (_gkState.mitglieder[gruppeId] || []);
     const v = (_gkState.verfuegbar[gruppeId] || []);
-    const idx = m.findIndex(u => u.id === memberId && u.quelle === quelle);
+    const idx = m.findIndex(u => u.id === athId);
     if (idx === -1) return;
-    const nutzer = m[idx];
+    const athlet = m[idx];
     _gkState.mitglieder[gruppeId] = m.filter((_, i) => i !== idx);
-    // Statistikportal-Mitglieder nicht in "Verfügbar" anzeigen (haben ggf. keinen Benutzer-Account)
-    if (quelle !== 'statistikportal') {
-      _gkState.verfuegbar[gruppeId] = [...v, nutzer].sort((a, b) => a.name.localeCompare(b.name));
-    }
+    _gkState.verfuegbar[gruppeId] = [...v, athlet].sort((a, b) => a.name.localeCompare(b.name));
     _gkRender();
-    const payload = quelle === 'statistikportal'
-      ? { athlet_remove: [memberId] }
-      : { benutzer_remove: [memberId] };
     try {
-      await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, payload);
+      await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, { remove: [athId] });
     } catch (e) {
       _gkState.mitglieder[gruppeId] = m;
       _gkState.verfuegbar[gruppeId] = v;
