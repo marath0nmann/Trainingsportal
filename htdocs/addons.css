@@ -2038,26 +2038,10 @@ body.planung-active #app-footer    { display: none; }
   display: flex; align-items: center; gap: 10px;
   padding: 10px 16px; min-height: 44px;
 }
-/* Checkbox für "im Gruppenplan sichtbar" */
-.gk-tab-check {
-  display: inline-flex; align-items: center; cursor: pointer;
-  flex-shrink: 0;
-}
-.gk-tab-check input[type="checkbox"] { display: none; }
-.gk-check-box {
-  width: 16px; height: 16px; border-radius: 3px;
-  border: 2px solid var(--border); background: var(--surface);
-  transition: background .15s, border-color .15s;
-  flex-shrink: 0;
-}
-.gk-tab-check input[type="checkbox"]:checked ~ .gk-check-box {
-  background: var(--primary); border-color: var(--primary);
-}
-.gk-tab-check input[type="checkbox"]:checked ~ .gk-check-box::after {
-  content: ''; display: block; margin: 2px 3px;
-  width: 6px; height: 8px;
-  border: 2px solid #fff; border-top: none; border-left: none;
-  transform: rotate(45deg) translateY(-1px);
+/* Native Checkbox für "im Gruppenplan sichtbar" */
+.gk-tab-cb {
+  width: 15px; height: 15px; flex-shrink: 0; cursor: pointer;
+  accent-color: var(--primary);
 }
 .gk-name { font-weight: 500; font-size: 13px; flex: 1; min-width: 0; }
 .gk-expand-btn {
@@ -2084,12 +2068,6 @@ body.planung-active #app-footer    { display: none; }
   padding: 3px 8px 3px 10px; border-radius: 12px;
   background: var(--surface); font-size: 12px;
   border: 1px solid var(--border);
-}
-.gk-badge-stat {
-  font-size: 9px; font-weight: 700; letter-spacing: .03em;
-  background: var(--primary); color: #fff;
-  padding: 1px 4px; border-radius: 3px;
-  opacity: .75; flex-shrink: 0;
 }
 .gk-mitglied-del {
   background: none; border: none; cursor: pointer;

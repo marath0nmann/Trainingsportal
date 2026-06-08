@@ -508,12 +508,10 @@ const PLANUNG = (() => {
 
       const mitglHtml = mitgl === null ? '' : (() => {
         const tags = mitgl.map(m => {
-          const isStat = m.quelle === 'statistikportal';
-          const badge  = isStat ? `<span class="gk-badge-stat" title="Mitglied über Statistikportal">SP</span>` : '';
           const delBtn = isAdmin
             ? `<button class="gk-mitglied-del" onclick="event.stopPropagation();PLANUNG._gkMitgliedEntfernen(${g.id},'${m.quelle}',${m.id})" title="Entfernen">×</button>`
             : '';
-          return `<span class="gk-mitglied-tag">${escapeHtml(m.name)}${badge}${delBtn}</span>`;
+          return `<span class="gk-mitglied-tag">${escapeHtml(m.name)}${delBtn}</span>`;
         }).join('');
 
         const addHtml = isAdmin ? `
@@ -537,10 +535,7 @@ const PLANUNG = (() => {
 
       return `<div class="gk-gruppe-row${expanded ? ' gk-expanded' : ''}">
         <div class="gk-gruppe-head">
-          <label class="gk-tab-check">
-            <input type="checkbox" class="pg-cfg-cb" value="${g.id}"${chk}>
-            <span class="gk-check-box"></span>
-          </label>
+          <input type="checkbox" class="pg-cfg-cb gk-tab-cb" value="${g.id}"${chk}>
           <span class="gk-name">${escapeHtml(g.name)}</span>
           <button class="gk-expand-btn" onclick="PLANUNG._gkToggle(${g.id})" title="Mitglieder anzeigen">
             👥 ${memberCount} ${expanded ? '▲' : '▼'}
@@ -554,13 +549,15 @@ const PLANUNG = (() => {
       <div class="panel" style="margin-top:12px">
         <div class="panel-header">Neue Gruppe anlegen</div>
         <div style="display:flex;gap:8px;align-items:center;padding:12px 16px">
-          <input id="gk-neu-name" class="ed-input" type="text" placeholder="Gruppenname"
-            style="flex:1" onkeydown="if(event.key==='Enter')PLANUNG._gkNeuAnlegen()">
+          <input id="gk-neu-name" type="text" placeholder="Gruppenname"
+            style="flex:1;background:var(--surface);border:1.5px solid var(--border);color:var(--text);border-radius:7px;padding:8px 10px;font-size:14px;font-family:inherit;"
+            onkeydown="if(event.key==='Enter')PLANUNG._gkNeuAnlegen()"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
           <button class="btn btn-primary btn-sm" onclick="PLANUNG._gkNeuAnlegen()">+ Anlegen</button>
         </div>
       </div>` : '';
 
-    const hint = `<span style="font-size:11px;color:var(--text2)">☑ = im Gruppenplan als Tab sichtbar &nbsp;·&nbsp; SP = Statistikportal-Mitglied</span>`;
+    const hint = `<span style="font-size:11px;color:var(--text2)">☑ = im Gruppenplan als Tab sichtbar</span>`;
 
     cont.innerHTML = `
       <div class="gk-page">
