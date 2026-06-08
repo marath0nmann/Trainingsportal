@@ -168,7 +168,7 @@ const PLANUNG = (() => {
   let _gruppen        = [];     // konfigurierte Gruppen des Trainers (sichtbar in Tabs)
   let _alleGruppen    = [];     // alle verfügbaren Gruppen (für Konfiguration)
   let _gruppenGeladen = false;  // true nach erstem Laden – verhindert erneutes Laden nach leerem Speichern
-  let _activeTab     = 'training'; // 'training' | 'athleten'
+  let _activeTab     = 'training'; // 'training' | 'athleten' | 'trainingsgruppen'
   let _athletSel     = null;       // beim Athleten-Tab gewählter Plan: { benutzer_id, name, stufe } | null
   let _athletenCache = {};         // benutzer_id → { name, stufe } (aus der Übersicht)
 
@@ -390,25 +390,26 @@ const PLANUNG = (() => {
     </span>`;
   }
 
-  // ── Untermenü (Admin-Stil): Gruppen · Athleten ───────────
+  // ── Untermenü (Admin-Stil): Gruppenpläne · Athletenpläne · Trainingsgruppen ──
   function _renderSectionBar() {
     const item = (key, label, aktiv, title) =>
       `<button class="subtab${aktiv ? ' active' : ''}"
         onclick="PLANUNG.wechsleSection('${key}')"${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>`;
     return `<div class="planung-section-nav">
       <div class="subtabs">
-        ${item('training', 'Gruppen',  _activeTab === 'training', 'Trainingspläne der Gruppen')}
-        ${item('athleten', 'Athleten', _activeTab === 'athleten', 'Persönliche Trainingspläne der Athleten')}
+        ${item('training',         'Gruppenpläne',     _activeTab === 'training',         'Trainingspläne der Gruppen')}
+        ${item('athleten',         'Athletenpläne',    _activeTab === 'athleten',         'Persönliche Trainingspläne der Athleten')}
+        ${item('trainingsgruppen', 'Trainingsgruppen', _activeTab === 'trainingsgruppen', 'Gruppen anlegen und Mitglieder verwalten')}
       </div>
     </div>`;
   }
 
-  // Gruppen-Tabs (nur innerhalb der Sektion „Gruppen") – ein Tab je Gruppe.
+  // Gruppen-Tabs (nur innerhalb der Sektion „Gruppenpläne") – ein Tab je Gruppe.
   function _renderGruppenTabs() {
     if (!_gruppen.length) {
       return `<div class="planung-gruppen-bar">
         <span class="planung-gruppen-hint">Kein Gruppenfilter aktiv –</span>
-        <button class="btn btn-ghost btn-sm" onclick="PLANUNG.gruppenKonfigurieren()">Gruppen auswählen</button>
+        <button class="btn btn-ghost btn-sm" onclick="PLANUNG.wechsleSection('trainingsgruppen')">Gruppen konfigurieren</button>
       </div>`;
     }
     const tabs = _gruppen.map(g =>
@@ -418,7 +419,7 @@ const PLANUNG = (() => {
     ).join('');
     return `<div class="planung-gruppen-bar">
       ${tabs}
-      <button class="planung-tab planung-tab-config" onclick="PLANUNG.gruppenKonfigurieren()" title="Gruppen konfigurieren">⚙</button>
+      <button class="planung-tab planung-tab-config" onclick="PLANUNG.wechsleSection('trainingsgruppen')" title="Trainingsgruppen verwalten">⚙</button>
     </div>`;
   }
 
@@ -464,40 +465,170 @@ const PLANUNG = (() => {
   }
 
   // Gruppen-Konfiguration: Trainer wählt, welche Gruppen er sieht
+  // ── Gruppen konfigurieren Modal ───────────────────────────
+  // State für aufgeklappte Gruppen und geladene Mitglieder
+  const _gkState = { expanded: new Set(), mitglieder: {}, verfuegbar: {} };
+
   async function gruppenKonfigurieren() {
     if (!_alleGruppen.length) {
       try { _alleGruppen = await GRUPPEN.laden(); } catch (_) { _alleGruppen = []; }
     }
-    if (!_alleGruppen.length) {
-      alert('Keine Trainingsgruppen im System vorhanden (Statistikportal).');
-      return;
-    }
+    _gkRender();
+  }
+
+  function _gkRender() {
+    const isAdmin    = state.user && state.user.rolle === 'admin';
     const ausgewaehlt = new Set(_gruppen.map(g => g.id));
     const cont = document.getElementById('modal-container');
-    const checks = _alleGruppen.map(g => {
-      const chk = ausgewaehlt.has(g.id) ? ' checked' : '';
-      return `<label class="profil-gruppe-item">
-        <input type="checkbox" class="pg-cfg-cb" value="${g.id}"${chk}>
-        <span>${escapeHtml(g.name)}</span>
-      </label>`;
+
+    const gruppenHtml = _alleGruppen.map(g => {
+      const chk      = ausgewaehlt.has(g.id) ? ' checked' : '';
+      const expanded = _gkState.expanded.has(g.id);
+      const mitgl    = _gkState.mitglieder[g.id] || null;
+      const verfg    = _gkState.verfuegbar[g.id] || [];
+
+      const mitglHtml = mitgl === null ? '' : (() => {
+        const tags = mitgl.map(m =>
+          `<span class="gk-mitglied-tag">
+            ${escapeHtml(m.name)}
+            ${isAdmin ? `<button class="gk-mitglied-del" onclick="event.stopPropagation();PLANUNG._gkMitgliedEntfernen(${g.id},${m.id})" title="Entfernen">×</button>` : ''}
+          </span>`
+        ).join('');
+        const addHtml = isAdmin && verfg.length ? `
+          <div class="gk-add-row">
+            <select class="gk-add-select" id="gk-add-${g.id}">
+              <option value="">— Mitglied hinzufügen —</option>
+              ${verfg.map(u => `<option value="${u.id}">${escapeHtml(u.name)}${u.rolle !== 'athlet' ? ' (' + escapeHtml(u.rolle || '') + ')' : ''}</option>`).join('')}
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="PLANUNG._gkMitgliedHinzufuegen(${g.id})">Hinzufügen</button>
+          </div>` : (isAdmin && !verfg.length ? '<p class="gk-no-more">Alle Benutzer sind bereits Mitglied.</p>' : '');
+        return `<div class="gk-mitglieder-panel">
+          ${mitgl.length ? `<div class="gk-mitglied-list">${tags}</div>` : '<p class="gk-no-more">Noch keine Mitglieder.</p>'}
+          ${addHtml}
+        </div>`;
+      })();
+
+      const memberCount = mitgl !== null ? ` <span class="gk-count">${mitgl.length}</span>` : '';
+
+      return `<div class="gk-gruppe-row${expanded ? ' gk-expanded' : ''}">
+        <div class="gk-gruppe-head">
+          <label class="profil-gruppe-item gk-tab-label">
+            <input type="checkbox" class="pg-cfg-cb" value="${g.id}"${chk}>
+            <span class="gk-name">${escapeHtml(g.name)}</span>
+          </label>
+          <button class="gk-expand-btn" onclick="PLANUNG._gkToggle(${g.id})" title="Mitglieder anzeigen">
+            👥${memberCount} ${expanded ? '▲' : '▼'}
+          </button>
+        </div>
+        ${expanded ? mitglHtml : ''}
+      </div>`;
     }).join('');
+
+    const neueGruppeHtml = isAdmin ? `
+      <div class="gk-neue-gruppe">
+        <input id="gk-neu-name" class="ed-input" type="text" placeholder="Name der neuen Gruppe" style="flex:1">
+        <button class="btn btn-ghost btn-sm" onclick="PLANUNG._gkNeuAnlegen()">+ Anlegen</button>
+      </div>` : '';
+
     cont.innerHTML = `
       <div class="modal-overlay">
-        <div class="modal-card" onclick="event.stopPropagation()">
+        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:560px">
           <div class="modal-head">
             <div><div class="modal-eyebrow">Planungsansicht</div><div class="modal-title">Trainingsgruppen konfigurieren</div></div>
             <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
           </div>
           <div class="modal-body">
-            <p class="profil-hint-global">Wähle die Gruppen, für die du Trainingspläne erstellst. Nur diese erscheinen als Tabs.</p>
-            <div class="profil-gruppen-list">${checks}</div>
-            <div class="modal-actions">
-              <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
-              <button class="btn btn-primary" onclick="PLANUNG.gruppenKonfigSpeichern()">Speichern</button>
-            </div>
+            <p class="profil-hint-global">Wähle die Gruppen (Tab-Auswahl) und verwalte Mitglieder (👥).</p>
+            <div class="gk-gruppen-list">${gruppenHtml || '<p class="gk-no-more">Keine Gruppen vorhanden.</p>'}</div>
+            ${neueGruppeHtml}
+          </div>
+          <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--border)">
+            <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="PLANUNG.gruppenKonfigSpeichern()">Speichern</button>
           </div>
         </div>
       </div>`;
+  }
+
+  async function _gkToggle(gruppeId) {
+    if (_gkState.expanded.has(gruppeId)) {
+      _gkState.expanded.delete(gruppeId);
+    } else {
+      _gkState.expanded.add(gruppeId);
+      if (!_gkState.mitglieder[gruppeId]) {
+        try {
+          const d = await apiGet(`trainingsgruppen/${gruppeId}/mitglieder`, { silent: true });
+          _gkState.mitglieder[gruppeId] = d.mitglieder || [];
+          _gkState.verfuegbar[gruppeId] = d.verfuegbar || [];
+        } catch (_) {
+          _gkState.mitglieder[gruppeId] = [];
+          _gkState.verfuegbar[gruppeId] = [];
+        }
+      }
+    }
+    _gkRender();
+  }
+
+  async function _gkMitgliedHinzufuegen(gruppeId) {
+    const sel = document.getElementById('gk-add-' + gruppeId);
+    const benId = sel ? parseInt(sel.value, 10) : 0;
+    if (!benId) return;
+    const m = (_gkState.mitglieder[gruppeId] || []);
+    const v = (_gkState.verfuegbar[gruppeId] || []);
+    const idx = v.findIndex(u => u.id === benId);
+    if (idx === -1) return;
+    const nutzer = v[idx];
+    // Optimistisch aktualisieren
+    _gkState.mitglieder[gruppeId] = [...m, nutzer];
+    _gkState.verfuegbar[gruppeId] = v.filter((_, i) => i !== idx);
+    _gkRender();
+    try {
+      await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, {
+        benutzer_ids: _gkState.mitglieder[gruppeId].map(u => u.id)
+      });
+    } catch (e) {
+      // Rollback
+      _gkState.mitglieder[gruppeId] = m;
+      _gkState.verfuegbar[gruppeId] = v;
+      _gkRender();
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function _gkMitgliedEntfernen(gruppeId, benId) {
+    const m = (_gkState.mitglieder[gruppeId] || []);
+    const v = (_gkState.verfuegbar[gruppeId] || []);
+    const idx = m.findIndex(u => u.id === benId);
+    if (idx === -1) return;
+    const nutzer = m[idx];
+    _gkState.mitglieder[gruppeId] = m.filter((_, i) => i !== idx);
+    _gkState.verfuegbar[gruppeId] = [...v, nutzer].sort((a, b) => a.name.localeCompare(b.name));
+    _gkRender();
+    try {
+      await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, {
+        benutzer_ids: _gkState.mitglieder[gruppeId].map(u => u.id)
+      });
+    } catch (e) {
+      _gkState.mitglieder[gruppeId] = m;
+      _gkState.verfuegbar[gruppeId] = v;
+      _gkRender();
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function _gkNeuAnlegen() {
+    const inp = document.getElementById('gk-neu-name');
+    const name = inp ? inp.value.trim() : '';
+    if (!name) { inp && inp.focus(); return; }
+    try {
+      const d = await apiPost('trainingsgruppen', { name });
+      _alleGruppen.push(d.gruppe);
+      _alleGruppen.sort((a, b) => a.name.localeCompare(b.name));
+      GRUPPEN.invalidate();
+      _gkRender();
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
   }
 
   async function gruppenKonfigSpeichern() {
@@ -509,11 +640,12 @@ const PLANUNG = (() => {
       if (!_gruppen.some(g => aktivGruppe && g.id === aktivGruppe.id)) {
         aktivGruppe = _gruppen[0] || null;
       }
-      // Flag setzen BEVOR render() – sonst würde render() die Prefs neu laden
-      // und die Auto-Select-Logik könnte leere Auswahl überschreiben
       _gruppenGeladen = true;
+      // State zurücksetzen für nächsten Öffnen
+      _gkState.expanded.clear();
+      Object.keys(_gkState.mitglieder).forEach(k => delete _gkState.mitglieder[k]);
+      Object.keys(_gkState.verfuegbar).forEach(k => delete _gkState.verfuegbar[k]);
       schliesseModal();
-      // Komplette Planungsansicht neu rendern (inkl. Tabs)
       const main = document.getElementById('main-content');
       if (main) await render(main);
     } catch (e) {
@@ -1532,6 +1664,7 @@ const PLANUNG = (() => {
     einheitLoeschenAusEditor, editorFooterRestore: _editorFooterStandard,
     reloadKal: renderKal,
     gruppeWechseln, gruppenKonfigurieren, gruppenKonfigSpeichern,
+    _gkToggle, _gkMitgliedHinzufuegen, _gkMitgliedEntfernen, _gkNeuAnlegen,
     getAktivGruppe,
     wechsleSection,
     setDefaultFarbe, resetDefaultFarbe,
