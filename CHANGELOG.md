@@ -1,6 +1,6 @@
 # Changelog
 
-## v264
+## v265
 - Tagesnotizen im Hauptkalender (Startseite): werden jetzt parallel zu den Einheiten geladen und in Kalenderfarbe mit Autorenname angezeigt; Absage-Autor im Hauptkalender sichtbar
 - Autorenname in Tagesnotizen: wird in beiden Kalendern (Haupt + Planung) neben dem Notiztext angezeigt
 - Fix: Neue Modals (Tagesnotiz, Absagen, Wiederherstellen) waren transparent – falsche CSS-Klassen `modal-box`/`modal-header` durch `modal-card`/`modal-head` ersetzt

@@ -174,8 +174,8 @@ const PLANUNG = (() => {
 
   // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
   function _applyPlanungLayout() {
-    // Athleten-Tab (Übersicht/fremder Plan) scrollt normal – kein Viewport-Lock.
-    if (_activeTab === 'athleten') { _clearPlanungLayout(); return; }
+    // Athleten- und Trainingsgruppen-Tab scrollt normal – kein Viewport-Lock.
+    if (_activeTab === 'athleten' || _activeTab === 'trainingsgruppen') { _clearPlanungLayout(); return; }
 
     // Auf schmalen Bildschirmen kein Viewport-Lock: das 100vh/overflow-hidden-
     // Layout lässt die Flex-Kalenderzeilen kollabieren und erzeugt eine
@@ -507,36 +507,43 @@ const PLANUNG = (() => {
       const verfg    = _gkState.verfuegbar[g.id] || [];
 
       const mitglHtml = mitgl === null ? '' : (() => {
-        const tags = mitgl.map(m =>
-          `<span class="gk-mitglied-tag">
-            ${escapeHtml(m.name)}
-            ${isAdmin ? `<button class="gk-mitglied-del" onclick="event.stopPropagation();PLANUNG._gkMitgliedEntfernen(${g.id},${m.id})" title="Entfernen">×</button>` : ''}
-          </span>`
-        ).join('');
-        const addHtml = isAdmin && verfg.length ? `
+        const tags = mitgl.map(m => {
+          const isStat = m.quelle === 'statistikportal';
+          const badge  = isStat ? `<span class="gk-badge-stat" title="Mitglied über Statistikportal">SP</span>` : '';
+          const delBtn = isAdmin
+            ? `<button class="gk-mitglied-del" onclick="event.stopPropagation();PLANUNG._gkMitgliedEntfernen(${g.id},'${m.quelle}',${m.id})" title="Entfernen">×</button>`
+            : '';
+          return `<span class="gk-mitglied-tag">${escapeHtml(m.name)}${badge}${delBtn}</span>`;
+        }).join('');
+
+        const addHtml = isAdmin ? `
           <div class="gk-add-row">
             <select class="gk-add-select" id="gk-add-${g.id}">
-              <option value="">— Mitglied hinzufügen —</option>
-              ${verfg.map(u => `<option value="${u.id}">${escapeHtml(u.name)}${u.rolle !== 'athlet' ? ' (' + escapeHtml(u.rolle || '') + ')' : ''}</option>`).join('')}
+              <option value="">— Benutzer hinzufügen —</option>
+              ${verfg.map(u => `<option value="${u.id}">${escapeHtml(u.name)}${u.rolle && u.rolle !== 'athlet' ? ' (' + escapeHtml(u.rolle) + ')' : ''}</option>`).join('')}
             </select>
-            <button class="btn btn-ghost btn-sm" onclick="PLANUNG._gkMitgliedHinzufuegen(${g.id})">Hinzufügen</button>
-          </div>` : (isAdmin && !verfg.length ? '<p class="gk-no-more">Alle Benutzer sind bereits Mitglied.</p>' : '');
+            <button class="btn btn-primary btn-sm" onclick="PLANUNG._gkMitgliedHinzufuegen(${g.id})">+ Hinzufügen</button>
+          </div>` : '';
+
         return `<div class="gk-mitglieder-panel">
           ${mitgl.length ? `<div class="gk-mitglied-list">${tags}</div>` : '<p class="gk-no-more">Noch keine Mitglieder.</p>'}
           ${addHtml}
         </div>`;
       })();
 
-      const memberCount = mitgl !== null ? ` <span class="gk-count">${mitgl.length}</span>` : '';
+      const memberCount = mitgl !== null
+        ? `<span class="gk-count">${mitgl.length}</span>`
+        : '';
 
       return `<div class="gk-gruppe-row${expanded ? ' gk-expanded' : ''}">
         <div class="gk-gruppe-head">
-          <label class="profil-gruppe-item gk-tab-label">
+          <label class="gk-tab-check">
             <input type="checkbox" class="pg-cfg-cb" value="${g.id}"${chk}>
-            <span class="gk-name">${escapeHtml(g.name)}</span>
+            <span class="gk-check-box"></span>
           </label>
+          <span class="gk-name">${escapeHtml(g.name)}</span>
           <button class="gk-expand-btn" onclick="PLANUNG._gkToggle(${g.id})" title="Mitglieder anzeigen">
-            👥${memberCount} ${expanded ? '▲' : '▼'}
+            👥 ${memberCount} ${expanded ? '▲' : '▼'}
           </button>
         </div>
         ${expanded ? mitglHtml : ''}
@@ -544,7 +551,7 @@ const PLANUNG = (() => {
     }).join('');
 
     const neueGruppeHtml = isAdmin ? `
-      <div class="panel" style="margin-top:16px">
+      <div class="panel" style="margin-top:12px">
         <div class="panel-header">Neue Gruppe anlegen</div>
         <div style="display:flex;gap:8px;align-items:center;padding:12px 16px">
           <input id="gk-neu-name" class="ed-input" type="text" placeholder="Gruppenname"
@@ -553,20 +560,22 @@ const PLANUNG = (() => {
         </div>
       </div>` : '';
 
+    const hint = `<span style="font-size:11px;color:var(--text2)">☑ = im Gruppenplan als Tab sichtbar &nbsp;·&nbsp; SP = Statistikportal-Mitglied</span>`;
+
     cont.innerHTML = `
       <div class="gk-page">
         <div class="panel">
-          <div class="panel-header" style="display:flex;align-items:center;justify-content:space-between">
+          <div class="panel-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
             <span>Gruppen &amp; Mitglieder</span>
-            <span style="font-size:12px;color:var(--text2);font-weight:400">Tab-Auswahl ✓ = im Gruppenplan sichtbar</span>
+            ${hint}
           </div>
-          <div class="gk-gruppen-list" style="padding:8px 0">
+          <div class="gk-gruppen-list">
             ${gruppenHtml || '<p class="gk-no-more" style="padding:12px 16px">Keine Gruppen vorhanden.</p>'}
           </div>
         </div>
         ${neueGruppeHtml}
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-          <button class="btn btn-primary" onclick="PLANUNG.gruppenKonfigSpeichern()">Tab-Auswahl speichern</button>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn btn-primary" onclick="PLANUNG.gruppenKonfigSpeichern()">Speichern</button>
         </div>
       </div>`;
   }
@@ -598,14 +607,14 @@ const PLANUNG = (() => {
     const v = (_gkState.verfuegbar[gruppeId] || []);
     const idx = v.findIndex(u => u.id === benId);
     if (idx === -1) return;
-    const nutzer = v[idx];
+    const nutzer = { ...v[idx], quelle: 'manuell' };
     // Optimistisch aktualisieren
     _gkState.mitglieder[gruppeId] = [...m, nutzer];
     _gkState.verfuegbar[gruppeId] = v.filter((_, i) => i !== idx);
     _gkRender();
     try {
       await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, {
-        benutzer_ids: _gkState.mitglieder[gruppeId].map(u => u.id)
+        benutzer_add: [benId]
       });
     } catch (e) {
       // Rollback
@@ -616,19 +625,23 @@ const PLANUNG = (() => {
     }
   }
 
-  async function _gkMitgliedEntfernen(gruppeId, benId) {
+  async function _gkMitgliedEntfernen(gruppeId, quelle, memberId) {
     const m = (_gkState.mitglieder[gruppeId] || []);
     const v = (_gkState.verfuegbar[gruppeId] || []);
-    const idx = m.findIndex(u => u.id === benId);
+    const idx = m.findIndex(u => u.id === memberId && u.quelle === quelle);
     if (idx === -1) return;
     const nutzer = m[idx];
     _gkState.mitglieder[gruppeId] = m.filter((_, i) => i !== idx);
-    _gkState.verfuegbar[gruppeId] = [...v, nutzer].sort((a, b) => a.name.localeCompare(b.name));
+    // Statistikportal-Mitglieder nicht in "Verfügbar" anzeigen (haben ggf. keinen Benutzer-Account)
+    if (quelle !== 'statistikportal') {
+      _gkState.verfuegbar[gruppeId] = [...v, nutzer].sort((a, b) => a.name.localeCompare(b.name));
+    }
     _gkRender();
+    const payload = quelle === 'statistikportal'
+      ? { athlet_remove: [memberId] }
+      : { benutzer_remove: [memberId] };
     try {
-      await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, {
-        benutzer_ids: _gkState.mitglieder[gruppeId].map(u => u.id)
-      });
+      await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, payload);
     } catch (e) {
       _gkState.mitglieder[gruppeId] = m;
       _gkState.verfuegbar[gruppeId] = v;
