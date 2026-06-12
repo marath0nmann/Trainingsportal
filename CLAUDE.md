@@ -10,17 +10,18 @@ Hosting: all-inkl.com Shared Hosting → `/training.tus-oedt.de/htdocs/`
 ```
 htdocs/                 → Web-Root (Document-Root von training.tus-oedt.de)
   index.html            → Einstiegspunkt (SPA), Cache-Buster ?v=NNN
-  app.css               → Optik wie Statistikportal (1:1 übernommen)
+  shared.php            → Asset-Proxy: liefert app.css/Logo aus dem Statistikportal-htdocs (identische Optik ohne Duplikat)
+  addons.css            → Trainingsportal-spezifische CSS-Erweiterungen
+  favicon.php           → Dynamisches Favicon/Apple-Touch-Icon aus dem Vereinslogo
   js/
     01_api.js           → apiGet/apiPost/apiPut/apiDel + 401-Redirect zum Login-Portal
     02_app.js           → Bootstrap, Header, Routing-Stub (renderPage)
   api/index.php         → REST-API (auth/me, auth/logout, ping; weitere Endpunkte folgen)
   opcache-clear.php     → Nach jedem Deploy aufgerufen
 includes/               → PHP-Bibliotheken (außerhalb Web-Root)
-  auth.php              → Session/Auth/TOTP/Passkey  (1:1 wie Statistik-/Login-Portal)
-  db.php                → DB-Zugriff
-  settings.php          → Vereinseinstellungen
-  totp.php / passkey.php
+  auth.php              → Session/Auth/TOTP/Passkey (portalspezifisch — eigene Rolle-Logik)
+  db.php / settings.php / totp.php / passkey.php
+                        → Stubs, laden die zentralen Klassen aus dem Statistikportal-includes
   config.sample.php     → Vorlage; config.php steht in .gitignore
 sql/                    → Trainingsportal-spezifische Tabellen (training_*)
 build.sh / commit.sh    → Build & Commit-Helper (analog Statistikportal)
