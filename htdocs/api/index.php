@@ -35,6 +35,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/settings.php';
+require_once __DIR__ . '/../../includes/migrate.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -49,36 +50,7 @@ header('Cache-Control: no-store');
 
 function runPendingMigrations(): void
 {
-    static $done = false;
-    if ($done) return;
-    $done = true;
-
-    // Aktuelle DB-Version lesen (0 = noch keine Migration gelaufen)
-    $current = (int) Settings::get('training_db_version', '0');
-    $migs    = _migrationStmts();
-    if ($current >= max(array_keys($migs))) return; // Fast-Path: alles aktuell
-
-    foreach ($migs as $num => $stmts) {
-        if ($num <= $current) continue;
-        if (is_callable($stmts)) {
-            // Migration als PHP-Closure
-            try { $stmts(); } catch (Throwable $e) {
-                error_log("[migration {$num}] " . $e->getMessage());
-            }
-        } else {
-            foreach ($stmts as $sql) {
-                try {
-                    DB::query($sql);
-                } catch (Throwable $e) {
-                    // DDL-Fehler ("already exists", "duplicate key name" …) sicher ignorieren;
-                    // echte Fehler werden ins PHP-Error-Log geschrieben.
-                    error_log("[migration {$num}] " . $e->getMessage());
-                }
-            }
-        }
-        Settings::set('training_db_version', (string) $num);
-        $current = $num;
-    }
+    Migrations::run('training_db_version', _migrationStmts());
 }
 
 /** Gibt alle Migrationen als [versionsnummer => [sql, ...]] zurück. */

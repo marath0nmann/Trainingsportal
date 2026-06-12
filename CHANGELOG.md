@@ -1,5 +1,8 @@
 # Changelog
 
+## v271
+- Refactor: `runPendingMigrations()` nutzt jetzt den gemeinsamen `Migrations::run('training_db_version', _migrationStmts())` aus `includes/migrate.php`. ~30 LOC Boilerplate raus.
+
 ## v270
 - Modernisierung (PHP 8): `strpos(...) !== false` → `str_contains(...)` in `api/index.php` (ICS-Parser) und `shared.php` (`str_starts_with` für Path-Prefix-Check). Identisches Verhalten, lesbarer.
 
