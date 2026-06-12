@@ -1,5 +1,8 @@
 # Changelog
 
+## v269
+- Re-Refactor (nach v268-Revert): `includes/{db,settings,totp,passkey}.php` sind jetzt robuste Stubs auf das Statistikportal-Schwesterverzeichnis (`../../statistik.tus-oedt.de/includes/`). Funktioniert ohne Eingriff in die Production-`config.php`. Optional per `STATISTIKPORTAL_INCLUDES_PATH` überschreibbar.
+
 ## v267
 - Tagesnotizen im Hauptkalender (Startseite): werden jetzt parallel zu den Einheiten geladen und in Kalenderfarbe mit Autorenname angezeigt; Absage-Autor im Hauptkalender sichtbar
 - Autorenname in Tagesnotizen: wird in beiden Kalendern (Haupt + Planung) neben dem Notiztext angezeigt
