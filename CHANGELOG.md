@@ -1,5 +1,8 @@
 # Changelog
 
+## v270
+- Modernisierung (PHP 8): `strpos(...) !== false` → `str_contains(...)` in `api/index.php` (ICS-Parser) und `shared.php` (`str_starts_with` für Path-Prefix-Check). Identisches Verhalten, lesbarer.
+
 ## v269
 - Re-Refactor (nach v268-Revert): `includes/{db,settings,totp,passkey}.php` sind jetzt robuste Stubs auf das Statistikportal-Schwesterverzeichnis (`../../statistik.tus-oedt.de/includes/`). Funktioniert ohne Eingriff in die Production-`config.php`. Optional per `STATISTIKPORTAL_INCLUDES_PATH` überschreibbar.
 

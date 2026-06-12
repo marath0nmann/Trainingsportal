@@ -2589,7 +2589,7 @@ function parseIcsEvents(string $body, string $von, string $bis): array {
             $val  = $m[3];
             if ($key === 'DTSTART' || $key === 'DTEND') {
                 $cur[$key] = $val;
-                if (strpos($params, 'VALUE=DATE') !== false) {
+                if (str_contains($params, 'VALUE=DATE')) {
                     $cur[$key . '_VALUE_DATE'] = true;
                 }
             } elseif ($key === 'SUMMARY') {

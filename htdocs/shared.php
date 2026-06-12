@@ -39,7 +39,7 @@ if (!$ok) { http_response_code(404); exit; }
 $path = rtrim(STATISTIKPORTAL_PATH, '/') . '/' . $file;
 $real = realpath($path);
 $base = realpath(STATISTIKPORTAL_PATH);
-if (!$real || !$base || strpos($real, $base) !== 0 || !is_file($real)) {
+if (!$real || !$base || !str_starts_with($real, $base) || !is_file($real)) {
     http_response_code(404); exit;
 }
 
