@@ -1,10 +1,5 @@
 # Changelog
 
-## v268
-- Refactor: `includes/{db,settings,totp,passkey}.php` sind jetzt 4-zeilige Stubs, die per `STATISTIKPORTAL_PATH` die zentralen Klassen aus dem Statistikportal-Repo laden – kein doppelter Bibliotheks-Code mehr
-- Refactor: `favicon.php` byteweise identisch mit Statistikportal/Login/Planung (Auto-Detect-Logo)
-- Doku: `CLAUDE.md` Projektstruktur an aktuellen Stand angepasst (shared.php-Proxy, Stub-Hinweis)
-
 ## v267
 - Tagesnotizen im Hauptkalender (Startseite): werden jetzt parallel zu den Einheiten geladen und in Kalenderfarbe mit Autorenname angezeigt; Absage-Autor im Hauptkalender sichtbar
 - Autorenname in Tagesnotizen: wird in beiden Kalendern (Haupt + Planung) neben dem Notiztext angezeigt

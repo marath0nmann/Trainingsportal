@@ -5,7 +5,8 @@
 
 set -e
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-OUT_DIR="/mnt/user-data/outputs"
+OUT_DIR="${OUT_DIR:-/mnt/user-data/outputs}"
+[ -d "$OUT_DIR" ] || OUT_DIR="$REPO_DIR/.."
 
 # ── Version aus index.html lesen und erhöhen ────────────────────────────────
 CUR_VER=$(grep -o 'v[0-9]\+' "$REPO_DIR/htdocs/index.html" | grep -m1 'v[0-9]' | tr -d 'v')

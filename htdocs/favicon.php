@@ -1,6 +1,6 @@
 <?php
 // ============================================================
-// Dynamisches Favicon / Apple-Touch-Icon (portalübergreifend)
+// Trainingsportal – Dynamisches Favicon / Apple-Touch-Icon
 // ============================================================
 // Liest logo_datei aus den Einstellungen und erzeugt daraus
 // ein quadratisches PNG in beliebiger Größe.
@@ -36,19 +36,15 @@ try {
     }
 } catch (\Throwable) {}
 
-// ── Logo auflösen: STATISTIKPORTAL_PATH (Schwesterportale) oder lokal ──
+// ── Logo aus Statistikportal-Pfad auflösen ─────────────────
 $logoFile = Settings::get('logo_datei', '');
 $logoPath = null;
 
-if ($logoFile !== '') {
-    $base = (defined('STATISTIKPORTAL_PATH') && is_dir(STATISTIKPORTAL_PATH))
-        ? realpath(STATISTIKPORTAL_PATH)
-        : realpath(__DIR__);
-    if ($base) {
-        $candidate = realpath($base . '/' . ltrim($logoFile, '/'));
-        if ($candidate && str_starts_with($candidate, $base) && is_file($candidate)) {
-            $logoPath = $candidate;
-        }
+if ($logoFile !== '' && defined('STATISTIKPORTAL_PATH') && is_dir(STATISTIKPORTAL_PATH)) {
+    $base      = realpath(STATISTIKPORTAL_PATH);
+    $candidate = realpath($base . '/' . ltrim($logoFile, '/'));
+    if ($candidate && str_starts_with($candidate, $base) && is_file($candidate)) {
+        $logoPath = $candidate;
     }
 }
 
