@@ -787,11 +787,12 @@ async function renderKalender(main, monthArg) {
 
   // Historische Wettkampf-Termine (vergangene Veranstaltungen aus Statistikportal)
   const histByDate = {};
-  termineRaw.forEach(t => {
-    if (t.datum <= _heute) {
-      (histByDate[t.datum] = histByDate[t.datum] || []).push(t);
-    }
-  });
+  if (!_wkPr.hideVergangen) {
+    termineRaw.forEach(t => {
+      if (t.datum <= _heute)
+        (histByDate[t.datum] = histByDate[t.datum] || []).push(t);
+    });
+  }
 
   // Wochen (für KW-Spalte)
   const weeks = [];
@@ -1949,9 +1950,11 @@ async function _buildPlanData(von, bis) {
   // Historische Wettkampf-Termine
   const _heuteB = ymd(new Date());
   const histByDate = {};
-  termineRaw.forEach(t => {
-    if (t.datum <= _heuteB) (histByDate[t.datum] = histByDate[t.datum] || []).push(t);
-  });
+  if (!_wkPrL.hideVergangen) {
+    termineRaw.forEach(t => {
+      if (t.datum <= _heuteB) (histByDate[t.datum] = histByDate[t.datum] || []).push(t);
+    });
+  }
 
   return { angemeldet, byDate, feiertageByDate, wettkampfBeiDatum, wkSerieDatumMap, kf, histByDate, statistikUrl };
 }
