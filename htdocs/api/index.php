@@ -1061,6 +1061,16 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig22b: ' . $e->getMessage()); }
         },
 
+        // ── 26: Wochenziele (km-Vorgaben pro Woche pro Benutzer) ────────────────────────
+        26 => static function (): void {
+            DB::query("CREATE TABLE IF NOT EXISTS " . DB::tbl('training_wochenziele') . " (
+                benutzer_id  INT UNSIGNED   NOT NULL,
+                woche_datum  DATE           NOT NULL,
+                km_ziel      DECIMAL(6,2)   NOT NULL,
+                PRIMARY KEY (benutzer_id, woche_datum)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        },
+
         // ── 25: abgesagt_von in training_einheiten ──────────────────────────────────────
         25 => static function (): void {
             try {
@@ -1181,6 +1191,10 @@ try {
     }
     if ($head === 'tagesnotizen') {
         handleTagesnotizen($method, $tail ?? '');
+        exit;
+    }
+    if ($head === 'wochenziele') {
+        handleWochenziele($method, $tail ?? '');
         exit;
     }
     if ($head === 'profil') {
@@ -6415,4 +6429,69 @@ function handleShare(string $method, string $sub): void
 
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Share-Endpoint nicht gefunden']);
+}
+
+// ── GET/PUT /wochenziele ────────────────────────────────────────────────────
+// GET  /wochenziele?von=&bis=[&fuer=benutzer_id]  → {ziele: {"2025-01-06": 50, ...}}
+// PUT  /wochenziele/{woche_datum}                  → Body: {km_ziel, fuer?}
+function handleWochenziele(string $method, string $sub = ''): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+
+    $tbl       = DB::tbl('training_wochenziele');
+    $istTrainer = in_array($user['rolle'] ?? '', ['admin', 'trainer']);
+
+    // ── GET /wochenziele ────────────────────────────────────────────────────
+    if ($method === 'GET' && $sub === '') {
+        $fuerParam = isset($_GET['fuer']) ? (int)$_GET['fuer'] : (int)$user['id'];
+        if ($fuerParam !== (int)$user['id'] && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Kein Zugriff']);
+            return;
+        }
+        $von = $_GET['von'] ?? date('Y-m-01');
+        $bis = $_GET['bis'] ?? date('Y-m-t');
+        $rows = DB::fetchAll(
+            "SELECT woche_datum, km_ziel FROM $tbl WHERE benutzer_id = ? AND woche_datum BETWEEN ? AND ? ORDER BY woche_datum",
+            [$fuerParam, $von, $bis]
+        );
+        $ziele = [];
+        foreach ($rows as $r) {
+            $ziele[$r['woche_datum']] = (float)$r['km_ziel'];
+        }
+        echo json_encode(['ok' => true, 'ziele' => $ziele]);
+        return;
+    }
+
+    // ── PUT /wochenziele/{woche_datum} ──────────────────────────────────────
+    if ($method === 'PUT' && preg_match('/^(\d{4}-\d{2}-\d{2})$/', $sub, $m)) {
+        $wocheDatum = $m[1];
+        $in         = json_decode(file_get_contents('php://input'), true) ?? [];
+        $kmZiel     = isset($in['km_ziel']) ? (float)$in['km_ziel'] : null;
+        $fuer       = isset($in['fuer']) ? (int)$in['fuer'] : (int)$user['id'];
+        if ($fuer !== (int)$user['id'] && !$istTrainer) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Kein Zugriff']);
+            return;
+        }
+        if ($kmZiel === null || $kmZiel <= 0) {
+            DB::query("DELETE FROM $tbl WHERE benutzer_id = ? AND woche_datum = ?", [$fuer, $wocheDatum]);
+        } else {
+            DB::query(
+                "INSERT INTO $tbl (benutzer_id, woche_datum, km_ziel) VALUES (?,?,?)
+                 ON DUPLICATE KEY UPDATE km_ziel = VALUES(km_ziel)",
+                [$fuer, $wocheDatum, $kmZiel]
+            );
+        }
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
 }

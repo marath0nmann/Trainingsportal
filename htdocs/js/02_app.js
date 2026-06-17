@@ -607,6 +607,14 @@ function _isoWeek(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
+// Monday (ISO) der Woche als YYYY-MM-DD
+function _isoMonday(date) {
+  const d = new Date(date);
+  const dow = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dow);
+  return ymd(d);
+}
+
 async function renderKalender(main, monthArg) {
   const monthStart = parseMonthArg(monthArg);
   const y = monthStart.getFullYear();
@@ -663,19 +671,20 @@ async function renderKalender(main, monthArg) {
   const von = ymd(gridStart);
   const bis = ymd(gridEnd);
   let oeffentlich = [], privat = [], feiertage = [], wettkampfRaw = [];
-  let termineRaw = [], statistikUrlKal = '', notizen = [];
+  let termineRaw = [], statistikUrlKal = '', notizen = [], wochenZiele = {};
   try {
     const needPrefs = angemeldet && state.kalFilter === null;
     const einheitenUrl = angemeldet
       ? `mein-plan/einheiten?von=${von}&bis=${bis}`
       : `einheiten?von=${von}&bis=${bis}${state.shareToken ? `&share_token=${state.shareToken}` : ''}`;
-    const [d1, d2, d3, d4, d5, d6] = await Promise.all([
+    const [d1, d2, d3, d4, d5, d6, d7] = await Promise.all([
       apiGet(einheitenUrl, { silent: true }),
       apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
       needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
       angemeldet ? _ladeWettkampfDaten().catch(() => []) : Promise.resolve([]),
       angemeldet ? _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })) : Promise.resolve({ termine: [], statistikportal_url: '' }),
       angemeldet ? apiGet(`tagesnotizen?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ notizen: [] })) : Promise.resolve({ notizen: [] }),
+      angemeldet ? apiGet(`wochenziele?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ ziele: {} })) : Promise.resolve({ ziele: {} }),
     ]);
     oeffentlich    = d1.einheiten || [];
     privat         = angemeldet ? (d1.privat || []) : [];
@@ -685,6 +694,7 @@ async function renderKalender(main, monthArg) {
     termineRaw     = d5.termine || [];
     statistikUrlKal = d5.statistikportal_url || _statistikportalUrl || '';
     notizen        = d6.notizen || [];
+    wochenZiele    = d7.ziele || {};
     if (angemeldet) {
       MEINPLAN.setAbo(d1.abo_typen || []);
       state.meineGruppen = d1.meine_gruppen || [];
@@ -802,11 +812,13 @@ async function renderKalender(main, monthArg) {
       const ws = new Date(cur);
       const dates = [];
       for (let i = 0; i < 7; i++) { dates.push(ymd(new Date(cur))); cur.setDate(cur.getDate() + 1); }
-      const kw = _isoWeek(ws);
-      const kmSum = Math.round(dates.reduce((s, d) =>
+      const kw     = _isoWeek(ws);
+      const monday = _isoMonday(ws);
+      const kmSum  = Math.round(dates.reduce((s, d) =>
         s + (byDate[d] || []).filter(e => e._privat)
                               .reduce((ss, e) => { const km = _effektivKm(e); return ss + (km !== null ? km : 0); }, 0), 0) * 10) / 10;
-      weeks.push({ dates, kw, kmSum });
+      const ziel   = wochenZiele[monday] ?? null;
+      weeks.push({ dates, kw, kmSum, monday, ziel });
     }
   }
 
@@ -818,10 +830,22 @@ async function renderKalender(main, monthArg) {
        </div>`
     : `<div class="kal-head">${WOCHENTAGE.map(w => `<div class="kal-head-cell">${w}</div>`).join('')}</div>`;
 
-  const rows = weeks.map(({ dates, kw, kmSum }) => {
-    const kwCell = angemeldet ? `<div class="meinplan-kw-cell">
+  const _fmtKmZ = v => v % 1 === 0 ? v + 'km' : v.toFixed(1) + 'km';
+
+  const rows = weeks.map(({ dates, kw, kmSum, monday, ziel }) => {
+    const hatZiel   = ziel !== null;
+    const erfuellt  = hatZiel && kmSum >= ziel;
+    const kmCls     = ['meinplan-kw-km',
+      kmSum > 0 ? 'has-km' : '',
+      hatZiel ? (erfuellt ? 'is-over-ziel' : 'is-under-ziel') : '',
+    ].filter(Boolean).join(' ');
+    const zielHtml  = hatZiel
+      ? `<span class="meinplan-kw-ziel">/ ${_fmtKmZ(ziel)}</span>`
+      : `<span class="meinplan-kw-ziel-leer">+ Ziel</span>`;
+    const kwCell = angemeldet ? `<div class="meinplan-kw-cell" data-woche="${monday}" onclick="setzeWochenziel(this)" title="Wochenziel setzen">
       <span class="meinplan-kw-num">KW&nbsp;${kw}</span>
-      <span class="meinplan-kw-km${kmSum > 0 ? ' has-km' : ''}">${kmSum > 0 ? (kmSum % 1 === 0 ? kmSum : kmSum.toFixed(1)) + 'km' : '–'}</span>
+      <span class="${kmCls}">${kmSum > 0 ? _fmtKmZ(kmSum) : '–'}</span>
+      ${zielHtml}
     </div>` : '';
 
     const cells = dates.map(k => {
@@ -1810,6 +1834,36 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
 
 function navigateKalender(monthYM) {
   location.hash = `#kalender/${monthYM}`;
+}
+
+function setzeWochenziel(cell, fuer) {
+  if (cell.querySelector('input')) return;
+  const monday = cell.dataset.woche;
+  if (!monday) return;
+  const zielEl = cell.querySelector('.meinplan-kw-ziel, .meinplan-kw-ziel-leer');
+  const current = zielEl && zielEl.classList.contains('meinplan-kw-ziel')
+    ? parseFloat(zielEl.textContent) || ''
+    : '';
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.min = '0'; inp.max = '999'; inp.step = '1';
+  inp.value = current; inp.placeholder = 'km';
+  inp.className = 'meinplan-kw-ziel-input';
+  if (zielEl) zielEl.replaceWith(inp);
+  else cell.appendChild(inp);
+  inp.focus(); inp.select();
+  let saved = false;
+  async function speichern() {
+    if (saved) return; saved = true;
+    const km = parseFloat(String(inp.value).replace(',', '.'));
+    inp.remove();
+    await apiPut(`wochenziele/${monday}`, { km_ziel: isNaN(km) || km <= 0 ? 0 : km, ...(fuer ? { fuer } : {}) });
+    renderPage();
+  }
+  inp.addEventListener('blur', speichern);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { saved = true; inp.remove(); }
+  });
 }
 function navigateKalenderHeute() {
   const d = new Date();

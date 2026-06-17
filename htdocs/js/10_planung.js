@@ -1030,32 +1030,57 @@ const PLANUNG = (() => {
         </div>
       </div>`;
 
-    let pub = [], priv = [];
+    let pub = [], priv = [], wochenZiele = {};
     try {
-      const d = await apiGet(
-        `mein-plan/einheiten?fuer=${sel.benutzer_id}&von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`,
-        { silent: true });
-      pub  = d.einheiten || [];
-      priv = d.privat    || [];
+      const [dEin, dZiele] = await Promise.all([
+        apiGet(`mein-plan/einheiten?fuer=${sel.benutzer_id}&von=${ymd(gridStart)}&bis=${ymd(gridEnd)}`, { silent: true }),
+        apiGet(`wochenziele?von=${ymd(gridStart)}&bis=${ymd(gridEnd)}&fuer=${sel.benutzer_id}`, { silent: true }).catch(() => ({ ziele: {} })),
+      ]);
+      pub         = dEin.einheiten || [];
+      priv        = dEin.privat    || [];
+      wochenZiele = dZiele.ziele   || {};
     } catch (e) {
       const g = document.getElementById('athlet-plan-grid');
       if (g) g.outerHTML = `<div id="athlet-plan-grid" class="athleten-error athleten-leer">Fehler: ${escapeHtml(e.message || '')}</div>`;
       return;
     }
 
-    const pubByDate = {};  pub.forEach(e  => (pubByDate[e.datum]  = pubByDate[e.datum]  || []).push(e));
+    const pubByDate  = {}; pub.forEach(e  => (pubByDate[e.datum]  = pubByDate[e.datum]  || []).push(e));
     const privByDate = {}; priv.forEach(e => (privByDate[e.datum] = privByDate[e.datum] || []).push(e));
 
-    const head = `<div class="kal-head">${WOCHENTAGE.map(w => `<div class="kal-head-cell">${w}</div>`).join('')}</div>`;
+    function _isoMondayP(date) {
+      const d = new Date(date); const dow = (d.getDay()+6)%7; d.setDate(d.getDate()-dow); return ymd(d);
+    }
+    function _isoWeek(date) {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const day = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - day);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+    const _fmtKmZ = v => v % 1 === 0 ? v + 'km' : v.toFixed(1) + 'km';
+
+    const head = `<div class="kal-head">
+      <div class="kal-head-cell meinplan-kw-head-cell">KW</div>
+      ${WOCHENTAGE.map(w => `<div class="kal-head-cell">${w}</div>`).join('')}
+    </div>`;
     const rows = [];
     let cursor = new Date(gridStart);
     while (cursor <= gridEnd) {
+      const weekStart = new Date(cursor);
       const cells = [];
+      let weekKm = 0;
       for (let i = 0; i < 7; i++) {
         const k         = ymd(cursor);
         const inMonth   = cursor.getMonth() === m;
         const isToday   = k === todayKey;
         const isWeekend = cursor.getDay() === 0 || cursor.getDay() === 6;
+
+        // km dieser Woche summieren
+        (privByDate[k] || []).forEach(e => {
+          const km = e.distanz_km != null ? e.distanz_km : (_fmtKm ? null : null);
+          if (km != null) weekKm += km;
+        });
 
         const pubHtml = (pubByDate[k] || []).map(e =>
           `<div class="kal-item kal-typ-${escapeHtml(e.typ)}${e.status === 'abgesagt' ? ' is-cancelled' : ''}" title="${escapeHtml(e.titel)} (Teamplan)">
@@ -1090,10 +1115,33 @@ const PLANUNG = (() => {
           </div>`);
         cursor.setDate(cursor.getDate() + 1);
       }
-      rows.push(`<div class="kal-row">${cells.join('')}</div>`);
+
+      // KW-Zelle mit Ist/Ziel-km
+      const monday   = _isoMondayP(weekStart);
+      const kw       = _isoWeek(weekStart);
+      const ziel     = wochenZiele[monday] ?? null;
+      const kmSum    = Math.round(weekKm * 10) / 10;
+      const hatZiel  = ziel !== null;
+      const kmCls    = ['meinplan-kw-km',
+        kmSum > 0 ? 'has-km' : '',
+        hatZiel ? (kmSum >= ziel ? 'is-over-ziel' : 'is-under-ziel') : '',
+      ].filter(Boolean).join(' ');
+      const zielHtml = hatZiel
+        ? `<span class="meinplan-kw-ziel">/ ${_fmtKmZ(ziel)}</span>`
+        : `<span class="meinplan-kw-ziel-leer">+ Ziel</span>`;
+      const clickAttr = darfEdit
+        ? ` onclick="setzeWochenziel(this,${sel.benutzer_id})" title="Wochenziel setzen" style="cursor:pointer"`
+        : ` title="KW ${kw}"`;
+      const kwCell = `<div class="meinplan-kw-cell" data-woche="${monday}"${clickAttr}>
+        <span class="meinplan-kw-num">KW&nbsp;${kw}</span>
+        <span class="${kmCls}">${kmSum > 0 ? _fmtKmZ(kmSum) : '–'}</span>
+        ${zielHtml}
+      </div>`;
+
+      rows.push(`<div class="kal-row meinplan-kal-row">${kwCell}${cells.join('')}</div>`);
     }
     const grid = document.getElementById('athlet-plan-grid');
-    if (grid) grid.outerHTML = `<div id="athlet-plan-grid" class="kal-grid">${head}${rows.join('')}</div>`;
+    if (grid) grid.outerHTML = `<div id="athlet-plan-grid" class="kal-grid meinplan-kal-grid">${head}${rows.join('')}</div>`;
   }
 
   function oeffneAthletPlan(id) {

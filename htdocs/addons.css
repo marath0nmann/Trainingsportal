@@ -1856,6 +1856,34 @@ body.planung-active #app-footer    { display: none; }
   line-height: 1; white-space: nowrap;
 }
 .meinplan-kw-km.has-km { color: var(--accent); }
+.meinplan-kw-km.is-over-ziel  { color: #27ae60 !important; }
+.meinplan-kw-km.is-under-ziel { color: #e67e22 !important; }
+
+/* Ziel-Anzeige in der KW-Spalte */
+.meinplan-kw-ziel {
+  font-size: 10px; color: var(--text2);
+  white-space: nowrap; line-height: 1; opacity: .8;
+}
+.meinplan-kw-ziel-leer {
+  font-size: 10px; color: var(--text2);
+  opacity: 0; white-space: nowrap; line-height: 1;
+  transition: opacity .15s;
+}
+.meinplan-kw-cell:hover .meinplan-kw-ziel-leer { opacity: .5; }
+.meinplan-kw-cell { cursor: pointer; }
+.meinplan-kw-cell:hover { background: var(--bg2, var(--surf2)); }
+
+/* Inline-Input zum Bearbeiten des Wochenziels */
+.meinplan-kw-ziel-input {
+  width: 44px; text-align: center;
+  border: 1.5px solid var(--accent); border-radius: 4px;
+  padding: 2px 3px; font-size: 12px;
+  background: var(--surface); color: var(--text);
+  outline: none;
+  -moz-appearance: textfield;
+}
+.meinplan-kw-ziel-input::-webkit-inner-spin-button,
+.meinplan-kw-ziel-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* Hinweis "Aus dem Teamplan übernommen" */
 .meinplan-ref-hint {
