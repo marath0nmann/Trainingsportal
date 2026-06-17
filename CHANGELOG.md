@@ -1,6 +1,6 @@
 # Changelog
 
-## v272
+## v273
 - Wochenziele: km-Vorgaben pro Woche im eigenen Plan und im Athletenplan (Trainer); Klick auf KW-Zelle → Inline-Eingabe; Ist/Ziel in Farbe (grün/orange)
 - Fix: "Vergangene ausblenden" ignorierte historische Statistikportal-Einträge (`histByDate`) in Kalender- und Listenansicht – der Filter gilt jetzt auch für vergangene Veranstaltungen aus dem Statistikportal
 - Refactor: `runPendingMigrations()` nutzt jetzt den gemeinsamen `Migrations::run('training_db_version', _migrationStmts())` aus `includes/migrate.php`. ~30 LOC Boilerplate raus.

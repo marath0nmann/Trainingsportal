@@ -1865,11 +1865,11 @@ body.planung-active #app-footer    { display: none; }
   white-space: nowrap; line-height: 1; opacity: .8;
 }
 .meinplan-kw-ziel-leer {
-  font-size: 10px; color: var(--text2);
-  opacity: 0; white-space: nowrap; line-height: 1;
+  font-size: 10px; color: var(--text2); opacity: .4;
+  white-space: nowrap; line-height: 1;
   transition: opacity .15s;
 }
-.meinplan-kw-cell:hover .meinplan-kw-ziel-leer { opacity: .5; }
+.meinplan-kw-cell:hover .meinplan-kw-ziel-leer { opacity: 1; color: var(--primary); }
 .meinplan-kw-cell { cursor: pointer; }
 .meinplan-kw-cell:hover { background: var(--bg2, var(--surf2)); }
 
