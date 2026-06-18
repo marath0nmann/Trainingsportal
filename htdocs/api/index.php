@@ -1061,6 +1061,31 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig22b: ' . $e->getMessage()); }
         },
 
+        // ── 27: Training-Rechte in bestehende Rollen einmergen ──────────────────────────
+        // INSERT IGNORE aus Migration 1 greift nicht, wenn trainer/editor bereits aus dem
+        // Statistikportal existieren. Diese Migration merged die fehlenden Rechte nach.
+        27 => static function (): void {
+            $tbl = DB::tbl('rollen');
+            $needed = [
+                'trainer' => ['training_bloecke_verwalten', 'training_bearbeiten'],
+                'editor'  => ['training_bearbeiten'],
+            ];
+            foreach ($needed as $roleName => $newRights) {
+                $row = DB::fetchOne("SELECT rechte FROM $tbl WHERE name = ?", [$roleName]);
+                if ($row) {
+                    $current = json_decode($row['rechte'] ?? '[]', true) ?: [];
+                    $merged  = array_values(array_unique(array_merge($current, $newRights)));
+                    if (count($merged) !== count($current) || array_diff($newRights, $current)) {
+                        DB::query("UPDATE $tbl SET rechte = ? WHERE name = ?",
+                            [json_encode($merged), $roleName]);
+                    }
+                } else {
+                    DB::query("INSERT INTO $tbl (name, rechte) VALUES (?, ?)",
+                        [$roleName, json_encode($newRights)]);
+                }
+            }
+        },
+
         // ── 26: Wochenziele (km-Vorgaben pro Woche pro Benutzer) ────────────────────────
         26 => static function (): void {
             DB::query("CREATE TABLE IF NOT EXISTS " . DB::tbl('training_wochenziele') . " (
