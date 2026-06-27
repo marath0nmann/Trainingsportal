@@ -646,6 +646,7 @@ async function renderKalender(main, monthArg) {
   const shareBanner = state.shareToken
     ? `<div class="share-banner">
         👁 Gastansicht: <strong>${escapeHtml(state.shareGruppeName || '')}</strong>
+        <button class="btn btn-ghost share-banner-login" onclick="exportPlanPDF()" title="Diese Ansicht als PDF speichern">📄 PDF</button>
         <button class="btn btn-ghost share-banner-login" onclick="goToLoginPortal()">Anmelden</button>
         <button class="share-banner-close" onclick="SHARE.beenden()" title="Gastansicht beenden">×</button>
        </div>`
@@ -2052,6 +2053,7 @@ async function renderListe(main, quarterArg) {
   const shareBannerL = state.shareToken
     ? `<div class="share-banner">
         👁 Gastansicht: <strong>${escapeHtml(state.shareGruppeName || '')}</strong>
+        <button class="btn btn-ghost share-banner-login" onclick="exportPlanPDF()" title="Diese Ansicht als PDF speichern">📄 PDF</button>
         <button class="btn btn-ghost share-banner-login" onclick="goToLoginPortal()">Anmelden</button>
         <button class="share-banner-close" onclick="SHARE.beenden()" title="Gastansicht beenden">×</button>
        </div>`
@@ -2845,6 +2847,131 @@ const SHARE = (() => {
   return { openDialog, _create, _revoke, _copy, _closeDialog, beenden,
            _onAnsichtChange, _startEdit, _cancelEdit, _saveEdit };
 })();
+
+// ── Aktuelle Ansicht als PDF (sachliches Trainingsplan-Format) ─────────────
+// Öffnet ein druckoptimiertes Dokument im Format der bestehenden Trainingspläne
+// (Tabelle Datum/Uhrzeit/Runde/Bemerkungen) und löst den Druck-/PDF-Dialog aus.
+async function exportPlanPDF() {
+  const { page, args } = parseHash();
+  let rangeStart, rangeEnd, fileTitle;
+  if (page === 'liste') {
+    const { year, quarter } = parseQuarterArg(args[0]);
+    rangeStart = new Date(year, (quarter - 1) * 3, 1);
+    rangeEnd   = new Date(year, quarter * 3, 0);
+    fileTitle  = `${year} Q${quarter} Trainingsplan`;
+  } else {
+    const ms = parseMonthArg(args[0]);
+    rangeStart = new Date(ms.getFullYear(), ms.getMonth(), 1);
+    rangeEnd   = new Date(ms.getFullYear(), ms.getMonth() + 1, 0);
+    fileTitle  = `Trainingsplan ${MONATSNAMEN[ms.getMonth()]} ${ms.getFullYear()}`;
+  }
+  const von = ymd(rangeStart), bis = ymd(rangeEnd);
+
+  let plan;
+  try { plan = await _buildPlanData(von, bis); }
+  catch (e) { alert('PDF konnte nicht erstellt werden: ' + (e.message || '')); return; }
+  const { byDate, wettkampfBeiDatum, histByDate } = plan;
+
+  const fmtD = (d) => {
+    const o = new Date(d + 'T00:00:00');
+    return `${String(o.getDate()).padStart(2, '0')}.${String(o.getMonth() + 1).padStart(2, '0')}.${o.getFullYear()}`;
+  };
+  const fmtT = (t) => t ? String(t).slice(0, 5) : '';
+
+  // Zeilen sammeln, nach Woche gruppiert (Leerzeile zwischen Wochen wie in der Vorlage)
+  const rows = [];
+  let cur = new Date(rangeStart), lastWeek = null;
+  while (cur <= rangeEnd) {
+    const k = ymd(cur);
+    const wk = isoWeek(cur) + '-' + isoWeekYear(cur);
+    const dayRows = [];
+    (byDate[k] || []).forEach(e => {
+      if (istKeinTraining(e.typ)) return;
+      const tp = e.treffpunkt ? (e.treffpunkt.name || e.treffpunkt) : '';
+      let bem = tp || '';
+      if (e.bemerkung) bem = bem ? `${bem} · ${e.bemerkung}` : e.bemerkung;
+      const abgesagt = e.status === 'abgesagt';
+      if (abgesagt) bem = 'Abgesagt' + (e.absage_notiz ? ': ' + e.absage_notiz : '');
+      dayRows.push({
+        datum: k, uhrzeit: fmtT(e.uhrzeit), runde: e.titel || '', bemerkung: bem,
+        gray: e.typ === 'dauerlauf', bold: e.typ === 'event', cancelled: abgesagt, time: e.uhrzeit || '99:99',
+      });
+    });
+    (wettkampfBeiDatum[k] || []).forEach(s => {
+      dayRows.push({
+        datum: k, uhrzeit: '', runde: _decodeHtml(s.name || s.kuerzel || ''),
+        bemerkung: (s.wettbewerbe || []).join(', '), gray: false, bold: true, time: '00:00',
+      });
+    });
+    (histByDate[k] || []).forEach(t => {
+      dayRows.push({
+        datum: k, uhrzeit: '', runde: _decodeHtml(t.serie_name || ''),
+        bemerkung: t.ort || '', gray: false, bold: true, time: '00:00',
+      });
+    });
+    if (dayRows.length) {
+      dayRows.sort((a, b) => a.time.localeCompare(b.time));
+      if (lastWeek !== null && wk !== lastWeek) rows.push({ spacer: true });
+      dayRows.forEach(r => rows.push(r));
+      lastWeek = wk;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  const esc = escapeHtml;
+  const bodyRows = rows.map(r => {
+    if (r.spacer) return `<tr class="spacer"><td colspan="4"></td></tr>`;
+    const cls = [r.gray ? 'gray' : '', r.bold ? 'bold' : '', r.cancelled ? 'cancelled' : ''].filter(Boolean).join(' ');
+    return `<tr class="${cls}">
+      <td class="c-datum">${esc(fmtD(r.datum))}</td>
+      <td class="c-zeit">${esc(r.uhrzeit)}</td>
+      <td>${esc(r.runde)}</td>
+      <td>${esc(r.bemerkung)}</td>
+    </tr>`;
+  }).join('');
+
+  const gruppe = state.shareGruppeName ? esc(state.shareGruppeName) : '';
+  const titel  = `Voraussichtlicher Trainingsplan (vom ${fmtD(von)} bis ${fmtD(bis)}) (Änderungen vorbehalten)`;
+  const leer   = bodyRows ? '' : `<tr><td colspan="4" style="text-align:center;color:#666">Keine Einträge im Zeitraum.</td></tr>`;
+
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+    <title>${esc(fileTitle)}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: Arial, Helvetica, sans-serif; color:#000; margin:0; padding:18px; font-size:11px; }
+      h1 { font-size:13px; text-align:center; margin:0 0 4px; font-weight:bold; }
+      .sub { text-align:center; font-size:11px; margin:0 0 14px; color:#333; }
+      table { width:100%; border-collapse:collapse; }
+      th, td { border:1px solid #000; padding:3px 6px; vertical-align:top; text-align:left; }
+      th { background:#d9d9d9; font-weight:bold; }
+      td.c-datum, td.c-zeit { white-space:nowrap; }
+      tr.gray td { background:#d9d9d9; }
+      tr.bold td { font-weight:bold; }
+      tr.cancelled td { text-decoration:line-through; color:#555; }
+      tr.spacer td { border:none; height:7px; padding:0; }
+      @page { size:A4 portrait; margin:14mm; }
+    </style></head>
+    <body>
+      <h1>${esc(titel)}</h1>
+      ${gruppe ? `<div class="sub">${gruppe}</div>` : ''}
+      <table>
+        <thead><tr>
+          <th style="width:84px">Datum</th>
+          <th style="width:58px">Uhrzeit</th>
+          <th>Runde</th>
+          <th style="width:32%">Bemerkungen</th>
+        </tr></thead>
+        <tbody>${bodyRows}${leer}</tbody>
+      </table>
+    </body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('Bitte Popups für diese Seite erlauben, um das PDF zu erstellen.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { try { win.print(); } catch (_) {} }, 350);
+}
 
 // ── Wettkampf: Schnelleintrag-Popover ────────────────────────────────────
 

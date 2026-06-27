@@ -1,5 +1,8 @@
 # Changelog
 
+## v279
+- Gastansicht: neuer Button „📄 PDF" in der Gastansicht-Leiste (neben „Anmelden") – speichert die aktuelle Ansicht (Monat bzw. Quartal) als sachliches Trainingsplan-PDF im bewährten Tabellenformat (Datum/Uhrzeit/Runde/Bemerkungen, Wochen durch Leerzeilen getrennt, Dauerläufe grau, Wettkämpfe/Events fett). Öffnet ein druckoptimiertes Dokument und den „Als PDF speichern"-Dialog.
+
 ## v278
 - Fix: Teilnehmerzahl wurde in der Gastansicht nicht angezeigt – Anmeldungen werden jetzt auch für Gäste geladen (Namen werden serverseitig entfernt, nur die Anzahl bleibt sichtbar).
 - Wettkampf-Zeilen (Liste): externer Link zur Wettkampf-Webseite (↗) bei zukünftigen Terminen; vergangene Veranstaltungen mit Ergebnissen verlinken weiterhin ins Statistikportal (auch für Gäste).
