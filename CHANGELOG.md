@@ -1,5 +1,12 @@
 # Changelog
 
+## v280
+- Wettkampfplanung: Button „+ Wettkampf vorschlagen" – Nutzer können bisher unbekannte Wettkämpfe (Name, Datum, Website, Disziplinen) zur Planungsliste hinzufügen
+- Vorschläge erscheinen sofort in der eigenen Planung und laufen unter Admin → Wettkämpfe mit orangem „Vorschlag"-Badge (inkl. Name des Vorschlagenden) zur Prüfung auf
+- Admin: beim ersten Speichern eines Vorschlags wird das Badge entfernt (als geprüft markiert); Zähler „N Vorschläge zur Prüfung" im Kopf der Wettkampf-Tabelle
+- Admin → Wettkämpfe: Button „+ Neuer Wettkampf" – Admins/Trainer legen Wettkämpfe direkt an (Name & Datum frei editierbar); manuelle/Statistik-lose Serien sind im Planungs-Modal jetzt voll editierbar
+- DB-Migration 29: Spalten `vorschlag_von` / `vorschlag_am` auf `veranstaltung_serien`; neue Endpoints `POST /wettkampf/vorschlag` (Nutzer) und `POST /wettkampf` (Admin)
+
 ## v279
 - Gastansicht: neuer Button „📄 PDF" in der Gastansicht-Leiste (neben „Anmelden") – speichert die aktuelle Ansicht (Monat bzw. Quartal) als sachliches Trainingsplan-PDF im bewährten Tabellenformat (Datum/Uhrzeit/Runde/Bemerkungen, Wochen durch Leerzeilen getrennt, Dauerläufe grau, Wettkämpfe/Events fett). Öffnet ein druckoptimiertes Dokument und den „Als PDF speichern"-Dialog.
 

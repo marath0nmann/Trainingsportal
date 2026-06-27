@@ -170,12 +170,18 @@ const WETTKAMPFPLANUNG = (() => {
             ${offen       ? ` &bull; ${offen} offen` : ''}
           </div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn btn-ghost btn-sm"
-            onclick="WETTKAMPFPLANUNG.setJahr(${_jahr - 1})">‹ ${_jahr - 1}</button>
-          <strong style="min-width:44px;text-align:center;font-size:1rem">${_jahr}</strong>
-          <button class="btn btn-ghost btn-sm"
-            onclick="WETTKAMPFPLANUNG.setJahr(${_jahr + 1})">${_jahr + 1} ›</button>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm"
+            onclick="WETTKAMPFPLANUNG._openVorschlagModal()"
+            title="Einen bisher unbekannten Wettkampf zur Planungsliste hinzufügen">
+            + Wettkampf vorschlagen</button>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-ghost btn-sm"
+              onclick="WETTKAMPFPLANUNG.setJahr(${_jahr - 1})">‹ ${_jahr - 1}</button>
+            <strong style="min-width:44px;text-align:center;font-size:1rem">${_jahr}</strong>
+            <button class="btn btn-ghost btn-sm"
+              onclick="WETTKAMPFPLANUNG.setJahr(${_jahr + 1})">${_jahr + 1} ›</button>
+          </div>
         </div>
       </div>
 
@@ -692,6 +698,104 @@ const WETTKAMPFPLANUNG = (() => {
     }
   }
 
+  // ── Wettkampf vorschlagen ────────────────────────────────────
+  function _openVorschlagModal() {
+    const cont = document.getElementById('modal-container');
+    if (!cont) return;
+    const heute = new Date().toISOString().slice(0, 10);
+    cont.innerHTML = `
+      <div class="modal-overlay" onclick="schliesseModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:480px">
+          <div class="modal-head">
+            <div>
+              <div class="modal-eyebrow">Wettkampfplanung</div>
+              <div class="modal-title">Wettkampf vorschlagen</div>
+            </div>
+            <button class="modal-close" onclick="schliesseModal()">&times;</button>
+          </div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
+            <div style="font-size:12px;color:var(--text2)">
+              Schlage einen bisher nicht gelisteten Wettkampf vor. Er erscheint sofort in deiner
+              Planung und läuft unter <strong>Admin&nbsp;→&nbsp;Wettkämpfe</strong> zur Prüfung auf.
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;
+                            letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px">
+                Name *</label>
+              <input type="text" id="wkv-name" placeholder="z. B. Stadtlauf Musterstadt"
+                style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
+                       padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;
+                            letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px">
+                Datum (sofern bekannt)</label>
+              <input type="date" id="wkv-datum" max="2035-12-31"
+                style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
+                       padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)">
+              <div style="font-size:11px;color:var(--text2);margin-top:4px">
+                Dient als Prognose-Basis für künftige Jahre.</div>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;
+                            letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px">
+                Website</label>
+              <input type="url" id="wkv-url" placeholder="https://…"
+                style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
+                       padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;
+                            letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px">
+                Disziplinen</label>
+              <input type="text" id="wkv-disz" placeholder="z. B. 10km Straße, Halbmarathon"
+                style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
+                       padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)">
+              <div style="font-size:11px;color:var(--text2);margin-top:4px">
+                Mehrere durch Komma trennen.</div>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+            <button class="btn btn-primary" id="wkv-save"
+              onclick="WETTKAMPFPLANUNG._submitVorschlag()">Vorschlagen</button>
+          </div>
+        </div>
+      </div>`;
+    setTimeout(() => document.getElementById('wkv-name')?.focus(), 50);
+  }
+
+  async function _submitVorschlag() {
+    const name  = (document.getElementById('wkv-name')?.value  || '').trim();
+    const datum = (document.getElementById('wkv-datum')?.value || '').trim();
+    const url   = (document.getElementById('wkv-url')?.value   || '').trim();
+    const disz  = (document.getElementById('wkv-disz')?.value  || '').trim();
+
+    if (!name) {
+      benachrichtigen('Bitte einen Namen angeben.', 'err');
+      document.getElementById('wkv-name')?.focus();
+      return;
+    }
+    const wettbewerbe = disz
+      ? disz.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    const btn = document.getElementById('wkv-save');
+    if (btn) { btn.disabled = true; btn.textContent = 'Speichern…'; }
+
+    try {
+      await apiPost('wettkampf/vorschlag', { name, datum, url, wettbewerbe });
+      schliesseModal();
+      benachrichtigen('Wettkampf vorgeschlagen – danke!', 'ok');
+      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
+      await _lade();
+      _renderListe();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      if (btn) { btn.disabled = false; btn.textContent = 'Vorschlagen'; }
+    }
+  }
+
   // ── Datum für ein bestimmtes Jahr berechnen ──────────────────
   // Prognose: gleicher N-ter Wochentag im gleichen Monat des Zieljahres
   // (identische Logik zu predictNextDate in 16_admin_wettkampf.js)
@@ -748,5 +852,6 @@ const WETTKAMPFPLANUNG = (() => {
     _toggleSelect, _toggleAll, _clearSelection,
     _openBulkPopper, _bulkSetStatus,
     _anDisziplin, _abDisziplin,
+    _openVorschlagModal, _submitVorschlag,
   };
 })();

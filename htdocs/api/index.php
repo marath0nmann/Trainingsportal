@@ -1061,6 +1061,20 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig22b: ' . $e->getMessage()); }
         },
 
+        // ── 29: Wettkampf-Vorschläge ────────────────────────────────────────────────────
+        // Nutzer können bisher unbekannte Wettkämpfe vorschlagen. Diese landen als neue
+        // veranstaltung_serien-Zeile mit gesetztem vorschlag_von und tauchen so direkt
+        // in Admin → Wettkämpfe zur Prüfung/Bearbeitung auf.
+        29 => static function (): void {
+            $tws = DB::tbl('veranstaltung_serien');
+            foreach ([
+                "ALTER TABLE `{$tws}` ADD COLUMN IF NOT EXISTS vorschlag_von INT UNSIGNED NULL DEFAULT NULL COMMENT 'Benutzer-ID des Vorschlagenden (NULL = kein Vorschlag / bereits geprüft)'",
+                "ALTER TABLE `{$tws}` ADD COLUMN IF NOT EXISTS vorschlag_am TIMESTAMP NULL DEFAULT NULL COMMENT 'Zeitpunkt des Vorschlags'",
+            ] as $sql) {
+                try { DB::query($sql); } catch (Throwable $e) { error_log('mig29: ' . $e->getMessage()); }
+            }
+        },
+
         // ── 27: Training-Rechte in bestehende Rollen einmergen ──────────────────────────
         // INSERT IGNORE aus Migration 1 greift nicht, wenn trainer/editor bereits aus dem
         // Statistikportal existieren. Diese Migration merged die fehlenden Rechte nach.
@@ -5672,6 +5686,113 @@ function handleWettkampf(string $method, string $tail): void
     $tbu = DB::tbl('benutzer');
     $tat = DB::tbl('athleten');
 
+    // ── POST /vorschlag ──────────────────────────────────────────
+    // Jeder eingeloggte Nutzer kann einen bisher unbekannten Wettkampf vorschlagen.
+    // Anlage als neue veranstaltung_serien-Zeile mit vorschlag_von → erscheint in
+    // Admin → Wettkämpfe zur Prüfung und sofort in der Wettkampfplanung.
+    if ($tail === 'vorschlag' && $method === 'POST') {
+        $in    = readJsonBody();
+        $name  = trim((string)($in['name'] ?? ''));
+        if ($name === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Name erforderlich']);
+            return;
+        }
+        $datum = trim((string)($in['datum'] ?? ''));
+        $datum = ($datum !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum)) ? $datum : null;
+        $url   = trim((string)($in['url'] ?? '')) ?: null;
+
+        $wb = is_array($in['wettbewerbe'] ?? null) ? $in['wettbewerbe'] : [];
+        $wb = array_values(array_filter(array_map(fn($x) => trim((string)$x), $wb)));
+        $wbJson = count($wb) ? json_encode($wb) : null;
+
+        try {
+            DB::query(
+                "INSERT INTO `{$tws}` (name, referenz_datum, url, wettbewerbe, vorschlag_von, vorschlag_am)
+                 VALUES (?,?,?,?,?,NOW())",
+                [$name, $datum, $url, $wbJson, $userId]
+            );
+            $serieId = (int)DB::lastInsertId();
+            // Planung anlegen (aktiv) – damit der Vorschlag im Kalender/der Planung erscheint
+            DB::query("INSERT INTO `{$twp}` (serie_id, aktiv) VALUES (?, 1)", [$serieId]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'fehler' => 'Speichern fehlgeschlagen', 'detail' => $e->getMessage()]);
+            return;
+        }
+        echo json_encode(['ok' => true, 'serie_id' => $serieId]);
+        return;
+    }
+
+    // ── POST /wettkampf ───────────────────────────────────────────
+    // Admin/Trainer legen einen neuen Wettkampf direkt in der Struktur der
+    // vorhandenen Serien an (veranstaltung_serien). Anders als /vorschlag wird
+    // kein vorschlag_von gesetzt → sofort als bestätigter Eintrag sichtbar.
+    if ($tail === '' && $method === 'POST') {
+        if (!$isAdmin) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Nur Admins/Trainer dürfen Wettkämpfe anlegen']);
+            return;
+        }
+        $in   = readJsonBody();
+        $name = trim((string)($in['name'] ?? ''));
+        if ($name === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Name erforderlich']);
+            return;
+        }
+        $rd = trim((string)($in['referenz_datum'] ?? ''));
+        $rd = ($rd !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $rd)) ? $rd : null;
+        $si = $rd ? ((int)substr($rd, 5, 2) * 100 + (int)substr($rd, 8, 2)) : null;
+        $nd = trim((string)($in['naechstes_datum'] ?? ''));
+        $nd = ($nd !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $nd)) ? $nd : null;
+        $url = trim((string)($in['url'] ?? '')) ?: null;
+
+        $wb = is_array($in['wettbewerbe'] ?? null) ? $in['wettbewerbe'] : [];
+        $wb = array_values(array_filter(array_map(fn($x) => trim((string)$x), $wb)));
+        $wbJson = count($wb) ? json_encode($wb) : null;
+
+        $ortId = (isset($in['ort_id']) && $in['ort_id'] !== null && $in['ort_id'] !== '')
+                 ? (int)$in['ort_id'] : null;
+        $lat = (isset($in['lat']) && is_numeric($in['lat'])) ? (float)$in['lat'] : null;
+        $lon = (isset($in['lon']) && is_numeric($in['lon'])) ? (float)$in['lon'] : null;
+
+        // Eindeutiges kuerzel aus dem Namen ableiten (Spalte ist NOT NULL)
+        $base = strtolower($name);
+        $base = strtr($base, ['ä'=>'ae','ö'=>'oe','ü'=>'ue','ß'=>'ss']);
+        $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+        $base = trim((string)$base, '-');
+        if ($base === '') $base = 'wk';
+        $base = substr($base, 0, 50);
+        $kuerzel = $base;
+        try {
+            $i = 1;
+            while (DB::fetchOne("SELECT id FROM `{$tws}` WHERE kuerzel=?", [$kuerzel])) {
+                $kuerzel = substr($base, 0, 50 - strlen('-' . $i)) . '-' . $i;
+                $i++;
+            }
+        } catch (\Throwable $ignored) {}
+
+        try {
+            DB::query(
+                "INSERT INTO `{$tws}`
+                   (name, kuerzel, referenz_datum, sortierindex, url, wettbewerbe, ort_id, lat, lon)
+                 VALUES (?,?,?,?,?,?,?,?,?)",
+                [$name, $kuerzel, $rd, $si, $url, $wbJson, $ortId, $lat, $lon]
+            );
+            $serieId = (int)DB::lastInsertId();
+            // Planung anlegen (aktiv) – damit der Wettkampf sofort im Kalender erscheint
+            DB::query("INSERT INTO `{$twp}` (serie_id, naechstes_datum, aktiv) VALUES (?, ?, 1)",
+                [$serieId, $nd]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'fehler' => 'Speichern fehlgeschlagen', 'detail' => $e->getMessage()]);
+            return;
+        }
+        echo json_encode(['ok' => true, 'serie_id' => $serieId]);
+        return;
+    }
+
     // ── POST /{serie_id}/anmeldungen ─────────────────────────────
     if (preg_match('/^(\d+)\/anmeldungen$/', $tail, $m) && $method === 'POST') {
         $serieId   = (int)$m[1];
@@ -5744,6 +5865,20 @@ function handleWettkampf(string $method, string $tail): void
                         ? (string)$in['naechstes_datum'] : null;
         }
         // Metadaten direkt auf veranstaltung_serien speichern
+        if (array_key_exists('name', $in)) {
+            $name = trim((string)($in['name'] ?? ''));
+            if ($name !== '') {
+                DB::query("UPDATE `{$tws}` SET name=? WHERE id=?", [$name, $serieId]);
+            }
+        }
+        if (array_key_exists('referenz_datum', $in)) {
+            $rd = trim((string)($in['referenz_datum'] ?? ''));
+            $rd = ($rd !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $rd)) ? $rd : null;
+            // sortierindex (MMDD) aus referenz_datum ableiten, damit die Jahres-Sortierung stimmt
+            $si = $rd ? ((int)substr($rd, 5, 2) * 100 + (int)substr($rd, 8, 2)) : null;
+            DB::query("UPDATE `{$tws}` SET referenz_datum=?, sortierindex=? WHERE id=?",
+                [$rd, $si, $serieId]);
+        }
         if (array_key_exists('wettbewerbe', $in)) {
             $arr = is_array($in['wettbewerbe']) ? $in['wettbewerbe'] : [];
             $arr = array_values(array_filter(array_map('trim', $arr)));
@@ -5766,6 +5901,10 @@ function handleWettkampf(string $method, string $tail): void
         if (array_key_exists('aktiv', $in)) {
             $sets[]   = 'aktiv=?';
             $params[] = $in['aktiv'] ? 1 : 0;
+        }
+        // Vorschlag als geprüft markieren (Flag löschen)
+        if (!empty($in['vorschlag_bestaetigt'])) {
+            DB::query("UPDATE `{$tws}` SET vorschlag_von=NULL WHERE id=?", [$serieId]);
         }
 
         $planung = DB::fetchOne("SELECT id FROM $twp WHERE serie_id=?", [$serieId]);
@@ -5795,7 +5934,7 @@ function handleWettkampf(string $method, string $tail): void
         try {
             $serien = DB::fetchAll(
                 "SELECT vs.id, vs.name, vs.kuerzel, vs.wettbewerbe,
-                        vs.url, vs.ort_id, vs.lat, vs.lon,
+                        vs.url, vs.ort_id, vs.lat, vs.lon, vs.referenz_datum,
                         COUNT(DISTINCT v.id)      AS anz_veranstaltungen,
                         MIN(v.datum)              AS erstes_datum,
                         MAX(v.datum)              AS letztes_datum_statistik,
@@ -5816,7 +5955,13 @@ function handleWettkampf(string $method, string $tail): void
                         wp.disziplinen_extra,
                         wp.disziplinen_ausgeschlossen,
                         wp.aktiv,
-                        tst.status
+                        tst.status,
+                        vs.vorschlag_von,
+                        vs.vorschlag_am,
+                        COALESCE(
+                          NULLIF(TRIM(CONCAT_WS(' ', vath.vorname, vath.nachname)), ''),
+                          vbu.benutzername
+                        )                         AS vorschlag_von_name
                  FROM $tws vs
                  LEFT JOIN $tvv v  ON v.serie_id = vs.id
                                    AND v.geloescht_am IS NULL
@@ -5825,10 +5970,13 @@ function handleWettkampf(string $method, string $tail): void
                  LEFT JOIN $tst tst ON tst.serie_id    = vs.id
                                     AND tst.benutzer_id = ?
                                     AND tst.jahr        = ?
+                 LEFT JOIN $tbu vbu  ON vbu.id  = vs.vorschlag_von
+                 LEFT JOIN $tat vath ON vath.id = vbu.athlet_id
                  GROUP BY vs.id, vs.name, vs.kuerzel, vs.wettbewerbe, vs.referenz_datum,
                           vs.url, vs.ort_id, vs.lat, vs.lon,
                           wp.id, wp.naechstes_datum, wp.disziplinen_extra,
-                          wp.disziplinen_ausgeschlossen, wp.aktiv, tst.status
+                          wp.disziplinen_ausgeschlossen, wp.aktiv, tst.status,
+                          vs.vorschlag_von, vs.vorschlag_am, vorschlag_von_name
                  ORDER BY MONTH(COALESCE(MAX(v.datum), vs.referenz_datum)) ASC,
                           DAY(COALESCE(MAX(v.datum), vs.referenz_datum))   ASC,
                           vs.name             ASC",
@@ -5969,6 +6117,7 @@ function handleWettkampf(string $method, string $tail): void
                 'planung_id'               => $pid,
                 'aktiv'                    => $s['aktiv'] !== null ? (int)$s['aktiv'] : 1,
                 'naechstes_datum'     => $s['naechstes_datum'],
+                'referenz_datum'      => $s['referenz_datum'] ?? null,
                 'status'              => $s['status'] ?? null,
                 'url'                 => $s['url'] ?? null,
                 'ort_id'              => isset($s['ort_id']) && $s['ort_id'] !== null ? (int)$s['ort_id'] : null,
@@ -5977,6 +6126,9 @@ function handleWettkampf(string $method, string $tail): void
                 'anmeldungen'         => $anmeldungen,
                 'meine_anmeldung_id'  => $meineAnmId,
                 'meine_disziplin'     => $meineDisziplin,
+                'vorschlag_von'       => isset($s['vorschlag_von']) && $s['vorschlag_von'] !== null ? (int)$s['vorschlag_von'] : null,
+                'vorschlag_von_name'  => $s['vorschlag_von_name'] ?? null,
+                'vorschlag_am'        => $s['vorschlag_am'] ?? null,
             ];
         }
 

@@ -180,6 +180,8 @@ const ADMIN_WETTKAMPF = (() => {
     if (!container) return;
     const admin = istAdmin();
 
+    const anzVorschlaege = serien.filter(s => s.vorschlag_von).length;
+
     let html = `
       <div style="display:flex;justify-content:space-between;align-items:flex-end;
                   margin-bottom:16px;gap:12px;flex-wrap:wrap">
@@ -188,8 +190,11 @@ const ADMIN_WETTKAMPF = (() => {
           <div style="font-size:12px;color:var(--text2)">
             Regelmäßige Veranstaltungen aus dem Statistikportal &bull;
             ${serien.length} Serien
+            ${anzVorschlaege ? ` &bull; <strong style="color:#e67e22">${anzVorschlaege} Vorschlag${anzVorschlaege !== 1 ? '&auml;ge' : ''} zur Prüfung</strong>` : ''}
           </div>
         </div>
+        ${admin ? `<button class="btn btn-primary btn-sm"
+          onclick="ADMIN_WETTKAMPF.neuerWettkampf()">+ Neuer Wettkampf</button>` : ''}
       </div>`;
 
     if (!serien.length) {
@@ -268,10 +273,13 @@ const ADMIN_WETTKAMPF = (() => {
           <td>
             <strong>${safeHtml(s.name || s.kuerzel)}</strong>${urlLink}
             ${inaktiv ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--border);color:var(--text2);margin-left:6px">Inaktiv</span>' : ''}
+            ${s.vorschlag_von ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#e67e2222;color:#e67e22;font-weight:700;margin-left:6px">Vorschlag</span>' : ''}
             ${ortName}
             <div style="font-size:11px;color:var(--text2);margin-top:1px">
-              ${s.anz_veranstaltungen} Ausgabe${s.anz_veranstaltungen !== 1 ? 'n' : ''}
-              ${s.erstes_datum ? ' &bull; seit ' + s.erstes_datum.slice(0, 4) : ''}
+              ${s.vorschlag_von
+                ? 'Vorschlag von ' + safeHtml(s.vorschlag_von_name || 'unbekannt') +
+                  (s.vorschlag_am ? ' &bull; ' + fmtDate(String(s.vorschlag_am).slice(0, 10)) : '')
+                : `${s.anz_veranstaltungen} Ausgabe${s.anz_veranstaltungen !== 1 ? 'n' : ''}${s.erstes_datum ? ' &bull; seit ' + s.erstes_datum.slice(0, 4) : ''}`}
             </div>
           </td>
           <td style="white-space:nowrap">
@@ -525,11 +533,17 @@ const ADMIN_WETTKAMPF = (() => {
     }
   }
 
-  // ── Modal: Planung bearbeiten ─────────────────────────────────
+  // ── Modal: Planung bearbeiten / Wettkampf anlegen ─────────────
+  // serieId === null/undefined → Anlage-Modus (neuer Wettkampf)
   async function showPlanungModal(serieId) {
     if (!istAdmin()) return;
-    const serie = serien.find(s => s.id === serieId);
-    if (!serie) return;
+    const create = (serieId === null || serieId === undefined);
+    const serie  = create ? null : serien.find(s => s.id === serieId);
+    if (!create && !serie) return;
+
+    // „manuell" = neu angelegt ODER keine Statistikportal-Ausgaben →
+    // Name & Datum (referenz_datum) sind dann frei editierbar.
+    const isManual = create || ((serie.anz_veranstaltungen | 0) === 0);
 
     // State zurücksetzen
     _diszFilter = '';
@@ -538,32 +552,85 @@ const ADMIN_WETTKAMPF = (() => {
     _wkmMap    = null;
     _wkmMarker = null;
 
-    // Prognose ermitteln
-    const prognose = predictNextDate(serie.letztes_datum);
-    // Datum-Vorschlag: manuell gesetzt oder Prognose (für direktes OK)
-    const datumVorschlag = serie.naechstes_datum || prognose || '';
+    // Prognose ermitteln (nur Edit-Modus)
+    const prognose = create ? null : predictNextDate(serie.naechstes_datum || serie.letztes_datum);
+    const datumVorschlag = create ? '' : (serie.naechstes_datum || prognose || '');
 
     let wtInfo = '';
-    if (serie.letztes_datum) {
+    if (!create && serie.letztes_datum) {
       const ld  = new Date(serie.letztes_datum + 'T00:00:00');
       const nth = Math.floor((ld.getDate() - 1) / 7) + 1;
       const ord = ['', '1.', '2.', '3.', '4.', '5.'][Math.min(nth, 5)];
       wtInfo = `${ord} ${WT_LANG[ld.getDay()]} im ${MONATE[ld.getMonth()]}`;
     }
 
-    const istPrognose = !serie.naechstes_datum && !!prognose;
+    const istPrognose = !create && !serie.naechstes_datum && !!prognose;
 
     _edit = {
-      serieId,
-      wettbewerbe: [...(serie.wettbewerbe || [])],
-      url:    serie.url    || '',
-      ort_id: serie.ort_id ?? null,
-      lat:    serie.lat    ?? null,
-      lon:    serie.lon    ?? null,
+      serieId: create ? null : serieId,
+      create,
+      isManual,
+      name:           create ? '' : decodeHtml(serie.name || ''),
+      referenz_datum: create ? '' : (serie.referenz_datum || ''),
+      wettbewerbe:    create ? [] : [...(serie.wettbewerbe || [])],
+      url:            create ? '' : (serie.url || ''),
+      ort_id:         create ? null : (serie.ort_id ?? null),
+      lat:            create ? null : (serie.lat ?? null),
+      lon:            create ? null : (serie.lon ?? null),
     };
 
     const cont = document.getElementById('modal-container');
     if (!cont) return;
+
+    const labelStyle = `font-size:11px;font-weight:700;text-transform:uppercase;
+                        letter-spacing:.5px;color:var(--text2);margin-bottom:8px`;
+    const inpStyle   = `width:100%;box-sizing:border-box;border:1px solid var(--border);
+                        border-radius:6px;padding:6px 8px;font-size:13px;
+                        background:var(--bg);color:var(--text)`;
+
+    // Name-Feld (nur manuell/Anlage)
+    const nameHtml = isManual ? `
+      <div>
+        <div style="${labelStyle}">Name${create ? ' *' : ''}</div>
+        <input type="text" id="planung-name" placeholder="z. B. Alpener Stadtlauf"
+          value="${escapeHtml(_edit.name)}" style="${inpStyle}">
+      </div>` : '';
+
+    // Datum-des-Wettkampfs-Feld (referenz_datum, nur manuell/Anlage)
+    const refHtml = isManual ? `
+      <div>
+        <div style="${labelStyle}">Datum des Wettkampfs</div>
+        <input type="date" id="planung-refdatum"
+          value="${escapeHtml(_edit.referenz_datum || '')}" style="${inpStyle}">
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">
+          Grundlage für die jährliche Termin-Prognose${create ? '' : ' &bull; bestimmt „Letzter Wettkampf"'}
+        </div>
+      </div>` : '';
+
+    // Nächster-Termin-Feld (naechstes_datum, nur Edit-Modus)
+    const naechsterHtml = create ? '' : `
+      <!-- Nächster Termin -->
+      <div>
+        <div style="${labelStyle}">Nächster Termin${isManual ? ' (fest, optional)' : ''}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <input type="date" id="planung-datum"
+            style="flex:1;min-width:150px;border:1px solid var(--border);border-radius:6px;
+                   padding:6px 8px;font-size:13px;background:var(--bg);color:var(--text)"
+            value="${escapeHtml(datumVorschlag)}">
+          ${serie.naechstes_datum
+            ? `<button class="btn btn-sm btn-ghost" title="Manuelles Datum entfernen – Prognose wird wieder verwendet"
+                onclick="ADMIN_WETTKAMPF._clearDatumModal()">↺ Datum löschen</button>`
+            : ''}
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">
+          ${istPrognose
+            ? `Datum basiert auf Prognose (${escapeHtml(wtInfo)}) &ndash; Leer lassen = Prognose weiter verwenden`
+            : prognose
+              ? `Prognose: <strong>${WT_KURZ[new Date(prognose+'T00:00:00').getDay()]}, ${fmtDate(prognose)}</strong>${wtInfo ? ' &bull; ' + escapeHtml(wtInfo) : ''}`
+              : 'Leer lassen = kein fester Termin'}
+          &ndash; Vergangene Daten möglich (korrigiert die Prognose für das Folgejahr)
+        </div>
+      </div>`;
 
     cont.innerHTML = `
       <div class="modal-overlay">
@@ -571,36 +638,27 @@ const ADMIN_WETTKAMPF = (() => {
              style="max-width:600px;max-height:90vh;overflow-y:auto">
           <div class="modal-head">
             <div>
-              <div class="modal-eyebrow">Planung bearbeiten</div>
-              <div class="modal-title">${safeHtml(serie.name || serie.kuerzel)}</div>
+              <div class="modal-eyebrow">${create ? 'Wettkampf anlegen' : 'Planung bearbeiten'}</div>
+              <div class="modal-title">${create ? 'Neuer Wettkampf' : safeHtml(serie.name || serie.kuerzel)}</div>
             </div>
             <button class="modal-close" onclick="schliesseModal()">&times;</button>
           </div>
           <div class="modal-body" style="display:flex;flex-direction:column;gap:20px">
 
-            <!-- Nächster Termin -->
-            <div>
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;
-                          letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Nächster Termin</div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <input type="date" id="planung-datum"
-                  style="flex:1;min-width:150px;border:1px solid var(--border);border-radius:6px;
-                         padding:6px 8px;font-size:13px;background:var(--bg);color:var(--text)"
-                  value="${escapeHtml(datumVorschlag)}">
-                ${serie.naechstes_datum
-                  ? `<button class="btn btn-sm btn-ghost" title="Manuelles Datum entfernen – Prognose wird wieder verwendet"
-                      onclick="ADMIN_WETTKAMPF._clearDatumModal(${serieId})">↺ Datum löschen</button>`
-                  : ''}
+            ${(!create && serie.vorschlag_von) ? `
+            <!-- Vorschlags-Hinweis -->
+            <div style="background:#e67e2218;border:1px solid #e67e2255;border-radius:8px;
+                        padding:10px 12px;font-size:13px;color:var(--text)">
+              <strong style="color:#e67e22">Nutzer-Vorschlag</strong> &ndash; eingereicht von
+              ${safeHtml(serie.vorschlag_von_name || 'unbekannt')}${serie.vorschlag_am ? ' am ' + fmtDate(String(serie.vorschlag_am).slice(0, 10)) : ''}.
+              <div style="font-size:12px;color:var(--text2);margin-top:3px">
+                Mit „Speichern" wird der Vorschlag als geprüft markiert und das Hinweis-Badge entfernt.
               </div>
-              <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                ${istPrognose
-                  ? `Datum basiert auf Prognose (${escapeHtml(wtInfo)}) &ndash; Leer lassen = Prognose weiter verwenden`
-                  : prognose
-                    ? `Prognose: <strong>${WT_KURZ[new Date(prognose+'T00:00:00').getDay()]}, ${fmtDate(prognose)}</strong>${wtInfo ? ' &bull; ' + escapeHtml(wtInfo) : ''}`
-                    : 'Leer lassen = kein Termin'}
-                &ndash; Vergangene Daten möglich (korrigiert die Prognose für das Folgejahr)
-              </div>
-            </div>
+            </div>` : ''}
+
+            ${nameHtml}
+            ${refHtml}
+            ${naechsterHtml}
 
             <!-- URL -->
             <div>
@@ -649,7 +707,7 @@ const ADMIN_WETTKAMPF = (() => {
           <div class="modal-actions">
             <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
             <button class="btn btn-primary"
-              onclick="ADMIN_WETTKAMPF.savePlanung(${serieId})">Speichern</button>
+              onclick="ADMIN_WETTKAMPF.savePlanung()">${create ? 'Anlegen' : 'Speichern'}</button>
           </div>
         </div>
       </div>`;
@@ -794,48 +852,92 @@ const ADMIN_WETTKAMPF = (() => {
     if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
 
-  // ── Speichern ─────────────────────────────────────────────────
-  async function savePlanung(serieId) {
+  // ── Speichern (Anlage oder Bearbeitung) ───────────────────────
+  async function savePlanung() {
     if (!_edit) return;
 
-    const datumInp = document.getElementById('planung-datum');
-    const urlInp   = document.getElementById('planung-url');
+    const nameVal = (document.getElementById('planung-name')?.value || '').trim();
+    const refVal  = (document.getElementById('planung-refdatum')?.value || '').trim() || null;
+    const datum   = (document.getElementById('planung-datum')?.value || '').trim() || null;
+    const url     = (document.getElementById('planung-url')?.value || '').trim() || null;
 
-    // Datum: wenn Feld leer → null (Prognose) oder wenn _clearDatum gesetzt
-    const datumVal = (datumInp?.value || '').trim();
-    // Prüfen ob der Wert dem Prognose-Vorschlag entspricht → als manuell speichern
-    const datum = datumVal || null;
-
-    const url = (urlInp?.value || '').trim() || null;
+    if (_edit.isManual && !nameVal) {
+      benachrichtigen('Bitte einen Namen eingeben.', 'err');
+      document.getElementById('planung-name')?.focus();
+      return;
+    }
 
     try {
-      await apiPut(`wettkampf/${serieId}/planung`, {
+      // ── Anlage-Modus ──
+      if (_edit.create) {
+        // Zukünftiges Datum direkt als fester Termin, vergangenes nur als Prognose-Basis
+        const naechstes = (refVal && refVal >= _heute()) ? refVal : null;
+        await apiPost('wettkampf', {
+          name:            nameVal,
+          referenz_datum:  refVal,
+          naechstes_datum: naechstes,
+          wettbewerbe:     _edit.wettbewerbe,
+          url,
+          ort_id: _edit.ort_id,
+          lat:    _edit.lat,
+          lon:    _edit.lon,
+        });
+        schliesseModal();
+        _edit = null;
+        benachrichtigen('Wettkampf angelegt.', 'ok');
+        if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
+        await reload();
+        return;
+      }
+
+      // ── Bearbeiten ──
+      const serieId      = _edit.serieId;
+      const serieVor     = serien.find(s => s.id === serieId);
+      const istVorschlag = !!(serieVor && serieVor.vorschlag_von);
+
+      const payload = {
         naechstes_datum: datum,
         wettbewerbe:     _edit.wettbewerbe,
         url,
         ort_id: _edit.ort_id,
         lat:    _edit.lat,
         lon:    _edit.lon,
-      });
+        ...(istVorschlag ? { vorschlag_bestaetigt: true } : {}),
+      };
+      // Name & Datum nur bei manuellen Wettkämpfen mitschicken
+      if (_edit.isManual) {
+        payload.name           = nameVal;
+        payload.referenz_datum = refVal;
+      }
+
+      await apiPut(`wettkampf/${serieId}/planung`, payload);
 
       // Lokal sofort aktualisieren
       const serie = serien.find(s => s.id === serieId);
-      if (serie && _edit) {
-        serie.wettbewerbe    = [..._edit.wettbewerbe];
+      if (serie) {
+        serie.wettbewerbe     = [..._edit.wettbewerbe];
         serie.naechstes_datum = datum;
-        serie.url            = url;
-        serie.ort_id         = _edit.ort_id;
-        serie.lat            = _edit.lat;
-        serie.lon            = _edit.lon;
+        serie.url             = url;
+        serie.ort_id          = _edit.ort_id;
+        serie.lat             = _edit.lat;
+        serie.lon             = _edit.lon;
+        if (_edit.isManual) { serie.name = nameVal; serie.referenz_datum = refVal; }
+        if (istVorschlag) { serie.vorschlag_von = null; serie.vorschlag_von_name = null; }
       }
 
       schliesseModal();
       _edit = null;
       benachrichtigen('Planung gespeichert.', 'ok');
+      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
       await reload();
     } catch (e) {
       benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
     }
+  }
+
+  // ── Neuer Wettkampf (Anlage-Modal) ────────────────────────────
+  function neuerWettkampf() {
+    showPlanungModal(null);
   }
 
   // ── Aktiv-Status umschalten ───────────────────────────────────
@@ -891,7 +993,7 @@ const ADMIN_WETTKAMPF = (() => {
 
   return {
     render,
-    showPlanungModal, savePlanung,
+    showPlanungModal, savePlanung, neuerWettkampf,
     _removeWb, _addDiszFromList, _setDiszFilter,
     _clearOrt, _setOrtFilter, _waehleOrt,
     _clearDatumModal,
