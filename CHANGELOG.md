@@ -1,5 +1,10 @@
 # Changelog
 
+## v278
+- Fix: Teilnehmerzahl wurde in der Gastansicht nicht angezeigt – Anmeldungen werden jetzt auch für Gäste geladen (Namen werden serverseitig entfernt, nur die Anzahl bleibt sichtbar).
+- Wettkampf-Zeilen (Liste): externer Link zur Wettkampf-Webseite (↗) bei zukünftigen Terminen; vergangene Veranstaltungen mit Ergebnissen verlinken weiterhin ins Statistikportal (auch für Gäste).
+- Gastansicht: „Nächste Wettkämpfe"-Abschnitt am Seitenende endgültig entfernt – die unbewachten Re-Render-Aufrufe sind jetzt in `ladeWettkampfSektionInto()` selbst per `!state.user`-Guard abgefangen.
+
 ## v277
 - Gastansicht (Share-Link): keine Prognose-Termine mehr – es werden nur noch feststehende Wettkampftermine angezeigt (eingeloggte Nutzer sehen Prognosen weiterhin).
 - Wettkampf-Zeilen in der Listenansicht zeigen jetzt die Disziplin-Chips und die Teilnehmerzahl (👥) in der letzten Spalte.

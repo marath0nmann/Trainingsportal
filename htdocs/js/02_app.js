@@ -1368,6 +1368,10 @@ async function ladeWettkampfSektionInto(containerId) {
   if (!el) return;
   el.innerHTML = '';
 
+  // Gastansicht (Share-Link): kein „Nächste Wettkämpfe"-Abschnitt – Wettkämpfe
+  // sind direkt in Kalender/Liste integriert.
+  if (!state.user) return;
+
   let serien = [];
   try { serien = await _ladeWettkampfDaten(); } catch (_) { return; }
 
@@ -2221,6 +2225,10 @@ async function renderListe(main, quarterArg) {
     const canAdd = !!state.user;
     const clickAttr = canAdd ? ` onclick="_wkPopoverToggle(${s.id}, this)"` : '';
     const prognose  = isFest ? '' : ' <span class="liste-wk-prognose">~ Prognose</span>';
+    // Externer Link zur Wettkampf-Webseite (zukünftige Termine)
+    const extLink = s.url
+      ? ` <a class="liste-wk-link" href="${escapeHtml(s.url)}" target="_blank" rel="noopener" title="Zur Wettkampf-Webseite" onclick="event.stopPropagation()">↗</a>`
+      : '';
     // Disziplin-Chips + Teilnehmerzahl in der letzten Spalte
     const chips = (s.wettbewerbe || []).map(d =>
       `<span class="liste-wk-chip">${escapeHtml(d)}</span>`).join('');
@@ -2231,7 +2239,7 @@ async function renderListe(main, quarterArg) {
       ${dateCell(datum)}
       <span class="liste-time">–</span>
       <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
-      <span class="liste-title-text">${emoji} ${escapeHtml(name)}${prognose}</span>
+      <span class="liste-title-text">${emoji} ${escapeHtml(name)}${prognose}${extLink}</span>
       <span class="liste-ort liste-wk-extra">${extra}</span>
     </div>`;
   };

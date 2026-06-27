@@ -644,6 +644,11 @@
   font-size: 11px; font-weight: 600; color: var(--text2);
   white-space: nowrap; margin-left: 2px;
 }
+.liste-wk-link {
+  text-decoration: none; color: #1e8449; font-weight: 700;
+  margin-left: 4px; opacity: .85;
+}
+.liste-wk-link:hover { opacity: 1; }
 
 /* Historische Wettkampf-Kacheln (vergangene Veranstaltungen aus Statistikportal) */
 .wk-hist-item {

@@ -5885,11 +5885,11 @@ function handleWettkampf(string $method, string $tail): void
             }
         }
 
-        // Anmeldungen für alle aktiven Planungen – nur für eingeloggte Nutzer
-        // (Gäste sehen die Wettkämpfe ohne Teilnehmer-Info)
-        $planungIds     = $userId ? array_values(array_filter(
+        // Anmeldungen für alle aktiven Planungen laden (auch für Gäste, damit die
+        // Teilnehmerzahl angezeigt werden kann). Namen werden für Gäste unten entfernt.
+        $planungIds     = array_values(array_filter(
             array_map(fn($s) => $s['planung_id'] ? (int)$s['planung_id'] : null, $serien)
-        )) : [];
+        ));
         $anmByPlanungId = [];
         if ($planungIds) {
             $phAnm = implode(',', array_fill(0, count($planungIds), '?'));
@@ -5934,10 +5934,19 @@ function handleWettkampf(string $method, string $tail): void
                 if (is_array($decoded)) $diszAusgeschlossen = $decoded;
             }
             $anmeldungen    = $pid ? ($anmByPlanungId[$pid] ?? []) : [];
+            // Gäste: keine Namen/IDs preisgeben – nur Anzahl + Disziplinverteilung
+            if (!$user) {
+                $anmeldungen = array_map(fn($a) => [
+                    'id'          => 0,
+                    'benutzer_id' => 0,
+                    'name'        => null,
+                    'disziplin'   => $a['disziplin'],
+                ], $anmeldungen);
+            }
             $meineAnmId     = null;
             $meineDisziplin = null;
             foreach ($anmeldungen as $anm) {
-                if ((int)$anm['benutzer_id'] === $userId) {
+                if ($userId && (int)$anm['benutzer_id'] === $userId) {
                     $meineAnmId     = (int)$anm['id'];
                     $meineDisziplin = $anm['disziplin'];
                     break;
