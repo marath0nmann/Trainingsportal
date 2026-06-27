@@ -1,5 +1,9 @@
 # Changelog
 
+## v277
+- Gastansicht (Share-Link): keine Prognose-Termine mehr – es werden nur noch feststehende Wettkampftermine angezeigt (eingeloggte Nutzer sehen Prognosen weiterhin).
+- Wettkampf-Zeilen in der Listenansicht zeigen jetzt die Disziplin-Chips und die Teilnehmerzahl (👥) in der letzten Spalte.
+
 ## v276
 - Gastansicht (Share-Link): kein eigener Abschnitt „Nächste Wettkämpfe" mehr; stattdessen werden die Wettkämpfe direkt in Kalender bzw. Liste integriert – immer vollständig (Vergangene und „passt nicht" werden in der Gastansicht nicht ausgeblendet). Wettkampfdaten werden dafür auch für Gäste geladen.
 

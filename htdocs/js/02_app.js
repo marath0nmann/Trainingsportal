@@ -797,6 +797,8 @@ async function renderKalender(main, monthArg) {
       if (_wkPr.hidePasstNicht && s.status === 'passt_nicht') return;
       // Vergangenes manuelles Datum als Prognose-Basis nutzen (korrigierter Termin)
       const manuell = s.naechstes_datum && s.naechstes_datum >= _heute ? s.naechstes_datum : null;
+      // Gastansicht: nur feststehende Termine, keine Prognosen
+      if (!angemeldet && !manuell) return;
       const datum   = manuell || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
       // Doppeleintrag nur unterdrücken wenn ein privater Eintrag für genau diese Serie existiert
@@ -2005,6 +2007,8 @@ async function _buildPlanData(von, bis) {
       if (s.aktiv === 0) return;
       if (_wkPrL.hidePasstNicht && s.status === 'passt_nicht') return;
       const manuellL = s.naechstes_datum && s.naechstes_datum >= _heuteListe ? s.naechstes_datum : null;
+      // Gastansicht: nur feststehende Termine, keine Prognosen
+      if (!angemeldet && !manuellL) return;
       const datum    = manuellL || ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
       if (datum) (wkSerieDatumMap[datum] = wkSerieDatumMap[datum] || []).push(s);
       // Doppeleintrag nur unterdrücken wenn privater Eintrag für genau diese Serie existiert
@@ -2217,12 +2221,18 @@ async function renderListe(main, quarterArg) {
     const canAdd = !!state.user;
     const clickAttr = canAdd ? ` onclick="_wkPopoverToggle(${s.id}, this)"` : '';
     const prognose  = isFest ? '' : ' <span class="liste-wk-prognose">~ Prognose</span>';
+    // Disziplin-Chips + Teilnehmerzahl in der letzten Spalte
+    const chips = (s.wettbewerbe || []).map(d =>
+      `<span class="liste-wk-chip">${escapeHtml(d)}</span>`).join('');
+    const anz   = (s.anmeldungen || []).length;
+    const teil  = anz > 0 ? `<span class="liste-wk-teil" title="${anz} Teilnehmer">👥 ${anz}</span>` : '';
+    const extra = (chips || teil) ? `${chips}${teil}` : '';
     return `<div class="liste-row liste-row-wettkampf kal-cal-wettkampf${datum === todayKey ? ' is-today' : ''}"${clickAttr} data-serie-id="${s.id}">
       ${dateCell(datum)}
       <span class="liste-time">–</span>
       <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
       <span class="liste-title-text">${emoji} ${escapeHtml(name)}${prognose}</span>
-      <span class="liste-ort"></span>
+      <span class="liste-ort liste-wk-extra">${extra}</span>
     </div>`;
   };
 

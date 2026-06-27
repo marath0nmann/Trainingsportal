@@ -630,6 +630,20 @@
   font-size: 11px; font-weight: 600; color: var(--text2);
   font-style: italic; opacity: .8;
 }
+/* Disziplin-Chips + Teilnehmerzahl in der Wettkampf-Zeile (letzte Spalte) */
+.liste-wk-extra {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  justify-content: flex-end; overflow: visible; max-width: 360px;
+}
+.liste-wk-chip {
+  font-size: 10px; font-weight: 700; line-height: 1.4;
+  padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, #27ae60 14%, var(--surface)); color: #1e8449;
+}
+.liste-wk-teil {
+  font-size: 11px; font-weight: 600; color: var(--text2);
+  white-space: nowrap; margin-left: 2px;
+}
 
 /* Historische Wettkampf-Kacheln (vergangene Veranstaltungen aus Statistikportal) */
 .wk-hist-item {
@@ -687,6 +701,7 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
   .liste-row .liste-time  { grid-column: 2; grid-row: 1; font-size: 12px; }
   .liste-row .liste-title-text { grid-column: 3; grid-row: 1; white-space: normal; word-break: break-word; }
   .liste-row .liste-ort   { grid-column: 2 / 4; grid-row: 2; text-align: left; }
+  .liste-row .liste-wk-extra { justify-content: flex-start; max-width: none; }
   .liste-kw-km { font-size: 13px; }
   .liste-kw-range { font-size: 12px; }
   #liste-legend .kal-legend { gap: 6px 8px; }
