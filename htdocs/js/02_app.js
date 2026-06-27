@@ -30,6 +30,9 @@ window.addEventListener('hashchange', renderPage);
 // ── Wettkampf-Anzeigeeinstellungen (gemeinsam mit Wettkampfplanung-Seite) ──
 // Schlüssel identisch mit 17_wettkampfplanung.js → ein localStorage-Eintrag für beide Views.
 function _wkPrefs() {
+  // Gastansicht (Share-Link): Wettkämpfe immer vollständig integriert anzeigen,
+  // unabhängig von lokalen Filtereinstellungen (Vergangene/„passt nicht" aus).
+  if (!state.user) return { hideVergangen: false, hidePasstNicht: false };
   let hideVergangen = false, hidePasstNicht = false;
   try {
     hideVergangen  = localStorage.getItem('wkp_hide_vergangen')   === '1';
@@ -683,6 +686,8 @@ async function renderKalender(main, monthArg) {
   let termineRaw = [], statistikUrlKal = '', notizen = [], wochenZiele = {};
   try {
     const needPrefs = angemeldet && state.kalFilter === null;
+    // Gastansicht (Share-Link): Wettkämpfe ebenfalls laden und in den Kalender integrieren
+    const ladeWk = angemeldet || !!state.shareToken;
     const einheitenUrl = angemeldet
       ? `mein-plan/einheiten?von=${von}&bis=${bis}`
       : `einheiten?von=${von}&bis=${bis}${state.shareToken ? `&share_token=${state.shareToken}` : ''}`;
@@ -690,8 +695,8 @@ async function renderKalender(main, monthArg) {
       apiGet(einheitenUrl, { silent: true }),
       apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
       needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
-      angemeldet ? _ladeWettkampfDaten().catch(() => []) : Promise.resolve([]),
-      angemeldet ? _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })) : Promise.resolve({ termine: [], statistikportal_url: '' }),
+      ladeWk ? _ladeWettkampfDaten().catch(() => []) : Promise.resolve([]),
+      ladeWk ? _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })) : Promise.resolve({ termine: [], statistikportal_url: '' }),
       angemeldet ? apiGet(`tagesnotizen?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ notizen: [] })) : Promise.resolve({ notizen: [] }),
       angemeldet ? apiGet(`wochenziele?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ ziele: {} })) : Promise.resolve({ ziele: {} }),
     ]);
@@ -1923,6 +1928,8 @@ function isoWeekYear(date) {
 async function _buildPlanData(von, bis) {
   const angemeldet = !!state.user;
   const needPrefs  = angemeldet && state.kalFilter === null;
+  // Gastansicht (Share-Link): Wettkämpfe ebenfalls laden und in die Liste integrieren
+  const ladeWk = angemeldet || !!state.shareToken;
   const einheitenUrl = angemeldet
     ? `mein-plan/einheiten?von=${von}&bis=${bis}`
     : `einheiten?von=${von}&bis=${bis}${state.shareToken ? `&share_token=${state.shareToken}` : ''}`;
@@ -1930,8 +1937,8 @@ async function _buildPlanData(von, bis) {
     apiGet(einheitenUrl, { silent: true }),
     apiGet(`feiertage?von=${von}&bis=${bis}`, { silent: true }).catch(() => ({ feiertage: [] })),
     needPrefs ? apiGet('kal/prefs', { silent: true }).catch(() => ({ prefs: null })) : Promise.resolve({ prefs: null }),
-    angemeldet ? _ladeWettkampfDaten().catch(() => []) : Promise.resolve([]),
-    angemeldet ? _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })) : Promise.resolve({ termine: [], statistikportal_url: '' }),
+    ladeWk ? _ladeWettkampfDaten().catch(() => []) : Promise.resolve([]),
+    ladeWk ? _ladeWettkampfTermine(von, bis).catch(() => ({ termine: [], statistikportal_url: '' })) : Promise.resolve({ termine: [], statistikportal_url: '' }),
   ]);
   const oeffentlich  = d1.einheiten || [];
   const privat       = angemeldet ? (d1.privat || []) : [];

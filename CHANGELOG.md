@@ -1,5 +1,8 @@
 # Changelog
 
+## v276
+- Gastansicht (Share-Link): kein eigener Abschnitt „Nächste Wettkämpfe" mehr; stattdessen werden die Wettkämpfe direkt in Kalender bzw. Liste integriert – immer vollständig (Vergangene und „passt nicht" werden in der Gastansicht nicht ausgeblendet). Wettkampfdaten werden dafür auch für Gäste geladen.
+
 ## v275
 - Teilen/Gast-Links: beim Erstellen werden jetzt zusätzlich Ansicht (Kalender/Liste) und Monat bzw. Quartal gewählt – Voreinstellung ist die aktuell geöffnete Ansicht + Zeitraum. Bestehende Links können nachträglich bearbeitet werden (✏️). Gäste landen auf der festgelegten Ansicht/Zeitraum; Navigation und Ansichtswechsel sind für sie ausgeblendet. DB-Migration 28 (Spalten `ansicht`/`zeitraum`), neue API `PUT share/tokens/{token}`. Der bestehende Link …85e6 wurde auf Liste/Q3 2026 gesetzt.
 - Wochenziele: km-Vorgaben pro Woche im eigenen Plan und im Athletenplan (Trainer); Klick auf KW-Zelle → Inline-Eingabe; Ist/Ziel in Farbe (grün/orange)
