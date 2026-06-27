@@ -1,6 +1,7 @@
 # Changelog
 
-## v274
+## v275
+- Teilen/Gast-Links: beim Erstellen werden jetzt zusätzlich Ansicht (Kalender/Liste) und Monat bzw. Quartal gewählt – Voreinstellung ist die aktuell geöffnete Ansicht + Zeitraum. Bestehende Links können nachträglich bearbeitet werden (✏️). Gäste landen auf der festgelegten Ansicht/Zeitraum; Navigation und Ansichtswechsel sind für sie ausgeblendet. DB-Migration 28 (Spalten `ansicht`/`zeitraum`), neue API `PUT share/tokens/{token}`. Der bestehende Link …85e6 wurde auf Liste/Q3 2026 gesetzt.
 - Wochenziele: km-Vorgaben pro Woche im eigenen Plan und im Athletenplan (Trainer); Klick auf KW-Zelle → Inline-Eingabe; Ist/Ziel in Farbe (grün/orange)
 - Fix: "Vergangene ausblenden" ignorierte historische Statistikportal-Einträge (`histByDate`) in Kalender- und Listenansicht – der Filter gilt jetzt auch für vergangene Veranstaltungen aus dem Statistikportal
 - Refactor: `runPendingMigrations()` nutzt jetzt den gemeinsamen `Migrations::run('training_db_version', _migrationStmts())` aus `includes/migrate.php`. ~30 LOC Boilerplate raus.

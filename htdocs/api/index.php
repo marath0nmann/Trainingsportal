@@ -1130,6 +1130,24 @@ function _migrationStmts(): array
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         },
 
+        // ── 28: Ansicht + Zeitraum für Share-Tokens ──────────────────────────────────────
+        // Ein Gast-Link öffnet jetzt eine feste Ansicht (kalender/liste) und einen
+        // festen Zeitraum (Monat YYYY-MM bzw. Quartal YYYY-QN). NULL = aktueller Zeitraum.
+        28 => static function (): void {
+            $tst = DB::tbl('training_share_tokens');
+            foreach ([
+                "ALTER TABLE `{$tst}` ADD COLUMN IF NOT EXISTS ansicht  VARCHAR(10) NOT NULL DEFAULT 'kalender'",
+                "ALTER TABLE `{$tst}` ADD COLUMN IF NOT EXISTS zeitraum VARCHAR(10) NULL DEFAULT NULL",
+            ] as $sql) {
+                try { DB::query($sql); } catch (Throwable $e) { error_log('mig28: ' . $e->getMessage()); }
+            }
+            // Bestehenden Link nachträglich auf Listenansicht Q3/2026 setzen
+            try {
+                DB::query("UPDATE `{$tst}` SET ansicht='liste', zeitraum='2026-Q3' WHERE token=?",
+                    ['87e538a6af3cc21c550a04a7458985e6']);
+            } catch (Throwable $e) { error_log('mig28b: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -6335,6 +6353,21 @@ function handleWettkampfplanung(string $method, string $tail): void
 //   POST share/tokens               → neuen Token erzeugen (auth + trainer)
 //   DELETE share/tokens/{token}     → Token widerrufen (auth + trainer)
 // ============================================================
+// Ansicht ('kalender'|'liste') + Zeitraum normalisieren/validieren.
+// Liefert [ansicht, zeitraum|null]. Zeitraum-Format hängt von der Ansicht ab:
+//   kalender → YYYY-MM, liste → YYYY-QN. Ungültiges/leeres Zeitraum → null.
+function _shareNormViewPeriod($ansichtRaw, $zeitraumRaw): array
+{
+    $ansicht  = ($ansichtRaw === 'liste') ? 'liste' : 'kalender';
+    $zeitraum = trim((string)($zeitraumRaw ?? ''));
+    if ($ansicht === 'liste') {
+        if (!preg_match('/^\d{4}-Q[1-4]$/', $zeitraum)) $zeitraum = null;
+    } else {
+        if (!preg_match('/^\d{4}-\d{2}$/', $zeitraum)) $zeitraum = null;
+    }
+    return [$ansicht, $zeitraum];
+}
+
 function handleShare(string $method, string $sub): void
 {
     runPendingMigrations();
@@ -6351,7 +6384,7 @@ function handleShare(string $method, string $sub): void
         $row = null;
         try {
             $row = DB::fetchOne(
-                "SELECT t.token, t.gruppe_id, t.name, g.name AS gruppe_name
+                "SELECT t.token, t.gruppe_id, t.name, t.ansicht, t.zeitraum, g.name AS gruppe_name
                    FROM $tst t
                    LEFT JOIN " . DB::tbl('gruppen') . " g ON g.id = t.gruppe_id
                   WHERE t.token = ?",
@@ -6368,6 +6401,8 @@ function handleShare(string $method, string $sub): void
             'gruppe_id'   => (int)$row['gruppe_id'],
             'name'        => $row['name'],
             'gruppe_name' => $row['gruppe_name'] ?? $row['name'],
+            'ansicht'     => $row['ansicht']  ?? 'kalender',
+            'zeitraum'    => $row['zeitraum'] ?? null,
         ]]);
         return;
     }
@@ -6390,7 +6425,7 @@ function handleShare(string $method, string $sub): void
         $rows = [];
         try {
             $rows = DB::fetchAll(
-                "SELECT t.token, t.gruppe_id, t.name, t.erstellt_am, g.name AS gruppe_name
+                "SELECT t.token, t.gruppe_id, t.name, t.ansicht, t.zeitraum, t.erstellt_am, g.name AS gruppe_name
                    FROM $tst t
                    LEFT JOIN " . DB::tbl('gruppen') . " g ON g.id = t.gruppe_id
                  ORDER BY t.erstellt_am DESC",
@@ -6402,6 +6437,8 @@ function handleShare(string $method, string $sub): void
             'gruppe_id'   => (int)$r['gruppe_id'],
             'name'        => $r['name'],
             'gruppe_name' => $r['gruppe_name'] ?? $r['name'],
+            'ansicht'     => $r['ansicht']  ?? 'kalender',
+            'zeitraum'    => $r['zeitraum'] ?? null,
             'erstellt_am' => $r['erstellt_am'],
         ], $rows);
         echo json_encode(['ok' => true, 'tokens' => $tokens]);
@@ -6428,13 +6465,63 @@ function handleShare(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => 'Gruppe nicht gefunden']);
             return;
         }
+        [$ansicht, $zeitraum] = _shareNormViewPeriod($in['ansicht'] ?? null, $in['zeitraum'] ?? null);
         $token = bin2hex(random_bytes(16));
-        DB::query("INSERT INTO $tst (token, gruppe_id, name) VALUES (?,?,?)", [$token, $gruppeId, $name]);
+        DB::query("INSERT INTO $tst (token, gruppe_id, name, ansicht, zeitraum) VALUES (?,?,?,?,?)",
+            [$token, $gruppeId, $name, $ansicht, $zeitraum]);
         echo json_encode(['ok' => true, 'token' => [
             'token'       => $token,
             'gruppe_id'   => $gruppeId,
             'name'        => $name,
             'gruppe_name' => $gruppe['name'],
+            'ansicht'     => $ansicht,
+            'zeitraum'    => $zeitraum,
+        ]]);
+        return;
+    }
+
+    // PUT /share/tokens/{token} – Ansicht/Zeitraum/Gruppe nachträglich ändern
+    if (str_starts_with($sub, 'tokens/') && $method === 'PUT') {
+        $token = substr($sub, 7);
+        if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Ungültiger Token']);
+            return;
+        }
+        $existing = null;
+        try { $existing = DB::fetchOne("SELECT gruppe_id, name FROM $tst WHERE token = ?", [$token]); } catch (Throwable $e) {}
+        if (!$existing) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Token nicht gefunden']);
+            return;
+        }
+        $in = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$ansicht, $zeitraum] = _shareNormViewPeriod($in['ansicht'] ?? null, $in['zeitraum'] ?? null);
+
+        // Gruppe optional ändern (Name folgt der Gruppe nach, sofern angegeben)
+        $gruppeId = $existing['gruppe_id'];
+        $name     = $existing['name'];
+        if (isset($in['gruppe_id']) && ctype_digit((string)$in['gruppe_id'])) {
+            $gId = (int)$in['gruppe_id'];
+            $gruppe = null;
+            try { $gruppe = DB::fetchOne("SELECT name FROM " . DB::tbl('gruppen') . " WHERE id = ?", [$gId]); } catch (Throwable $e) {}
+            if (!$gruppe) {
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'fehler' => 'Gruppe nicht gefunden']);
+                return;
+            }
+            $gruppeId = $gId;
+            $name     = $gruppe['name'];
+        }
+
+        DB::query("UPDATE $tst SET gruppe_id=?, name=?, ansicht=?, zeitraum=? WHERE token=?",
+            [$gruppeId, $name, $ansicht, $zeitraum, $token]);
+        echo json_encode(['ok' => true, 'token' => [
+            'token'     => $token,
+            'gruppe_id' => (int)$gruppeId,
+            'name'      => $name,
+            'ansicht'   => $ansicht,
+            'zeitraum'  => $zeitraum,
         ]]);
         return;
     }

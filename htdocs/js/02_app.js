@@ -15,6 +15,8 @@ const state = {
   shareToken:     null,   // aktiver Share-Token (Gastansicht)
   shareGruppeId:  null,
   shareGruppeName: null,
+  shareAnsicht:   null,   // feste Ansicht des Gast-Links ('kalender'|'liste')
+  shareZeitraum:  null,   // fester Zeitraum (YYYY-MM | YYYY-QN | null)
 };
 
 // ── Drag & Drop (private Einheiten verschieben) ────────────
@@ -222,18 +224,25 @@ async function _initShareToken() {
       state.shareToken      = r.token.token;
       state.shareGruppeId   = r.token.gruppe_id;
       state.shareGruppeName = r.token.gruppe_name || r.token.name;
+      state.shareAnsicht    = r.token.ansicht || 'kalender';
+      state.shareZeitraum   = r.token.zeitraum || null;
       localStorage.setItem('training_share_token', state.shareToken);
-      // Token aus URL entfernen (saubere URL) ohne re-render
-      if (tokenFromUrl) {
-        const clean = location.hash.replace(/[?&]share=[^&]*/g, '').replace(/[?&]$/, '');
-        history.replaceState(null, '', clean || '#kalender');
-      }
+      // Gast immer auf die feste Ansicht + den festen Zeitraum lenken
+      // (Token aus URL entfernen, saubere URL) – ohne re-render (replaceState)
+      history.replaceState(null, '', _shareTargetHash());
     } else {
       localStorage.removeItem('training_share_token');
     }
   } catch (_) {
     localStorage.removeItem('training_share_token');
   }
+}
+
+/** Ziel-Hash für die Gastansicht aus fixierter Ansicht + Zeitraum. */
+function _shareTargetHash() {
+  const zr = state.shareZeitraum;
+  if (state.shareAnsicht === 'liste') return '#liste' + (zr ? '/' + zr : '');
+  return '#kalender' + (zr ? '/' + zr : '');
 }
 
 function renderPage() {
@@ -646,17 +655,17 @@ async function renderKalender(main, monthArg) {
       <div id="heute-sektion"></div>
       <div class="kal-toolbar">
         <div class="kal-nav">
-          <button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Aktuellen Monat anzeigen">Heute</button>
-          <button class="btn btn-ghost" onclick="navigateKalender('${ymd(prev).slice(0,7)}')" aria-label="Vorheriger Monat">‹</button>
+          ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Aktuellen Monat anzeigen">Heute</button>
+          <button class="btn btn-ghost" onclick="navigateKalender('${ymd(prev).slice(0,7)}')" aria-label="Vorheriger Monat">‹</button>` : ''}
           <h1 class="kal-title">${MONATSNAMEN[m]} ${y}</h1>
-          <button class="btn btn-ghost" onclick="navigateKalender('${ymd(next).slice(0,7)}')" aria-label="Nächster Monat">›</button>
+          ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateKalender('${ymd(next).slice(0,7)}')" aria-label="Nächster Monat">›</button>` : ''}
         </div>
-        <div class="kal-nav-right">
+        ${angemeldet ? `<div class="kal-nav-right">
           <div class="view-toggle">
             <button class="btn btn-ghost view-active" title="Kalenderansicht">▦ Kalender</button>
             <button class="btn btn-ghost" onclick="navigateListe()" title="Quartalsplan (aktuelles Quartal)">☰ Liste</button>
           </div>
-        </div>
+        </div>` : ''}
       </div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
       <div id="kal-actions" class="kal-actions"></div>
@@ -2040,17 +2049,17 @@ async function renderListe(main, quarterArg) {
       <div id="heute-sektion"></div>
       <div class="liste-toolbar">
         <div class="liste-nav">
-          <button class="btn btn-ghost" onclick="navigateListe()" title="Aktuelles Quartal anzeigen">Heute</button>
-          <button class="btn btn-ghost" onclick="navigateListe('${prevQ}')" aria-label="Vorheriges Quartal">‹</button>
+          ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateListe()" title="Aktuelles Quartal anzeigen">Heute</button>
+          <button class="btn btn-ghost" onclick="navigateListe('${prevQ}')" aria-label="Vorheriges Quartal">‹</button>` : ''}
           <span class="liste-title">Q${quarter} ${year} · ${QUARTALS_MONATE_LABEL[quarter - 1]}</span>
-          <button class="btn btn-ghost" onclick="navigateListe('${nextQ}')" aria-label="Nächstes Quartal">›</button>
+          ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateListe('${nextQ}')" aria-label="Nächstes Quartal">›</button>` : ''}
         </div>
-        <div class="liste-nav-right">
+        ${angemeldet ? `<div class="liste-nav-right">
           <div class="view-toggle">
             <button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Kalenderansicht (aktueller Monat)">▦ Kalender</button>
             <button class="btn btn-ghost view-active" title="Quartalsplan">☰ Liste</button>
           </div>
-        </div>
+        </div>` : ''}
       </div>
       <div id="liste-legend"></div>
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
@@ -2545,8 +2554,9 @@ function _renderKalActions(containerId) {
 
 // ── SHARE-Modul ───────────────────────────────────────────────────────────
 const SHARE = (() => {
-  let _gruppen = [];
-  let _tokens  = [];
+  let _gruppen   = [];
+  let _tokens    = [];
+  let _editToken = null;   // Token, dessen Zeile gerade im Bearbeiten-Modus ist
 
   async function _loadData() {
     const [gr, tk] = await Promise.all([
@@ -2557,13 +2567,84 @@ const SHARE = (() => {
     _tokens  = tk.tokens  || [];
   }
 
+  // ── Hilfsfunktionen: Ansicht/Zeitraum ──────────────────────────
+  function _currentMonthKey() {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  }
+  function _currentQuarterKey() {
+    const n = new Date();
+    return `${n.getFullYear()}-Q${Math.floor(n.getMonth() / 3) + 1}`;
+  }
+  // Aktuell gewählte Ansicht + Zeitraum (für Voreinstellung neuer Links)
+  function _currentViewPeriod() {
+    const { page, args } = parseHash();
+    if (page === 'liste') {
+      const { year, quarter } = parseQuarterArg(args[0]);
+      return { ansicht: 'liste', zeitraum: `${year}-Q${quarter}` };
+    }
+    const ms = parseMonthArg(args[0]);
+    return { ansicht: 'kalender', zeitraum: `${ms.getFullYear()}-${String(ms.getMonth() + 1).padStart(2, '0')}` };
+  }
+  function _ansichtLabel(a) { return a === 'liste' ? '☰ Liste' : '📅 Kalender'; }
+  function _zeitraumLabel(ansicht, zr) {
+    if (!zr) return 'aktueller Zeitraum';
+    if (ansicht === 'liste') {
+      const m = /^(\d{4})-Q([1-4])$/.exec(zr);
+      return m ? `Q${m[2]} ${m[1]}` : zr;
+    }
+    const m = /^(\d{4})-(\d{2})$/.exec(zr);
+    return m ? `${MONATSNAMEN[+m[2] - 1]} ${m[1]}` : zr;
+  }
+  function _quarterOpts(value) {
+    const sel = value || _currentQuarterKey();
+    const baseY = new Date().getFullYear();
+    let opts = '';
+    for (let y = baseY - 1; y <= baseY + 2; y++) {
+      for (let q = 1; q <= 4; q++) {
+        const key = `${y}-Q${q}`;
+        opts += `<option value="${key}"${key === sel ? ' selected' : ''}>Q${q} ${y}</option>`;
+      }
+    }
+    return opts;
+  }
+  function _zeitraumFieldHtml(ansicht, value, id) {
+    if (ansicht === 'liste') {
+      return `<select id="${id}" class="share-select">${_quarterOpts(value)}</select>`;
+    }
+    const mv = /^\d{4}-\d{2}$/.test(value || '') ? value : _currentMonthKey();
+    return `<input type="month" id="${id}" class="share-select" value="${mv}">`;
+  }
+  function _gruppenOptsHtml(selId) {
+    return _gruppen.map(g =>
+      `<option value="${g.id}"${g.id === selId ? ' selected' : ''}>${escapeHtml(g.name)}</option>`).join('');
+  }
+  function _shareUrl(t) {
+    const path = t.ansicht === 'liste'
+      ? `#liste${t.zeitraum ? '/' + t.zeitraum : ''}`
+      : `#kalender${t.zeitraum ? '/' + t.zeitraum : ''}`;
+    return `${location.origin}${location.pathname}${path}?share=${t.token}`;
+  }
+
+  // Beim Umschalten der Ansicht das passende Zeitraum-Feld neu rendern
+  function _onAnsichtChange(ctx) {
+    const prefix = ctx === 'edit' ? 'share-edit' : 'share';
+    const ansSel = document.getElementById(`${prefix}-ansicht`);
+    const wrap   = document.getElementById(`${prefix}-zeitraum-wrap`);
+    if (!ansSel || !wrap) return;
+    const ansicht = ansSel.value === 'liste' ? 'liste' : 'kalender';
+    const def = ansicht === 'liste' ? _currentQuarterKey() : _currentMonthKey();
+    wrap.innerHTML = _zeitraumFieldHtml(ansicht, def, `${prefix}-zeitraum`);
+  }
+
   async function openDialog() {
     const mod = document.getElementById('modal-container');
     if (!mod) return;
-    mod.innerHTML = `<div class="modal-overlay"><div class="modal-card" style="max-width:560px">
+    _editToken = null;
+    mod.innerHTML = `<div class="modal-overlay"><div class="modal-card" style="max-width:600px">
       <div class="modal-head"><div><div class="modal-eyebrow">Trainingsplan teilen</div>
         <div class="modal-title">🔗 Gast-Links verwalten</div>
-        <div class="modal-sub">Erstelle einen kryptischen Link, über den Gäste einen Gruppen-Trainingsplan einsehen können – ohne Anmeldung.</div>
+        <div class="modal-sub">Erstelle einen kryptischen Link, über den Gäste einen Gruppen-Trainingsplan in einer festen Ansicht und einem festen Zeitraum einsehen können – ohne Anmeldung.</div>
       </div>
       <button class="modal-close" onclick="SHARE._closeDialog()">×</button></div>
       <div class="modal-body">
@@ -2584,32 +2665,32 @@ const SHARE = (() => {
     const body = mod.querySelector('.modal-body');
     if (!body) return;
 
-    const gruppenOpts = _gruppen.map(g =>
-      `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+    const def = _currentViewPeriod();
 
     const tokenRows = _tokens.length
-      ? _tokens.map(t => {
-          const url = `${location.origin}${location.pathname}#kalender?share=${t.token}`;
-          return `<div class="share-token-row">
-            <div class="share-token-info">
-              <span class="share-token-name">${escapeHtml(t.gruppe_name || t.name)}</span>
-              <span class="share-token-url" title="${escapeHtml(url)}">${escapeHtml(url.length > 55 ? url.slice(0, 52) + '…' : url)}</span>
-            </div>
-            <div class="share-token-actions">
-              <button class="btn btn-ghost share-copy-btn" onclick="SHARE._copy('${escapeHtml(url)}')" title="Link kopieren">📋</button>
-              <button class="btn btn-ghost share-del-btn" onclick="SHARE._revoke('${t.token}')" title="Link widerrufen">🗑</button>
-            </div>
-          </div>`;
-        }).join('')
+      ? _tokens.map(t => t.token === _editToken ? _editRowHtml(t) : _viewRowHtml(t)).join('')
       : '<div style="color:var(--text2);font-size:13px;padding:8px 0">Noch keine Gast-Links vorhanden.</div>';
 
     body.innerHTML = `
       <div class="share-create-form">
-        <label class="share-label">Gruppe wählen</label>
-        <div class="share-form-row">
-          <select id="share-gruppe-sel" class="share-select">${gruppenOpts}</select>
-          <button class="btn btn-primary" onclick="SHARE._create()">Link erstellen</button>
+        <div class="share-field-grid">
+          <div>
+            <label class="share-label">Gruppe</label>
+            <select id="share-gruppe-sel" class="share-select">${_gruppenOptsHtml(null)}</select>
+          </div>
+          <div>
+            <label class="share-label">Ansicht</label>
+            <select id="share-ansicht" class="share-select" onchange="SHARE._onAnsichtChange('create')">
+              <option value="kalender"${def.ansicht === 'kalender' ? ' selected' : ''}>📅 Kalender</option>
+              <option value="liste"${def.ansicht === 'liste' ? ' selected' : ''}>☰ Liste</option>
+            </select>
+          </div>
+          <div>
+            <label class="share-label">Zeitraum</label>
+            <div id="share-zeitraum-wrap">${_zeitraumFieldHtml(def.ansicht, def.zeitraum, 'share-zeitraum')}</div>
+          </div>
         </div>
+        <button class="btn btn-primary share-create-btn" onclick="SHARE._create()">Link erstellen</button>
       </div>
       <div class="share-tokens-list">
         <div class="share-tokens-heading">Vorhandene Links</div>
@@ -2617,16 +2698,87 @@ const SHARE = (() => {
       </div>`;
   }
 
+  function _viewRowHtml(t) {
+    const url = _shareUrl(t);
+    return `<div class="share-token-row">
+      <div class="share-token-info">
+        <span class="share-token-name">${escapeHtml(t.gruppe_name || t.name)}
+          <span class="share-token-meta">· ${_ansichtLabel(t.ansicht)} · ${escapeHtml(_zeitraumLabel(t.ansicht, t.zeitraum))}</span>
+        </span>
+        <span class="share-token-url" title="${escapeHtml(url)}">${escapeHtml(url.length > 55 ? url.slice(0, 52) + '…' : url)}</span>
+      </div>
+      <div class="share-token-actions">
+        <button class="btn btn-ghost share-copy-btn" onclick="SHARE._copy('${escapeHtml(url)}')" title="Link kopieren">📋</button>
+        <button class="btn btn-ghost share-copy-btn" onclick="SHARE._startEdit('${t.token}')" title="Ansicht/Zeitraum ändern">✏️</button>
+        <button class="btn btn-ghost share-del-btn" onclick="SHARE._revoke('${t.token}')" title="Link widerrufen">🗑</button>
+      </div>
+    </div>`;
+  }
+
+  function _editRowHtml(t) {
+    return `<div class="share-token-row share-token-edit">
+      <div class="share-field-grid">
+        <div>
+          <label class="share-label">Gruppe</label>
+          <select id="share-edit-gruppe" class="share-select">${_gruppenOptsHtml(t.gruppe_id)}</select>
+        </div>
+        <div>
+          <label class="share-label">Ansicht</label>
+          <select id="share-edit-ansicht" class="share-select" onchange="SHARE._onAnsichtChange('edit')">
+            <option value="kalender"${t.ansicht !== 'liste' ? ' selected' : ''}>📅 Kalender</option>
+            <option value="liste"${t.ansicht === 'liste' ? ' selected' : ''}>☰ Liste</option>
+          </select>
+        </div>
+        <div>
+          <label class="share-label">Zeitraum</label>
+          <div id="share-edit-zeitraum-wrap">${_zeitraumFieldHtml(t.ansicht || 'kalender', t.zeitraum, 'share-edit-zeitraum')}</div>
+        </div>
+      </div>
+      <div class="share-edit-actions">
+        <button class="btn btn-primary btn-sm" onclick="SHARE._saveEdit('${t.token}')">Speichern</button>
+        <button class="btn btn-ghost btn-sm" onclick="SHARE._cancelEdit()">Abbrechen</button>
+      </div>
+    </div>`;
+  }
+
   async function _create() {
     const sel = document.getElementById('share-gruppe-sel');
+    const ans = document.getElementById('share-ansicht');
+    const zr  = document.getElementById('share-zeitraum');
     if (!sel) return;
     const gruppeId = parseInt(sel.value, 10);
     const gruppe = _gruppen.find(g => g.id === gruppeId);
     if (!gruppe) return;
+    const ansicht  = ans && ans.value === 'liste' ? 'liste' : 'kalender';
+    const zeitraum = zr ? zr.value : '';
     try {
-      await apiPost('share/tokens', { gruppe_id: gruppeId, name: gruppe.name });
+      await apiPost('share/tokens', { gruppe_id: gruppeId, name: gruppe.name, ansicht, zeitraum });
       await _loadData();
       _renderDialogBody();
+    } catch (e) {
+      alert('Fehler: ' + (e.message || ''));
+    }
+  }
+
+  function _startEdit(token) { _editToken = token; _renderDialogBody(); }
+  function _cancelEdit()     { _editToken = null;  _renderDialogBody(); }
+
+  async function _saveEdit(token) {
+    const g = document.getElementById('share-edit-gruppe');
+    const a = document.getElementById('share-edit-ansicht');
+    const z = document.getElementById('share-edit-zeitraum');
+    if (!a || !z) return;
+    const payload = {
+      ansicht:  a.value === 'liste' ? 'liste' : 'kalender',
+      zeitraum: z.value,
+    };
+    if (g) payload.gruppe_id = parseInt(g.value, 10);
+    try {
+      await apiPut(`share/tokens/${token}`, payload);
+      _editToken = null;
+      await _loadData();
+      _renderDialogBody();
+      _wkNotify('Gespeichert', true);
     } catch (e) {
       alert('Fehler: ' + (e.message || ''));
     }
@@ -2665,7 +2817,8 @@ const SHARE = (() => {
     location.reload();
   }
 
-  return { openDialog, _create, _revoke, _copy, _closeDialog, beenden };
+  return { openDialog, _create, _revoke, _copy, _closeDialog, beenden,
+           _onAnsichtChange, _startEdit, _cancelEdit, _saveEdit };
 })();
 
 // ── Wettkampf: Schnelleintrag-Popover ────────────────────────────────────
