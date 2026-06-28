@@ -1,5 +1,10 @@
 # Changelog
 
+## v281
+- Wettkampf-Absage: Admins/Trainer können eine einzelne Ausgabe absagen (Modal Admin → Wettkämpfe, Abschnitt „Absage"). Der Wettkampf bleibt in allen Übersichten sichtbar, wird aber durchgestrichen + rot „Abgesagt" markiert; eine Anmeldung ist nicht mehr möglich (Kalender, Liste, „Nächste Wettkämpfe", Wettkampfplanung, Popover – sowie serverseitig blockiert).
+- Abgrenzung Absage ↔ Deaktivierung: Absage ist einmalig (nächstes Jahr findet der Wettkampf wieder statt – sobald das abgesagte Datum vergangen ist, greift die Prognose normal weiter); Deaktivierung (●/◯) bedeutet, der Wettkampf findet generell nicht mehr statt und verschwindet aus aktueller und kommender Planung.
+- DB-Migration 30: Spalte `abgesagt_datum` auf `training_wettkampf_planung`; `PUT /wettkampf/{id}/planung` akzeptiert `abgesagt_datum`; `POST /wettkampf/{id}/anmeldungen` blockt abgesagte Ausgaben (HTTP 409).
+
 ## v280
 - Wettkampfplanung: Button „+ Wettkampf vorschlagen" – Nutzer können bisher unbekannte Wettkämpfe (Name, Datum, Website, Disziplinen) zur Planungsliste hinzufügen
 - Vorschläge erscheinen sofort in der eigenen Planung und laufen unter Admin → Wettkämpfe mit orangem „Vorschlag"-Badge (inkl. Name des Vorschlagenden) zur Prüfung auf

@@ -1162,6 +1162,20 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig28b: ' . $e->getMessage()); }
         },
 
+        // ── 30: Wettkampf-Absage (einmalige Ausgabe) ────────────────────────────────────
+        // Eine Absage betrifft genau eine Ausgabe (Datum). Der Wettkampf bleibt sichtbar,
+        // wird aber durchgestrichen + „Abgesagt" markiert und ist nicht buchbar. Sobald
+        // das abgesagte Datum vergangen ist, greift die Prognose fürs Folgejahr normal.
+        // Abgrenzung zur Deaktivierung (aktiv=0 = findet generell nicht mehr statt).
+        30 => static function (): void {
+            $twp = DB::tbl('training_wettkampf_planung');
+            try {
+                DB::query("ALTER TABLE `{$twp}`
+                    ADD COLUMN IF NOT EXISTS abgesagt_datum DATE NULL DEFAULT NULL
+                    COMMENT 'Abgesagte Ausgabe (Datum); NULL = findet statt'");
+            } catch (Throwable $e) { error_log('mig30: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -5808,12 +5822,18 @@ function handleWettkampf(string $method, string $tail): void
         }
 
         // Planung holen oder auto-anlegen
-        $planung = DB::fetchOne("SELECT id FROM $twp WHERE serie_id=?", [$serieId]);
+        $planung = DB::fetchOne("SELECT id, abgesagt_datum FROM $twp WHERE serie_id=?", [$serieId]);
         if (!$planung) {
             DB::query("INSERT INTO $twp (serie_id) VALUES (?)", [$serieId]);
             $planungId = (int)DB::lastInsertId();
         } else {
             $planungId = (int)$planung['id'];
+            // Abgesagte (noch nicht vergangene) Ausgabe ist nicht buchbar
+            if (!empty($planung['abgesagt_datum']) && $planung['abgesagt_datum'] >= date('Y-m-d')) {
+                http_response_code(409);
+                echo json_encode(['ok' => false, 'fehler' => 'Dieser Wettkampf ist abgesagt – eine Anmeldung ist nicht möglich.']);
+                return;
+            }
         }
 
         // Upsert – Disziplin ändern ist erlaubt
@@ -5863,6 +5883,13 @@ function handleWettkampf(string $method, string $tail): void
             $sets[]   = 'naechstes_datum=?';
             $params[] = ($in['naechstes_datum'] !== null && $in['naechstes_datum'] !== '')
                         ? (string)$in['naechstes_datum'] : null;
+        }
+        // Absage einer einzelnen Ausgabe (Datum) bzw. Aufhebung (null)
+        if (array_key_exists('abgesagt_datum', $in)) {
+            $ad = trim((string)($in['abgesagt_datum'] ?? ''));
+            $ad = ($ad !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $ad)) ? $ad : null;
+            $sets[]   = 'abgesagt_datum=?';
+            $params[] = $ad;
         }
         // Metadaten direkt auf veranstaltung_serien speichern
         if (array_key_exists('name', $in)) {
@@ -5917,10 +5944,15 @@ function handleWettkampf(string $method, string $tail): void
             $nd = array_key_exists('naechstes_datum', $in)
                 ? (($in['naechstes_datum'] !== null && $in['naechstes_datum'] !== '') ? (string)$in['naechstes_datum'] : null)
                 : null;
+            $ad = null;
+            if (array_key_exists('abgesagt_datum', $in)) {
+                $adv = trim((string)($in['abgesagt_datum'] ?? ''));
+                $ad  = ($adv !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $adv)) ? $adv : null;
+            }
             $ak = array_key_exists('aktiv', $in) ? ($in['aktiv'] ? 1 : 0) : 1;
             DB::query(
-                "INSERT INTO $twp (serie_id, naechstes_datum, aktiv) VALUES (?,?,?)",
-                [$serieId, $nd, $ak]
+                "INSERT INTO $twp (serie_id, naechstes_datum, abgesagt_datum, aktiv) VALUES (?,?,?,?)",
+                [$serieId, $nd, $ad, $ak]
             );
         }
         echo json_encode(['ok' => true]);
@@ -5952,6 +5984,7 @@ function handleWettkampf(string $method, string $tail): void
                          ORDER BY v2.datum DESC LIMIT 1) AS ort_letzter,
                         wp.id                     AS planung_id,
                         wp.naechstes_datum,
+                        wp.abgesagt_datum,
                         wp.disziplinen_extra,
                         wp.disziplinen_ausgeschlossen,
                         wp.aktiv,
@@ -5974,7 +6007,7 @@ function handleWettkampf(string $method, string $tail): void
                  LEFT JOIN $tat vath ON vath.id = vbu.athlet_id
                  GROUP BY vs.id, vs.name, vs.kuerzel, vs.wettbewerbe, vs.referenz_datum,
                           vs.url, vs.ort_id, vs.lat, vs.lon,
-                          wp.id, wp.naechstes_datum, wp.disziplinen_extra,
+                          wp.id, wp.naechstes_datum, wp.abgesagt_datum, wp.disziplinen_extra,
                           wp.disziplinen_ausgeschlossen, wp.aktiv, tst.status,
                           vs.vorschlag_von, vs.vorschlag_am, vorschlag_von_name
                  ORDER BY MONTH(COALESCE(MAX(v.datum), vs.referenz_datum)) ASC,
@@ -6117,6 +6150,7 @@ function handleWettkampf(string $method, string $tail): void
                 'planung_id'               => $pid,
                 'aktiv'                    => $s['aktiv'] !== null ? (int)$s['aktiv'] : 1,
                 'naechstes_datum'     => $s['naechstes_datum'],
+                'abgesagt_datum'      => $s['abgesagt_datum'] ?? null,
                 'referenz_datum'      => $s['referenz_datum'] ?? null,
                 'status'              => $s['status'] ?? null,
                 'url'                 => $s['url'] ?? null,
@@ -6282,7 +6316,7 @@ function handleWettkampfplanung(string $method, string $tail): void
         $serien = DB::fetchAll("
             SELECT
                 vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
-                wp.naechstes_datum, COALESCE(wp.aktiv, 1) AS aktiv,
+                wp.naechstes_datum, wp.abgesagt_datum, COALESCE(wp.aktiv, 1) AS aktiv,
                 MAX(vv.datum)                              AS letztes_datum_statistik,
                 CASE
                     WHEN MAX(vv.datum) IS NULL AND vs.referenz_datum IS NULL THEN NULL
@@ -6302,7 +6336,7 @@ function handleWettkampfplanung(string $method, string $tail): void
                                    AND tst.benutzer_id = ?
                                    AND tst.jahr        = ?
             GROUP BY vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
-                     vs.referenz_datum, wp.naechstes_datum, wp.aktiv, tst.status
+                     vs.referenz_datum, wp.naechstes_datum, wp.abgesagt_datum, wp.aktiv, tst.status
             ORDER BY COALESCE(vs.sortierindex, 9999) ASC, vs.name ASC
         ", [$userId, $jahr]);
 
@@ -6466,6 +6500,7 @@ function handleWettkampfplanung(string $method, string $tail): void
                 'letztes_datum'           => $s['letztes_datum'],
                 'letztes_datum_statistik' => $s['letztes_datum_statistik'],
                 'naechstes_datum'         => $s['naechstes_datum'],
+                'abgesagt_datum'          => $s['abgesagt_datum'] ?? null,
                 'status'                => $st,
                 // [{id, disziplin}] – für An-/Abmelde-Buttons im Frontend
                 'meine_anmeldungen'      => $anm,

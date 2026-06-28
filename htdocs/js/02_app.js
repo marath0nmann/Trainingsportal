@@ -967,15 +967,16 @@ async function renderKalender(main, monthArg) {
       const showWk  = !kf || kf.wettkampf !== false;
       const wkHtml  = (showWk && wkItems.length)
         ? wkItems.map(s => {
-            const name   = _decodeHtml(s.name || s.kuerzel || '');
-            const isFest = !!(s.naechstes_datum && s.naechstes_datum >= _heute);
-            const emoji  = isFest ? '🏆' : '❓';
-            const hint   = isFest ? ' (fester Termin)' : ' (Prognosedatum – noch nicht bestätigt)';
-            const canAdd = !!state.user;
+            const name     = _decodeHtml(s.name || s.kuerzel || '');
+            const abgesagt = !!(s.abgesagt_datum && s.abgesagt_datum >= _heute);
+            const isFest   = !!(s.naechstes_datum && s.naechstes_datum >= _heute);
+            const emoji    = abgesagt ? '🚫' : isFest ? '🏆' : '❓';
+            const canAdd   = !!state.user;
+            const titleSty = abgesagt ? 'text-decoration:line-through;opacity:.7' : '';
             return `<div class="kal-item kal-cal-wettkampf is-privat" data-serie-id="${s.id}"
               style="cursor:${canAdd ? 'pointer' : 'default'}"
               ${canAdd ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${s.id},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"` : ''}>
-              <span class="kal-item-title">${emoji} ${escapeHtml(name)}</span>
+              <span class="kal-item-title" style="${titleSty}">${emoji} ${escapeHtml(name)}</span>
             </div>`;
           }).join('')
         : '';
@@ -1389,7 +1390,9 @@ async function ladeWettkampfSektionInto(containerId) {
     .map(s => {
       let datum = null, modus = 'prognose';
       const _heuteS = ymd(new Date());
-      if (s.naechstes_datum && s.naechstes_datum >= _heuteS) {
+      if (s.abgesagt_datum && s.abgesagt_datum >= _heuteS) {
+        datum = s.abgesagt_datum; modus = 'abgesagt';
+      } else if (s.naechstes_datum && s.naechstes_datum >= _heuteS) {
         datum = s.naechstes_datum; modus = 'manuell';
       } else if (typeof ADMIN_WETTKAMPF !== 'undefined') {
         datum = ADMIN_WETTKAMPF.predictNextDate(s.naechstes_datum || s.letztes_datum);
@@ -1404,6 +1407,7 @@ async function ladeWettkampfSektionInto(containerId) {
   const cards = mitDatum.map(({ s, datum, modus }) => {
     const datumFmt = new Date(datum + 'T00:00:00').toLocaleDateString('de-DE',
       { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const abgesagt = modus === 'abgesagt';
     const isFest = modus === 'manuell';
     const name   = escapeHtml(s.name || s.kuerzel || '?');
 
@@ -1421,7 +1425,9 @@ async function ladeWettkampfSektionInto(containerId) {
 
     // ── Disziplin-Buttons (identisch mit Kalender-Popover) ───
     let diszHtml = '';
-    if (angemeldet) {
+    if (abgesagt) {
+      diszHtml = `<div class="wk-disz-buttons"><span class="wk-pop-btn wk-disz-static" style="opacity:.7">Keine Anmeldung möglich</span></div>`;
+    } else if (angemeldet) {
       const liste = disziplinen.length ? disziplinen : [null]; // null = allgemeine Teilnahme
       const btns = liste.map(d => {
         const normD   = d || null;
@@ -1468,12 +1474,14 @@ async function ladeWettkampfSektionInto(containerId) {
 
     return `<div class="wk-card kal-cal-wettkampf">
       <div class="wk-card-eyebrow">
-        <span class="wk-datum">${escapeHtml(datumFmt)}</span>
-        ${isFest
+        <span class="wk-datum"${abgesagt ? ' style="text-decoration:line-through"' : ''}>${escapeHtml(datumFmt)}</span>
+        ${abgesagt
+          ? '<span class="heute-badge" style="background:#cc000022;color:var(--primary);font-weight:700">Abgesagt</span>'
+          : isFest
           ? ''
           : '<span class="heute-badge wk-badge-prognose">Prognose</span>'}
       </div>
-      <div class="wk-card-name">${name}</div>
+      <div class="wk-card-name"${abgesagt ? ' style="text-decoration:line-through"' : ''}>${name}</div>
       ${diszHtml}
       ${teilnehmerHtml}
     </div>`;
@@ -2221,12 +2229,16 @@ async function renderListe(main, quarterArg) {
 
   // Zeile für einen Wettkampf-Forecast (Serie)
   const rowWettkampf = (s, datum) => {
-    const name   = _decodeHtml(s.name || s.kuerzel || '');
-    const isFest = !!(s.naechstes_datum && s.naechstes_datum >= ymd(new Date()));
-    const emoji  = isFest ? '🏆' : '❓';
-    const canAdd = !!state.user;
+    const name     = _decodeHtml(s.name || s.kuerzel || '');
+    const abgesagt = !!(s.abgesagt_datum && s.abgesagt_datum >= ymd(new Date()));
+    const isFest   = !!(s.naechstes_datum && s.naechstes_datum >= ymd(new Date()));
+    const emoji    = abgesagt ? '🚫' : isFest ? '🏆' : '❓';
+    const canAdd   = !!state.user;
     const clickAttr = canAdd ? ` onclick="_wkPopoverToggle(${s.id}, this)"` : '';
-    const prognose  = isFest ? '' : ' <span class="liste-wk-prognose">~ Prognose</span>';
+    const prognose  = abgesagt
+      ? ' <span class="liste-wk-prognose" style="color:var(--primary);font-weight:700">Abgesagt</span>'
+      : isFest ? '' : ' <span class="liste-wk-prognose">~ Prognose</span>';
+    const titleSty  = abgesagt ? ' style="text-decoration:line-through"' : '';
     // Externer Link zur Wettkampf-Webseite (zukünftige Termine)
     const extLink = s.url
       ? ` <a class="liste-wk-link" href="${escapeHtml(s.url)}" target="_blank" rel="noopener" title="Zur Wettkampf-Webseite" onclick="event.stopPropagation()">↗</a>`
@@ -2241,7 +2253,7 @@ async function renderListe(main, quarterArg) {
       ${dateCell(datum)}
       <span class="liste-time">–</span>
       <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
-      <span class="liste-title-text">${emoji} ${escapeHtml(name)}${prognose}${extLink}</span>
+      <span class="liste-title-text"${titleSty}>${emoji} ${escapeHtml(name)}${prognose}${extLink}</span>
       <span class="liste-ort liste-wk-extra">${extra}</span>
     </div>`;
   };
@@ -2998,8 +3010,9 @@ function _wkPopoverShow(serieId, anchorEl) {
   _wkPopSerie = serieId;
 
   const _heuteStr = ymd(new Date());
+  const abgesagt = !!(serie.abgesagt_datum && serie.abgesagt_datum >= _heuteStr);
   const manuell = serie.naechstes_datum && serie.naechstes_datum >= _heuteStr ? serie.naechstes_datum : null;
-  const datum   = manuell
+  const datum   = (abgesagt ? serie.abgesagt_datum : null) || manuell
     || (typeof ADMIN_WETTKAMPF !== 'undefined' ? ADMIN_WETTKAMPF.predictNextDate(serie.naechstes_datum || serie.letztes_datum) : null);
   if (!datum) { _wkNotify('Kein Termin berechenbar.', false); return; }
 
@@ -3018,19 +3031,42 @@ function _wkPopoverShow(serieId, anchorEl) {
 
   const nameEl = document.createElement('div');
   nameEl.className   = 'wk-pop-name';
-  nameEl.textContent = '🏆 ' + name;
+  nameEl.textContent = (abgesagt ? '🚫 ' : '🏆 ') + name;
+  if (abgesagt) nameEl.style.textDecoration = 'line-through';
   pop.appendChild(nameEl);
 
   const datumEl = document.createElement('div');
   datumEl.className = 'wk-pop-datum';
   datumEl.textContent = datumFmt;
-  if (!isFest) {
+  if (abgesagt) datumEl.style.textDecoration = 'line-through';
+  if (abgesagt) {
+    const badge = document.createElement('span');
+    badge.className   = 'wk-pop-badge';
+    badge.style.cssText = 'background:#cc000022;color:var(--primary);font-weight:700';
+    badge.textContent = 'Abgesagt';
+    datumEl.appendChild(badge);
+  } else if (!isFest) {
     const badge = document.createElement('span');
     badge.className   = 'wk-pop-badge';
     badge.textContent = '~ Prognose';
     datumEl.appendChild(badge);
   }
   pop.appendChild(datumEl);
+
+  // Abgesagt → keine Anmeldung möglich
+  if (abgesagt) {
+    const note = document.createElement('div');
+    note.className = 'wk-pop-disz';
+    note.style.cssText = 'font-size:12px;color:var(--text2);font-style:italic;padding:4px 2px';
+    note.textContent = 'Dieser Wettkampf ist abgesagt – keine Anmeldung möglich.';
+    pop.appendChild(note);
+    pop.addEventListener('mouseenter', () => clearTimeout(_wkHideTimer));
+    pop.addEventListener('mouseleave', () => { _wkHideTimer = setTimeout(_wkPopoverHide, 180); });
+    document.body.appendChild(pop);
+    _wkPopPosition(pop, anchorEl.getBoundingClientRect());
+    document.addEventListener('keydown', _wkEscHide);
+    return;
+  }
 
   const diszDiv = document.createElement('div');
   diszDiv.className = 'wk-pop-disz';

@@ -101,6 +101,10 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   function naechstesDatum(serie) {
+    // Abgesagte (noch nicht vergangene) Ausgabe bleibt sichtbar (durchgestrichen)
+    if (serie.abgesagt_datum && serie.abgesagt_datum >= _heute()) {
+      return { datum: serie.abgesagt_datum, modus: 'abgesagt' };
+    }
     if (serie.naechstes_datum && serie.naechstes_datum >= _heute()) {
       return { datum: serie.naechstes_datum, modus: 'manuell' };
     }
@@ -109,6 +113,16 @@ const ADMIN_WETTKAMPF = (() => {
     const basis = serie.naechstes_datum || serie.letztes_datum;
     const p = predictNextDate(basis);
     return p ? { datum: p, modus: 'prognose' } : null;
+  }
+
+  // Die „echte" kommende Ausgabe ohne Absage-Überlagerung (für das Absage-Datum)
+  function echtesNaechstes(serie) {
+    if (serie.naechstes_datum && serie.naechstes_datum >= _heute()) return serie.naechstes_datum;
+    return predictNextDate(serie.naechstes_datum || serie.letztes_datum);
+  }
+
+  function istAbgesagt(serie) {
+    return !!(serie.abgesagt_datum && serie.abgesagt_datum >= _heute());
   }
 
   function fmtDate(iso) {
@@ -220,9 +234,10 @@ const ADMIN_WETTKAMPF = (() => {
       <tbody>`;
 
     _sortiereSerien().forEach(s => {
-      const next    = naechstesDatum(s);
-      const disz    = allesDisziplinen(s);
-      const inaktiv = s.aktiv === 0;
+      const next     = naechstesDatum(s);
+      const disz     = allesDisziplinen(s);
+      const inaktiv  = s.aktiv === 0;
+      const abgesagt = next && next.modus === 'abgesagt';
 
       // Disziplin-Chips (max 4 + Überhang)
       const MAX = 4;
@@ -238,18 +253,23 @@ const ADMIN_WETTKAMPF = (() => {
         ? WT_KURZ[new Date(s.letztes_datum + 'T00:00:00').getDay()] : '';
 
       let nextCell = '<span style="color:var(--text2);font-size:13px">–</span>';
-      if (next && (!inaktiv || next.modus === 'manuell')) {
+      if (next && (!inaktiv || next.modus === 'manuell' || abgesagt)) {
         const nd = new Date(next.datum + 'T00:00:00');
         const wt = WT_KURZ[nd.getDay()];
-        const badge = next.modus === 'manuell'
+        const badge = abgesagt
+          ? '<span style="font-size:10px;padding:1px 5px;border-radius:8px;' +
+            'background:#cc000022;color:var(--primary);font-weight:700;margin-left:4px">Abgesagt</span>'
+          : next.modus === 'manuell'
           ? '<span style="font-size:10px;padding:1px 5px;border-radius:8px;' +
             'background:#2ecc7122;color:#27ae60;margin-left:4px">fest</span>'
           : '<span style="font-size:10px;padding:1px 5px;border-radius:8px;' +
             'background:var(--border);color:var(--text2);margin-left:4px">Prognose</span>';
-        nextCell = `<span style="font-weight:600;font-size:13px">${wt}, ${fmtDate(next.datum)}</span>${badge}`;
+        const strike = abgesagt ? 'text-decoration:line-through;color:var(--text2);' : '';
+        nextCell = `<span style="font-weight:600;font-size:13px;${strike}">${wt}, ${fmtDate(next.datum)}</span>${badge}`;
       }
 
       const rowOpacity = inaktiv ? 'opacity:.45' : '';
+      const nameStrike = abgesagt ? 'text-decoration:line-through;' : '';
 
       // URL-Link im Namen (nur wenn vorhanden)
       const urlLink = s.url
@@ -271,7 +291,8 @@ const ADMIN_WETTKAMPF = (() => {
       html += `
         <tr style="cursor:${admin ? 'pointer' : 'default'};${rowOpacity}" ${rowClick}>
           <td>
-            <strong>${safeHtml(s.name || s.kuerzel)}</strong>${urlLink}
+            <strong style="${nameStrike}">${safeHtml(s.name || s.kuerzel)}</strong>${urlLink}
+            ${abgesagt ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#cc000022;color:var(--primary);font-weight:700;margin-left:6px">Abgesagt</span>' : ''}
             ${inaktiv ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--border);color:var(--text2);margin-left:6px">Inaktiv</span>' : ''}
             ${s.vorschlag_von ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#e67e2222;color:#e67e22;font-weight:700;margin-left:6px">Vorschlag</span>' : ''}
             ${ortName}
@@ -577,6 +598,7 @@ const ADMIN_WETTKAMPF = (() => {
       ort_id:         create ? null : (serie.ort_id ?? null),
       lat:            create ? null : (serie.lat ?? null),
       lon:            create ? null : (serie.lon ?? null),
+      abgesagt_datum: create ? null : (istAbgesagt(serie) ? serie.abgesagt_datum : null),
     };
 
     const cont = document.getElementById('modal-container');
@@ -660,6 +682,13 @@ const ADMIN_WETTKAMPF = (() => {
             ${refHtml}
             ${naechsterHtml}
 
+            ${create ? '' : `
+            <!-- Absage dieser Ausgabe -->
+            <div>
+              <div style="${labelStyle}">Absage</div>
+              <div id="absage-sektion"></div>
+            </div>`}
+
             <!-- URL -->
             <div>
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;
@@ -714,6 +743,7 @@ const ADMIN_WETTKAMPF = (() => {
 
     _renderDiszArea();
     _renderOrtSektion();
+    if (!create) _renderAbsageSektion(serie);
 
     // Karte initialisieren
     _initMap(_edit.lat, _edit.lon).then(() => _updateCoordsDisplay());
@@ -741,6 +771,54 @@ const ADMIN_WETTKAMPF = (() => {
     const inp = document.getElementById('planung-datum');
     if (inp) inp.value = ''; // leer → savePlanung schickt null → Prognose wird wieder verwendet
     if (_edit) delete _edit._clearDatum;
+  }
+
+  // ── Absage-Sektion im Modal ───────────────────────────────────
+  function _renderAbsageSektion(serie) {
+    const area = document.getElementById('absage-sektion');
+    if (!area || !_edit) return;
+
+    if (_edit.abgesagt_datum) {
+      const wt = WT_KURZ[new Date(_edit.abgesagt_datum + 'T00:00:00').getDay()];
+      area.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+                    background:#cc000012;border:1px solid #cc000033;border-radius:8px;padding:10px 12px">
+          <div style="flex:1;font-size:13px;color:var(--text)">
+            <strong style="color:var(--primary)">Abgesagt</strong> für ${wt}, ${fmtDate(_edit.abgesagt_datum)}
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">
+              Wird durchgestrichen angezeigt und ist nicht buchbar. Nächstes Jahr findet der Wettkampf wieder statt.
+            </div>
+          </div>
+          <button class="btn btn-sm btn-ghost" onclick="ADMIN_WETTKAMPF._toggleAbsage()">Absage aufheben</button>
+        </div>`;
+    } else {
+      // Datum, das abgesagt würde = aktuell kommende Ausgabe
+      const ziel = echtesNaechstes(serie);
+      const zielTxt = ziel
+        ? `${WT_KURZ[new Date(ziel + 'T00:00:00').getDay()]}, ${fmtDate(ziel)}`
+        : '–';
+      area.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;font-size:12px;color:var(--text2)">
+            Sagt die kommende Ausgabe (${zielTxt}) einmalig ab &ndash; der Wettkampf bleibt für die Folgejahre erhalten.
+          </div>
+          <button class="btn btn-sm btn-ghost" ${ziel ? '' : 'disabled'}
+            onclick="ADMIN_WETTKAMPF._toggleAbsage()">Diese Ausgabe absagen</button>
+        </div>`;
+    }
+  }
+
+  function _toggleAbsage() {
+    if (!_edit) return;
+    const serie = serien.find(s => s.id === _edit.serieId);
+    if (_edit.abgesagt_datum) {
+      _edit.abgesagt_datum = null;
+    } else {
+      const ziel = serie ? echtesNaechstes(serie) : null;
+      if (!ziel) { benachrichtigen('Kein Termin zum Absagen vorhanden.', 'warn'); return; }
+      _edit.abgesagt_datum = ziel;
+    }
+    if (serie) _renderAbsageSektion(serie);
   }
 
   // ── Disziplin-Bereich ─────────────────────────────────────────
@@ -897,6 +975,7 @@ const ADMIN_WETTKAMPF = (() => {
 
       const payload = {
         naechstes_datum: datum,
+        abgesagt_datum:  _edit.abgesagt_datum,
         wettbewerbe:     _edit.wettbewerbe,
         url,
         ort_id: _edit.ort_id,
@@ -917,6 +996,7 @@ const ADMIN_WETTKAMPF = (() => {
       if (serie) {
         serie.wettbewerbe     = [..._edit.wettbewerbe];
         serie.naechstes_datum = datum;
+        serie.abgesagt_datum  = _edit.abgesagt_datum;
         serie.url             = url;
         serie.ort_id          = _edit.ort_id;
         serie.lat             = _edit.lat;
@@ -996,7 +1076,7 @@ const ADMIN_WETTKAMPF = (() => {
     showPlanungModal, savePlanung, neuerWettkampf,
     _removeWb, _addDiszFromList, _setDiszFilter,
     _clearOrt, _setOrtFilter, _waehleOrt,
-    _clearDatumModal,
+    _clearDatumModal, _toggleAbsage,
     toggleAktiv, imKalenderEintragen,
     predictNextDate, sortiereNach,
   };

@@ -22,6 +22,11 @@ const WETTKAMPFPLANUNG = (() => {
   let _hideVergangen   = false;       // vergangene Veranstaltungen ausblenden
   let _hidePasstNicht  = false;       // "passt nicht"-Einträge ausblenden
 
+  // Vorschlag-Modal: Disziplin-Picker
+  let _vorschlagAlleDisz   = null;    // null = noch nicht geladen
+  let _vorschlagDiszFilter = '';
+  let _vorschlagDisz       = [];      // ausgewählte Disziplinen
+
   // ── Einstellungen (localStorage) ─────────────────────────────
   function _loadPrefs() {
     try {
@@ -262,6 +267,8 @@ const WETTKAMPFPLANUNG = (() => {
       const heute   = (new Date()).toISOString().slice(0, 10);
       const vergangen   = datum && datum < heute;
       const isSelected  = _selected.has(s.id);
+      // Absage betrifft die Ausgabe des angezeigten Jahres
+      const abgesagt    = !!(s.abgesagt_datum && s.abgesagt_datum.startsWith(String(_jahr)));
 
       // Disziplinen: wettbewerbe als klickbare An-/Abmelde-Buttons
       const wb          = Array.isArray(s.wettbewerbe) ? s.wettbewerbe : [];
@@ -271,21 +278,25 @@ const WETTKAMPFPLANUNG = (() => {
       const stBg   = st.bg;
       const stText2 = st.text;
       let wbHtml = '';
-      liste.forEach(w => {
-        const key   = w === null ? '' : w;
-        const label = w === null ? 'Teilnahme eintragen' : w;
-        const anm   = meineAnm.find(a => (a.disziplin || '') === key) || null;
-        const baseStyle = `font-size:11px;padding:2px 8px;margin:1px 2px;border-color:${stBg}`;
-        if (anm) {
-          wbHtml += `<button class="wk-pop-btn"
-            onclick="WETTKAMPFPLANUNG._abDisziplin(${s.id},${anm.id})"
-            style="${baseStyle};background:${stBg};color:${stText2}">✓ ${escapeHtml(label)}</button>`;
-        } else {
-          wbHtml += `<button class="wk-pop-btn"
-            onclick="WETTKAMPFPLANUNG._anDisziplin(${s.id},${escapeHtml(JSON.stringify(key))})"
-            style="${baseStyle};background:color-mix(in srgb,${stBg} 15%,transparent)">${escapeHtml(label)}</button>`;
-        }
-      });
+      if (abgesagt) {
+        wbHtml = `<span style="font-size:11px;color:var(--text2);font-style:italic">Keine Anmeldung möglich</span>`;
+      } else {
+        liste.forEach(w => {
+          const key   = w === null ? '' : w;
+          const label = w === null ? 'Teilnahme eintragen' : w;
+          const anm   = meineAnm.find(a => (a.disziplin || '') === key) || null;
+          const baseStyle = `font-size:11px;padding:2px 8px;margin:1px 2px;border-color:${stBg}`;
+          if (anm) {
+            wbHtml += `<button class="wk-pop-btn"
+              onclick="WETTKAMPFPLANUNG._abDisziplin(${s.id},${anm.id})"
+              style="${baseStyle};background:${stBg};color:${stText2}">✓ ${escapeHtml(label)}</button>`;
+          } else {
+            wbHtml += `<button class="wk-pop-btn"
+              onclick="WETTKAMPFPLANUNG._anDisziplin(${s.id},${escapeHtml(JSON.stringify(key))})"
+              style="${baseStyle};background:color-mix(in srgb,${stBg} 15%,transparent)">${escapeHtml(label)}</button>`;
+          }
+        });
+      }
       const anmHtml = '';
 
       const y = String(_jahr);
@@ -306,7 +317,9 @@ const WETTKAMPFPLANUNG = (() => {
         tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
         const kw  = Math.ceil(((tmp - new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7);
         const kwHtml = `<span style="font-size:11px;color:var(--text2);display:block;margin-top:1px">KW ${kw}</span>`;
-        if (istPrognose) {
+        if (abgesagt) {
+          datumHtml = `<span style="font-size:13px;text-decoration:line-through;color:var(--text2)">${fmt}</span>${kwHtml}`;
+        } else if (istPrognose) {
           const wt = fmt.split(',')[0];
           datumHtml = `<span style="font-size:13px;color:var(--text2);font-style:italic"
             title="Prognose – gleicher ${wt} im gleichen Monat wie letztes Jahr">~ ${fmt}</span>${kwHtml}`;
@@ -328,7 +341,8 @@ const WETTKAMPFPLANUNG = (() => {
           </td>
           <td>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <strong>${escapeHtml(s.name)}</strong>
+              <strong style="${abgesagt ? 'text-decoration:line-through' : ''}">${escapeHtml(s.name)}</strong>
+              ${abgesagt ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#cc000022;color:var(--primary);font-weight:700">Abgesagt</span>' : ''}
               ${s.url ? `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener"
                   class="wkp-url-link" title="${escapeHtml(s.url)}">↗</a>` : ''}
             </div>
@@ -702,10 +716,20 @@ const WETTKAMPFPLANUNG = (() => {
   function _openVorschlagModal() {
     const cont = document.getElementById('modal-container');
     if (!cont) return;
-    const heute = new Date().toISOString().slice(0, 10);
+
+    // Picker-Zustand zurücksetzen
+    _vorschlagDisz       = [];
+    _vorschlagDiszFilter = '';
+    if (_vorschlagAlleDisz !== null && _vorschlagAlleDisz.length === 0) _vorschlagAlleDisz = null;
+
+    const lblStyle = `font-size:11px;font-weight:700;text-transform:uppercase;
+                      letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px`;
+    const inpStyle = `width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
+                      padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)`;
+
     cont.innerHTML = `
       <div class="modal-overlay" onclick="schliesseModal(event)">
-        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:480px">
+        <div class="modal-card" onclick="event.stopPropagation()" style="max-width:480px;max-height:90vh;overflow-y:auto">
           <div class="modal-head">
             <div>
               <div class="modal-eyebrow">Wettkampfplanung</div>
@@ -717,42 +741,23 @@ const WETTKAMPFPLANUNG = (() => {
             <div style="font-size:12px;color:var(--text2)">
               Schlage einen bisher nicht gelisteten Wettkampf vor. Er erscheint sofort in deiner
               Planung und läuft unter <strong>Admin&nbsp;→&nbsp;Wettkämpfe</strong> zur Prüfung auf.
+              Alle Felder sind erforderlich.
             </div>
             <div>
-              <label style="font-size:11px;font-weight:700;text-transform:uppercase;
-                            letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px">
-                Name *</label>
-              <input type="text" id="wkv-name" placeholder="z. B. Stadtlauf Musterstadt"
-                style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
-                       padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)">
+              <label style="${lblStyle}">Name *</label>
+              <input type="text" id="wkv-name" placeholder="z. B. Stadtlauf Musterstadt" style="${inpStyle}">
             </div>
             <div>
-              <label style="font-size:11px;font-weight:700;text-transform:uppercase;
-                            letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px">
-                Datum (sofern bekannt)</label>
-              <input type="date" id="wkv-datum" max="2035-12-31"
-                style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
-                       padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)">
-              <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                Dient als Prognose-Basis für künftige Jahre.</div>
+              <label style="${lblStyle}">Datum *</label>
+              <input type="date" id="wkv-datum" max="2035-12-31" style="${inpStyle}">
             </div>
             <div>
-              <label style="font-size:11px;font-weight:700;text-transform:uppercase;
-                            letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px">
-                Website</label>
-              <input type="url" id="wkv-url" placeholder="https://…"
-                style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
-                       padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)">
+              <label style="${lblStyle}">Website *</label>
+              <input type="url" id="wkv-url" placeholder="https://…" style="${inpStyle}">
             </div>
             <div>
-              <label style="font-size:11px;font-weight:700;text-transform:uppercase;
-                            letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px">
-                Disziplinen</label>
-              <input type="text" id="wkv-disz" placeholder="z. B. 10km Straße, Halbmarathon"
-                style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
-                       padding:7px 9px;font-size:14px;background:var(--bg);color:var(--text)">
-              <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                Mehrere durch Komma trennen.</div>
+              <label style="${lblStyle}">Disziplinen *</label>
+              <div id="wkv-disz-area"></div>
             </div>
           </div>
           <div class="modal-actions">
@@ -762,29 +767,147 @@ const WETTKAMPFPLANUNG = (() => {
           </div>
         </div>
       </div>`;
+
+    _renderVorschlagDiszArea();
     setTimeout(() => document.getElementById('wkv-name')?.focus(), 50);
+
+    // Disziplinliste nachladen
+    if (_vorschlagAlleDisz === null) {
+      apiGet('wettkampf/disziplinen', { silent: true })
+        .then(resp => { _vorschlagAlleDisz = resp.disziplinen || []; })
+        .catch(()  => { _vorschlagAlleDisz = []; })
+        .then(()   => _renderVorschlagDiszArea());
+    }
+  }
+
+  // Disziplin-Picker im Vorschlag-Modal (analog Admin → Wettkämpfe)
+  function _renderVorschlagDiszArea() {
+    const area = document.getElementById('wkv-disz-area');
+    if (!area) return;
+
+    let html = '';
+
+    // Ausgewählte Disziplinen als Chips (× zum Entfernen)
+    if (_vorschlagDisz.length) {
+      html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">`;
+      _vorschlagDisz.forEach(d => {
+        const dJ = escapeHtml(JSON.stringify(d));
+        html += `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
+          border-radius:12px;font-size:13px;background:var(--border);color:var(--text)">
+          ${escapeHtml(d)}
+          <button onclick="WETTKAMPFPLANUNG._removeVorschlagDisz(${dJ})"
+            style="border:none;background:none;cursor:pointer;color:var(--text2);
+                   font-size:16px;line-height:1;padding:0 0 0 2px;margin:0"
+            title="Entfernen">&times;</button>
+        </span>`;
+      });
+      html += `</div>`;
+    }
+
+    if (_vorschlagAlleDisz === null) {
+      html += `<div style="font-size:13px;color:var(--text2)">
+        <span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border);
+          border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;
+          vertical-align:middle;margin-right:6px"></span>Lade Disziplinen&hellip;</div>`;
+    } else {
+      const bereits   = new Set(_vorschlagDisz);
+      const suchterm  = _vorschlagDiszFilter.trim().toLowerCase();
+      const gefiltert = _vorschlagAlleDisz.filter(d => !suchterm || d.toLowerCase().includes(suchterm));
+      const MAX_LIST  = 40;
+
+      html += `<input type="text" id="wkv-disz-filter"
+        placeholder="Disziplin suchen…"
+        value="${escapeHtml(_vorschlagDiszFilter)}"
+        oninput="WETTKAMPFPLANUNG._setVorschlagDiszFilter(this.value)"
+        style="width:100%;box-sizing:border-box;border:1px solid var(--border);
+               border-radius:6px;padding:5px 8px;font-size:13px;
+               background:var(--bg);color:var(--text);margin-bottom:6px">`;
+
+      if (_vorschlagAlleDisz.length === 0) {
+        html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
+          Keine Disziplinen verfügbar.</div>`;
+      } else if (gefiltert.length === 0) {
+        html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
+          Keine passenden Disziplinen gefunden.</div>`;
+      } else {
+        html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
+          border-radius:6px;padding:3px">`;
+        gefiltert.slice(0, MAX_LIST).forEach(d => {
+          const dJ = escapeHtml(JSON.stringify(d));
+          if (bereits.has(d)) {
+            html += `<div style="padding:5px 10px;font-size:13px;color:var(--text2);
+              display:flex;align-items:center;gap:6px">
+              <span style="color:#27ae60;font-size:11px">✓</span>${escapeHtml(d)}</div>`;
+          } else {
+            html += `<div onclick="WETTKAMPFPLANUNG._addVorschlagDisz(${dJ})"
+              style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px"
+              onmouseover="this.style.background='var(--border)'"
+              onmouseout="this.style.background=''">
+              ${escapeHtml(d)}
+            </div>`;
+          }
+        });
+        if (gefiltert.length > MAX_LIST) {
+          html += `<div style="padding:5px 10px;font-size:11px;color:var(--text2)">
+            + ${gefiltert.length - MAX_LIST} weitere &ndash; Suche verfeinern</div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
+    area.innerHTML = html;
+  }
+
+  function _addVorschlagDisz(d) {
+    if (!_vorschlagDisz.includes(d)) _vorschlagDisz.push(d);
+    _vorschlagDiszFilter = '';
+    _renderVorschlagDiszArea();
+    setTimeout(() => document.getElementById('wkv-disz-filter')?.focus(), 0);
+  }
+
+  function _removeVorschlagDisz(d) {
+    _vorschlagDisz = _vorschlagDisz.filter(x => x !== d);
+    _renderVorschlagDiszArea();
+  }
+
+  function _setVorschlagDiszFilter(val) {
+    _vorschlagDiszFilter = val;
+    _renderVorschlagDiszArea();
+    const inp = document.getElementById('wkv-disz-filter');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
 
   async function _submitVorschlag() {
     const name  = (document.getElementById('wkv-name')?.value  || '').trim();
     const datum = (document.getElementById('wkv-datum')?.value || '').trim();
     const url   = (document.getElementById('wkv-url')?.value   || '').trim();
-    const disz  = (document.getElementById('wkv-disz')?.value  || '').trim();
 
+    // Alle Felder sind Pflicht
     if (!name) {
       benachrichtigen('Bitte einen Namen angeben.', 'err');
       document.getElementById('wkv-name')?.focus();
       return;
     }
-    const wettbewerbe = disz
-      ? disz.split(',').map(s => s.trim()).filter(Boolean)
-      : [];
+    if (!datum) {
+      benachrichtigen('Bitte ein Datum angeben.', 'err');
+      document.getElementById('wkv-datum')?.focus();
+      return;
+    }
+    if (!url) {
+      benachrichtigen('Bitte eine Website angeben.', 'err');
+      document.getElementById('wkv-url')?.focus();
+      return;
+    }
+    if (!_vorschlagDisz.length) {
+      benachrichtigen('Bitte mindestens eine Disziplin auswählen.', 'err');
+      return;
+    }
 
     const btn = document.getElementById('wkv-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Speichern…'; }
 
     try {
-      await apiPost('wettkampf/vorschlag', { name, datum, url, wettbewerbe });
+      await apiPost('wettkampf/vorschlag', { name, datum, url, wettbewerbe: _vorschlagDisz });
       schliesseModal();
       benachrichtigen('Wettkampf vorgeschlagen – danke!', 'ok');
       if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
@@ -853,5 +976,6 @@ const WETTKAMPFPLANUNG = (() => {
     _openBulkPopper, _bulkSetStatus,
     _anDisziplin, _abDisziplin,
     _openVorschlagModal, _submitVorschlag,
+    _addVorschlagDisz, _removeVorschlagDisz, _setVorschlagDiszFilter,
   };
 })();
