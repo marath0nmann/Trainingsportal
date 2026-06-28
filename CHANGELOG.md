@@ -1,5 +1,8 @@
 # Changelog
 
+## v282
+- Fix: „Wettkampf vorschlagen" schlug ab dem zweiten Vorschlag fehl (SQLSTATE 23000 „Duplicate entry '' for key 'kuerzel'") – der Endpoint `POST /wettkampf/vorschlag` leitet jetzt wie der Admin-Endpoint ein eindeutiges `kuerzel` aus dem Namen ab.
+
 ## v281
 - Wettkampf-Absage: Admins/Trainer können eine einzelne Ausgabe absagen (Modal Admin → Wettkämpfe, Abschnitt „Absage"). Der Wettkampf bleibt in allen Übersichten sichtbar, wird aber durchgestrichen + rot „Abgesagt" markiert; eine Anmeldung ist nicht mehr möglich (Kalender, Liste, „Nächste Wettkämpfe", Wettkampfplanung, Popover – sowie serverseitig blockiert).
 - Abgrenzung Absage ↔ Deaktivierung: Absage ist einmalig (nächstes Jahr findet der Wettkampf wieder statt – sobald das abgesagte Datum vergangen ist, greift die Prognose normal weiter); Deaktivierung (●/◯) bedeutet, der Wettkampf findet generell nicht mehr statt und verschwindet aus aktueller und kommender Planung.

@@ -5720,11 +5720,27 @@ function handleWettkampf(string $method, string $tail): void
         $wb = array_values(array_filter(array_map(fn($x) => trim((string)$x), $wb)));
         $wbJson = count($wb) ? json_encode($wb) : null;
 
+        // Eindeutiges kuerzel aus dem Namen ableiten (Spalte ist NOT NULL UNIQUE)
+        $base = strtolower($name);
+        $base = strtr($base, ['ä'=>'ae','ö'=>'oe','ü'=>'ue','ß'=>'ss']);
+        $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+        $base = trim((string)$base, '-');
+        if ($base === '') $base = 'wk';
+        $base = substr($base, 0, 50);
+        $kuerzel = $base;
+        try {
+            $i = 1;
+            while (DB::fetchOne("SELECT id FROM `{$tws}` WHERE kuerzel=?", [$kuerzel])) {
+                $kuerzel = substr($base, 0, 50 - strlen('-' . $i)) . '-' . $i;
+                $i++;
+            }
+        } catch (\Throwable $ignored) {}
+
         try {
             DB::query(
-                "INSERT INTO `{$tws}` (name, referenz_datum, url, wettbewerbe, vorschlag_von, vorschlag_am)
-                 VALUES (?,?,?,?,?,NOW())",
-                [$name, $datum, $url, $wbJson, $userId]
+                "INSERT INTO `{$tws}` (name, kuerzel, referenz_datum, url, wettbewerbe, vorschlag_von, vorschlag_am)
+                 VALUES (?,?,?,?,?,?,NOW())",
+                [$name, $kuerzel, $datum, $url, $wbJson, $userId]
             );
             $serieId = (int)DB::lastInsertId();
             // Planung anlegen (aktiv) – damit der Vorschlag im Kalender/der Planung erscheint
