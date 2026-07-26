@@ -160,6 +160,9 @@ const ADMIN_WETTKAMPF = (() => {
       } else if (_sortCol === 'letzter') {
         va = a.letztes_datum || '';
         vb = b.letztes_datum || '';
+      } else if (_sortCol === 'anmeldungen') {
+        va = Array.isArray(a.anmeldungen) ? a.anmeldungen.length : 0;
+        vb = Array.isArray(b.anmeldungen) ? b.anmeldungen.length : 0;
       } else {
         const na = naechstesDatum(a);
         const nb = naechstesDatum(b);
@@ -218,7 +221,7 @@ const ADMIN_WETTKAMPF = (() => {
     }
 
     html += `<div class="panel"><div class="table-scroll">
-    <table style="min-width:640px">
+    <table style="min-width:720px">
       <thead>
         <tr>
           <th class="${_sortCol==='name'?'sorted':''}" onclick="ADMIN_WETTKAMPF.sortiereNach('name')">
@@ -228,6 +231,9 @@ const ADMIN_WETTKAMPF = (() => {
           <th class="${_sortCol==='naechster'?'sorted':''}" onclick="ADMIN_WETTKAMPF.sortiereNach('naechster')">
             Nächster Termin${_arrow('naechster')}</th>
           <th>Disziplinen</th>
+          <th class="${_sortCol==='anmeldungen'?'sorted':''}" style="text-align:center;white-space:nowrap"
+              onclick="ADMIN_WETTKAMPF.sortiereNach('anmeldungen')">
+            Anmeldungen${_arrow('anmeldungen')}</th>
           <th style="width:60px"></th>
         </tr>
       </thead>
@@ -238,6 +244,7 @@ const ADMIN_WETTKAMPF = (() => {
       const disz     = allesDisziplinen(s);
       const inaktiv  = s.aktiv === 0;
       const abgesagt = next && next.modus === 'abgesagt';
+      const anzAnm   = Array.isArray(s.anmeldungen) ? s.anmeldungen.length : 0;
 
       // Disziplin-Chips (max 4 + Überhang)
       const MAX = 4;
@@ -311,6 +318,13 @@ const ADMIN_WETTKAMPF = (() => {
           <td style="white-space:nowrap">${nextCell}</td>
           <td>
             ${chips || '<span style="color:var(--text2)">–</span>'}
+          </td>
+          <td style="text-align:center;white-space:nowrap">
+            ${anzAnm > 0
+              ? `<span title="${anzAnm} Anmeldung${anzAnm !== 1 ? 'en' : ''}"
+                   style="display:inline-block;min-width:22px;padding:1px 7px;border-radius:10px;
+                          font-size:12px;font-weight:600;background:var(--border);color:var(--text)">👥 ${anzAnm}</span>`
+              : '<span style="color:var(--text2);font-size:13px">–</span>'}
           </td>
           <td style="text-align:right;white-space:nowrap">
             ${admin ? `<button onclick="event.stopPropagation();ADMIN_WETTKAMPF.toggleAktiv(${s.id})"

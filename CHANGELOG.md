@@ -1,5 +1,8 @@
 # Changelog
 
+## v283
+- Admin → Wettkämpfe: neue (sortierbare) Spalte „Anmeldungen" – zeigt pro Wettkampf die Anzahl der Anmeldungen (👥) an.
+
 ## v282
 - Fix: „Wettkampf vorschlagen" schlug ab dem zweiten Vorschlag fehl (SQLSTATE 23000 „Duplicate entry '' for key 'kuerzel'") – der Endpoint `POST /wettkampf/vorschlag` leitet jetzt wie der Admin-Endpoint ein eindeutiges `kuerzel` aus dem Namen ab.
 
