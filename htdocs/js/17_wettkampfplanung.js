@@ -677,8 +677,8 @@ const WETTKAMPFPLANUNG = (() => {
     const datum = _datumFuerJahr(serie, _jahr);
 
     try {
-      // Formale Anmeldung (Teilnehmerliste)
-      await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '' });
+      // Formale Anmeldung (Teilnehmerliste) – für das angezeigte Jahr
+      await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '', jahr: _jahr });
 
       // Kalender-Eintrag (Mein Plan)
       if (datum) {

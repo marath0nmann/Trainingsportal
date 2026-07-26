@@ -1176,6 +1176,32 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig30: ' . $e->getMessage()); }
         },
 
+        // ── 31: Jahresbezug für Wettkampf-Anmeldungen ───────────────────────────────────
+        // Anmeldungen hingen bisher nur an der Serie (planung_id) und tauchten dadurch
+        // auch nach dem Jahreswechsel bei der nächsten Ausgabe auf. Neue Spalte `jahr`
+        // bindet jede Anmeldung an eine konkrete Ausgabe. Backfill aus erstellt_am.
+        31 => static function (): void {
+            $twa = DB::tbl('training_wettkampf_anmeldungen');
+            try {
+                DB::query("ALTER TABLE `{$twa}`
+                    ADD COLUMN IF NOT EXISTS jahr SMALLINT UNSIGNED NULL AFTER benutzer_id");
+            } catch (Throwable $e) { error_log('mig31a: ' . $e->getMessage()); }
+            // Backfill: Jahr aus dem Anlagezeitpunkt (bester verfügbarer Näherungswert)
+            try {
+                DB::query("UPDATE `{$twa}` SET jahr = YEAR(erstellt_am) WHERE jahr IS NULL");
+            } catch (Throwable $e) { error_log('mig31b: ' . $e->getMessage()); }
+            try {
+                DB::query("UPDATE `{$twa}` SET jahr = YEAR(CURDATE()) WHERE jahr IS NULL");
+            } catch (Throwable $e) { /* Fallback */ }
+            // Eindeutigkeit nun pro (Planung, Nutzer, Jahr)
+            try { DB::query("ALTER TABLE `{$twa}` DROP INDEX uk_planung_benutzer"); }
+            catch (Throwable $e) { /* evtl. bereits ersetzt */ }
+            try {
+                DB::query("ALTER TABLE `{$twa}`
+                    ADD UNIQUE KEY uk_planung_benutzer_jahr (planung_id, benutzer_id, jahr)");
+            } catch (Throwable $e) { error_log('mig31c: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -5829,6 +5855,9 @@ function handleWettkampf(string $method, string $tail): void
         $in        = readJsonBody();
         $disziplin = trim((string)($in['disziplin'] ?? ''));  // '' = allgemeine Teilnahme
         $bemerkung = trim((string)($in['bemerkung'] ?? '')) ?: null;
+        // Jahr der Ausgabe, für die man sich anmeldet (Default: laufendes Jahr)
+        $jahr      = (isset($in['jahr']) && (int)$in['jahr'] >= 2020 && (int)$in['jahr'] <= 2035)
+                     ? (int)$in['jahr'] : (int)date('Y');
 
         $serie = DB::fetchOne("SELECT id FROM $tws WHERE id=?", [$serieId]);
         if (!$serie) {
@@ -5852,12 +5881,12 @@ function handleWettkampf(string $method, string $tail): void
             }
         }
 
-        // Upsert – Disziplin ändern ist erlaubt
+        // Upsert – pro (Planung, Nutzer, Jahr) eine Anmeldung; Disziplin änderbar
         DB::query(
-            "INSERT INTO $twa (planung_id, benutzer_id, disziplin, bemerkung)
-             VALUES (?,?,?,?)
+            "INSERT INTO $twa (planung_id, benutzer_id, jahr, disziplin, bemerkung)
+             VALUES (?,?,?,?,?)
              ON DUPLICATE KEY UPDATE disziplin=VALUES(disziplin), bemerkung=VALUES(bemerkung)",
-            [$planungId, $userId, $disziplin, $bemerkung]
+            [$planungId, $userId, $jahr, $disziplin, $bemerkung]
         );
         echo json_encode(['ok' => true, 'planung_id' => $planungId]);
         return;
@@ -6092,7 +6121,7 @@ function handleWettkampf(string $method, string $tail): void
             $phAnm = implode(',', array_fill(0, count($planungIds), '?'));
             try {
                 $anmRows = DB::fetchAll(
-                    "SELECT a.id, a.planung_id, a.benutzer_id, a.disziplin,
+                    "SELECT a.id, a.planung_id, a.benutzer_id, a.disziplin, a.jahr,
                             COALESCE(
                               NULLIF(TRIM(CONCAT_WS(' ', ath.vorname, ath.nachname)), ''),
                               b.benutzername
@@ -6111,6 +6140,7 @@ function handleWettkampf(string $method, string $tail): void
                         'benutzer_id' => (int)$a['benutzer_id'],
                         'name'        => $a['anzeige_name'] ?? null,
                         'disziplin'   => $a['disziplin'],
+                        'jahr'        => isset($a['jahr']) && $a['jahr'] !== null ? (int)$a['jahr'] : null,
                     ];
                 }
             } catch (\Throwable $e) { /* Anmeldungen sind optional */ }
@@ -6357,12 +6387,13 @@ function handleWettkampfplanung(string $method, string $tail): void
         ", [$userId, $jahr]);
 
         // Discipline registrations per serie for this user (inkl. ID zum Löschen)
+        // – nur Anmeldungen des angezeigten Jahres
         $anmeldungen = DB::fetchAll("
             SELECT wp.serie_id, twa.id AS anm_id, twa.disziplin
             FROM `{$twa}` twa
             JOIN `{$twp}` wp ON wp.id = twa.planung_id
-            WHERE twa.benutzer_id = ?
-        ", [$userId]);
+            WHERE twa.benutzer_id = ? AND twa.jahr = ?
+        ", [$userId, $jahr]);
 
         $anmBySerie = [];
         foreach ($anmeldungen as $a) {

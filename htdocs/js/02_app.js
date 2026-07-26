@@ -1414,9 +1414,13 @@ async function ladeWettkampfSektionInto(containerId) {
     // Disziplinen: wettbewerbe ist die einzige editierbare Quelle
     const disziplinen = [...(s.wettbewerbe || [])];
 
-    // Meine Anmeldung (formale Tabelle) + privater Plan-Eintrag (gleiche Logik wie Popover)
-    const meineAnmId     = s.meine_anmeldung_id  || null;
-    const meineDisziplin = s.meine_disziplin      || null;  // null = ohne Disziplin
+    // Meine Anmeldung (formale Tabelle) – jahresgenau für die angezeigte Ausgabe
+    const _cardJahr  = Number(datum.slice(0, 4));
+    const _meinId    = state.user ? (state.user.id || 0) : 0;
+    const _meineAnm  = (s.anmeldungen || []).find(a =>
+      a.benutzer_id === _meinId && (a.jahr == null || a.jahr === _cardJahr)) || null;
+    const meineAnmId     = _meineAnm ? (_meineAnm.id || null) : null;
+    const meineDisziplin = _meineAnm ? (_meineAnm.disziplin || null) : null;  // null = ohne Disziplin
     // Nur Einträge dieser Serie (Titelprefix), nicht alle Wettkämpfe an dem Datum
     const _serieNorm  = _decodeHtml(s.name || s.kuerzel || '');
     const privatListe = (_wkPrivatMap[datum] || []).filter(ev =>
@@ -1448,8 +1452,10 @@ async function ladeWettkampfSektionInto(containerId) {
       diszHtml = `<div class="wk-disz-buttons">${pills}</div>`;
     }
 
-    // ── Teilnehmer-Liste ─────────────────────────────────────
-    const anmeldungen = (s.anmeldungen || []).slice();
+    // ── Teilnehmer-Liste (nur Anmeldungen der angezeigten Ausgabe) ──
+    const _kartenJahr = Number(datum.slice(0, 4));
+    const anmeldungen = (s.anmeldungen || [])
+      .filter(a => a.jahr == null || a.jahr === _kartenJahr).slice();
     const myId = state.user ? (state.user.id || 0) : 0;
     const myName = state.user
       ? (state.user.vorname && state.user.nachname
@@ -2246,7 +2252,8 @@ async function renderListe(main, quarterArg) {
     // Disziplin-Chips + Teilnehmerzahl in der letzten Spalte
     const chips = (s.wettbewerbe || []).map(d =>
       `<span class="liste-wk-chip">${escapeHtml(d)}</span>`).join('');
-    const anz   = (s.anmeldungen || []).length;
+    const _rowJahr = Number(datum.slice(0, 4));
+    const anz   = (s.anmeldungen || []).filter(a => a.jahr == null || a.jahr === _rowJahr).length;
     const teil  = anz > 0 ? `<span class="liste-wk-teil" title="${anz} Teilnehmer">👥 ${anz}</span>` : '';
     const extra = (chips || teil) ? `${chips}${teil}` : '';
     return `<div class="liste-row liste-row-wettkampf kal-cal-wettkampf${datum === todayKey ? ' is-today' : ''}"${clickAttr} data-serie-id="${s.id}">
@@ -3075,14 +3082,18 @@ function _wkPopoverShow(serieId, anchorEl) {
   // Nur Einträge dieser Serie filtern (Titelprefix) – verhindert Überschneidungen bei gleichen Datum
   const vorhandene  = (_wkPrivatMap[datum] || []).filter(ev => (ev.titel || '').startsWith('🏆 ' + name));
   const serieDaten  = (_wettkampfCache?.data || []).find(s => s.id === serieId) || null;
+  // Meine formale Anmeldung – jahresgenau zur angezeigten Ausgabe
+  const _popJahr    = Number(datum.slice(0, 4));
+  const _meinIdPop  = state.user ? (state.user.id || 0) : 0;
+  const _meineAnmPop = (serieDaten?.anmeldungen || []).find(a =>
+    a.benutzer_id === _meinIdPop && (a.jahr == null || a.jahr === _popJahr)) || null;
   const buttons = disziplinen.length ? disziplinen : [null];
   buttons.forEach(d => {
     const normD      = d || null; // null für „ohne Disziplin"
     const existEintrag = vorhandene.find(ev => (ev.bemerkung || null) === normD) || null;
     // auch formale Anmeldung prüfen (Card-Sign-up)
-    const formalAnmId = (serieDaten?.meine_anmeldung_id &&
-                          (serieDaten.meine_disziplin || null) === normD)
-                        ? serieDaten.meine_anmeldung_id : null;
+    const formalAnmId = (_meineAnmPop && (_meineAnmPop.disziplin || null) === normD)
+                        ? (_meineAnmPop.id || null) : null;
     const isAktiv = !!(existEintrag || formalAnmId);
 
     const btn = document.createElement('button');
@@ -3093,7 +3104,7 @@ function _wkPopoverShow(serieId, anchorEl) {
       btn.addEventListener('click', async () => {
         _wkPopoverHide();
         try {
-          const delAnmId = formalAnmId || serieDaten?.meine_anmeldung_id || null;
+          const delAnmId = formalAnmId || (_meineAnmPop ? _meineAnmPop.id : null) || null;
           await Promise.all([
             existEintrag ? apiDel(`mein-plan/einheiten/${existEintrag.id}`) : Promise.resolve(),
             delAnmId     ? apiDel(`wettkampf/anmeldungen/${delAnmId}`)      : Promise.resolve(),
@@ -3179,7 +3190,7 @@ async function _wkEintragen(serieId, disziplin) {
     });
     // auch formale Anmeldung anlegen → erscheint in Teilnehmerliste der Karte
     try {
-      await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '' });
+      await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '', jahr: Number(datum.slice(0, 4)) });
     } catch (_) { /* optional – kein Fehler wenn Anmeldung nicht möglich */ }
     _wettkampfCache = null;
     ladeWettkampfSektionInto('wettkampf-sektion');

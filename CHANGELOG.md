@@ -1,5 +1,9 @@
 # Changelog
 
+## v285
+- Wettkampf-Anmeldungen sind jetzt jahresgebunden: jede Anmeldung wird für ein konkretes Jahr gespeichert (`jahr`). Nach dem Jahreswechsel zeigt eine abgelaufene, bereits fürs Folgejahr terminierte Veranstaltung nicht mehr die Vorjahres-Anmeldungen – überall (Admin-Tabelle, Startseiten-Karte/Liste, Popover, Wettkampfplanung) wird nur die Ausgabe des jeweils angezeigten Jahres gezählt.
+- DB-Migration 31: Spalte `jahr` auf `training_wettkampf_anmeldungen` (Backfill aus `erstellt_am`), Eindeutigkeit jetzt pro (Planung, Nutzer, Jahr); `POST /wettkampf/{id}/anmeldungen` nimmt `jahr` entgegen (Default: laufendes Jahr).
+
 ## v284
 - Admin → Wettkämpfe: Tooltip der Spalte „Anmeldungen" listet jetzt die angemeldeten Personen (Name · Disziplin) auf.
 

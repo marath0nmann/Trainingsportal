@@ -125,6 +125,17 @@ const ADMIN_WETTKAMPF = (() => {
     return !!(serie.abgesagt_datum && serie.abgesagt_datum >= _heute());
   }
 
+  // Anmeldungen der kommenden Ausgabe (nach Jahr des nächsten Termins gefiltert)
+  function _anmeldungenFuer(serie) {
+    const next = naechstesDatum(serie);
+    const jahr = next ? Number(next.datum.slice(0, 4)) : new Date().getFullYear();
+    return (Array.isArray(serie.anmeldungen) ? serie.anmeldungen : [])
+      .filter(a => a.jahr == null || a.jahr === jahr);
+  }
+  function _anzAnmeldungen(serie) {
+    return _anmeldungenFuer(serie).length;
+  }
+
   function fmtDate(iso) {
     if (!iso) return '–';
     return new Date(iso + 'T00:00:00').toLocaleDateString('de-DE',
@@ -161,8 +172,8 @@ const ADMIN_WETTKAMPF = (() => {
         va = a.letztes_datum || '';
         vb = b.letztes_datum || '';
       } else if (_sortCol === 'anmeldungen') {
-        va = Array.isArray(a.anmeldungen) ? a.anmeldungen.length : 0;
-        vb = Array.isArray(b.anmeldungen) ? b.anmeldungen.length : 0;
+        va = _anzAnmeldungen(a);
+        vb = _anzAnmeldungen(b);
       } else {
         const na = naechstesDatum(a);
         const nb = naechstesDatum(b);
@@ -244,7 +255,8 @@ const ADMIN_WETTKAMPF = (() => {
       const disz     = allesDisziplinen(s);
       const inaktiv  = s.aktiv === 0;
       const abgesagt = next && next.modus === 'abgesagt';
-      const anmListe = Array.isArray(s.anmeldungen) ? s.anmeldungen : [];
+      // Nur Anmeldungen der kommenden Ausgabe (Jahr des nächsten Termins)
+      const anmListe = _anmeldungenFuer(s);
       const anzAnm   = anmListe.length;
       // Tooltip: eine Zeile pro Angemeldetem (Name · Disziplin)
       const anmTitle = anzAnm
