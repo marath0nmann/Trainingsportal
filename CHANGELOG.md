@@ -1,5 +1,8 @@
 # Changelog
 
+## v284
+- Admin → Wettkämpfe: Tooltip der Spalte „Anmeldungen" listet jetzt die angemeldeten Personen (Name · Disziplin) auf.
+
 ## v283
 - Admin → Wettkämpfe: neue (sortierbare) Spalte „Anmeldungen" – zeigt pro Wettkampf die Anzahl der Anmeldungen (👥) an.
 

@@ -244,7 +244,15 @@ const ADMIN_WETTKAMPF = (() => {
       const disz     = allesDisziplinen(s);
       const inaktiv  = s.aktiv === 0;
       const abgesagt = next && next.modus === 'abgesagt';
-      const anzAnm   = Array.isArray(s.anmeldungen) ? s.anmeldungen.length : 0;
+      const anmListe = Array.isArray(s.anmeldungen) ? s.anmeldungen : [];
+      const anzAnm   = anmListe.length;
+      // Tooltip: eine Zeile pro Angemeldetem (Name · Disziplin)
+      const anmTitle = anzAnm
+        ? anmListe.map(a => {
+            const nm = decodeHtml(a.name || 'Unbekannt');
+            return a.disziplin ? `${nm} · ${a.disziplin}` : nm;
+          }).join('\n')
+        : '';
 
       // Disziplin-Chips (max 4 + Überhang)
       const MAX = 4;
@@ -321,9 +329,9 @@ const ADMIN_WETTKAMPF = (() => {
           </td>
           <td style="text-align:center;white-space:nowrap">
             ${anzAnm > 0
-              ? `<span title="${anzAnm} Anmeldung${anzAnm !== 1 ? 'en' : ''}"
+              ? `<span title="${escapeHtml(anmTitle)}"
                    style="display:inline-block;min-width:22px;padding:1px 7px;border-radius:10px;
-                          font-size:12px;font-weight:600;background:var(--border);color:var(--text)">👥 ${anzAnm}</span>`
+                          font-size:12px;font-weight:600;background:var(--border);color:var(--text);cursor:help">👥 ${anzAnm}</span>`
               : '<span style="color:var(--text2);font-size:13px">–</span>'}
           </td>
           <td style="text-align:right;white-space:nowrap">
