@@ -1221,8 +1221,8 @@ function renderHeuteSektionHtml(items, privatItems = [], heading = 'Heute') {
     const intern = e.sichtbarkeit === 'intern';
     const tp = e.treffpunkt;
     const treffpunktName = tp ? (tp.name || null) : null;
-    // Karte nur wenn Koordinaten vorhanden UND kein Komoot-Link vorhanden UND nicht abgesagt
-    const hasMap = !abgesagt && !e.komoot_url && !!(tp && tp.lat && tp.lng);
+    // Karte nur wenn Koordinaten vorhanden UND keine eigene Strecke/kein Komoot-Link UND nicht abgesagt
+    const hasMap = !abgesagt && !e.strecke_id && !e.komoot_url && !!(tp && tp.lat && tp.lng);
 
     // Absagegrund-Zeile mit Autor
     const absageAutor = e.abgesagt_von_name ? ` (${escapeHtml(e.abgesagt_von_name)})` : '';
@@ -1555,6 +1555,9 @@ async function ladHeuteDetails(items) {
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
       }
+      if (einheit.strecke_id) {
+        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${einheit.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">🗺 Strecke als GPX</a>`);
+      }
       if (einheit.komoot_url) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>`);
       }
@@ -1564,9 +1567,12 @@ async function ladHeuteDetails(items) {
 
       areaEl.innerHTML = html;
 
-      // Komoot-Strecke in rechte Spalte
+      // Streckenverlauf (eigene DB) bzw. Komoot-Embed in rechte Spalte
       const komootEl = document.getElementById(`heute-komoot-${einheit.id}`);
-      if (komootEl && einheit.komoot_url) {
+      if (komootEl && einheit.strecke_id) {
+        await STRECKEN.vorschauEinbinden(komootEl, einheit.strecke_id, { breite: 360, hoehe: 200 });
+        if (komootEl.firstElementChild) komootEl.closest('.heute-card').classList.add('heute-card-split');
+      } else if (komootEl && einheit.komoot_url) {
         const embedUrl = komootEmbedUrl(einheit.komoot_url);
         if (embedUrl) {
           komootEl.innerHTML = `<iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe>`;
@@ -2386,12 +2392,16 @@ async function zeigeEinheit(id) {
               ${e.treffpunkt.maps_apple  ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_apple)}"  target="_blank" rel="noopener" title="Apple Maps öffnen">Apple Maps</a>`  : ''}
               ${e.treffpunkt.maps_komoot ? `<a class="tp-link" href="${escapeHtml(e.treffpunkt.maps_komoot)}" target="_blank" rel="noopener" title="In Komoot öffnen">Komoot</a>` : ''}
             </span></div>` : ''}
+            ${e.strecke_id ? `<div class="modal-row modal-row-block">
+              <span class="modal-label">Strecke</span>
+              <div id="detail-strecke-${e.id}" class="strecke-detail"></div>
+            </div>` : ''}
             ${(() => {
               if (!e.komoot_url) return '';
               const embedUrl = komootEmbedUrl(e.komoot_url);
               if (!embedUrl) return '';
               return `<div class="modal-row modal-row-block">
-                <span class="modal-label">Strecke</span>
+                <span class="modal-label">${e.strecke_id ? 'Komoot' : 'Strecke'}</span>
                 <div class="komoot-embed"><iframe src="${escapeHtml(embedUrl)}" frameborder="0" scrolling="no" allow="fullscreen" loading="lazy"></iframe></div>
               </div>`;
             })()}
@@ -2402,12 +2412,18 @@ async function zeigeEinheit(id) {
             ${segHtml}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
+              ${e.strecke_id ? `<a class="btn btn-ghost" href="api/index.php?p=strecken/${e.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">🗺 Strecke als GPX</a>` : ''}
               ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
               ${state.user ? `<button class="btn btn-ghost" onclick="oeffneTerminModal(state._lastEinheit)">Bearbeiten</button>` : ''}
             </div>
           </div>
         </div>
       </div>`;
+
+    if (e.strecke_id) {
+      STRECKEN.vorschauEinbinden(
+        document.getElementById(`detail-strecke-${e.id}`), e.strecke_id, { breite: 420, hoehe: 220 });
+    }
   } catch (err) {
     cont.innerHTML = `<div class="modal-overlay"><div class="modal-card"><div class="modal-body">Fehler: ${escapeHtml(err.message || '')}</div></div></div>`;
   }

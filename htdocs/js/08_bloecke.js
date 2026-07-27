@@ -46,7 +46,7 @@ const BLOECKE = (() => {
     const container = document.getElementById('bloecke-list');
     if (!container) return;
     try {
-      const data = await apiGet('bloecke', { silent: true });
+      const [data] = await Promise.all([apiGet('bloecke', { silent: true }), STRECKEN.load()]);
       const bloecke = data.bloecke || [];
       if (!bloecke.length) {
         container.innerHTML = `<div class="bloecke-leer">Noch keine Trainingsblöcke vorhanden.${istTrainer() ? ' Erstelle den ersten Block mit „+ Neuer Block".' : ''}</div>`;
@@ -120,10 +120,13 @@ const BLOECKE = (() => {
       || (!istGlobal && state.user && b.erstellt_von === state.user.id);
     const istRunde = hatStrecke(b.typ);
     const segCount = b.seg_count ?? null;
+    const strecke = b.strecke_id ? STRECKEN.ausListe(b.strecke_id) : null;
     const infoBadge = istRunde
-      ? (b.komoot_url
-          ? `<a class="block-seg-badge block-komoot-badge" href="${escapeHtml(b.komoot_url)}" target="_blank" rel="noopener" title="Komoot-Strecke öffnen">Komoot</a>`
-          : `<span class="block-seg-badge block-seg-leer">Keine Strecke</span>`)
+      ? (b.strecke_id
+          ? `<span class="block-seg-badge block-strecke-badge" title="${escapeHtml(strecke ? strecke.name : 'Streckenverlauf hinterlegt')}">${escapeHtml(strecke ? STRECKEN.fmtDistanz(strecke.distanz_m) : 'Strecke')}</span>`
+          : b.komoot_url
+            ? `<a class="block-seg-badge block-komoot-badge" href="${escapeHtml(b.komoot_url)}" target="_blank" rel="noopener" title="Komoot-Strecke öffnen">Komoot</a>`
+            : `<span class="block-seg-badge block-seg-leer">Keine Strecke</span>`)
       : (segCount !== null
           ? (segCount > 0
               ? `<span class="block-seg-badge">${segCount} Seg.</span>`
@@ -657,8 +660,9 @@ const BLOECKE = (() => {
             </div>
 
             <div id="be-komoot-wrap" class="ed-komoot-wrap"${istRunde ? '' : ' style="display:none"'}>
+              ${STRECKEN.feldHtml('be-strecke')}
               <div class="ed-fg ed-fg-wide">
-                <label>Komoot-Strecke <span class="ed-hint">(Tour-Link, z. B. https://www.komoot.com/tour/…)</span></label>
+                <label>Komoot-Strecke <span class="ed-hint">(optionaler Tour-Link, z. B. https://www.komoot.com/tour/…)</span></label>
                 <input type="url" id="be-komoot-url" value="${escapeHtml(b.komoot_url || '')}" placeholder="https://www.komoot.com/tour/…">
               </div>
               <div class="ed-komoot-preview" id="be-komoot-preview">
@@ -723,6 +727,7 @@ const BLOECKE = (() => {
     }
 
     rendereBlockEditor();
+    STRECKEN.feldInit('be-strecke', b.strecke_id || null);
   }
 
   function onTypChange() {
@@ -929,6 +934,7 @@ const BLOECKE = (() => {
       titel:        val('be-titel'),
       typ,
       komoot_url:   istRunde ? (val('be-komoot-url') || null) : null,
+      strecke_id:   istRunde ? STRECKEN.feldWert('be-strecke') : null,
       bemerkung:    val('be-bemerkung') || null,
       sichtbarkeit: val('be-sichtbarkeit'),
       segmente:     istRunde ? [] : bloeckeZuSegmente(editorBloecke),

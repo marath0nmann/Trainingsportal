@@ -1,5 +1,12 @@
 # Changelog
 
+## v286
+- Trainingsplanung → Runde: Der **Streckenverlauf** kann jetzt importiert werden (GPX, TCX, KML, GeoJSON – per Datei-Upload, Drag & Drop oder Adresse einer Streckendatei). Die Geometrie liegt vollständig in der eigenen Datenbank; zur Anzeige wird nichts von Garmin/Komoot nachgeladen. Vorschau ist ein Inline-SVG (Start-/Ziel-Marker, Rundkurs-Erkennung) in Einheiten-Editor, Block-Editor, Detail-Modal, Heute-Karte und Planungs-Popover.
+- Beim Import werden Länge, Höhenmeter (↗/↘ mit 3-m-Hysterese gegen GPS-Rauschen) und Bounding-Box berechnet; sehr dichte Aufzeichnungen werden per Douglas-Peucker auf max. 3.000 Punkte ausgedünnt (Längenabweichung < 0,1 %).
+- Einmal importierte Strecken sind wiederverwendbar (Auswahlliste je Runde), umbenennbar, löschbar (nur wenn nirgends verwendet) und als GPX exportierbar – auch aus Detail-Modal und Heute-Karte („🗺 Strecke als GPX" für Uhr/Navi).
+- Hinweis zu Garmin Connect: Aktivitäts- und Streckendaten werden dort nur an angemeldete Nutzer herausgegeben (auch bei Freigabe-Links). Ein Link auf `connect.garmin.com` erzeugt daher eine erklärende Meldung mit dem Weg über „Exportieren nach GPX"; gleiches gilt für Komoot.
+- DB-Migration 32: neue Tabelle `training_strecken` (Geometrie als JSON-Punktliste) sowie Spalte `strecke_id` auf `training_einheiten` und `training_bloecke`. Neue Endpunkte `GET/POST/PUT/DELETE strecken[/{id}]` und `GET strecken/{id}/gpx`. Blöcke geben ihre Strecke beim Einplanen (auch als Serie) an die Einheit weiter.
+
 ## v285
 - Wettkampf-Anmeldungen sind jetzt jahresgebunden: jede Anmeldung wird für ein konkretes Jahr gespeichert (`jahr`). Nach dem Jahreswechsel zeigt eine abgelaufene, bereits fürs Folgejahr terminierte Veranstaltung nicht mehr die Vorjahres-Anmeldungen – überall (Admin-Tabelle, Startseiten-Karte/Liste, Popover, Wettkampfplanung) wird nur die Ausgabe des jeweils angezeigten Jahres gezählt.
 - DB-Migration 31: Spalte `jahr` auf `training_wettkampf_anmeldungen` (Backfill aus `erstellt_am`), Eindeutigkeit jetzt pro (Planung, Nutzer, Jahr); `POST /wettkampf/{id}/anmeldungen` nimmt `jahr` entgegen (Default: laufendes Jahr).
