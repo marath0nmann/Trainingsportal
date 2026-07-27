@@ -99,12 +99,26 @@ const KAL_POPOVER = (() => {
       const aboAktiv = zeigeAktionen && MEINPLAN.istAboAktivFuerTyp(e.typ);
       const typEsc   = escapeHtml(e.typ);
 
+      // Streckenverlauf (falls hinterlegt) als kompakte SVG-Vorschau
+      let streckeHtml = '';
+      if (e.strecke_id) {
+        const s = await STRECKEN.get(e.strecke_id);
+        if (currentId !== einheitId) return;
+        if (s) {
+          streckeHtml = `<div class="kal-pop-strecke">
+            ${STRECKEN.svgHtml(s, { breite: 220, hoehe: 110, pad: 6 })}
+            <div class="kal-pop-strecke-meta">${escapeHtml(STRECKEN.metaText(s))}</div>
+          </div>`;
+        }
+      }
+
       pop.innerHTML = `
         <div class="kal-pop-typ kal-typ-${typEsc}">${escapeHtml(typLabel)}</div>
         <div class="kal-pop-titel">${escapeHtml(e.titel)}</div>
         ${metaParts.length ? `<div class="kal-pop-meta">${metaParts.map(escapeHtml).join(' · ')}</div>` : ''}
         ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
         ${segsHtml}
+        ${streckeHtml}
         ${zeigeAktionen ? `<div class="kal-pop-actions kal-pop-actions-col">
           ${kannUebernehmen ? `<button class="btn btn-primary btn-sm"
             onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"

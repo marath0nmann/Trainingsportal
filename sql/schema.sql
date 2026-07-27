@@ -22,6 +22,33 @@ CREATE TABLE IF NOT EXISTS training_treffpunkte (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Strecken (Streckenverlauf für Runden) ──────────────────────
+-- Die Geometrie liegt vollständig hier: Beim Import (GPX/TCX/KML/GeoJSON)
+-- wird die Datei einmalig geparst und als JSON-Punktliste gespeichert.
+-- Es wird bewusst NICHT auf Garmin/Komoot verlinkt oder nachgeladen.
+CREATE TABLE IF NOT EXISTS training_strecken (
+  id           INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  name         VARCHAR(200)  NOT NULL,
+  herkunft     VARCHAR(200)  NULL COMMENT 'Nur Info: Dateiname/Quelle des Imports',
+  distanz_m    INT UNSIGNED  NOT NULL DEFAULT 0,
+  aufstieg_m   INT UNSIGNED  NULL,
+  abstieg_m    INT UNSIGNED  NULL,
+  punkte       INT UNSIGNED  NOT NULL DEFAULT 0,
+  start_lat    DECIMAL(10,7) NULL,
+  start_lng    DECIMAL(10,7) NULL,
+  min_lat      DECIMAL(10,7) NULL,
+  max_lat      DECIMAL(10,7) NULL,
+  min_lng      DECIMAL(10,7) NULL,
+  max_lng      DECIMAL(10,7) NULL,
+  ist_rundkurs TINYINT(1)    NOT NULL DEFAULT 0,
+  geometrie    MEDIUMTEXT    NOT NULL COMMENT 'JSON [[lat,lng,ele|null], ...]',
+  erstellt_von INT UNSIGNED  NULL,
+  erstellt_am  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  geaendert_am TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Trainingseinheit (Kalendereintrag) ─────────────────────────
 CREATE TABLE IF NOT EXISTS training_einheiten (
   id            INT UNSIGNED       NOT NULL AUTO_INCREMENT,
@@ -31,7 +58,8 @@ CREATE TABLE IF NOT EXISTS training_einheiten (
                                    NOT NULL DEFAULT 'frei',
   titel         VARCHAR(200)       NOT NULL,
   treffpunkt_id INT UNSIGNED       NULL,
-  komoot_url    VARCHAR(500)       NULL COMMENT 'Komoot-Streckenlink (v. a. für typ=runde)',
+  komoot_url    VARCHAR(500)       NULL COMMENT 'Optionaler Komoot-Streckenlink (v. a. für typ=runde)',
+  strecke_id    INT UNSIGNED       NULL COMMENT 'Streckenverlauf aus training_strecken',
   bemerkung     TEXT               NULL,
   sichtbarkeit  ENUM('oeffentlich','intern')
                                    NOT NULL DEFAULT 'oeffentlich',
@@ -75,7 +103,8 @@ CREATE TABLE IF NOT EXISTS training_bloecke (
   titel         VARCHAR(200)       NOT NULL,
   typ           ENUM('intervall','dauerlauf','funktionell','runde','event','frei','kein_training')
                                    NOT NULL DEFAULT 'intervall',
-  komoot_url    VARCHAR(500)       NULL COMMENT 'Komoot-Streckenlink (v. a. für typ=runde)',
+  komoot_url    VARCHAR(500)       NULL COMMENT 'Optionaler Komoot-Streckenlink (v. a. für typ=runde)',
+  strecke_id    INT UNSIGNED       NULL COMMENT 'Streckenverlauf aus training_strecken',
   bemerkung     TEXT               NULL,
   sichtbarkeit  ENUM('global','privat')
                                    NOT NULL DEFAULT 'global',

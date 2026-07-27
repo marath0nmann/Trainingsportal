@@ -17,6 +17,12 @@
 //   PUT  bloecke/{id}               → Update (Trainer oder eigener privater Block)
 //   DEL  bloecke/{id}               → Löschen (Trainer oder eigener privater Block)
 //   POST bloecke/{id}/apply         → Block als Einheit auf den Kalender legen (auth)
+//   GET  strecken                   → Liste der Strecken ohne Geometrie (auth)
+//   GET  strecken/{id}              → Strecke inkl. Geometrie (auch ohne Login)
+//   GET  strecken/{id}/gpx          → Strecke als GPX-Download
+//   POST strecken                   → Import GPX/TCX/KML/GeoJSON (Recht: training_bearbeiten)
+//   PUT  strecken/{id}              → Umbenennen (Recht)
+//   DEL  strecken/{id}              → Löschen, nur wenn nirgends verwendet (Recht)
 //   GET  treffpunkte                → Liste (auth)
 //   POST treffpunkte                → Neu (Recht: training_bloecke_verwalten)
 //   PUT  treffpunkte/{id}           → Update (Recht: training_bloecke_verwalten)
@@ -1202,6 +1208,45 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig31c: ' . $e->getMessage()); }
         },
 
+        // ── 32: Streckenverlauf (eigene Datenhaltung) ───────────────────────────────────
+        // Runden können einen echten Streckenverlauf bekommen. Die Geometrie liegt
+        // vollständig in der eigenen DB (`training_strecken.geometrie` = JSON-Punktliste),
+        // es wird bewusst NICHT auf Garmin/Komoot verlinkt oder nachgeladen.
+        32 => static function (): void {
+            $tst = DB::tbl('training_strecken');
+            try {
+                DB::query("CREATE TABLE IF NOT EXISTS `{$tst}` (
+                  id           INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+                  name         VARCHAR(200)  NOT NULL,
+                  herkunft     VARCHAR(200)  NULL COMMENT 'Nur Info: Dateiname/Quelle des Imports',
+                  distanz_m    INT UNSIGNED  NOT NULL DEFAULT 0,
+                  aufstieg_m   INT UNSIGNED  NULL,
+                  abstieg_m    INT UNSIGNED  NULL,
+                  punkte       INT UNSIGNED  NOT NULL DEFAULT 0,
+                  start_lat    DECIMAL(10,7) NULL,
+                  start_lng    DECIMAL(10,7) NULL,
+                  min_lat      DECIMAL(10,7) NULL,
+                  max_lat      DECIMAL(10,7) NULL,
+                  min_lng      DECIMAL(10,7) NULL,
+                  max_lng      DECIMAL(10,7) NULL,
+                  ist_rundkurs TINYINT(1)    NOT NULL DEFAULT 0,
+                  geometrie    MEDIUMTEXT    NOT NULL COMMENT 'JSON [[lat,lng,ele|null], ...]',
+                  erstellt_von INT UNSIGNED  NULL,
+                  erstellt_am  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  geaendert_am TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  PRIMARY KEY (id),
+                  KEY idx_name (name)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            } catch (Throwable $e) { error_log('mig32a: ' . $e->getMessage()); }
+
+            foreach (['training_einheiten', 'training_bloecke'] as $t) {
+                try {
+                    DB::query('ALTER TABLE `' . DB::tbl($t) . '`
+                        ADD COLUMN IF NOT EXISTS strecke_id INT UNSIGNED NULL');
+                } catch (Throwable $e) { error_log('mig32b: ' . $e->getMessage()); }
+            }
+        },
+
     ];
 }
 
@@ -1268,6 +1313,10 @@ try {
     }
     if ($head === 'treffpunkte') {
         handleTreffpunkte($method, $tail);
+        exit;
+    }
+    if ($head === 'strecken') {
+        handleStrecken($method, $tail);
         exit;
     }
     if ($head === 'weg') {
@@ -1426,7 +1475,7 @@ function handleEinheiten(string $method, string $sub): void
         }
 
         $rows = DB::fetchAll(
-            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url,
+            'SELECT e.id, e.datum, e.uhrzeit, e.typ, e.titel, e.treffpunkt_id, e.komoot_url, e.strecke_id,
                     e.bemerkung, e.absage_notiz, e.abgesagt_von, e.sichtbarkeit, e.status, e.serie_id, e.gruppe_id,
                     t.name AS tp_name, t.lat AS tp_lat, t.lng AS tp_lng,
                     COALESCE(CONCAT(av_a.vorname, \' \', av_a.nachname), av_b.benutzername) AS abgesagt_von_name
@@ -1506,7 +1555,7 @@ function handleEinheiten(string $method, string $sub): void
         try {
             DB::query(
                 'UPDATE ' . DB::tbl('training_einheiten') . '
-                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, komoot_url=?, bemerkung=?, absage_notiz=?, sichtbarkeit=?, status=?, gruppe_id=?
+                    SET datum=?, uhrzeit=?, typ=?, titel=?, treffpunkt_id=?, komoot_url=?, strecke_id=?, bemerkung=?, absage_notiz=?, sichtbarkeit=?, status=?, gruppe_id=?
                   WHERE id=?',
                 [
                     $in['datum'],
@@ -1516,6 +1565,8 @@ function handleEinheiten(string $method, string $sub): void
                     isset($in['treffpunkt_id']) && $in['treffpunkt_id'] !== '' && $in['treffpunkt_id'] !== null
                         ? (int)$in['treffpunkt_id'] : null,
                     isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
+                    isset($in['strecke_id']) && $in['strecke_id'] !== '' && $in['strecke_id'] !== null
+                        ? (int)$in['strecke_id'] : null,
                     $in['bemerkung'] ?? null,
                     isset($in['absage_notiz']) && $in['absage_notiz'] !== '' ? $in['absage_notiz'] : null,
                     $in['sichtbarkeit'] ?? 'oeffentlich',
@@ -3526,9 +3577,9 @@ function handleSerien(string $method, string $sub): void
             foreach ($daten as $datum) {
                 DB::query(
                     'INSERT INTO ' . DB::tbl('training_einheiten') . '
-                     (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, bemerkung,
+                     (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, strecke_id, bemerkung,
                       sichtbarkeit, status, serie_id, gruppe_id, erstellt_von)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     [
                         $datum,
                         $uhrzeit,
@@ -3536,6 +3587,7 @@ function handleSerien(string $method, string $sub): void
                         $block['titel'],
                         $tpId,
                         $block['komoot_url'] ?? null,
+                        $block['strecke_id'] ?? null,
                         $block['bemerkung'] ?? null,
                         $sicht,
                         'geplant',
@@ -3664,6 +3716,7 @@ function handleSerien(string $method, string $sub): void
         if (array_key_exists('titel', $in))         { $sets[] = 'titel=?';         $vals[] = (string)$in['titel']; }
         if (array_key_exists('treffpunkt_id', $in)) { $sets[] = 'treffpunkt_id=?'; $vals[] = ($in['treffpunkt_id'] !== '' && $in['treffpunkt_id'] !== null ? (int)$in['treffpunkt_id'] : null); }
         if (array_key_exists('komoot_url', $in))    { $sets[] = 'komoot_url=?';    $vals[] = ($in['komoot_url'] !== '' && $in['komoot_url'] !== null ? substr((string)$in['komoot_url'], 0, 500) : null); }
+        if (array_key_exists('strecke_id', $in))    { $sets[] = 'strecke_id=?';    $vals[] = ($in['strecke_id'] !== '' && $in['strecke_id'] !== null ? (int)$in['strecke_id'] : null); }
         if (array_key_exists('bemerkung', $in))     { $sets[] = 'bemerkung=?';     $vals[] = ($in['bemerkung'] !== '' ? $in['bemerkung'] : null); }
         if (array_key_exists('sichtbarkeit', $in))  { $sets[] = 'sichtbarkeit=?';  $vals[] = (in_array($in['sichtbarkeit'] ?? '', ['oeffentlich', 'intern'], true) ? $in['sichtbarkeit'] : 'oeffentlich'); }
         if (array_key_exists('status', $in))        { $sets[] = 'status=?';        $vals[] = $in['status'] ?: 'geplant'; }
@@ -4182,8 +4235,8 @@ function handleBloecke(string $method, string $sub): void
                 ? (int)$in['gruppe_id'] : null;
             DB::query(
                 'INSERT INTO ' . DB::tbl('training_einheiten') . '
-                 (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, bemerkung, sichtbarkeit, status, gruppe_id, erstellt_von)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                 (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, strecke_id, bemerkung, sichtbarkeit, status, gruppe_id, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                 [
                     $in['datum'],
                     $in['uhrzeit'] ?? null,
@@ -4191,6 +4244,7 @@ function handleBloecke(string $method, string $sub): void
                     $block['titel'],
                     $tpId,
                     $block['komoot_url'] ?? null,
+                    $block['strecke_id'] ?? null,
                     $block['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? $defaultSicht,
                     'geplant',
@@ -4246,12 +4300,14 @@ function handleBloecke(string $method, string $sub): void
         try {
             DB::query(
                 'INSERT INTO ' . DB::tbl('training_bloecke') . '
-                 (titel, typ, komoot_url, bemerkung, sichtbarkeit, erstellt_von)
-                 VALUES (?,?,?,?,?,?)',
+                 (titel, typ, komoot_url, strecke_id, bemerkung, sichtbarkeit, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?)',
                 [
                     $in['titel'],
                     $in['typ'] ?? 'intervall',
                     isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
+                    isset($in['strecke_id']) && $in['strecke_id'] !== '' && $in['strecke_id'] !== null
+                        ? (int)$in['strecke_id'] : null,
                     $in['bemerkung'] ?? null,
                     $sicht,
                     (int)$user['id'],
@@ -4303,12 +4359,14 @@ function handleBloecke(string $method, string $sub): void
         try {
             DB::query(
                 'UPDATE ' . DB::tbl('training_bloecke') . '
-                    SET titel=?, typ=?, komoot_url=?, bemerkung=?, sichtbarkeit=?
+                    SET titel=?, typ=?, komoot_url=?, strecke_id=?, bemerkung=?, sichtbarkeit=?
                   WHERE id=?',
                 [
                     $in['titel'],
                     $in['typ'] ?? 'intervall',
                     isset($in['komoot_url']) && $in['komoot_url'] !== '' ? substr((string)$in['komoot_url'], 0, 500) : null,
+                    isset($in['strecke_id']) && $in['strecke_id'] !== '' && $in['strecke_id'] !== null
+                        ? (int)$in['strecke_id'] : null,
                     $in['bemerkung'] ?? null,
                     $in['sichtbarkeit'] ?? $block['sichtbarkeit'],
                     $id,
@@ -4364,6 +4422,7 @@ function mapBlock(array $r): array {
         'titel'        => $r['titel'],
         'typ'          => $r['typ'],
         'komoot_url'   => $r['komoot_url'] ?? null,
+        'strecke_id'   => isset($r['strecke_id']) && $r['strecke_id'] !== null ? (int)$r['strecke_id'] : null,
         'bemerkung'    => $r['bemerkung'],
         'sichtbarkeit' => $r['sichtbarkeit'],
         'erstellt_von' => $r['erstellt_von'] !== null ? (int)$r['erstellt_von'] : null,
@@ -4440,6 +4499,524 @@ function validateBlock(array $in): array {
 }
 
 // ============================================================
+// ============================================================
+// Strecken – Streckenverlauf für Runden, vollständig in eigener DB
+//   GET  strecken                 → Liste ohne Geometrie (auth)
+//   GET  strecken/{id}            → Einzelne Strecke inkl. Geometrie
+//   GET  strecken/{id}/gpx        → Export als GPX-Datei
+//   POST strecken                 → Import: {name?, dateiname?, inhalt} oder {url}
+//   PUT  strecken/{id}            → Umbenennen
+//   DEL  strecken/{id}            → Löschen (nur wenn nirgends verwendet)
+//
+// Bewusst ohne Fremd-Verlinkung: Beim Import wird die Geometrie einmalig
+// geparst und als JSON-Punktliste gespeichert. Danach ist keine Verbindung
+// zu Garmin/Komoot & Co. mehr nötig – auch nicht zum Anzeigen.
+// ============================================================
+function handleStrecken(string $method, string $sub): void
+{
+    $user = Auth::check();
+
+    // ── GET strecken/{id}[/gpx] – ohne Login lesbar (öffentliche Runden) ──
+    if ($method === 'GET' && preg_match('#^(\d+)(/gpx)?$#', $sub, $m)) {
+        $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_strecken') . ' WHERE id = ?', [(int)$m[1]]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Strecke nicht gefunden']);
+            return;
+        }
+        if (!empty($m[2])) {
+            $gpx  = streckeAlsGpx($row);
+            $name = preg_replace('/[^A-Za-z0-9_-]+/', '_', $row['name']) ?: 'strecke';
+            header('Content-Type: application/gpx+xml; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $name . '.gpx"');
+            echo $gpx;
+            return;
+        }
+        echo json_encode(['ok' => true, 'strecke' => mapStrecke($row, true)]);
+        return;
+    }
+
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+
+    // ── GET strecken → Liste (ohne Geometrie: kann mehrere MB groß sein) ──
+    if ($sub === '' && $method === 'GET') {
+        $rows = DB::fetchAll(
+            // Geometrie bewusst nicht mitladen – pro Strecke schnell mehrere hundert KB
+            'SELECT s.id, s.name, s.herkunft, s.distanz_m, s.aufstieg_m, s.abstieg_m, s.punkte,
+                    s.start_lat, s.start_lng, s.ist_rundkurs, s.erstellt_am,
+                    (SELECT COUNT(*) FROM ' . DB::tbl('training_einheiten') . ' e WHERE e.strecke_id = s.id)
+                  + (SELECT COUNT(*) FROM ' . DB::tbl('training_bloecke')   . ' b WHERE b.strecke_id = s.id) AS verwendet
+               FROM ' . DB::tbl('training_strecken') . ' s
+           ORDER BY s.name'
+        );
+        echo json_encode(['ok' => true, 'strecken' => array_map(
+            fn($r) => mapStrecke($r, false) + ['verwendet' => (int)$r['verwendet']],
+            $rows
+        )]);
+        return;
+    }
+
+    // Ab hier: Schreibzugriff nur für Trainer/Editoren
+    if (!Auth::hasRecht('training_bearbeiten') && !Auth::hasRecht('training_bloecke_verwalten')) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung. Nur Trainer und Editoren dürfen Strecken verwalten.']);
+        return;
+    }
+
+    // ── POST strecken → Import ──
+    if ($sub === '' && $method === 'POST') {
+        $in       = readJsonBody();
+        $inhalt   = (string)($in['inhalt'] ?? '');
+        $dateiname = trim((string)($in['dateiname'] ?? ''));
+        $url      = trim((string)($in['url'] ?? ''));
+
+        if ($inhalt === '' && $url !== '') {
+            $geholt = streckeVonUrlLaden($url, $fehler);
+            if ($geholt === null) {
+                http_response_code(400);
+                echo json_encode(['ok' => false, 'fehler' => $fehler]);
+                return;
+            }
+            $inhalt = $geholt;
+            if ($dateiname === '') $dateiname = $url;
+        }
+        if (trim($inhalt) === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Streckendaten übergeben.']);
+            return;
+        }
+        if (strlen($inhalt) > 12 * 1024 * 1024) {
+            http_response_code(413);
+            echo json_encode(['ok' => false, 'fehler' => 'Datei zu groß (max. 12 MB).']);
+            return;
+        }
+
+        $parsed = streckeParsen($inhalt, $fehler);
+        if ($parsed === null) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => $fehler]);
+            return;
+        }
+        [$punkte, $datName] = $parsed;
+
+        $name = trim((string)($in['name'] ?? ''));
+        if ($name === '') $name = $datName;
+        if ($name === '' && $dateiname !== '') $name = preg_replace('/\.[a-z0-9]{2,5}$/i', '', basename($dateiname));
+        if ($name === '') $name = 'Importierte Strecke';
+
+        $id = streckeSpeichern(null, $name, $punkte, $dateiname !== '' ? $dateiname : null, (int)$user['id']);
+        $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_strecken') . ' WHERE id = ?', [$id]);
+        echo json_encode(['ok' => true, 'id' => $id, 'strecke' => mapStrecke($row, true)]);
+        return;
+    }
+
+    // ── PUT strecken/{id} → Umbenennen (optional: Geometrie ersetzen) ──
+    if ($method === 'PUT' && ctype_digit($sub)) {
+        $id  = (int)$sub;
+        $row = DB::fetchOne('SELECT id FROM ' . DB::tbl('training_strecken') . ' WHERE id = ?', [$id]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Strecke nicht gefunden']);
+            return;
+        }
+        $in   = readJsonBody();
+        $name = trim((string)($in['name'] ?? ''));
+        if ($name === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "name" erforderlich']);
+            return;
+        }
+        DB::query('UPDATE ' . DB::tbl('training_strecken') . ' SET name = ? WHERE id = ?',
+            [substr($name, 0, 200), $id]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── DELETE strecken/{id} ──
+    if ($method === 'DELETE' && ctype_digit($sub)) {
+        $id = (int)$sub;
+        $n  = (int)(DB::fetchOne(
+            'SELECT (SELECT COUNT(*) FROM ' . DB::tbl('training_einheiten') . ' WHERE strecke_id = ?)
+                  + (SELECT COUNT(*) FROM ' . DB::tbl('training_bloecke')   . ' WHERE strecke_id = ?) AS n',
+            [$id, $id]
+        )['n'] ?? 0);
+        if ($n > 0) {
+            http_response_code(409);
+            echo json_encode(['ok' => false, 'fehler' => "Strecke wird noch von $n Einheit(en)/Block(s) verwendet."]);
+            return;
+        }
+        DB::query('DELETE FROM ' . DB::tbl('training_strecken') . ' WHERE id = ?', [$id]);
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+}
+
+/** Strecke aus geparsten Punkten berechnen + speichern. Gibt die ID zurück. */
+function streckeSpeichern(?int $id, string $name, array $punkte, ?string $herkunft, int $userId): int
+{
+    $mess     = streckeVermessen($punkte);
+    $reduziert = streckeVereinfachen($punkte, 3000);
+
+    $params = [
+        substr($name, 0, 200),
+        $herkunft !== null ? substr($herkunft, 0, 200) : null,
+        $mess['distanz_m'], $mess['aufstieg_m'], $mess['abstieg_m'], count($reduziert),
+        $mess['start_lat'], $mess['start_lng'],
+        $mess['min_lat'], $mess['max_lat'], $mess['min_lng'], $mess['max_lng'],
+        $mess['ist_rundkurs'] ? 1 : 0,
+        json_encode($reduziert, JSON_UNESCAPED_SLASHES),
+    ];
+
+    if ($id === null) {
+        DB::query(
+            'INSERT INTO ' . DB::tbl('training_strecken') . '
+             (name, herkunft, distanz_m, aufstieg_m, abstieg_m, punkte, start_lat, start_lng,
+              min_lat, max_lat, min_lng, max_lng, ist_rundkurs, geometrie, erstellt_von)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            array_merge($params, [$userId])
+        );
+        return (int)DB::lastInsertId();
+    }
+    DB::query(
+        'UPDATE ' . DB::tbl('training_strecken') . '
+            SET name=?, herkunft=?, distanz_m=?, aufstieg_m=?, abstieg_m=?, punkte=?, start_lat=?, start_lng=?,
+                min_lat=?, max_lat=?, min_lng=?, max_lng=?, ist_rundkurs=?, geometrie=?
+          WHERE id=?',
+        array_merge($params, [$id])
+    );
+    return $id;
+}
+
+function mapStrecke(array $r, bool $mitGeometrie): array
+{
+    $out = [
+        'id'           => (int)$r['id'],
+        'name'         => $r['name'],
+        'herkunft'     => $r['herkunft'] ?? null,
+        'distanz_m'    => (int)$r['distanz_m'],
+        'aufstieg_m'   => $r['aufstieg_m'] !== null ? (int)$r['aufstieg_m'] : null,
+        'abstieg_m'    => $r['abstieg_m']  !== null ? (int)$r['abstieg_m']  : null,
+        'punkte'       => (int)$r['punkte'],
+        'start_lat'    => $r['start_lat'] !== null ? (float)$r['start_lat'] : null,
+        'start_lng'    => $r['start_lng'] !== null ? (float)$r['start_lng'] : null,
+        'ist_rundkurs' => !empty($r['ist_rundkurs']),
+        'erstellt_am'  => $r['erstellt_am'] ?? null,
+    ];
+    if ($mitGeometrie) {
+        $out['geometrie'] = json_decode((string)($r['geometrie'] ?? '[]'), true) ?: [];
+    }
+    return $out;
+}
+
+/**
+ * Erkennt das Format (GPX/TCX/KML/GeoJSON) und liefert [punkte, name].
+ * punkte = [[lat, lng, ele|null], ...]. Bei Fehler: null + $fehler.
+ */
+function streckeParsen(string $inhalt, ?string &$fehler = null): ?array
+{
+    $inhalt = ltrim($inhalt, "\xEF\xBB\xBF \t\r\n");
+
+    // ── GeoJSON ──
+    if (str_starts_with($inhalt, '{') || str_starts_with($inhalt, '[')) {
+        $punkte = _streckePunkteAusGeojson(json_decode($inhalt, true));
+        if (!$punkte) { $fehler = 'GeoJSON enthält keine Linien-Geometrie.'; return null; }
+        return [$punkte, ''];
+    }
+
+    // Für die XML-Formate alle Namespace-Präfixe entfernen – dann greifen
+    // einfache XPath-Ausdrücke unabhängig vom GPX/TCX-Schema-Dialekt.
+    $xmlRoh = preg_replace('/\sxmlns(:[A-Za-z0-9_.-]+)?\s*=\s*(["\'])[^"\']*\2/', '', $inhalt);
+    $xmlRoh = preg_replace('#(</?)[A-Za-z0-9_.-]+:#', '$1', (string)$xmlRoh);
+
+    $prev = libxml_use_internal_errors(true);
+    $xml  = simplexml_load_string((string)$xmlRoh, 'SimpleXMLElement', LIBXML_NOCDATA | LIBXML_NONET);
+    libxml_clear_errors();
+    libxml_use_internal_errors($prev);
+
+    if ($xml === false) {
+        $fehler = 'Datei konnte nicht gelesen werden. Erwartet werden GPX, TCX, KML oder GeoJSON.';
+        return null;
+    }
+
+    $name = '';
+    foreach ($xml->xpath('//trk/name') ?: [] as $n) { $name = trim((string)$n); break; }
+    if ($name === '') { foreach ($xml->xpath('//metadata/name') ?: [] as $n) { $name = trim((string)$n); break; } }
+    if ($name === '') { foreach ($xml->xpath('//Placemark/name') ?: [] as $n) { $name = trim((string)$n); break; } }
+
+    // ── GPX: trkpt (Track) > rtept (Route) > wpt (Wegpunkte) ──
+    foreach (['//trkpt', '//rtept', '//wpt'] as $xp) {
+        $punkte = [];
+        foreach ($xml->xpath($xp) ?: [] as $pt) {
+            $lat = isset($pt['lat']) ? (float)$pt['lat'] : null;
+            $lng = isset($pt['lon']) ? (float)$pt['lon'] : null;
+            if ($lat === null || $lng === null) continue;
+            $ele = isset($pt->ele) && (string)$pt->ele !== '' ? (float)$pt->ele : null;
+            $punkte[] = [$lat, $lng, $ele];
+        }
+        if (count($punkte) >= 2) return [$punkte, $name];
+    }
+
+    // ── TCX ──
+    $punkte = [];
+    foreach ($xml->xpath('//Trackpoint') ?: [] as $pt) {
+        if (!isset($pt->Position->LatitudeDegrees)) continue;
+        $punkte[] = [
+            (float)$pt->Position->LatitudeDegrees,
+            (float)$pt->Position->LongitudeDegrees,
+            isset($pt->AltitudeMeters) && (string)$pt->AltitudeMeters !== '' ? (float)$pt->AltitudeMeters : null,
+        ];
+    }
+    if (count($punkte) >= 2) return [$punkte, $name];
+
+    // ── KML: <coordinates>lng,lat[,ele] …</coordinates> ──
+    $punkte = [];
+    foreach ($xml->xpath('//coordinates') ?: [] as $c) {
+        foreach (preg_split('/\s+/', trim((string)$c), -1, PREG_SPLIT_NO_EMPTY) as $tripel) {
+            $t = explode(',', $tripel);
+            if (count($t) < 2) continue;
+            $punkte[] = [(float)$t[1], (float)$t[0], isset($t[2]) && $t[2] !== '' ? (float)$t[2] : null];
+        }
+    }
+    if (count($punkte) >= 2) return [$punkte, $name];
+
+    $fehler = 'Keine Streckenpunkte gefunden. Unterstützt werden GPX, TCX, KML und GeoJSON.';
+    return null;
+}
+
+function _streckePunkteAusGeojson($j): array
+{
+    if (!is_array($j)) return [];
+    // Liste von [lng,lat] bzw. [lat,lng]-Paaren wird als LineString-Koordinaten behandelt
+    if (isset($j[0]) && is_array($j[0]) && isset($j[0][0]) && is_numeric($j[0][0])) {
+        return _streckeCoordsZuPunkten($j);
+    }
+    $typ = $j['type'] ?? '';
+    if ($typ === 'FeatureCollection') {
+        foreach ((array)($j['features'] ?? []) as $f) {
+            $p = _streckePunkteAusGeojson($f);
+            if ($p) return $p;
+        }
+        return [];
+    }
+    if ($typ === 'Feature')            return _streckePunkteAusGeojson($j['geometry'] ?? []);
+    if ($typ === 'LineString')         return _streckeCoordsZuPunkten((array)($j['coordinates'] ?? []));
+    if ($typ === 'MultiLineString') {
+        $alle = [];
+        foreach ((array)($j['coordinates'] ?? []) as $teil) {
+            $alle = array_merge($alle, _streckeCoordsZuPunkten((array)$teil));
+        }
+        return $alle;
+    }
+    if ($typ === 'GeometryCollection') {
+        foreach ((array)($j['geometries'] ?? []) as $g) {
+            $p = _streckePunkteAusGeojson($g);
+            if ($p) return $p;
+        }
+    }
+    return [];
+}
+
+/** GeoJSON-Koordinaten sind [lng, lat, ele] – umdrehen auf [lat, lng, ele]. */
+function _streckeCoordsZuPunkten(array $coords): array
+{
+    $punkte = [];
+    foreach ($coords as $c) {
+        if (!is_array($c) || count($c) < 2) continue;
+        $punkte[] = [(float)$c[1], (float)$c[0], isset($c[2]) ? (float)$c[2] : null];
+    }
+    return count($punkte) >= 2 ? $punkte : [];
+}
+
+/** Länge, Höhenmeter, Bounding-Box und Rundkurs-Erkennung über die Rohpunkte. */
+function streckeVermessen(array $punkte): array
+{
+    $dist = 0.0; $auf = 0.0; $ab = 0.0;
+    $minLat = $maxLat = $punkte[0][0];
+    $minLng = $maxLng = $punkte[0][1];
+    $refEle = $punkte[0][2];              // Referenzhöhe für die 3-m-Hysterese
+
+    for ($i = 1, $n = count($punkte); $i < $n; $i++) {
+        $dist += streckeHaversine($punkte[$i - 1][0], $punkte[$i - 1][1], $punkte[$i][0], $punkte[$i][1]);
+        $minLat = min($minLat, $punkte[$i][0]); $maxLat = max($maxLat, $punkte[$i][0]);
+        $minLng = min($minLng, $punkte[$i][1]); $maxLng = max($maxLng, $punkte[$i][1]);
+
+        // Höhenmeter nur zählen, wenn die Abweichung > 3 m ist – filtert GPS-Rauschen
+        $ele = $punkte[$i][2];
+        if ($ele !== null && $refEle !== null) {
+            $d = $ele - $refEle;
+            if ($d >= 3.0)      { $auf += $d; $refEle = $ele; }
+            elseif ($d <= -3.0) { $ab  -= $d; $refEle = $ele; }
+        } elseif ($refEle === null) {
+            $refEle = $ele;
+        }
+    }
+
+    $letzter  = $punkte[count($punkte) - 1];
+    $abstand  = streckeHaversine($punkte[0][0], $punkte[0][1], $letzter[0], $letzter[1]);
+    $hatHoehe = $auf > 0 || $ab > 0;
+
+    return [
+        'distanz_m'    => (int)round($dist),
+        'aufstieg_m'   => $hatHoehe ? (int)round($auf) : null,
+        'abstieg_m'    => $hatHoehe ? (int)round($ab)  : null,
+        'start_lat'    => round($punkte[0][0], 7),
+        'start_lng'    => round($punkte[0][1], 7),
+        'min_lat'      => round($minLat, 7), 'max_lat' => round($maxLat, 7),
+        'min_lng'      => round($minLng, 7), 'max_lng' => round($maxLng, 7),
+        'ist_rundkurs' => $abstand < 150 && $dist > 500,
+    ];
+}
+
+/** Entfernung in Metern zwischen zwei WGS84-Punkten. */
+function streckeHaversine(float $lat1, float $lng1, float $lat2, float $lng2): float
+{
+    $r  = 6371000.0;
+    $p1 = deg2rad($lat1); $p2 = deg2rad($lat2);
+    $dp = deg2rad($lat2 - $lat1);
+    $dl = deg2rad($lng2 - $lng1);
+    $a  = sin($dp / 2) ** 2 + cos($p1) * cos($p2) * sin($dl / 2) ** 2;
+    return $r * 2 * atan2(sqrt($a), sqrt(1 - $a));
+}
+
+/**
+ * Punktzahl auf $max reduzieren (Douglas-Peucker). Aufzeichnungen haben
+ * gern >10.000 Punkte; für Darstellung und Export reichen ein paar Tausend.
+ * Die Toleranz wächst in kleinen Schritten, damit nicht deutlich stärker
+ * ausgedünnt wird als nötig.
+ */
+function streckeVereinfachen(array $punkte, int $max): array
+{
+    $punkte = array_map(fn($p) => [round($p[0], 6), round($p[1], 6),
+        $p[2] !== null ? round($p[2], 1) : null], $punkte);
+    if (count($punkte) <= $max) return $punkte;
+
+    $tol = 0.000015;                      // ≈ 1,5 m
+    for ($i = 0; $i < 40; $i++) {
+        $red = _streckeDouglasPeucker($punkte, $tol);
+        if (count($red) <= $max) return $red;
+        $tol *= 1.4;
+    }
+    return array_slice($punkte, 0, $max);
+}
+
+function _streckeDouglasPeucker(array $p, float $tol): array
+{
+    $n = count($p);
+    if ($n < 3) return $p;
+
+    $behalten = array_fill(0, $n, false);
+    $behalten[0] = $behalten[$n - 1] = true;
+    $stack = [[0, $n - 1]];
+
+    while ($stack) {
+        [$a, $b] = array_pop($stack);
+        $maxD = 0.0; $idx = -1;
+        for ($i = $a + 1; $i < $b; $i++) {
+            $d = _streckePunktLinienAbstand($p[$i], $p[$a], $p[$b]);
+            if ($d > $maxD) { $maxD = $d; $idx = $i; }
+        }
+        if ($idx > 0 && $maxD > $tol) {
+            $behalten[$idx] = true;
+            $stack[] = [$a, $idx];
+            $stack[] = [$idx, $b];
+        }
+    }
+    $out = [];
+    for ($i = 0; $i < $n; $i++) if ($behalten[$i]) $out[] = $p[$i];
+    return $out;
+}
+
+/** Abstand Punkt↔Strecke in Grad (Längengrad um cos(lat) gestaucht). */
+function _streckePunktLinienAbstand(array $p, array $a, array $b): float
+{
+    $k  = cos(deg2rad($a[0]));
+    $px = ($p[1] - $a[1]) * $k; $py = $p[0] - $a[0];
+    $bx = ($b[1] - $a[1]) * $k; $by = $b[0] - $a[0];
+    $len2 = $bx * $bx + $by * $by;
+    if ($len2 <= 0) return sqrt($px * $px + $py * $py);
+    $t = max(0.0, min(1.0, ($px * $bx + $py * $by) / $len2));
+    $dx = $px - $t * $bx; $dy = $py - $t * $by;
+    return sqrt($dx * $dx + $dy * $dy);
+}
+
+/**
+ * Lädt eine Streckendatei per HTTP. Für Portale, die ihre Touren nur
+ * angemeldet herausgeben (Garmin Connect, Komoot), gibt es eine gezielte
+ * Meldung statt eines nichtssagenden HTTP-Fehlers.
+ */
+function streckeVonUrlLaden(string $url, ?string &$fehler = null): ?string
+{
+    if (!preg_match('#^https?://#i', $url)) {
+        $fehler = 'Bitte eine vollständige http(s)-Adresse angeben.';
+        return null;
+    }
+    $host = strtolower((string)parse_url($url, PHP_URL_HOST));
+
+    if (str_contains($host, 'garmin.com')) {
+        $fehler = 'Garmin Connect gibt Streckendaten nur an angemeldete Nutzer heraus. '
+                . 'Bitte die Aktivität in Garmin Connect öffnen → „⋮" → „Exportieren nach GPX" '
+                . 'und die GPX-Datei hier hochladen.';
+        return null;
+    }
+    if (str_contains($host, 'komoot.')) {
+        $fehler = 'Komoot gibt Tourendaten nur an angemeldete Nutzer heraus. '
+                . 'Bitte die Tour in Komoot als GPX exportieren und die Datei hier hochladen.';
+        return null;
+    }
+    if (!function_exists('curl_init')) {
+        $fehler = 'Server kann keine URLs abrufen. Bitte die Datei hochladen.';
+        return null;
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 4,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_USERAGENT      => 'Trainingsportal/1.0',
+    ]);
+    $body = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+
+    if ($body === false)  { $fehler = 'Abruf fehlgeschlagen: ' . $err; return null; }
+    if ($code >= 400)     { $fehler = "Abruf fehlgeschlagen (HTTP $code)."; return null; }
+
+    $probe = ltrim(substr((string)$body, 0, 400));
+    if (stripos($probe, '<!doctype html') === 0 || stripos($probe, '<html') === 0) {
+        $fehler = 'Unter der Adresse liegt eine Webseite, keine Streckendatei. '
+                . 'Bitte die Strecke als GPX exportieren und hochladen.';
+        return null;
+    }
+    return (string)$body;
+}
+
+/** Exportiert eine gespeicherte Strecke wieder als GPX. */
+function streckeAlsGpx(array $row): string
+{
+    $punkte = json_decode((string)$row['geometrie'], true) ?: [];
+    $name   = htmlspecialchars((string)$row['name'], ENT_XML1 | ENT_QUOTES, 'UTF-8');
+    $out    = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+            . '<gpx version="1.1" creator="Trainingsportal" xmlns="http://www.topografix.com/GPX/1/1">' . "\n"
+            . "  <metadata><name>$name</name></metadata>\n"
+            . "  <trk><name>$name</name><trkseg>\n";
+    foreach ($punkte as $p) {
+        $out .= '    <trkpt lat="' . $p[0] . '" lon="' . $p[1] . '">'
+              . (isset($p[2]) && $p[2] !== null ? '<ele>' . $p[2] . '</ele>' : '')
+              . "</trkpt>\n";
+    }
+    return $out . "  </trkseg></trk>\n</gpx>\n";
+}
+
 function mapEinheit(array $r): array {
     $tp = null;
     if (!empty($r['treffpunkt_id'])) {
@@ -4469,6 +5046,7 @@ function mapEinheit(array $r): array {
         'titel'        => $r['titel'],
         'treffpunkt'   => $tp,
         'komoot_url'   => $r['komoot_url'] ?? null,
+        'strecke_id'   => isset($r['strecke_id']) && $r['strecke_id'] !== null ? (int)$r['strecke_id'] : null,
         'bemerkung'        => $r['bemerkung'],
         'absage_notiz'     => $r['absage_notiz'] ?? null,
         'abgesagt_von_name'=> $r['abgesagt_von_name'] ?? null,

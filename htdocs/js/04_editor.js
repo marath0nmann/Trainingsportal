@@ -107,8 +107,9 @@ const EDITOR = (() => {
             </div>
 
             <div id="ed-komoot-wrap" class="ed-komoot-wrap"${istRunde ? '' : ' style="display:none"'}>
+              ${STRECKEN.feldHtml('ed-strecke')}
               <div class="ed-fg ed-fg-wide">
-                <label>Komoot-Strecke <span class="ed-hint">(Tour-Link, z. B. https://www.komoot.com/tour/…)</span></label>
+                <label>Komoot-Strecke <span class="ed-hint">(optionaler Tour-Link, z. B. https://www.komoot.com/tour/…)</span></label>
                 <input type="url" id="ed-komoot-url" value="${escapeHtml(e.komoot_url || '')}" placeholder="https://www.komoot.com/tour/…">
               </div>
             </div>
@@ -139,6 +140,7 @@ const EDITOR = (() => {
       </div>`;
 
     rendereSegmente();
+    STRECKEN.feldInit('ed-strecke', e.strecke_id || null);
   }
 
   function rendereSegmente() {
@@ -249,6 +251,7 @@ const EDITOR = (() => {
       titel:          val('ed-titel'),
       treffpunkt_id:  tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
       komoot_url:     istRunde ? (val('ed-komoot-url') || null) : null,
+      strecke_id:     istRunde ? STRECKEN.feldWert('ed-strecke') : null,
       bemerkung:      val('ed-bemerkung') || null,
       sichtbarkeit:   val('ed-sichtbarkeit'),
       status:         val('ed-status'),
