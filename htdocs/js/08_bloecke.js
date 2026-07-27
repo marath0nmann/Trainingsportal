@@ -98,6 +98,11 @@ const BLOECKE = (() => {
       }
 
       container.innerHTML = html;
+
+      // Streckenvorschauen nachladen (Geometrie steckt nicht in der Blockliste)
+      container.querySelectorAll('.block-strecke-thumb[data-strecke-id]').forEach(el => {
+        STRECKEN.vorschauEinbinden(el, el.dataset.streckeId, { breite: 260, hoehe: 120, ohneText: true });
+      });
     } catch (e) {
       container.innerHTML = `<div class="bloecke-leer bloecke-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
     }
@@ -142,9 +147,12 @@ const BLOECKE = (() => {
         </div>
         <div class="block-titel">${escapeHtml(b.titel)}</div>
         ${b.bemerkung  ? `<div class="block-bemerkung">${escapeHtml(b.bemerkung)}</div>`   : ''}
+        ${b.strecke_id ? `<div class="block-strecke-thumb" data-strecke-id="${b.strecke_id}"></div>` : ''}
         <div class="block-card-actions">
           <button class="btn btn-primary btn-sm" onclick="BLOECKE.anwenden(${b.id})">Im Kalender planen</button>
           ${kannBearbeiten ? `<button class="btn btn-ghost btn-sm" onclick="BLOECKE.bearbeiten(${b.id})">Bearbeiten</button>` : ''}
+          ${b.strecke_id ? `<button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${b.strecke_id})">🗺 Karte</button>` : ''}
+          ${b.strecke_id ? `<a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${b.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>` : ''}
         </div>
       </div>`;
   }

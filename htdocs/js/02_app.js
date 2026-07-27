@@ -368,6 +368,8 @@ function renderAdminPage(main, subTab) {
           onclick="navigateAdmin('wettkampf')">Wettkämpfe</button>
         <button class="subtab${tab === 'treffpunkte' ? ' active' : ''}"
           onclick="navigateAdmin('treffpunkte')">Treffpunkte</button>
+        <button class="subtab${tab === 'strecken' ? ' active' : ''}"
+          onclick="navigateAdmin('strecken')">Strecken</button>
         <button class="subtab${tab === 'gruppen' ? ' active' : ''}"
           onclick="navigateAdmin('gruppen')">Gruppen</button>
       </div>
@@ -383,6 +385,8 @@ function renderAdminPage(main, subTab) {
     ADMIN_WETTKAMPF.render(contentEl);
   } else if (tab === 'treffpunkte') {
     TREFFPUNKTE.render(contentEl);
+  } else if (tab === 'strecken') {
+    STRECKEN.renderSeite(contentEl);
   } else if (tab === 'gruppen') {
     ADMIN_GRUPPEN.render(contentEl);
   } else {
@@ -730,6 +734,8 @@ async function renderKalender(main, monthArg) {
 
   // WEG vorladen damit _effektivKm die Anreise-km einrechnen kann
   if (angemeldet && typeof WEG !== 'undefined') await WEG.load();
+  // Strecken-Stammdaten für die 🗺-Marker (Distanz im Tooltip)
+  if (angemeldet && typeof STRECKEN !== 'undefined') await STRECKEN.load();
 
   // byDate: datum → [ {..., _privat: bool}, ... ]
   // Bereits übernommene öffentliche Einheiten werden ausgeblendet (die private Kopie vertritt sie)
@@ -943,7 +949,7 @@ async function renderKalender(main, monthArg) {
           ? `<span class="kal-item-absage-notiz" title="${absageTxt}">⚠ ${absageTxt}</span>`
           : '';
         return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})">
-          <div class="kal-item-top">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>
+          <div class="kal-item-top">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span>${streckeMarker(e)}</div>
           ${absageNotizHtml}
         </div>`;
       }).join('');
@@ -1556,7 +1562,8 @@ async function ladHeuteDetails(items) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
       }
       if (einheit.strecke_id) {
-        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${einheit.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">🗺 Strecke als GPX</a>`);
+        actions.push(`<button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${einheit.strecke_id})">🗺 Auf Karte</button>`);
+        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${einheit.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>`);
       }
       if (einheit.komoot_url) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="${escapeHtml(einheit.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>`);
@@ -1985,6 +1992,8 @@ async function _buildPlanData(von, bis) {
   }
   // WEG vorladen, damit _effektivKm die Anreise-km einrechnen kann
   if (angemeldet && typeof WEG !== 'undefined') await WEG.load();
+  // Strecken-Stammdaten für die 🗺-Marker (Distanz im Tooltip)
+  if (angemeldet && typeof STRECKEN !== 'undefined') await STRECKEN.load();
 
   const adoptedIds = new Set(privat.filter(p => p.ref_einheit_id != null).map(p => p.ref_einheit_id));
   const kf         = state.kalFilter;
@@ -2217,7 +2226,7 @@ async function renderListe(main, quarterArg) {
       ${dateCell(datum)}
       <span class="liste-time">${e.uhrzeit ? escapeHtml(e.uhrzeit) : '–'}</span>
       <span class="liste-typ-badge liste-typ-${e.typ}">${escapeHtml(typLabel)}</span>
-      <span class="liste-title-text">${meinDot}${escapeHtml(e.titel)}</span>
+      <span class="liste-title-text">${meinDot}${escapeHtml(e.titel)}${streckeMarker(e)}</span>
       <span class="liste-ort">${lastCell}</span>
     </div>`;
   };
@@ -2412,7 +2421,8 @@ async function zeigeEinheit(id) {
             ${segHtml}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
-              ${e.strecke_id ? `<a class="btn btn-ghost" href="api/index.php?p=strecken/${e.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">🗺 Strecke als GPX</a>` : ''}
+              ${e.strecke_id ? `<button class="btn btn-ghost" onclick="STRECKEN.karteOeffnen(${e.strecke_id})">🗺 Auf Karte</button>` : ''}
+              ${e.strecke_id ? `<a class="btn btn-ghost" href="api/index.php?p=strecken/${e.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>` : ''}
               ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
               ${state.user ? `<button class="btn btn-ghost" onclick="oeffneTerminModal(state._lastEinheit)">Bearbeiten</button>` : ''}
             </div>
@@ -2522,6 +2532,15 @@ function benachrichtigen(text, art) {
 }
 
 // Extrahiert die Tour-ID aus einer Komoot-URL und gibt die Embed-URL zurück.
+// Kleiner Marker für Einträge mit hinterlegtem Streckenverlauf.
+// Distanz kommt aus dem Strecken-Cache – ohne geladene Liste nur das Symbol.
+function streckeMarker(e) {
+  if (!e || !e.strecke_id || typeof STRECKEN === 'undefined') return '';
+  const s = STRECKEN.ausListe(e.strecke_id);
+  const titel = s ? `${s.name} · ${STRECKEN.metaText(s)}` : 'Streckenverlauf hinterlegt';
+  return `<span class="strecke-marker" title="${escapeHtml(titel)}">🗺${s ? ' ' + escapeHtml(STRECKEN.fmtDistanz(s.distanz_m)) : ''}</span>`;
+}
+
 // Unterstützt: komoot.com/tour/ID, komoot.com/de-de/tour/ID, etc.
 function komootEmbedUrl(url) {
   if (!url) return null;

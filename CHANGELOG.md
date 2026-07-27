@@ -1,5 +1,11 @@
 # Changelog
 
+## v287
+- Strecken werden jetzt überall dort angezeigt, wo sie gebraucht werden: 🗺-Marker mit Distanz in Kalender- und Listenansicht, Vorschau im Planungs-Popover, in der Termin-Detailansicht, auf der Heute-Karte und auf der Trainingsblock-Karte.
+- Neue **Kartenansicht**: Klick auf jede Streckenvorschau (oder „🗺 Auf Karte") zeigt den Verlauf auf einer OpenStreetMap-Karte mit Start-/Ziel-Markern. Die Geometrie kommt weiterhin ausschließlich aus der eigenen Datenbank – von außen kommen nur die Kartenkacheln (wie beim Treffpunkt-Picker).
+- **GPX-Download** an allen diesen Stellen (Detailansicht, Heute-Karte, Blockkarte, Kartenansicht, Editor) – für Uhr/Navi.
+- Neue Seite **Admin → Strecken**: Übersicht aller importierten Strecken mit Vorschau, Länge/Höhenmetern, Verwendungszähler, Punktzahl und Herkunft; Import per Drag & Drop direkt dort, plus Umbenennen, Löschen und GPX-Download.
+
 ## v286
 - Trainingsplanung → Runde: Der **Streckenverlauf** kann jetzt importiert werden (GPX, TCX, KML, GeoJSON – per Datei-Upload, Drag & Drop oder Adresse einer Streckendatei). Die Geometrie liegt vollständig in der eigenen Datenbank; zur Anzeige wird nichts von Garmin/Komoot nachgeladen. Vorschau ist ein Inline-SVG (Start-/Ziel-Marker, Rundkurs-Erkennung) in Einheiten-Editor, Block-Editor, Detail-Modal, Heute-Karte und Planungs-Popover.
 - Beim Import werden Länge, Höhenmeter (↗/↘ mit 3-m-Hysterese gegen GPS-Rauschen) und Bounding-Box berechnet; sehr dichte Aufzeichnungen werden per Douglas-Peucker auf max. 3.000 Punkte ausgedünnt (Längenabweichung < 0,1 %).

@@ -319,5 +319,5 @@ const TREFFPUNKTE = (() => {
   function getListe() { return _liste; }
   function invalidate() { _loadPromise = null; }
 
-  return { render, neu, bearbeiten, speichern, loeschen, laden, getListe, invalidate };
+  return { render, neu, bearbeiten, speichern, loeschen, laden, getListe, invalidate, ladeLeaflet };
 })();
