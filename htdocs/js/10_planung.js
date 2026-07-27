@@ -99,18 +99,28 @@ const KAL_POPOVER = (() => {
       const aboAktiv = zeigeAktionen && MEINPLAN.istAboAktivFuerTyp(e.typ);
       const typEsc   = escapeHtml(e.typ);
 
-      // Streckenverlauf (falls hinterlegt) als kompakte SVG-Vorschau
+      // Streckenverlauf (falls hinterlegt): Vorschau + direkter Weg zu
+      // Kartenansicht und GPX. Das Popover wird dafür etwas breiter.
       let streckeHtml = '';
       if (e.strecke_id) {
         const s = await STRECKEN.get(e.strecke_id);
         if (currentId !== einheitId) return;
         if (s) {
           streckeHtml = `<div class="kal-pop-strecke">
-            ${STRECKEN.svgHtml(s, { breite: 220, hoehe: 110, pad: 6 })}
-            <div class="kal-pop-strecke-meta">${escapeHtml(STRECKEN.metaText(s))}</div>
+            <div class="kal-pop-strecke-bild" title="Auf Karte anzeigen"
+                 onclick="event.stopPropagation();STRECKEN.karteOeffnen(${s.id})">
+              ${STRECKEN.svgHtml(s, { breite: 276, hoehe: 150, pad: 6 })}
+            </div>
+            <div class="kal-pop-strecke-meta">${escapeHtml(s.name)} · ${escapeHtml(STRECKEN.metaText(s))}</div>
+            <div class="kal-pop-strecke-actions">
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();STRECKEN.karteOeffnen(${s.id})">🗺 Auf Karte</button>
+              <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${s.id}/gpx" download
+                 onclick="event.stopPropagation()">GPX</a>
+            </div>
           </div>`;
         }
       }
+      pop.classList.toggle('kal-pop-has-strecke', !!streckeHtml);
 
       pop.innerHTML = `
         <div class="kal-pop-typ kal-typ-${typEsc}">${escapeHtml(typLabel)}</div>
@@ -146,7 +156,8 @@ const KAL_POPOVER = (() => {
   }
 
   function _position(pop, rect) {
-    const popW   = 244;
+    // Tatsächliche Breite messen – mit Streckenvorschau ist das Popover breiter
+    const popW   = pop.offsetWidth || 244;
     const margin = 10;
     const viewW  = window.innerWidth;
     const viewH  = window.innerHeight;

@@ -2539,8 +2539,8 @@ body.planung-active #app-footer    { display: none; }
   color: var(--text-muted); font-size: .88rem;
 }
 .strecke-karte-map .leaflet-container { width: 100%; height: 100%; }
-/* Zweites Overlay über einem bereits offenen Modal */
-.strecke-karte-overlay { z-index: 1200; }
+/* Zweites Overlay – über bereits offenem Modal und über dem Kalender-Popover */
+.strecke-karte-overlay { z-index: 1400; }
 
 /* ── Übersichtsseite Admin → Strecken ──────────────────────── */
 .strecke-seite-summe { font-size: .82rem; font-weight: 400; opacity: .75; }
@@ -2561,4 +2561,23 @@ body.planung-active #app-footer    { display: none; }
 .strecke-karte-unbenutzt { font-style: italic; }
 .strecke-karte-actions {
   display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;
+}
+
+/* ── Streckenvorschau im Kalender-Popover ──────────────────── */
+/* Mit Vorschau braucht das Popover mehr Breite als die Standard-280px */
+.kal-popover.kal-pop-has-strecke { width: 320px; }
+.kal-pop-strecke {
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.kal-pop-strecke-bild {
+  cursor: pointer; border-radius: 6px; overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.kal-pop-strecke-bild:hover .strecke-svg-linie { stroke: var(--primary); }
+.kal-pop-strecke-meta {
+  margin-top: 4px; font-size: .76rem; color: var(--text-muted);
+}
+.kal-pop-strecke-actions {
+  display: flex; gap: 6px; margin-top: 6px;
 }

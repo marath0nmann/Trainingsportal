@@ -1,7 +1,8 @@
 # Changelog
 
 ## v287
-- Strecken werden jetzt überall dort angezeigt, wo sie gebraucht werden: 🗺-Marker mit Distanz in Kalender- und Listenansicht, Vorschau im Planungs-Popover, in der Termin-Detailansicht, auf der Heute-Karte und auf der Trainingsblock-Karte.
+- Strecken werden jetzt überall dort angezeigt, wo sie gebraucht werden: 🗺-Marker mit Distanz in Kalender- und Listenansicht, Vorschau in der Termin-Detailansicht, auf der Heute-Karte und auf der Trainingsblock-Karte.
+- **Hover-Tooltip im Kalender**: zeigt die Runde jetzt direkt als Streckenvorschau mit Name, Länge/Höhenmetern sowie Buttons „🗺 Auf Karte" und „GPX". Das Popover wird dafür breiter (320 px) und positioniert sich an seiner tatsächlichen Breite statt an einem festen Wert.
 - Neue **Kartenansicht**: Klick auf jede Streckenvorschau (oder „🗺 Auf Karte") zeigt den Verlauf auf einer OpenStreetMap-Karte mit Start-/Ziel-Markern. Die Geometrie kommt weiterhin ausschließlich aus der eigenen Datenbank – von außen kommen nur die Kartenkacheln (wie beim Treffpunkt-Picker).
 - **GPX-Download** an allen diesen Stellen (Detailansicht, Heute-Karte, Blockkarte, Kartenansicht, Editor) – für Uhr/Navi.
 - Neue Seite **Admin → Strecken**: Übersicht aller importierten Strecken mit Vorschau, Länge/Höhenmetern, Verwendungszähler, Punktzahl und Herkunft; Import per Drag & Drop direkt dort, plus Umbenennen, Löschen und GPX-Download.
