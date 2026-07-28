@@ -4567,6 +4567,50 @@ function handleStrecken(string $method, string $sub): void
         return;
     }
 
+    // ── GET strecken/zuordnung → Vorschläge für bereits geplante Runden ──
+    // Einheiten übernehmen den Titel ihres Blocks 1:1. Über (titel, typ)
+    // lassen sich deshalb auch alte Termine nachträglich einer Strecke
+    // zuordnen – Vorschlag zuerst aus dem gleichnamigen Block, sonst aus
+    // einer bereits zugeordneten Einheit mit gleichem Titel.
+    if ($sub === 'zuordnung' && $method === 'GET') {
+        echo json_encode(['ok' => true, 'gruppen' => streckenZuordnungVorschlaege()]);
+        return;
+    }
+
+    // ── POST strecken/zuordnung → Zuordnung anwenden ──
+    if ($sub === 'zuordnung' && $method === 'POST') {
+        $in      = readJsonBody();
+        $eintrag = isset($in['zuordnungen']) && is_array($in['zuordnungen'])
+            ? $in['zuordnungen']
+            : [['titel' => $in['titel'] ?? '', 'typ' => $in['typ'] ?? '', 'strecke_id' => $in['strecke_id'] ?? null]];
+        // abDatum: leer = auch zurückliegende Termine zuordnen
+        $abDatum = isset($in['ab_datum']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$in['ab_datum'])
+            ? (string)$in['ab_datum'] : null;
+
+        $geaendert = 0;
+        foreach ($eintrag as $z) {
+            $titel = trim((string)($z['titel'] ?? ''));
+            $typ   = trim((string)($z['typ'] ?? ''));
+            $sid   = isset($z['strecke_id']) && $z['strecke_id'] !== '' ? (int)$z['strecke_id'] : 0;
+            if ($titel === '' || $typ === '' || $sid <= 0) continue;
+
+            $exists = DB::fetchOne('SELECT id FROM ' . DB::tbl('training_strecken') . ' WHERE id = ?', [$sid]);
+            if (!$exists) continue;
+
+            $sql    = 'UPDATE ' . DB::tbl('training_einheiten') . '
+                          SET strecke_id = ?
+                        WHERE strecke_id IS NULL AND titel = ? AND typ = ?';
+            $params = [$sid, $titel, $typ];
+            if ($abDatum !== null) { $sql .= ' AND datum >= ?'; $params[] = $abDatum; }
+            // Über PDO, weil nur so die Zahl der geänderten Zeilen zurückkommt
+            $stmt = DB::get()->prepare($sql);
+            $stmt->execute($params);
+            $geaendert += $stmt->rowCount();
+        }
+        echo json_encode(['ok' => true, 'geaendert' => $geaendert]);
+        return;
+    }
+
     // ── POST strecken → Import ──
     if ($sub === '' && $method === 'POST') {
         $in       = readJsonBody();
@@ -4656,6 +4700,53 @@ function handleStrecken(string $method, string $sub): void
 
     http_response_code(405);
     echo json_encode(['ok' => false, 'fehler' => 'Methode nicht erlaubt']);
+}
+
+/**
+ * Bereits geplante Runden ohne Streckenverlauf, gruppiert nach (titel, typ).
+ * Vorschlag kommt zuerst aus dem gleichnamigen Trainingsblock, sonst aus
+ * einer bereits zugeordneten Einheit mit gleichem Titel.
+ */
+function streckenZuordnungVorschlaege(): array
+{
+    $te = DB::tbl('training_einheiten');
+    $tb = DB::tbl('training_bloecke');
+    $tt = DB::tbl('training_typen');
+
+    $rows = DB::fetchAll(
+        "SELECT e.titel, e.typ,
+                COUNT(*)      AS anzahl,
+                MIN(e.datum)  AS von,
+                MAX(e.datum)  AS bis,
+                SUM(e.datum >= CURDATE()) AS kommend,
+                (SELECT b.strecke_id FROM $tb b
+                  WHERE b.titel = e.titel AND b.typ = e.typ AND b.strecke_id IS NOT NULL
+                  LIMIT 1) AS block_strecke_id,
+                (SELECT e2.strecke_id FROM $te e2
+                  WHERE e2.titel = e.titel AND e2.typ = e.typ AND e2.strecke_id IS NOT NULL
+                  LIMIT 1) AS einheit_strecke_id
+           FROM $te e
+           JOIN $tt t ON t.slug = e.typ AND t.hat_strecke = 1
+          WHERE e.strecke_id IS NULL
+       GROUP BY e.titel, e.typ
+       ORDER BY MAX(e.datum) DESC"
+    );
+
+    return array_map(function ($r) {
+        $vorschlag = $r['block_strecke_id'] ?? $r['einheit_strecke_id'] ?? null;
+        return [
+            'titel'      => $r['titel'],
+            'typ'        => $r['typ'],
+            'anzahl'     => (int)$r['anzahl'],
+            'kommend'    => (int)$r['kommend'],
+            'vergangen'  => (int)$r['anzahl'] - (int)$r['kommend'],
+            'von'        => $r['von'],
+            'bis'        => $r['bis'],
+            'vorschlag_strecke_id' => $vorschlag !== null ? (int)$vorschlag : null,
+            'vorschlag_quelle'     => $r['block_strecke_id'] !== null ? 'block'
+                                     : ($r['einheit_strecke_id'] !== null ? 'einheit' : null),
+        ];
+    }, $rows);
 }
 
 /** Strecke aus geparsten Punkten berechnen + speichern. Gibt die ID zurück. */

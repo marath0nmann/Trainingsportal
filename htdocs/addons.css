@@ -2581,3 +2581,45 @@ body.planung-active #app-footer    { display: none; }
 .kal-pop-strecke-actions {
   display: flex; gap: 6px; margin-top: 6px;
 }
+
+/* ── Nachträgliche Zuordnung geplanter Runden ──────────────── */
+.strecke-zuordnung {
+  margin: 0 0 18px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+.strecke-zuordnung-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; flex-wrap: wrap;
+}
+.strecke-zuordnung-head span { font-size: .82rem; color: var(--text-muted); }
+.strecke-zuordnung-hilfe {
+  margin: 6px 0 8px; font-size: .82rem; line-height: 1.45; color: var(--text-muted);
+}
+.strecke-zuordnung-opt {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-bottom: 10px; font-size: .84rem;
+}
+.strecke-zuordnung-tab { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.strecke-zuordnung-tab th {
+  text-align: left; font-weight: 600; font-size: .76rem;
+  text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted);
+  padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border);
+}
+.strecke-zuordnung-tab td {
+  padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.strecke-zuordnung-tab select { max-width: 260px; width: 100%; }
+.strecke-zuordnung-anzahl span,
+.strecke-zuordnung-zeit { color: var(--text-muted); white-space: nowrap; }
+.strecke-zuordnung-actions { margin-top: 10px; }
+.strecke-zuordnung-ok {
+  margin: 0 0 18px; font-size: .84rem; color: var(--text-muted);
+}
+
+/* Schmale Bildschirme: Tabelle horizontal scrollen lassen */
+@media (max-width: 640px) {
+  .strecke-zuordnung { overflow-x: auto; }
+  .strecke-zuordnung-tab { min-width: 520px; }
+}
