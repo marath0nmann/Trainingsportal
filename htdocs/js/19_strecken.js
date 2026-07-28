@@ -436,6 +436,7 @@ const STRECKEN = (() => {
           zum Anzeigen wird nichts von Garmin, Komoot &amp; Co. nachgeladen.
         </p>
         <div class="strecke-seite-import">${_importHtml(SEITE)}</div>
+        <div id="strecke-zuordnung"></div>
         <div class="strecke-seite-grid">
           ${liste.length
             ? liste.map(s => `
@@ -465,9 +466,122 @@ const STRECKEN = (() => {
     });
     _dropzoneBinden(SEITE);
     _seitenContainer = container;
+    _renderZuordnung();
   }
 
   let _seitenContainer = null;
+
+  // ── Nachträgliche Zuordnung bereits geplanter Runden ───────
+  // Einheiten übernehmen den Titel ihres Blocks; über (Titel, Typ)
+  // lassen sich deshalb auch alte Termine einer Strecke zuordnen.
+
+  async function _renderZuordnung() {
+    const wrap = document.getElementById('strecke-zuordnung');
+    if (!wrap) return;
+
+    let gruppen = [];
+    try {
+      const r = await apiGet('strecken/zuordnung', { silent: true });
+      gruppen = (r && r.gruppen) || [];
+    } catch (e) { /* Endpunkt (noch) nicht verfügbar → Abschnitt ausblenden */ }
+
+    if (!gruppen.length) {
+      wrap.innerHTML = (listeCache || []).length
+        ? '<div class="strecke-zuordnung-ok">✓ Alle geplanten Runden haben einen Streckenverlauf.</div>'
+        : '';
+      return;
+    }
+
+    const liste  = listeCache || [];
+    const offene = gruppen.reduce((n, g) => n + g.anzahl, 0);
+    const opts = g => `<option value="">— keine —</option>` + liste.map(s =>
+      `<option value="${s.id}"${s.id === g.vorschlag_strecke_id ? ' selected' : ''}>${escapeHtml(s.name)} (${escapeHtml(fmtDistanz(s.distanz_m))})</option>`
+    ).join('');
+
+    const mitVorschlag = gruppen.filter(g => g.vorschlag_strecke_id).length;
+
+    wrap.innerHTML = `
+      <div class="strecke-zuordnung">
+        <div class="strecke-zuordnung-head">
+          <strong>Geplante Runden ohne Streckenverlauf</strong>
+          <span>${offene} ${offene === 1 ? 'Termin' : 'Termine'} in ${gruppen.length} ${gruppen.length === 1 ? 'Gruppe' : 'Gruppen'}</span>
+        </div>
+        <p class="strecke-zuordnung-hilfe">
+          Ein Trainingsblock gibt seine Strecke nur beim Einplanen weiter – schon vorhandene
+          Termine bleiben leer. Hier lassen sie sich nachträglich zuordnen, gruppiert nach Titel.
+        </p>
+        <label class="strecke-zuordnung-opt">
+          <input type="checkbox" id="strecke-zuordnung-vergangene" checked>
+          <span>Auch zurückliegende Termine zuordnen</span>
+        </label>
+        <table class="strecke-zuordnung-tab">
+          <thead><tr><th>Runde</th><th>Termine</th><th>Zeitraum</th><th>Strecke</th><th></th></tr></thead>
+          <tbody>
+            ${gruppen.map((g, i) => `
+              <tr data-i="${i}">
+                <td>${escapeHtml(g.titel)}</td>
+                <td class="strecke-zuordnung-anzahl">
+                  ${g.anzahl}${g.vergangen ? ` <span title="davon zurückliegend">(${g.vergangen} alt)</span>` : ''}
+                </td>
+                <td class="strecke-zuordnung-zeit">${_datKurz(g.von)}–${_datKurz(g.bis)}</td>
+                <td><select class="strecke-zuordnung-sel">${opts(g)}</select></td>
+                <td><button class="btn btn-ghost btn-sm" onclick="STRECKEN.zuordnen(${i})">Zuordnen</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+        ${mitVorschlag ? `<div class="strecke-zuordnung-actions">
+          <button class="btn btn-primary btn-sm" onclick="STRECKEN.zuordnenAlle()">
+            Alle ${mitVorschlag} Vorschläge übernehmen
+          </button>
+        </div>` : ''}
+      </div>`;
+
+    _zuordnungGruppen = gruppen;
+  }
+
+  let _zuordnungGruppen = [];
+
+  function _datKurz(iso) {
+    if (!iso) return '';
+    const [j, m, t] = iso.split('-');
+    return `${t}.${m}.${j.slice(2)}`;
+  }
+
+  function _abDatum() {
+    const cb = document.getElementById('strecke-zuordnung-vergangene');
+    if (cb && cb.checked) return null;             // null = ohne Datumsgrenze
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async function zuordnen(i) {
+    const g   = _zuordnungGruppen[i];
+    const sel = document.querySelector(`.strecke-zuordnung-tab tr[data-i="${i}"] .strecke-zuordnung-sel`);
+    const sid = sel && sel.value ? parseInt(sel.value, 10) : null;
+    if (!g || !sid) { _hinweis('Bitte zuerst eine Strecke auswählen.', 'err'); return; }
+    await _zuordnungSenden([{ titel: g.titel, typ: g.typ, strecke_id: sid }]);
+  }
+
+  async function zuordnenAlle() {
+    const eintraege = [];
+    _zuordnungGruppen.forEach((g, i) => {
+      const sel = document.querySelector(`.strecke-zuordnung-tab tr[data-i="${i}"] .strecke-zuordnung-sel`);
+      const sid = sel && sel.value ? parseInt(sel.value, 10) : null;
+      if (sid) eintraege.push({ titel: g.titel, typ: g.typ, strecke_id: sid });
+    });
+    if (!eintraege.length) { _hinweis('Keine Strecke ausgewählt.', 'err'); return; }
+    await _zuordnungSenden(eintraege);
+  }
+
+  async function _zuordnungSenden(zuordnungen) {
+    const ab = _abDatum();
+    try {
+      const r = await apiPost('strecken/zuordnung', { zuordnungen, ab_datum: ab });
+      _hinweis(`${r.geaendert} ${r.geaendert === 1 ? 'Termin' : 'Termine'} zugeordnet.`, 'ok');
+      await renderSeite(_seitenContainer);
+    } catch (e) {
+      _hinweis('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
 
   async function seiteUmbenennen(id) {
     const s = ausListe(id);
@@ -513,5 +627,6 @@ const STRECKEN = (() => {
     feldAuswahl, feldImportToggle, feldDatei, feldUrl,
     feldUmbenennen, feldLoeschen,
     renderSeite, seiteUmbenennen, seiteLoeschen,
+    zuordnen, zuordnenAlle,
   };
 })();

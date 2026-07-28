@@ -1,5 +1,10 @@
 # Changelog
 
+## v288
+- **Admin → Strecken: bereits geplante Runden nachträglich zuordnen.** Ein Trainingsblock gibt seine Strecke nur beim Einplanen weiter – schon vorhandene Termine blieben leer. Der neue Abschnitt „Geplante Runden ohne Streckenverlauf" listet sie nach Titel gruppiert (mit Anzahl, Anteil zurückliegender Termine und Zeitraum), schlägt automatisch die Strecke des gleichnamigen Blocks vor und ordnet sie per Klick zu – einzeln oder alle Vorschläge auf einmal.
+- Zurückliegende Termine werden dabei standardmäßig mit zugeordnet (abschaltbar über „Auch zurückliegende Termine zuordnen"), damit auch der Rückblick die Strecke zeigt.
+- Neue Endpunkte `GET strecken/zuordnung` (Vorschläge) und `POST strecken/zuordnung` (anwenden, optional ab Datum). Zugeordnet wird über (Titel, Typ) und nur dort, wo noch keine Strecke hinterlegt ist – bestehende Zuordnungen bleiben unangetastet.
+
 ## v287
 - Strecken werden jetzt überall dort angezeigt, wo sie gebraucht werden: 🗺-Marker mit Distanz in Kalender- und Listenansicht, Vorschau in der Termin-Detailansicht, auf der Heute-Karte und auf der Trainingsblock-Karte.
 - **Hover-Tooltip im Kalender**: zeigt die Runde jetzt direkt als Streckenvorschau mit Name, Länge/Höhenmetern sowie Buttons „🗺 Auf Karte" und „GPX". Das Popover wird dafür breiter (320 px) und positioniert sich an seiner tatsächlichen Breite statt an einem festen Wert.
