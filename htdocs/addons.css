@@ -2511,3 +2511,73 @@ body.planung-active #app-footer    { display: none; }
 .kal-pop-strecke-meta {
   margin-top: 2px; font-size: .76rem; color: var(--text-muted);
 }
+
+/* ── Marker in Kalender- und Listenansicht ─────────────────── */
+.strecke-marker {
+  display: inline-flex; align-items: center; gap: 2px;
+  margin-left: 5px; padding: 0 4px; border-radius: 4px;
+  font-size: .72em; line-height: 1.5; white-space: nowrap;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.liste-title-text .strecke-marker { font-size: .78em; }
+
+/* Vorschau ist klickbar → Kartenansicht */
+.strecke-vorschau-bild { cursor: pointer; }
+.strecke-vorschau-bild:hover .strecke-svg-linie { stroke: var(--primary); }
+.strecke-vorschau-bild:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Thumbnail auf der Trainingsblock-Karte */
+.block-strecke-thumb { margin: 8px 0 4px; }
+.block-strecke-thumb .strecke-vorschau { border-color: var(--border); }
+
+/* ── Kartenansicht (Leaflet im Modal) ──────────────────────── */
+.strecke-karte-map {
+  height: min(60vh, 520px); width: 100%;
+  border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: .88rem;
+}
+.strecke-karte-map .leaflet-container { width: 100%; height: 100%; }
+/* Zweites Overlay – über bereits offenem Modal und über dem Kalender-Popover */
+.strecke-karte-overlay { z-index: 1400; }
+
+/* ── Übersichtsseite Admin → Strecken ──────────────────────── */
+.strecke-seite-summe { font-size: .82rem; font-weight: 400; opacity: .75; }
+.strecke-seite-import { margin: 12px 0 18px; max-width: 620px; }
+.strecke-seite-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.strecke-karte {
+  display: flex; flex-direction: column; gap: 4px;
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px; background: var(--surface);
+}
+.strecke-karte-bild .strecke-vorschau { border: none; background: none; }
+.strecke-karte-titel { font-weight: 600; }
+.strecke-karte-meta  { font-size: .84rem; color: var(--accent); }
+.strecke-karte-info  { font-size: .76rem; color: var(--text-muted); }
+.strecke-karte-unbenutzt { font-style: italic; }
+.strecke-karte-actions {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;
+}
+
+/* ── Streckenvorschau im Kalender-Popover ──────────────────── */
+/* Mit Vorschau braucht das Popover mehr Breite als die Standard-280px */
+.kal-popover.kal-pop-has-strecke { width: 320px; }
+.kal-pop-strecke {
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.kal-pop-strecke-bild {
+  cursor: pointer; border-radius: 6px; overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.kal-pop-strecke-bild:hover .strecke-svg-linie { stroke: var(--primary); }
+.kal-pop-strecke-meta {
+  margin-top: 4px; font-size: .76rem; color: var(--text-muted);
+}
+.kal-pop-strecke-actions {
+  display: flex; gap: 6px; margin-top: 6px;
+}

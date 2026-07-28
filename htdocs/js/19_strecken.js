@@ -132,12 +132,83 @@ const STRECKEN = (() => {
     const o = opts || {};
     el.innerHTML = `
       <div class="strecke-vorschau">
-        <div class="strecke-vorschau-bild">${svgHtml(s, o)}</div>
+        <div class="strecke-vorschau-bild" role="button" tabindex="0"
+             title="Auf Karte anzeigen" onclick="STRECKEN.karteOeffnen(${s.id})"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();STRECKEN.karteOeffnen(${s.id})}">${svgHtml(s, o)}</div>
         ${o.ohneText ? '' : `<div class="strecke-vorschau-meta">
           <span class="strecke-vorschau-name">${escapeHtml(s.name)}</span>
           <span class="strecke-vorschau-zahlen">${escapeHtml(metaText(s))}</span>
         </div>`}
       </div>`;
+  }
+
+  // ── Kartenansicht ──────────────────────────────────────────
+  // Für die genaue Betrachtung: Strecke auf einer OSM-Karte.
+  // Die Geometrie kommt weiterhin aus der eigenen DB – von außen
+  // kommen nur die Kartenkacheln (wie beim Treffpunkt-Picker).
+
+  async function karteOeffnen(id) {
+    const s = await get(id);
+    if (!s || !s.geometrie || s.geometrie.length < 2) {
+      _hinweis('Für diese Strecke ist kein Verlauf gespeichert.', 'err');
+      return;
+    }
+    const cont = document.getElementById('modal-container');
+    if (!cont) return;
+
+    // Als eigenes Overlay anhängen, damit ein bereits offenes Modal
+    // (z. B. die Termin-Detailansicht) darunter erhalten bleibt.
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay strecke-karte-overlay';
+    overlay.innerHTML = `
+      <div class="modal-card modal-wide" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-eyebrow">Streckenverlauf</div>
+            <div class="modal-title">${escapeHtml(s.name)}</div>
+            <div class="modal-sub">${escapeHtml(metaText(s))}</div>
+          </div>
+          <button class="modal-close" aria-label="Schließen">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="strecke-karte-map" class="strecke-karte-map">Karte wird geladen…</div>
+          <div class="modal-actions">
+            <a class="btn btn-ghost" href="api/index.php?p=strecken/${s.id}/gpx" download>🗺 Als GPX herunterladen</a>
+          </div>
+        </div>
+      </div>`;
+    const zu = () => overlay.remove();
+    overlay.addEventListener('click', ev => { if (ev.target === overlay) zu(); });
+    overlay.querySelector('.modal-close').addEventListener('click', zu);
+    cont.appendChild(overlay);
+
+    try {
+      await TREFFPUNKTE.ladeLeaflet();
+    } catch (e) {
+      const el = document.getElementById('strecke-karte-map');
+      if (el) el.textContent = 'Karte konnte nicht geladen werden. Die Strecke steht als GPX-Download bereit.';
+      return;
+    }
+    if (!document.body.contains(overlay)) return;  // inzwischen geschlossen
+
+    const el = document.getElementById('strecke-karte-map');
+    el.textContent = '';
+    const punkte = s.geometrie.map(p => [p[0], p[1]]);
+    const map = L.map(el);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+    const linie = L.polyline(punkte, { color: '#cc0000', weight: 4, opacity: .9 }).addTo(map);
+    map.fitBounds(linie.getBounds(), { padding: [24, 24] });
+    L.circleMarker(punkte[0], { radius: 6, color: '#fff', weight: 2, fillColor: '#16a34a', fillOpacity: 1 })
+      .addTo(map).bindTooltip('Start');
+    if (!s.ist_rundkurs) {
+      L.circleMarker(punkte[punkte.length - 1], { radius: 6, color: '#fff', weight: 2, fillColor: '#cc0000', fillOpacity: 1 })
+        .addTo(map).bindTooltip('Ziel');
+    }
+    // Leaflet braucht nach dem Einblenden im Modal eine Größenkorrektur
+    setTimeout(() => map.invalidateSize(), 60);
   }
 
   // ── Editor-Feld ────────────────────────────────────────────
@@ -190,7 +261,8 @@ const STRECKEN = (() => {
       if (vor && vor.firstElementChild) {
         vor.insertAdjacentHTML('beforeend', `
           <div class="strecke-feld-aktionen">
-            <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${st.strecke_id}/gpx" download>GPX herunterladen</a>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${st.strecke_id})">🗺 Auf Karte</button>
+            <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${st.strecke_id}/gpx" download>GPX</a>
             <button type="button" class="btn btn-ghost btn-sm" onclick="STRECKEN.feldUmbenennen('${feldId}')">Umbenennen</button>
             <button type="button" class="btn btn-ghost btn-sm" onclick="STRECKEN.feldLoeschen('${feldId}')">Löschen</button>
           </div>`);
@@ -295,8 +367,10 @@ const STRECKEN = (() => {
       await load(true);
       const st = felder.get(feldId);
       if (st) { st.strecke_id = s.id; st.offen = false; }
-      await _feldRender(feldId);
       _hinweis(`Strecke „${s.name}" importiert (${metaText(s)}).`, 'ok');
+      // Übersichtsseite rendert sich komplett neu, das Editor-Feld nur sich selbst
+      if (st && st.nachImport) await st.nachImport(s);
+      else await _feldRender(feldId);
     } catch (e) {
       _status(feldId, e.message || 'Import fehlgeschlagen.', 'err');
     }
@@ -335,6 +409,93 @@ const STRECKEN = (() => {
     }
   }
 
+  // ── Übersichtsseite (Admin → Strecken) ─────────────────────
+  // Zentrale Verwaltung: alle importierten Strecken mit Vorschau,
+  // GPX-Download, Umbenennen, Löschen – plus Import ohne Umweg
+  // über eine konkrete Runde.
+
+  const SEITE = 'seite-strecke';
+
+  async function renderSeite(container) {
+    if (!container) return;
+    felder.set(SEITE, { strecke_id: null, offen: false, nachImport: () => renderSeite(container) });
+    container.innerHTML = '<div class="bloecke-loading">Lade Strecken…</div>';
+    await load(true);
+
+    const liste = listeCache || [];
+    const gesamt = liste.reduce((n, s) => n + s.distanz_m, 0);
+
+    container.innerHTML = `
+      <div class="panel">
+        <div class="panel-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <span>Strecken</span>
+          <span class="strecke-seite-summe">${liste.length} ${liste.length === 1 ? 'Strecke' : 'Strecken'}${liste.length ? ' · ' + fmtDistanz(gesamt) + ' gesamt' : ''}</span>
+        </div>
+        <p class="bloecke-intro">
+          Streckenverläufe für Runden. Die Geometrie liegt vollständig in der Vereins-Datenbank –
+          zum Anzeigen wird nichts von Garmin, Komoot &amp; Co. nachgeladen.
+        </p>
+        <div class="strecke-seite-import">${_importHtml(SEITE)}</div>
+        <div class="strecke-seite-grid">
+          ${liste.length
+            ? liste.map(s => `
+              <div class="strecke-karte">
+                <div class="strecke-karte-bild" data-strecke-id="${s.id}"></div>
+                <div class="strecke-karte-titel">${escapeHtml(s.name)}</div>
+                <div class="strecke-karte-meta">${escapeHtml(metaText(s))}</div>
+                <div class="strecke-karte-info">
+                  ${s.verwendet > 0
+                    ? `${s.verwendet}× verplant`
+                    : '<span class="strecke-karte-unbenutzt">nicht verwendet</span>'}
+                  · ${s.punkte} Punkte${s.herkunft ? ' · ' + escapeHtml(s.herkunft) : ''}
+                </div>
+                <div class="strecke-karte-actions">
+                  <button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${s.id})">🗺 Karte</button>
+                  <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${s.id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>
+                  <button class="btn btn-ghost btn-sm" onclick="STRECKEN.seiteUmbenennen(${s.id})">Umbenennen</button>
+                  <button class="btn btn-ghost btn-sm" onclick="STRECKEN.seiteLoeschen(${s.id})">Löschen</button>
+                </div>
+              </div>`).join('')
+            : '<div class="bloecke-leer">Noch keine Strecken importiert.</div>'}
+        </div>
+      </div>`;
+
+    container.querySelectorAll('.strecke-karte-bild[data-strecke-id]').forEach(el => {
+      vorschauEinbinden(el, el.dataset.streckeId, { breite: 300, hoehe: 160, ohneText: true });
+    });
+    _dropzoneBinden(SEITE);
+    _seitenContainer = container;
+  }
+
+  let _seitenContainer = null;
+
+  async function seiteUmbenennen(id) {
+    const s = ausListe(id);
+    const name = prompt('Neuer Name der Strecke:', s ? s.name : '');
+    if (name === null || !name.trim()) return;
+    try {
+      await apiPut(`strecken/${id}`, { name: name.trim() });
+      detailCache.delete(parseInt(id, 10));
+      await renderSeite(_seitenContainer);
+      _hinweis('Strecke umbenannt.', 'ok');
+    } catch (e) {
+      _hinweis('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
+  async function seiteLoeschen(id) {
+    const s = ausListe(id);
+    if (!confirm(`Strecke „${s ? s.name : id}" endgültig aus der Datenbank löschen?`)) return;
+    try {
+      await apiDel(`strecken/${id}`);
+      detailCache.delete(parseInt(id, 10));
+      await renderSeite(_seitenContainer);
+      _hinweis('Strecke gelöscht.', 'ok');
+    } catch (e) {
+      _hinweis('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
   function _hinweis(text, art) {
     const cont = document.getElementById('notification-container');
     if (!cont) { console.log(text); return; }
@@ -347,9 +508,10 @@ const STRECKEN = (() => {
 
   return {
     load, get, invalidate, ausListe, fmtDistanz, metaText,
-    svgHtml, vorschauEinbinden,
+    svgHtml, vorschauEinbinden, karteOeffnen,
     feldHtml, feldInit, feldWert,
     feldAuswahl, feldImportToggle, feldDatei, feldUrl,
     feldUmbenennen, feldLoeschen,
+    renderSeite, seiteUmbenennen, seiteLoeschen,
   };
 })();
