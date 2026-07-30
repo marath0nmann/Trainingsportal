@@ -2514,13 +2514,14 @@ body.planung-active #app-footer    { display: none; }
 
 /* ── Marker in Kalender- und Listenansicht ─────────────────── */
 .strecke-marker {
-  display: inline-flex; align-items: center; gap: 2px;
-  margin-left: 5px; padding: 0 4px; border-radius: 4px;
+  display: inline-block; padding: 0 4px; border-radius: 4px;
   font-size: .72em; line-height: 1.5; white-space: nowrap;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
 }
-.liste-title-text .strecke-marker { font-size: .78em; }
+.liste-title-text .strecke-marker { margin-left: 6px; font-size: .78em; }
+/* Im Monatsraster eigene Zeile – neben dem Titel wird es zu eng */
+.kal-item-strecke { margin-top: 1px; line-height: 1.3; }
 
 /* Vorschau ist klickbar → Kartenansicht */
 .strecke-vorschau-bild { cursor: pointer; }
@@ -2622,4 +2623,37 @@ body.planung-active #app-footer    { display: none; }
 @media (max-width: 640px) {
   .strecke-zuordnung { overflow-x: auto; }
   .strecke-zuordnung-tab { min-width: 520px; }
+}
+
+/* ── Kartenhintergrund für kleine Vorschauen (ohne Leaflet) ── */
+/* Kacheln und Linie teilen sich dasselbe Web-Mercator-Pixelsystem. */
+.strecke-karte-mini {
+  position: relative; overflow: hidden;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: #e8e4dd;                       /* OSM-Landfarbe, bis Kacheln da sind */
+}
+.strecke-karte-mini-kacheln { position: absolute; inset: 0; }
+.strecke-kachel {
+  position: absolute; width: 256px; height: 256px;
+  max-width: none;                           /* globales img-Styling aushebeln */
+  user-select: none; pointer-events: none;
+}
+.strecke-svg-auf-karte { position: absolute; inset: 0; }
+/* Auf Kacheln braucht die Linie einen weißen Saum statt des Flächen-Kontrasts */
+.strecke-svg-auf-karte .strecke-svg-schatten { stroke: #fff; opacity: .9; stroke-width: 7; }
+.strecke-svg-auf-karte .strecke-svg-linie    { stroke: #cc0000; stroke-width: 3.5; }
+.strecke-svg-auf-karte .strecke-svg-start,
+.strecke-svg-auf-karte .strecke-svg-ende     { stroke: #fff; }
+.strecke-karte-mini-attr {
+  position: absolute; right: 0; bottom: 0;
+  padding: 0 4px; border-top-left-radius: 4px;
+  font-size: 9px; line-height: 1.6; color: #333;
+  background: rgba(255,255,255,.72); pointer-events: none;
+}
+/* Dunkles App-Theme: OSM liefert nur helle Kacheln → invertieren.
+   Die Linie liegt im SVG darüber und bleibt davon unberührt. */
+[data-theme="dark"] .strecke-kachel { filter: invert(1) hue-rotate(180deg) brightness(.92); }
+[data-theme="dark"] .strecke-karte-mini { background: #17191c; }
+[data-theme="dark"] .strecke-karte-mini-attr {
+  color: #ddd; background: rgba(0,0,0,.55);
 }

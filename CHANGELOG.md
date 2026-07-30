@@ -1,5 +1,10 @@
 # Changelog
 
+## v289
+- **Kartenhintergrund im Kalender-Tooltip**: Die Streckenvorschau liegt jetzt auf echten OpenStreetMap-Kacheln statt auf leerem Grund. Umgesetzt als kleiner statischer Kachel-Renderer (Web-Mercator, ohne Leaflet) – Kacheln und Linie teilen sich dasselbe Pixelsystem und liegen exakt übereinander. Die Zoomstufe wird automatisch so gewählt, dass die Strecke komplett hineinpasst. Im dunklen Theme werden die Kacheln invertiert; die rote Linie liegt im SVG darüber und bleibt davon unberührt.
+- Kalenderübersicht: Karten-Emoji entfernt, die Distanz steht jetzt in einer eigenen Zeile unter dem Titel – im Monatsraster war es neben dem Titel zu eng und wurde abgeschnitten.
+- Ohne geladene Strecken-Liste (z. B. Gastansicht) entfällt der Marker ganz, statt eine Marke ohne Zahl zu zeigen.
+
 ## v288
 - **Admin → Strecken: bereits geplante Runden nachträglich zuordnen.** Ein Trainingsblock gibt seine Strecke nur beim Einplanen weiter – schon vorhandene Termine blieben leer. Der neue Abschnitt „Geplante Runden ohne Streckenverlauf" listet sie nach Titel gruppiert (mit Anzahl, Anteil zurückliegender Termine und Zeitraum), schlägt automatisch die Strecke des gleichnamigen Blocks vor und ordnet sie per Klick zu – einzeln oder alle Vorschläge auf einmal.
 - Zurückliegende Termine werden dabei standardmäßig mit zugeordnet (abschaltbar über „Auch zurückliegende Termine zuordnen"), damit auch der Rückblick die Strecke zeigt.

@@ -109,7 +109,7 @@ const KAL_POPOVER = (() => {
           streckeHtml = `<div class="kal-pop-strecke">
             <div class="kal-pop-strecke-bild" title="Auf Karte anzeigen"
                  onclick="event.stopPropagation();STRECKEN.karteOeffnen(${s.id})">
-              ${STRECKEN.svgHtml(s, { breite: 276, hoehe: 150, pad: 6 })}
+              ${STRECKEN.kartenVorschauHtml(s, { breite: 288, hoehe: 170 })}
             </div>
             <div class="kal-pop-strecke-meta">${escapeHtml(s.name)} · ${escapeHtml(STRECKEN.metaText(s))}</div>
             <div class="kal-pop-strecke-actions">
