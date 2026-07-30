@@ -124,6 +124,92 @@ const STRECKEN = (() => {
     </svg>`;
   }
 
+  // ── Vorschau mit Kartenhintergrund ─────────────────────────
+  // Kleiner statischer Kachel-Renderer: kein Leaflet nötig (das wäre für
+  // einen Hover-Tooltip zu schwer). Kacheln und Linie teilen sich dasselbe
+  // Web-Mercator-Pixelsystem, deshalb liegen sie exakt übereinander.
+
+  const TILE = 256;
+  const ZOOM_MAX = 17;
+
+  /** WGS84 → Weltpixel im Web-Mercator bei Zoomstufe z. */
+  function _merc(lat, lng, z) {
+    const welt = TILE * Math.pow(2, z);
+    const sinLat = Math.min(0.9999, Math.max(-0.9999, Math.sin(lat * Math.PI / 180)));
+    return [
+      (lng + 180) / 360 * welt,
+      (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * welt,
+    ];
+  }
+
+  /**
+   * Streckenvorschau auf OpenStreetMap-Kacheln.
+   * Die Geometrie kommt weiterhin aus der eigenen DB – von außen
+   * kommen nur die Kartenbilder (wie beim Treffpunkt-Picker).
+   */
+  function kartenVorschauHtml(s, opts) {
+    const o   = opts || {};
+    const w   = o.breite || 276;
+    const h   = o.hoehe  || 170;
+    const pad = o.pad != null ? o.pad : 10;
+    const pts = (s && s.geometrie) || [];
+    if (pts.length < 2) return '<div class="strecke-svg-leer">Kein Streckenverlauf</div>';
+
+    let minLat = pts[0][0], maxLat = pts[0][0], minLng = pts[0][1], maxLng = pts[0][1];
+    for (const p of pts) {
+      if (p[0] < minLat) minLat = p[0]; if (p[0] > maxLat) maxLat = p[0];
+      if (p[1] < minLng) minLng = p[1]; if (p[1] > maxLng) maxLng = p[1];
+    }
+
+    // Größte Zoomstufe wählen, bei der die Strecke noch komplett hineinpasst
+    let z = ZOOM_MAX;
+    for (; z > 1; z--) {
+      const a = _merc(maxLat, minLng, z);
+      const b = _merc(minLat, maxLng, z);
+      if (b[0] - a[0] <= w - 2 * pad && b[1] - a[1] <= h - 2 * pad) break;
+    }
+
+    // Weltpixel-Koordinate der linken oberen Ecke des Ausschnitts
+    const mitte = _merc((minLat + maxLat) / 2, (minLng + maxLng) / 2, z);
+    const offX  = mitte[0] - w / 2;
+    const offY  = mitte[1] - h / 2;
+
+    const maxIdx = Math.pow(2, z) - 1;
+    let kacheln = '';
+    for (let tx = Math.floor(offX / TILE); tx <= Math.floor((offX + w) / TILE); tx++) {
+      for (let ty = Math.floor(offY / TILE); ty <= Math.floor((offY + h) / TILE); ty++) {
+        if (ty < 0 || ty > maxIdx) continue;
+        const wrapX = ((tx % (maxIdx + 1)) + maxIdx + 1) % (maxIdx + 1);   // Datumsgrenze
+        kacheln += `<img class="strecke-kachel" alt="" aria-hidden="true"
+          src="https://tile.openstreetmap.org/${z}/${wrapX}/${ty}.png"
+          style="left:${(tx * TILE - offX).toFixed(0)}px;top:${(ty * TILE - offY).toFixed(0)}px">`;
+      }
+    }
+
+    const px = p => {
+      const m = _merc(p[0], p[1], z);
+      return [(m[0] - offX).toFixed(1), (m[1] - offY).toFixed(1)];
+    };
+    const d = pts.map((p, i) => {
+      const q = px(p);
+      return (i === 0 ? 'M' : 'L') + q[0] + ' ' + q[1];
+    }).join(' ');
+    const start = px(pts[0]);
+    const ende  = px(pts[pts.length - 1]);
+
+    return `<div class="strecke-karte-mini" style="width:${w}px;height:${h}px">
+      <div class="strecke-karte-mini-kacheln">${kacheln}</div>
+      <svg class="strecke-svg strecke-svg-auf-karte" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"
+           role="img" aria-label="Streckenverlauf ${escapeHtml(s.name || '')}">
+        <path class="strecke-svg-schatten" d="${d}"/>
+        <path class="strecke-svg-linie" d="${d}"/>
+        <circle class="strecke-svg-start" cx="${start[0]}" cy="${start[1]}" r="4"/>
+        ${s.ist_rundkurs ? '' : `<circle class="strecke-svg-ende" cx="${ende[0]}" cy="${ende[1]}" r="4"/>`}
+      </svg>
+      <span class="strecke-karte-mini-attr">© OpenStreetMap</span>
+    </div>`;
+  }
+
   /** Lädt die Geometrie nach und rendert die Vorschau in ein Element. */
   async function vorschauEinbinden(el, streckeId, opts) {
     if (!el) return;
@@ -622,7 +708,7 @@ const STRECKEN = (() => {
 
   return {
     load, get, invalidate, ausListe, fmtDistanz, metaText,
-    svgHtml, vorschauEinbinden, karteOeffnen,
+    svgHtml, kartenVorschauHtml, vorschauEinbinden, karteOeffnen,
     feldHtml, feldInit, feldWert,
     feldAuswahl, feldImportToggle, feldDatei, feldUrl,
     feldUmbenennen, feldLoeschen,

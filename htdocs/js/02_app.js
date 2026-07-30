@@ -948,8 +948,11 @@ async function renderKalender(main, monthArg) {
         const absageNotizHtml = abgesagt
           ? `<span class="kal-item-absage-notiz" title="${absageTxt}">⚠ ${absageTxt}</span>`
           : '';
+        // Distanz in eigener Zeile – neben dem Titel wird es im Monatsraster zu eng
+        const streckeZeile = streckeMarker(e);
         return `<div class="${cls}" data-einheit-id="${e.id}" onclick="zeigeEinheit(${e.id})">
-          <div class="kal-item-top">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span>${streckeMarker(e)}</div>
+          <div class="kal-item-top">${time}<span class="kal-item-title">${escapeHtml(e.titel)}</span></div>
+          ${streckeZeile ? `<div class="kal-item-strecke">${streckeZeile}</div>` : ''}
           ${absageNotizHtml}
         </div>`;
       }).join('');
@@ -2532,13 +2535,14 @@ function benachrichtigen(text, art) {
 }
 
 // Extrahiert die Tour-ID aus einer Komoot-URL und gibt die Embed-URL zurück.
-// Kleiner Marker für Einträge mit hinterlegtem Streckenverlauf.
-// Distanz kommt aus dem Strecken-Cache – ohne geladene Liste nur das Symbol.
+// Distanz-Marker für Einträge mit hinterlegtem Streckenverlauf.
+// Ohne geladene Strecken-Liste (z. B. Gastansicht) bleibt er leer –
+// eine Marke ohne Zahl bringt keinen Mehrwert.
 function streckeMarker(e) {
   if (!e || !e.strecke_id || typeof STRECKEN === 'undefined') return '';
   const s = STRECKEN.ausListe(e.strecke_id);
-  const titel = s ? `${s.name} · ${STRECKEN.metaText(s)}` : 'Streckenverlauf hinterlegt';
-  return `<span class="strecke-marker" title="${escapeHtml(titel)}">🗺${s ? ' ' + escapeHtml(STRECKEN.fmtDistanz(s.distanz_m)) : ''}</span>`;
+  if (!s) return '';
+  return `<span class="strecke-marker" title="${escapeHtml(s.name + ' · ' + STRECKEN.metaText(s))}">${escapeHtml(STRECKEN.fmtDistanz(s.distanz_m))}</span>`;
 }
 
 // Unterstützt: komoot.com/tour/ID, komoot.com/de-de/tour/ID, etc.
