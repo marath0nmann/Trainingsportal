@@ -1,5 +1,9 @@
 # Changelog
 
+## v290
+- **Wettkampfplanung: keine versehentliche Anmeldung für eine bereits gelaufene Ausgabe.** Die Jahresansicht startet im laufenden Jahr – wer sich im August für einen Wettkampf im März anmeldet, hat sonst unbemerkt die Ausgabe des Vorjahres gebucht. Liegt der Termin des angezeigten Jahres in der Vergangenheit, fragt das Portal jetzt nach und bietet die nächste Ausgabe an (OK = Folgejahr, Abbrechen = trotzdem das angezeigte Jahr).
+- Die Anmeldung, der Kalendereintrag in „Mein Plan" und die Jahresansicht beziehen sich danach einheitlich auf die tatsächlich gewählte Ausgabe.
+
 ## v289
 - **Kartenhintergrund im Kalender-Tooltip**: Die Streckenvorschau liegt jetzt auf echten OpenStreetMap-Kacheln statt auf leerem Grund. Umgesetzt als kleiner statischer Kachel-Renderer (Web-Mercator, ohne Leaflet) – Kacheln und Linie teilen sich dasselbe Pixelsystem und liegen exakt übereinander. Die Zoomstufe wird automatisch so gewählt, dass die Strecke komplett hineinpasst. Im dunklen Theme werden die Kacheln invertiert; die rote Linie liegt im SVG darüber und bleibt davon unberührt.
 - Kalenderübersicht: Karten-Emoji entfernt, die Distanz steht jetzt in einer eigenen Zeile unter dem Titel – im Monatsraster war es neben dem Titel zu eng und wurde abgeschnitten.
