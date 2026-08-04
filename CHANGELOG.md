@@ -1,5 +1,8 @@
 # Changelog
 
+## v294
+- Fehler beim Laden der Heute/Morgen-Sektion landen jetzt in der Browser-Konsole. Bisher wurde der Bereich bei einem Fehler kommentarlos geleert – von außen nicht von „keine Einheit geplant" zu unterscheiden.
+
 ## v293
 - **Verschachtelte Intervallblöcke.** Trainingsblöcke können jetzt Blöcke enthalten – damit lässt sich z. B. „3 x (4 x 400, 100 TP), BP 400 TP" so planen, wie Trainer es aufschreiben: ein 3er-Block, der einen 4er-Block und die Blockpause enthält. Bisher musste jede Wiederholung von Hand ausgeschrieben werden.
 - Neuer Segment-Editor mit Baumstruktur: „+ Block" legt einen Wiederholungsblock an (auch innerhalb eines Blocks), „+ Tempo"/„+ Pause" einzelne Abschnitte. Abschnitte lassen sich sortieren (↑/↓), per „⤵" in einen eigenen Wiederholungsblock umwandeln und zwischen Tempo und Pause umschalten. Block- und Einheiten-Editor nutzen jetzt denselben Editor.

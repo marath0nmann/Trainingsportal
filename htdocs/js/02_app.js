@@ -1370,6 +1370,9 @@ async function ladeHeuteSektionInto(containerId) {
     const allItems = [...todayItems, ...morgenItems];
     if (allItems.length) ladHeuteDetails(allItems);
   } catch (e) {
+    // Bereich bleibt leer – Fehler aber sichtbar machen, sonst verschwindet
+    // die Heute/Morgen-Sektion kommentarlos (z. B. bei API-Fehlern).
+    console.error('Heute/Morgen-Sektion konnte nicht geladen werden:', e);
     el.innerHTML = '';
   }
 }
