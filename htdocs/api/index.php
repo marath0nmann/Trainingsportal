@@ -5605,8 +5605,9 @@ function handleMeinPlan(string $method, string $tail): void
             require_once __DIR__ . '/../../includes/segbaum.php';
             $proEinheit = [];
             foreach ($segRows as $sr) $proEinheit[(int)$sr['einheit_id']][] = $sr;
-            foreach ($proEinheit as $eid => $rows) {
-                $segKmByEinheit[$eid] = Segbaum::gesamtDistanz(Segbaum::ausRows($rows)) / 1000.0;
+            // Achtung: nicht $rows als Laufvariable – das ist die Einheitenliste
+            foreach ($proEinheit as $eid => $segsDerEinheit) {
+                $segKmByEinheit[$eid] = Segbaum::gesamtDistanz(Segbaum::ausRows($segsDerEinheit)) / 1000.0;
             }
         }
         $privatMapped = array_map(function ($r) use ($segKmByEinheit) {

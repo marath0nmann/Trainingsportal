@@ -1,5 +1,8 @@
 # Changelog
 
+## v295
+- **Startseite zeigt Heute/Morgen wieder an.** Die Kilometer-Berechnung für übernommene Einheiten (neu in v293) hat die Einheitenliste der API überschrieben – die Antwort enthielt statt der Trainings deren Segmentzeilen. Dadurch blieb der Heute/Morgen-Bereich leer und der Kalender ohne Team-Einheiten.
+
 ## v294
 - Fehler beim Laden der Heute/Morgen-Sektion landen jetzt in der Browser-Konsole. Bisher wurde der Bereich bei einem Fehler kommentarlos geleert – von außen nicht von „keine Einheit geplant" zu unterscheiden.
 
