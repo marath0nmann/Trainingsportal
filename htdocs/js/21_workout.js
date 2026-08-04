@@ -31,10 +31,26 @@ const APPLEWORKOUT = (() => {
     if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return false;
     try {
       // Probe-Objekt: manche Browser melden share() ohne Datei-Unterstützung
-      return navigator.canShare({ files: [new File([new Uint8Array(1)], 'p.workout')] });
+      return !!baueDatei(new Uint8Array(1), 'p.workout');
     } catch (e) {
       return false;
     }
+  }
+
+  // `com.apple.workout` ist ausschließlich über die Dateiendung deklariert
+  // (UTTypeTagSpecification kennt nur public.filename-extension, keinen
+  // MIME-Typ). Ein gesetzter Typ wie application/octet-stream bildet auf
+  // public.data ab und überstimmt die Endung – dann findet iOS die
+  // Fitness-App nicht mehr. Deshalb zuerst ohne Typ versuchen.
+  function baueDatei(inhalt, name) {
+    const varianten = [undefined, { type: 'application/octet-stream' }];
+    for (const opt of varianten) {
+      try {
+        const file = opt ? new File([inhalt], name, opt) : new File([inhalt], name);
+        if (navigator.canShare({ files: [file] })) return file;
+      } catch (e) { /* nächste Variante */ }
+    }
+    return null;
   }
 
   function dateiname(titel) {
@@ -54,8 +70,8 @@ const APPLEWORKOUT = (() => {
       const r = await fetch(url(einheitId), { credentials: 'same-origin' });
       if (!r.ok) { delete cache[einheitId]; return; }
       const blob = await r.blob();
-      const file = new File([blob], dateiname(titel), { type: 'application/octet-stream' });
-      if (navigator.canShare({ files: [file] })) cache[einheitId] = file;
+      const file = baueDatei(blob, dateiname(titel));
+      if (file) cache[einheitId] = file;
       else delete cache[einheitId];
     } catch (e) {
       delete cache[einheitId];

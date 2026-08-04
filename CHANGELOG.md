@@ -1,5 +1,8 @@
 # Changelog
 
+## v298
+- **Apple-Watch-Export: Fitness fehlte im Teilen-Sheet.** Der Systemtyp `com.apple.workout` ist ausschließlich über die Dateiendung deklariert (`UTTypeTagSpecification` kennt nur `public.filename-extension`, keinen MIME-Typ). Der bisher gesetzte Typ `application/octet-stream` bildete deshalb auf `public.data` ab und überstimmte die Endung – iOS konnte die zuständige App nicht mehr ermitteln. Die geteilte Datei wird jetzt ohne MIME-Typ gebaut, damit die Endung greift; `application/octet-stream` bleibt nur als Rückfall, falls der Browser eine Datei ohne Typ ablehnt.
+
 ## v297
 - **Apple-Watch-Export öffnet sich direkt.** Auf dem iPhone landete die `.workout`-Datei bisher als Download in „Dateien" und musste dort von Hand gesucht und geöffnet werden. Auf Touch-Geräten öffnet der Button jetzt das native Teilen-Sheet, in dem „Fitness" direkt als Ziel steht – ein Tipp, und das Training ist auf der Uhr.
 - Die Datei wird dafür beim Öffnen der Ansicht im Hintergrund geladen (wenige hundert Byte), weil iOS `navigator.share()` nur unmittelbar im Klick-Ereignis erlaubt. Ohne Web-Share-API und am Desktop bleibt es beim gewohnten Download.
