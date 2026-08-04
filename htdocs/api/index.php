@@ -2856,8 +2856,23 @@ function handleAppleWorkout(string $method, string $sub): void
     $name = $row['titel'];
     $bin  = AppleWorkout::encode($name, $segs, $paceSekProKm);
 
+    // Dateiname aus dem Titel – er ist in der iOS-Vorschau sichtbar
+    $datei = preg_replace('/[\\\\\/:*?"<>|]+/u', ' ', $name);
+    $datei = trim(preg_replace('/\s+/u', ' ', $datei));
+    if ($datei === '') $datei = 'Training ' . $row['datum'];
+    $datei = mb_substr($datei, 0, 60) . '.workout';
+
+    // inline statt attachment: Safari soll die Datei selbst typisieren
+    // dürfen (die Endung steht über den Rewrite auch im Pfad) statt sie
+    // ungefragt in die Dateiablage zu schieben.
+    // Umlaute nach RFC 5987, dazu ein ASCII-Name als Rückfallebene
+    $asciiName = preg_replace('/[^A-Za-z0-9 .\-_]/', '', $datei);
+    if (trim($asciiName, ' .') === '.workout' || $asciiName === '') {
+        $asciiName = 'training-' . $row['datum'] . '-' . $id . '.workout';
+    }
     header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename="training-' . $row['datum'] . '-' . $id . '.workout"');
+    header('Content-Disposition: inline; filename="' . $asciiName . '"'
+         . "; filename*=UTF-8''" . rawurlencode($datei));
     header('Content-Length: ' . strlen($bin));
     header('Cache-Control: no-store');
     echo $bin;

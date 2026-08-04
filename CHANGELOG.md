@@ -1,5 +1,10 @@
 # Changelog
 
+## v299
+- **Apple-Watch-Export über eine URL mit echter Dateiendung.** `com.apple.workout` ist im System ausschließlich über `public.filename-extension` deklariert – ohne MIME-Typ. Steht die Endung nur in der Query (`api/index.php?p=…workout`), kann Safari den Typ nicht bestimmen. Neue Route `/workout/{id}.workout` per `.htaccess`, ausgeliefert als `inline` statt `attachment`, damit Safari die Datei selbst typisiert.
+- Der Dateiname kommt jetzt aus dem Titel der Einheit (mit RFC-5987-Kodierung für Umlaute) statt `training-2026-08-05-42.workout` – er ist in der iOS-Vorschau sichtbar.
+- Der Weg über das Teilen-Sheet (`navigator.share`) ist entfallen: Fitness ist nur als Dokumenthandler registriert (`CFBundleDocumentTypes`), und die App-Reihe im Teilen-Sheet listet ausschließlich Share-Extensions. Die Datei wurde dort korrekt als Workout erkannt, Fitness kann dort aber grundsätzlich nicht erscheinen.
+
 ## v298
 - **Apple-Watch-Export: Fitness fehlte im Teilen-Sheet.** Der Systemtyp `com.apple.workout` ist ausschließlich über die Dateiendung deklariert (`UTTypeTagSpecification` kennt nur `public.filename-extension`, keinen MIME-Typ). Der bisher gesetzte Typ `application/octet-stream` bildete deshalb auf `public.data` ab und überstimmte die Endung – iOS konnte die zuständige App nicht mehr ermitteln. Die geteilte Datei wird jetzt ohne MIME-Typ gebaut, damit die Endung greift; `application/octet-stream` bleibt nur als Rückfall, falls der Browser eine Datei ohne Typ ablehnt.
 
