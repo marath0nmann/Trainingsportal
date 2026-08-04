@@ -486,6 +486,13 @@
 .seg-blk-sum-row {
   font-size: 11px; color: var(--text2); line-height: 1.6;
 }
+/* Verschachtelte Wiederholungsblöcke in der Zusammenfassung */
+.seg-sum-wdh { font-weight: 700; color: var(--text); }
+.seg-sum-gruppe {
+  margin-left: 10px; padding-left: 8px;
+  border-left: 2px solid color-mix(in srgb, var(--text2) 30%, transparent);
+}
+.seg-sum-pause { opacity: .8; }
 
 /* ============================================================
    Quartalsplan / Listenansicht
@@ -1743,6 +1750,56 @@ body.planung-active #app-footer    { display: none; }
 .ed-typ-pause {
   background: color-mix(in srgb, var(--text2) 12%, transparent);
   color: var(--text2); border-color: color-mix(in srgb, var(--text2) 25%, transparent);
+}
+
+/* ── Verschachtelter Segment-Editor (SEG) ─────────────────────────── */
+.seged { display: flex; flex-direction: column; gap: 8px; }
+
+.seged-gruppe {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surf2);
+}
+/* Verschachtelte Blöcke optisch absetzen */
+.seged-gruppe .seged-gruppe {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.seged-gruppe-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.seged-wdh { display: flex; align-items: center; gap: 6px; }
+.seged-wdh span {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text2);
+}
+.seged-wdh input {
+  width: 64px; height: 34px; text-align: center;
+  background: var(--surface); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: 7px; font-family: inherit; font-size: 13px;
+}
+.seged-wdh input:focus { outline: none; border-color: var(--accent); }
+.seged-gruppe-mal { font-weight: 700; color: var(--text2); }
+.seged-gruppe-info { font-size: 12px; color: var(--text2); }
+.seged-gruppe-tools { margin-left: auto; display: flex; gap: 2px; }
+
+.seged-kinder { display: flex; flex-direction: column; gap: 6px; }
+
+.seged-zeile {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.seged-zeile .ed-seg-dist { width: 100px; flex: 0 0 auto; }
+.seged-zeile select.ed-seg-input { width: auto; min-width: 150px; flex: 1 1 150px; }
+.seged-zeile-tools { margin-left: auto; display: flex; gap: 2px; }
+
+.seged-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .seged-zeile select.ed-seg-input { min-width: 120px; }
+  .seged-zeile .ed-seg-dist { width: 78px; }
+  .seged-gruppe { padding: 8px; }
 }
 
 /* ============================================================

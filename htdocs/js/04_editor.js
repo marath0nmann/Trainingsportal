@@ -15,19 +15,12 @@ const EDITOR = (() => {
   let currentId       = null;
   let currentSerieId  = null;
   let currentDatum    = null;
-  let currentSegmente = [];
+  let currentBaum     = [];
 
   // Typen aus globalem getTypen() (02_app.js), konfiguriert via Admin → Einstellungen
   function getTypOptions() {
     return getTypen().map(x => ({ value: x.slug, label: x.bezeichnung }));
   }
-  const PAUSE_OPTIONS = [
-    { value: 'TP',   label: 'TP – Trabpause' },
-    { value: 'GP',   label: 'GP – Gehpause' },
-    { value: 'BP',   label: 'BP – Blockpause' },
-    { value: 'frei', label: '— frei —' },
-  ];
-
   async function open(opts) {
     // opts: { datum?, einheit?, segmente? }
     const ist_neu = !opts.einheit;
@@ -41,11 +34,11 @@ const EDITOR = (() => {
     currentId      = e.id;
     currentSerieId = e.serie_id || null;
     currentDatum   = e.datum || null;
-    currentSegmente = (opts.segmente || []).map(s => ({...s}));
+    currentBaum = SEG.baumAusRows(opts.segmente || []);
 
-    // Treffpunkte für Dropdown laden
+    // Treffpunkte + Pace-Referenzen für die Dropdowns laden
     let tpListe = [];
-    try { tpListe = await TREFFPUNKTE.laden(); } catch (_) {}
+    try { [tpListe] = await Promise.all([TREFFPUNKTE.laden(), PACE.load()]); } catch (_) {}
     const curTpId = e.treffpunkt ? e.treffpunkt.id
       : (ist_neu ? ((appConfig.typen || []).find(t => t.slug === e.typ)?.default_treffpunkt_id ?? null) : null);
     const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
@@ -119,12 +112,12 @@ const EDITOR = (() => {
                 <h3>Segmente</h3>
                 <div class="ed-segactions">
                   <button class="btn btn-ghost" onclick="EDITOR.parsenAusTitel()">Aus Titel parsen</button>
-                  <button class="btn btn-ghost" onclick="EDITOR.segmentHinzufuegen()">+ Segment</button>
                 </div>
               </div>
               <div id="ed-segmente-tabelle"></div>
+              <div id="ed-gesamtdistanz" class="be-gesamtdistanz"></div>
               <div class="ed-seghint">
-                Pause in Metern · TP/GP/BP = Trab-/Geh-/Blockpause · Pace-Referenz wird für die persönliche Pace im Athleten-View benutzt
+                Distanz in Metern · Blöcke lassen sich verschachteln (Block im Block) · TP/GP/BP = Trab-/Geh-/Blockpause
               </div>
             </div>
 
@@ -144,81 +137,24 @@ const EDITOR = (() => {
   }
 
   function rendereSegmente() {
-    const wrap = document.getElementById('ed-segmente-tabelle');
-    if (!wrap) return;
-    if (!currentSegmente.length) {
-      wrap.innerHTML = `<div class="ed-segleer">Keine Segmente. Klick „Aus Titel parsen" oder „+ Segment".</div>`;
-      return;
-    }
-    const paceOpts = PACE.getOptions().map(o => `<option value="${o.value}">${o.label}</option>`).join('');
-    const rows = currentSegmente.map((s, i) => `
-      <tr>
-        <td><input type="number" min="1" value="${s.wiederholungen ?? 1}" data-i="${i}" data-f="wiederholungen" class="ed-seg-input ed-seg-num"></td>
-        <td><input type="number" min="50" step="50" value="${s.distanz_m ?? ''}" data-i="${i}" data-f="distanz_m" class="ed-seg-input ed-seg-dist"></td>
-        <td><input type="number" min="0" step="50" value="${s.pause_m ?? ''}" data-i="${i}" data-f="pause_m" class="ed-seg-input ed-seg-dist"></td>
-        <td>
-          <select data-i="${i}" data-f="pause_typ" class="ed-seg-input">
-            ${PAUSE_OPTIONS.map(o => `<option value="${o.value}"${o.value===(s.pause_typ||'TP')?' selected':''}>${o.label}</option>`).join('')}
-          </select>
-        </td>
-        <td>
-          <select data-i="${i}" data-f="pace_referenz" class="ed-seg-input">
-            ${PACE.getOptions().map(o => `<option value="${o.value}"${o.value===(s.pace_referenz||'')?' selected':''}>${o.label}</option>`).join('')}
-          </select>
-        </td>
-        <td><button class="btn-icon" title="Segment löschen" onclick="EDITOR.segmentLoeschen(${i})">×</button></td>
-      </tr>`).join('');
-
-    wrap.innerHTML = `
-      <table class="ed-seg-table">
-        <thead>
-          <tr>
-            <th>Wdh</th><th>Distanz (m)</th><th>Pause (m)</th><th>Pause-Typ</th><th>Pace-Referenz</th><th></th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-
-    wrap.querySelectorAll('.ed-seg-input').forEach(el => {
-      el.addEventListener('change', onSegEdit);
-      el.addEventListener('input',  onSegEdit);
+    SEG.editorMount('ed-segmente-tabelle', currentBaum, baum => {
+      currentBaum = baum;
+      const el = document.getElementById('ed-gesamtdistanz');
+      if (el) {
+        const m = SEG.gesamtDistanz(baum);
+        el.textContent = m ? 'Gesamtdistanz: ' + SEG.fmtDist(m) : '';
+      }
     });
-  }
-
-  function onSegEdit(ev) {
-    const t = ev.target;
-    const i = parseInt(t.dataset.i, 10);
-    const f = t.dataset.f;
-    if (!currentSegmente[i]) return;
-    let v = t.value;
-    if (['wiederholungen','distanz_m','pause_m'].includes(f)) {
-      v = v === '' ? null : parseInt(v, 10);
-    }
-    if (f === 'pace_referenz' && v === '') v = null;
-    currentSegmente[i][f] = v;
   }
 
   function parsenAusTitel() {
     const titel = (document.getElementById('ed-titel') || {}).value || '';
-    const segs = PARSER.parse(titel);
-    if (!segs.length) {
+    const baum = PARSER.parseBaum(titel);
+    if (!baum.length) {
       benachrichtigen('Konnte aus dem Titel keine Segmente erkennen.', 'warn');
       return;
     }
-    currentSegmente = segs;
-    rendereSegmente();
-  }
-
-  function segmentHinzufuegen() {
-    currentSegmente.push({
-      wiederholungen: 1, distanz_m: 400, pause_m: 100,
-      pause_typ: 'TP', pace_referenz: '5000', notiz: null,
-    });
-    rendereSegmente();
-  }
-
-  function segmentLoeschen(i) {
-    currentSegmente.splice(i, 1);
+    currentBaum = baum;
     rendereSegmente();
   }
 
@@ -255,7 +191,7 @@ const EDITOR = (() => {
       bemerkung:      val('ed-bemerkung') || null,
       sichtbarkeit:   val('ed-sichtbarkeit'),
       status:         val('ed-status'),
-      segmente:       istRunde ? [] : currentSegmente,
+      segmente:       istRunde ? [] : SEG.rowsAusBaum(currentBaum),
     };
   }
 
@@ -404,7 +340,7 @@ const EDITOR = (() => {
   }
 
   return {
-    open, parsenAusTitel, segmentHinzufuegen, segmentLoeschen,
+    open, parsenAusTitel,
     speichern, loeschen, onTypChange,
     speichernEinzel, speichernAbJetzt, speichernAlle,
     loeschenNurDieser, loeschenAbJetzt, loeschenAlleSerie, loeschenAbbrechen,

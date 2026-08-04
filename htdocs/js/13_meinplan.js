@@ -14,12 +14,12 @@ const MEINPLAN = (() => {
   function istAboAktivFuerTyp(typ) { return _aboTypen.has(typ); }
 
   // ── km-Berechnung ────────────────────────────────────────
-  // Wenn Segmente vorhanden: Summe aller Wiederholungen × Distanz.
+  // Wenn Segmente vorhanden: Gesamtdistanz des Segment-Baums (inkl.
+  // verschachtelter Wiederholungen und Pausen).
   // Sonst: Fallback-km aus der Typen-Konfiguration.
   function _berechneKm(e, segs) {
     if (Array.isArray(segs) && segs.length) {
-      const total = segs.reduce((s, seg) =>
-        s + (seg.wiederholungen || 1) * (((seg.distanz_m || 0) + (seg.pause_m || 0)) / 1000), 0);
+      const total = SEG.gesamtDistanz(SEG.baumAusRows(segs)) / 1000;
       return total > 0 ? Math.round(total * 100) / 100 : null;
     }
     const typen = (window.appConfig && Array.isArray(window.appConfig.typen))

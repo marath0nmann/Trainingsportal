@@ -1,5 +1,13 @@
 # Changelog
 
+## v293
+- **Verschachtelte Intervallblöcke.** Trainingsblöcke können jetzt Blöcke enthalten – damit lässt sich z. B. „3 x (4 x 400, 100 TP), BP 400 TP" so planen, wie Trainer es aufschreiben: ein 3er-Block, der einen 4er-Block und die Blockpause enthält. Bisher musste jede Wiederholung von Hand ausgeschrieben werden.
+- Neuer Segment-Editor mit Baumstruktur: „+ Block" legt einen Wiederholungsblock an (auch innerhalb eines Blocks), „+ Tempo"/„+ Pause" einzelne Abschnitte. Abschnitte lassen sich sortieren (↑/↓), per „⤵" in einen eigenen Wiederholungsblock umwandeln und zwischen Tempo und Pause umschalten. Block- und Einheiten-Editor nutzen jetzt denselben Editor.
+- **Titel-Kurzschrift** wird aus der Struktur erzeugt und wieder eingelesen: „Aus Titel parsen" versteht geklammerte Wiederholungen inklusive Blockpausen („3 x (4 x 400, 100 TP), BP 400 TP").
+- Kalender-Tooltip und Detailansicht zeigen die Struktur statt einer ausgerollten Segmentliste: Balkengrafik über den echten Ablauf, darunter eingerückt „3 ×" → „4 ×" → Abschnitte. Die falschen Zeilen („3 × 400m" acht Mal) sind damit weg.
+- Gesamtdistanz, „Mein Plan"-Kilometer, ICS-Beschreibung sowie Garmin-FIT- und Apple-Watch-Export berücksichtigen die Verschachtelung. Für die Uhren wird nur die innerste Wiederholung kompakt übertragen, äußere Blöcke werden ausgerollt (beide Formate kennen keine geschachtelten Wiederholungen).
+- Bestehende Blöcke und Einheiten bleiben unverändert nutzbar: die alte flache Segmentablage wird beim Öffnen automatisch als Baum gelesen.
+
 ## v292
 - Apple-Watch-Export jetzt auch auf der „Heute"-Karte – der Button „⌚ Apple Watch" steht überall dort, wo es schon den FIT-Export für Garmin gibt (Heute-Karte und Termin-Detailansicht).
 

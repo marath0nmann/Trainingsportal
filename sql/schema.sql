@@ -76,15 +76,22 @@ CREATE TABLE IF NOT EXISTS training_einheiten (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Strukturierte Segmente (Intervalle, Pyramiden, Blöcke) ─────
--- Beispiel: "12 x 400m (100GP)" = 1 Segment (wiederholungen=12, distanz=400, pause=100, pause_typ=GP)
--- Beispiel: "400/600/800/1000/800/600/400" = 7 Segmente mit gleicher block_id
+-- Die Zeilen bilden einen Baum: abschnitt_typ='gruppe' ist ein Wiederholungs-
+-- block, eltern_id verweist auf dessen knoten_id. Damit sind verschachtelte
+-- Intervalle abbildbar, z. B. "3 x (4 x 400, 100 TP), BP 400 TP":
+--   gruppe(3) → [ gruppe(4) → [work 400, pause 100 TP], pause 400 BP ]
+-- Zeilen ohne knoten_id stammen aus der flachen Ablage davor (Gruppierung
+-- über block_id/gruppen_id, Pause in pause_m) und werden beim Lesen konvertiert.
 CREATE TABLE IF NOT EXISTS training_segmente (
   id              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
   einheit_id      INT UNSIGNED    NOT NULL,
   reihenfolge     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  block_id        SMALLINT UNSIGNED NULL,
-  wiederholungen  SMALLINT UNSIGNED NOT NULL DEFAULT 1,
-  distanz_m       INT UNSIGNED    NOT NULL,
+  abschnitt_typ   VARCHAR(10)     NOT NULL DEFAULT 'work' COMMENT 'work | pause | gruppe (Wiederholungsblock)',
+  knoten_id       SMALLINT UNSIGNED NULL COMMENT 'Knoten-Nr. innerhalb der Einheit',
+  eltern_id       SMALLINT UNSIGNED NULL COMMENT 'knoten_id des umschließenden Blocks',
+  block_id        SMALLINT UNSIGNED NULL COMMENT 'Altbestand: flache Gruppierung',
+  wiederholungen  SMALLINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'nur bei abschnitt_typ=gruppe',
+  distanz_m       INT UNSIGNED    NULL COMMENT 'NULL bei Gruppenknoten',
   pause_m         INT UNSIGNED    NULL,
   pause_typ       ENUM('TP','GP','BP','frei') NULL,
   pace_referenz   VARCHAR(40)     NULL COMMENT 'z.B. 10km, 5km, marathon, frei',
@@ -120,9 +127,12 @@ CREATE TABLE IF NOT EXISTS training_block_segmente (
   id              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
   block_id        INT UNSIGNED    NOT NULL,
   reihenfolge     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  gruppen_id      SMALLINT UNSIGNED NULL,
-  wiederholungen  SMALLINT UNSIGNED NOT NULL DEFAULT 1,
-  distanz_m       INT UNSIGNED    NOT NULL,
+  abschnitt_typ   VARCHAR(10)     NOT NULL DEFAULT 'work' COMMENT 'work | pause | gruppe (Wiederholungsblock)',
+  knoten_id       SMALLINT UNSIGNED NULL COMMENT 'Knoten-Nr. innerhalb des Blocks',
+  eltern_id       SMALLINT UNSIGNED NULL COMMENT 'knoten_id des umschließenden Blocks',
+  gruppen_id      SMALLINT UNSIGNED NULL COMMENT 'Altbestand: flache Gruppierung',
+  wiederholungen  SMALLINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'nur bei abschnitt_typ=gruppe',
+  distanz_m       INT UNSIGNED    NULL COMMENT 'NULL bei Gruppenknoten',
   pause_m         INT UNSIGNED    NULL,
   pause_typ       ENUM('TP','GP','BP','frei') NULL,
   pace_referenz   VARCHAR(40)     NULL COMMENT 'z.B. 10km, 5km, HM, M',

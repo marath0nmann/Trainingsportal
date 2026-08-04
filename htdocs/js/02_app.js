@@ -1557,7 +1557,7 @@ async function ladHeuteDetails(items) {
           actions.push(`<button class="btn btn-sm heute-dabei-btn is-dabei" onclick="toggleHeuteDabei(${einheit.id}, ${privatId}, null, null)">☑ Ich bin dabei!</button>`);
         } else {
           const eJson = escapeHtml(JSON.stringify({ id: einheit.id, datum: einheit.datum, uhrzeit: einheit.uhrzeit || null, typ: einheit.typ, titel: einheit.titel }));
-          const sJson = escapeHtml(JSON.stringify(seg.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m, pause_m: s.pause_m }))));
+          const sJson = escapeHtml(JSON.stringify(seg));
           actions.push(`<button class="btn btn-ghost btn-sm heute-dabei-btn" onclick="toggleHeuteDabei(${einheit.id}, null, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))" data-e="${eJson}" data-s="${sJson}">☐ Ich bin dabei?</button>`);
         }
       }
@@ -1610,7 +1610,7 @@ async function toggleHeuteDabei(einheitId, privatId, einheitData, segmente) {
         const seg = cached ? cached.segmente || [] : [];
         const e   = cached ? cached.einheit   : { id: einheitId };
         const eJson = escapeHtml(JSON.stringify({ id: e.id, datum: e.datum, uhrzeit: e.uhrzeit || null, typ: e.typ, titel: e.titel }));
-        const sJson = escapeHtml(JSON.stringify(seg.map(s => ({ wiederholungen: s.wiederholungen, distanz_m: s.distanz_m, pause_m: s.pause_m }))));
+        const sJson = escapeHtml(JSON.stringify(seg));
         btn.className = 'btn btn-ghost btn-sm heute-dabei-btn';
         btn.textContent = '☐ Ich bin dabei?';
         btn.setAttribute('onclick', `toggleHeuteDabei(${einheitId}, null, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))`);
@@ -1821,67 +1821,11 @@ async function loescheTermin(id, scope) {
   }
 }
 
-// Segment-Blöcke (TrainingPeaks-Stil): jede Wiederholung als eigener Block
+// Segment-Blöcke (TrainingPeaks-Stil): Balkengrafik + verschachtelte
+// Zusammenfassung. Struktur und Rendering stecken in SEG (20_segmente.js).
 function renderSegmentBlocksHtml(seg, paceData, typ) {
-  if (!seg.length) return '';
-  const maxDist = Math.max(
-    ...seg.map(s => s.distanz_m || 0),
-    ...seg.map(s => s.pause_m   || 0),
-    1
-  );
-  const typClass = `seg-blk-typ-${typ || 'frei'}`;
-
-  let blocksHtml = '';
-  seg.forEach((s, si) => {
-    if (si > 0) blocksHtml += `<div class="seg-blk-sep"></div>`;
-    const wdh = s.wiederholungen || 1;
-    const h   = Math.round(16 + (s.distanz_m / maxDist) * 40);
-    const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
-    const splitSek = sekProKm != null ? sekProKm * (s.distanz_m / 1000) : null;
-    const paceStr  = splitSek != null ? PACE.formatTime(splitSek) : '';
-    const distStr  = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + 'km' : s.distanz_m + 'm';
-    const PAUSE_LABEL = { TP: 'Trabbpause', GP: 'Gehpause', BP: 'Bergpause', frei: 'Pause' };
-    for (let i = 0; i < wdh; i++) {
-      const tip = `${wdh > 1 ? (i + 1) + ' / ' + wdh + ' · ' : ''}${distStr}${s.pace_referenz ? ' · ' + s.pace_referenz : ''}${paceStr ? ' · ' + paceStr : ''}`;
-      blocksHtml += `<div class="seg-blk seg-blk-work ${typClass}" style="flex:${s.distanz_m};height:${h}px" title="${escapeHtml(tip)}"></div>`;
-      if (s.pause_m) {
-        const pH  = Math.round(16 + (s.pause_m / maxDist) * 40);
-        const pLbl = PAUSE_LABEL[s.pause_typ] || 'Pause';
-        blocksHtml += `<div class="seg-blk seg-blk-pause" style="flex:${s.pause_m};height:${pH}px" title="${s.pause_m}m ${pLbl}"></div>`;
-      }
-    }
-  });
-
-  const PAUSE_LBL = { TP: 'Trabpause', GP: 'Gehpause', BP: 'Blockpause', frei: 'Pause' };
-  const summaryHtml = seg.map(s => {
-    const wdh     = s.wiederholungen || 1;
-    const distStr = s.distanz_m >= 1000 ? (s.distanz_m / 1000) + 'km' : s.distanz_m + 'm';
-    let line = (wdh > 1 ? wdh + ' × ' : '') + distStr;
-
-    // Pace: entweder berechnete Pace oder Referenz-Label
-    const sekProKm = paceData ? PACE.paceSekProKm(paceData, s.pace_referenz) : null;
-    if (sekProKm != null) {
-      const m  = Math.floor(sekProKm / 60);
-      const sc = String(Math.round(sekProKm % 60)).padStart(2, '0');
-      line += ` (@ ${m}:${sc}min/km)`;
-    } else if (s.pace_referenz) {
-      const refLabel = PACE.fmtDistLabel(s.pace_referenz);
-      line += ` (@ ${escapeHtml(refLabel)}-Pace)`;
-    }
-
-    // Pause
-    if (s.pause_m) {
-      const pLbl = PAUSE_LBL[s.pause_typ] || 'Pause';
-      line += ` · ${s.pause_m}m ${pLbl}`;
-    }
-
-    return `<div class="seg-blk-sum-row">${line}</div>`;
-  }).join('');
-
-  return `<div class="seg-blocks-wrap">
-    <div class="seg-blocks">${blocksHtml}</div>
-    ${summaryHtml ? `<div class="seg-blk-summary">${summaryHtml}</div>` : ''}
-  </div>`;
+  if (!seg || !seg.length) return '';
+  return SEG.ansichtHtml(seg, paceData, typ);
 }
 
 function navigateKalender(monthYM) {
@@ -2364,11 +2308,8 @@ async function zeigeEinheit(id) {
         ${renderSegmentBlocksHtml(seg, paceData, e.typ)}
       </div>` : '';
 
-    // km-Zeile: Trainings-km aus Segmenten + Anfahrt-km
-    const trainingsKm = seg.reduce((s, b) => {
-      const wdh = parseInt(b.wiederholungen) || 1;
-      return s + ((parseFloat(b.distanz_m) || 0) + (parseFloat(b.pause_m) || 0)) * wdh;
-    }, 0) / 1000;
+    // km-Zeile: Trainings-km aus dem Segment-Baum + Anfahrt-km
+    const trainingsKm = SEG.gesamtDistanz(SEG.baumAusRows(seg)) / 1000;
     let kmHtml = '';
     if (trainingsKm > 0 || wegKm != null) {
       const fmtKm = km => km.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + 'km';

@@ -45,27 +45,31 @@ class AppleWorkout {
 
     /**
      * @param string $name        Workout-Name (in der Fitness-App sichtbar)
-     * @param array  $segmente    Segmente (s. training_segmente)
+     * @param array  $segmente    Segmentzeilen (s. training_segmente, beliebig verschachtelt)
      * @param array  $paceSekProKm  ['<pace_referenz>' => Sekunden pro km]
      * @return string Binärinhalt der .workout-Datei
      */
     public static function encode(string $name, array $segmente, array $paceSekProKm = []): string
     {
+        // Verschachtelte Blöcke auf die eine Ebene bringen, die das Format kennt
+        require_once __DIR__ . '/segbaum.php';
         $bloecke = '';
-        foreach ($segmente as $s) {
-            $dist = (int)($s['distanz_m'] ?? 0);
-            if ($dist <= 0) continue;
-            $wdh   = max(1, (int)($s['wiederholungen'] ?? 1));
-            $pause = (int)($s['pause_m'] ?? 0);
-
-            // Zielpace für dieses Segment (nur wenn Referenzzeit vorhanden)
-            $ref     = $s['pace_referenz'] ?? null;
-            $sekProKm = ($ref !== null && isset($paceSekProKm[$ref])) ? (float)$paceSekProKm[$ref] : null;
-
-            $steps = self::step(1, $dist, $sekProKm, $s['notiz'] ?? null);
-            if ($pause > 0) {
-                $steps .= self::step(2, $pause, null, self::pausenName($s, $pause));
+        foreach (Segbaum::exportBloecke(Segbaum::ausRows($segmente)) as $blk) {
+            $wdh   = max(1, (int)$blk['wiederholungen']);
+            $steps = '';
+            foreach ($blk['schritte'] as $s) {
+                $dist = (int)($s['distanz_m'] ?? 0);
+                if ($dist <= 0) continue;
+                if (($s['typ'] ?? 'work') === 'pause') {
+                    $steps .= self::step(2, $dist, null, self::pausenName($s, $dist));
+                } else {
+                    // Zielpace für diesen Schritt (nur wenn Referenzzeit vorhanden)
+                    $ref      = $s['pace_referenz'] ?? null;
+                    $sekProKm = ($ref !== null && isset($paceSekProKm[$ref])) ? (float)$paceSekProKm[$ref] : null;
+                    $steps   .= self::step(1, $dist, $sekProKm, $s['notiz'] ?? null);
+                }
             }
+            if ($steps === '') continue;
             $bloecke .= self::fLen(5, $steps . self::fVar(2, $wdh));
         }
 
