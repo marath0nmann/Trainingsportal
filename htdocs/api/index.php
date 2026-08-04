@@ -1291,6 +1291,10 @@ try {
         handleFit($method, $tail);
         exit;
     }
+    if ($head === 'workout') {
+        handleAppleWorkout($method, $tail);
+        exit;
+    }
     if ($head === 'config') {
         handleConfig();
         exit;
@@ -2784,6 +2788,93 @@ function handleFit(string $method, string $sub): void
     header('Content-Length: ' . strlen($fit));
     header('Cache-Control: no-store');
     echo $fit;
+}
+
+// ============================================================
+// Apple-Workout-Export (iOS Fitness / Apple Watch)
+//   GET workout/einheit/{id}.workout → Binärdatei zum Import in iOS
+// ============================================================
+function handleAppleWorkout(string $method, string $sub): void
+{
+    if ($method !== 'GET' || !preg_match('#^einheit/(\d+)(?:\.workout)?$#', $sub, $m)) {
+        http_response_code(404);
+        echo 'Workout-Endpoint nicht gefunden';
+        return;
+    }
+    $id  = (int)$m[1];
+    $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_einheiten') . ' WHERE id = ?', [$id]);
+    if (!$row) { http_response_code(404); echo 'Einheit nicht gefunden'; return; }
+
+    $user = Auth::check();
+    if ($row['sichtbarkeit'] !== 'oeffentlich' && !$user) {
+        http_response_code(401); echo 'Nicht angemeldet'; return;
+    }
+
+    $segs = DB::fetchAll(
+        'SELECT * FROM ' . DB::tbl('training_segmente') . ' WHERE einheit_id = ? ORDER BY reihenfolge, id',
+        [$id]
+    );
+
+    // Pace-Vorgaben nur für angemeldete Nutzer (persönliche Bestzeiten)
+    $paceSekProKm = $user
+        ? ladePaceSekProKmMap((int)$user['id'], isset($user['athlet_id']) ? (int)$user['athlet_id'] : 0)
+        : [];
+
+    require_once __DIR__ . '/../../includes/apple_workout.php';
+
+    $name = $row['titel'];
+    $bin  = AppleWorkout::encode($name, $segs, $paceSekProKm);
+
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="training-' . $row['datum'] . '-' . $id . '.workout"');
+    header('Content-Length: ' . strlen($bin));
+    header('Cache-Control: no-store');
+    echo $bin;
+}
+
+// Effektive Pace je Referenzdistanz: ['<ref>' => Sekunden pro km]
+// Spiegelt die Auflösung aus js/05_pace.js (manual → 12m → pb, mit Fallbacks).
+function ladePaceSekProKmMap(int $userId, int $athletId): array
+{
+    $prefs = ladePacePrefs($userId);
+    if (empty($prefs)) return [];
+
+    $refsMap = [];
+    foreach ($prefs as $key => $p) { $refsMap[$key] = (float)$key; }
+
+    $pb   = $athletId > 0 ? fetchBestzeiten($athletId, 'pb',  $refsMap) : [];
+    $m12  = $athletId > 0 ? fetchBestzeiten($athletId, '12m', $refsMap) : [];
+
+    $out = [];
+    foreach ($prefs as $ref => $p) {
+        $distM = (float)$ref;
+        if ($distM <= 0) continue;
+
+        $sek     = null;
+        $distRef = $distM;
+        if (($p['modus'] ?? 'pb') === 'manual') {
+            // Manuell: kein Fallback auf Bestzeiten
+            if (!empty($p['manual_sek'])) $sek = (float)$p['manual_sek'];
+        } else {
+            $reihenfolge = ($p['modus'] ?? 'pb') === '12m' ? [$m12, $pb] : [$pb, $m12];
+            foreach ($reihenfolge as $quelle) {
+                if (!empty($quelle[$ref]['sekunden'])) {
+                    $sek     = (float)$quelle[$ref]['sekunden'];
+                    $distRef = (float)$quelle[$ref]['distanz_m'];
+                    break;
+                }
+            }
+        }
+        if ($sek !== null && $distRef > 0) {
+            $out[$ref] = $sek / ($distRef / 1000);
+        }
+    }
+
+    // Alte benannte Referenzen in Segmenten weiterhin bedienen
+    foreach (['5km' => '5000', '10km' => '10000', 'HM' => '21098', 'M' => '42195'] as $alt => $neu) {
+        if (isset($out[$neu])) $out[$alt] = $out[$neu];
+    }
+    return $out;
 }
 
 // ============================================================

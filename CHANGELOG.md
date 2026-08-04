@@ -1,5 +1,11 @@
 # Changelog
 
+## v291
+- **Apple-Watch-Export**: Trainingseinheiten mit Segmenten lassen sich als `.workout`-Datei herunterladen und am iPhone in die Fitness-App importieren – dort landen sie als eigenes Training auf der Apple Watch. Neuer Button „⌚ Apple Watch" in der Detailansicht, direkt neben dem FIT-Export für Garmin.
+- Jedes Segment wird zu einem Wiederholungsblock (z. B. „8 x 600m") mit Trainings- und Erholungsschritt; die Pause erscheint als eigener Schritt mit Distanz und Bezeichnung (Trabpause/Gehpause/Blockpause).
+- Für angemeldete Nutzer enthält der Trainingsschritt eine **Pace-Vorgabe** als Korridor (Zielpace ±5 s/km), berechnet aus den persönlichen Pace-Referenzen – dieselbe Auflösung wie im Portal (manuell → 12 Monate → Bestzeit).
+- Neuer Endpunkt `GET workout/einheit/{id}.workout` und Encoder `includes/apple_workout.php`. Das Dateiformat (Protobuf ohne öffentliches Schema) wurde aus einer von iOS exportierten Referenzdatei abgeleitet; der Encoder reproduziert diese byte-identisch.
+
 ## v290
 - **Wettkampfplanung: keine versehentliche Anmeldung für eine bereits gelaufene Ausgabe.** Die Jahresansicht startet im laufenden Jahr – wer sich im August für einen Wettkampf im März anmeldet, hat sonst unbemerkt die Ausgabe des Vorjahres gebucht. Liegt der Termin des angezeigten Jahres in der Vergangenheit, fragt das Portal jetzt nach und bietet die nächste Ausgabe an (OK = Folgejahr, Abbrechen = trotzdem das angezeigte Jahr).
 - Die Anmeldung, der Kalendereintrag in „Mein Plan" und die Jahresansicht beziehen sich danach einheitlich auf die tatsächlich gewählte Ausgabe.
