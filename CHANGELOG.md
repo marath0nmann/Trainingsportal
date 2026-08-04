@@ -1,5 +1,8 @@
 # Changelog
 
+## v296
+- **Apple-Watch-Export: Pausen laufen jetzt offen** statt über eine feste Distanz – der Erholungsschritt endet erst, wenn man an der Uhr weiterdrückt (Garmin-Pendant: „bis Drücken der LAP-Taste"). Die vorgesehene Pausendistanz steht weiterhin in der Bezeichnung des Schritts, z. B. „Trabpause 100m".
+
 ## v295
 - **Startseite zeigt Heute/Morgen wieder an.** Die Kilometer-Berechnung für übernommene Einheiten (neu in v293) hat die Einheitenliste der API überschrieben – die Antwort enthielt statt der Trainings deren Segmentzeilen. Dadurch blieb der Heute/Morgen-Bereich leer und der Kalender ohne Team-Einheiten.
 

@@ -61,7 +61,9 @@ class AppleWorkout {
                 $dist = (int)($s['distanz_m'] ?? 0);
                 if ($dist <= 0) continue;
                 if (($s['typ'] ?? 'work') === 'pause') {
-                    $steps .= self::step(2, $dist, null, self::pausenName($s, $dist));
+                    // Pause offen: läuft bis zum Weiterdrücken an der Uhr.
+                    // Die vorgesehene Distanz steht in der Bezeichnung.
+                    $steps .= self::step(2, null, null, self::pausenName($s, $dist));
                 } else {
                     // Zielpace für diesen Schritt (nur wenn Referenzzeit vorhanden)
                     $ref      = $s['pace_referenz'] ?? null;
@@ -90,10 +92,12 @@ class AppleWorkout {
     }
 
     // ── Ein Schritt (Training oder Erholung) ────────────────────
-    private static function step(int $zweck, int $distanzM, ?float $sekProKm, ?string $anzeigeName): string
+    // $distanzM = null → offenes Ziel (Schritt endet erst auf Tastendruck)
+    private static function step(int $zweck, ?int $distanzM, ?float $sekProKm, ?string $anzeigeName): string
     {
-        // Ziel: Distanz in Kilometern
-        $ziel = self::fVar(1, 3) . self::fLen(4, self::menge(2, $distanzM / 1000));
+        $ziel = $distanzM === null
+            ? self::fVar(1, 4)                                                    // offen
+            : self::fVar(1, 3) . self::fLen(4, self::menge(2, $distanzM / 1000)); // Distanz in km
 
         $detail = self::fLen(1, $ziel);
 
