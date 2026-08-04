@@ -1565,7 +1565,7 @@ async function ladHeuteDetails(items) {
         }
       }
       if (seg.length) {
-        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
+        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ Garmin</a>`);
         const appleBtn = APPLEWORKOUT.buttonHtml(einheit.id, einheit.titel, 'btn-sm');
         if (appleBtn) actions.push(appleBtn);
       }
@@ -2369,7 +2369,7 @@ async function zeigeEinheit(id) {
             ${kmHtml}
             ${segHtml}
             <div class="modal-actions">
-              ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
+              ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ Garmin</a>` : ''}
               ${seg.length ? APPLEWORKOUT.buttonHtml(e.id, e.titel) : ''}
               ${e.strecke_id ? `<button class="btn btn-ghost" onclick="STRECKEN.karteOeffnen(${e.strecke_id})">🗺 Auf Karte</button>` : ''}
               ${e.strecke_id ? `<a class="btn btn-ghost" href="api/index.php?p=strecken/${e.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>` : ''}

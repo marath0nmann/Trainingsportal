@@ -929,6 +929,9 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   padding: 8px 14px; border-radius: 7px; font-weight: 600; font-size: 13px;
   cursor: pointer; font-family: inherit; border: 1.5px solid transparent;
   transition: background .12s, border-color .12s, color .12s;
+  /* Buttons sind teils <a> (Downloads, externe Links) – ohne das
+     zeichnet der Browser sie unterstrichen */
+  text-decoration: none;
 }
 .btn-primary {
   background: var(--btn-bg); color: var(--on-btn); border-color: var(--btn-bg);

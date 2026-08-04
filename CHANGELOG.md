@@ -1,5 +1,9 @@
 # Changelog
 
+## v301
+- Der Garmin-Button heißt jetzt nur noch „⌚ Garmin" statt „⌚ FIT für Garmin" – kürzer und passend zum „⌚ Apple Watch" daneben.
+- Buttons, die als Link umgesetzt sind (Garmin, Apple Watch, GPX, Komoot), werden nicht mehr unterstrichen: `.btn` setzte kein `text-decoration`, sodass der Standard-Linkstil durchschlug.
+
 ## v300
 - **Apple-Watch-Export wieder als einfacher Download.** Die Route mit Dateiendung im Pfad (v299) brachte auf dem iPhone nur eine zusätzliche Rückfrage vor dem Download, ohne dass Fitness dadurch erreichbar wurde. Auslieferung deshalb wieder als `attachment` über `api/index.php?p=workout/einheit/{id}.workout`, Rewrite-Regel entfernt.
 - Der Button „⌚ Apple Watch" erscheint jetzt nur noch auf Apple-Plattformen (iOS, iPadOS, macOS) – anderswo gibt es keine App, die `.workout` öffnen kann.
