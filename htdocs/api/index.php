@@ -1247,6 +1247,32 @@ function _migrationStmts(): array
             }
         },
 
+        // ── 33: Verschachtelte Intervallblöcke ──────────────────────────────────────────
+        // Segmente sind jetzt ein Baum: `abschnitt_typ='gruppe'` markiert einen
+        // Wiederholungsblock, `knoten_id`/`eltern_id` verbinden die Zeilen.
+        // Damit ist z. B. „3 x (4 x 400, 100 TP), BP 400 TP" abbildbar.
+        // Altbestand (Gruppierung über gruppen_id/block_id, Pause in pause_m)
+        // bleibt lesbar und wird beim Einlesen konvertiert.
+        33 => static function (): void {
+            foreach (['training_segmente', 'training_block_segmente'] as $t) {
+                $tbl = DB::tbl($t);
+                try {
+                    DB::query("ALTER TABLE `{$tbl}`
+                        ADD COLUMN IF NOT EXISTS abschnitt_typ VARCHAR(10) NOT NULL DEFAULT 'work' AFTER reihenfolge,
+                        ADD COLUMN IF NOT EXISTS knoten_id SMALLINT UNSIGNED NULL,
+                        ADD COLUMN IF NOT EXISTS eltern_id SMALLINT UNSIGNED NULL");
+                } catch (Throwable $e) { error_log('mig33a: ' . $e->getMessage()); }
+                // Gruppenknoten tragen keine Distanz
+                try {
+                    DB::query("ALTER TABLE `{$tbl}` MODIFY COLUMN distanz_m INT UNSIGNED NULL");
+                } catch (Throwable $e) { error_log('mig33b: ' . $e->getMessage()); }
+                // Ältere ENUM-Definition auf VARCHAR bringen (Wert 'gruppe' fehlte dort)
+                try {
+                    DB::query("ALTER TABLE `{$tbl}` MODIFY COLUMN abschnitt_typ VARCHAR(10) NOT NULL DEFAULT 'work'");
+                } catch (Throwable $e) { error_log('mig33c: ' . $e->getMessage()); }
+            }
+        },
+
     ];
 }
 
@@ -1517,7 +1543,8 @@ function handleEinheiten(string $method, string $sub): void
             return;
         }
         $segmente = DB::fetchAll(
-            'SELECT id, reihenfolge, block_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz
+            'SELECT id, reihenfolge, abschnitt_typ, knoten_id, eltern_id, block_id,
+                    wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz
                FROM ' . DB::tbl('training_segmente') . '
               WHERE einheit_id = ?
            ORDER BY reihenfolge, id',
@@ -2213,13 +2240,17 @@ function handleAdmin(string $method, string $sub): void {
                 foreach ($segs as $i => $s) {
                     DB::query(
                         'INSERT INTO ' . DB::tbl('training_block_segmente') . '
-                         (block_id, reihenfolge, gruppen_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
-                         VALUES (?,?,?,?,?,?,?,?,?)',
+                         (block_id, reihenfolge, abschnitt_typ, knoten_id, eltern_id, gruppen_id,
+                          wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                         [
                             $blockId, $i,
-                            isset($s['block_id']) ? $s['block_id'] : null,
+                            $s['abschnitt_typ'] ?? 'work',
+                            $s['knoten_id'] ?? null,
+                            $s['eltern_id'] ?? null,
+                            $s['block_id'] ?? null,
                             (int)($s['wiederholungen'] ?? 1),
-                            (int)$s['distanz_m'],
+                            $s['distanz_m'] ?? null,
                             $s['pause_m'] ?? null,
                             $s['pause_typ'] ?? null,
                             $s['pace_referenz'] ?? null,
@@ -3185,18 +3216,20 @@ function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid =
         $descLines[] = $e['bemerkung'];
     }
     if (!empty($segs)) {
-        $descLines[] = '';
-        $descLines[] = 'Segmente:';
-        foreach ($segs as $i => $s) {
-            $z = ($i + 1) . '. ' . formatSegmentText($s);
-            $bz = $bestzeiten[$s['pace_referenz']] ?? null;
-            if ($bz && $s['pace_referenz']) {
-                $sekProKm = $bz['sek'] / ($bz['distanz_m'] / 1000);
-                $splitSek = $sekProKm * ((int)$s['distanz_m'] / 1000);
-                $z .= ' → ' . formatTimeShort($splitSek) . ' / Wdh (' . formatPaceShort($sekProKm) . ')';
+        require_once __DIR__ . '/../../includes/segbaum.php';
+        $baum = Segbaum::ausRows($segs);
+        // Bestzeiten → Sekunden pro km je Pace-Referenz
+        $paceSekProKm = [];
+        foreach ($bestzeiten as $ref => $bz) {
+            if (!empty($bz['sek']) && !empty($bz['distanz_m'])) {
+                $paceSekProKm[$ref] = $bz['sek'] / ($bz['distanz_m'] / 1000);
             }
-            $descLines[] = $z;
         }
+        $descLines[] = '';
+        $descLines[] = 'Segmente: ' . Segbaum::kurzschrift($baum);
+        foreach (Segbaum::textZeilen($baum, $paceSekProKm) as $z) $descLines[] = $z;
+        $gesamt = Segbaum::gesamtDistanz($baum);
+        if ($gesamt > 0) $descLines[] = 'Gesamt: ' . Segbaum::distText($gesamt);
     }
     $desc = implode("\n", $descLines);
     if ($desc !== '') {
@@ -3207,33 +3240,8 @@ function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid =
     return implode("\r\n", array_map('icsFold', $lines));
 }
 
-function formatSegmentText(array $s): string {
-    $wdh = ((int)$s['wiederholungen'] > 1) ? ((int)$s['wiederholungen'] . ' x ') : '';
-    $dist = formatDistText((int)$s['distanz_m']);
-    $pause = '';
-    if (!empty($s['pause_m'])) {
-        $pLbl = ['TP' => 'TP', 'GP' => 'GP', 'BP' => 'BP'][$s['pause_typ'] ?? ''] ?? 'P';
-        $pause = ' (' . (int)$s['pause_m'] . ' ' . $pLbl . ')';
-    }
-    return $wdh . $dist . $pause;
-}
-function formatDistText(int $m): string {
-    if ($m >= 1000) {
-        $km = $m / 1000;
-        if ($km == (int)$km) return ((int)$km) . ' km';
-        return rtrim(rtrim(number_format($km, 2, ',', ''), '0'), ',') . 'km';
-    }
-    return $m . ' m';
-}
-function formatTimeShort(float $sek): string {
-    $sek = (int)round($sek);
-    $m = intdiv($sek, 60);
-    $s = $sek % 60;
-    return $m . ':' . str_pad((string)$s, 2, '0', STR_PAD_LEFT);
-}
-function formatPaceShort(float $sekProKm): string {
-    return formatTimeShort($sekProKm) . ' /km';
-}
+// Segment-Formatierung für ICS steckt jetzt in Segbaum (includes/segbaum.php).
+
 
 function icsEsc(string $s): string {
     $s = str_replace(['\\', "\r\n", "\n", ',', ';'],
@@ -3635,15 +3643,7 @@ function handleSerien(string $method, string $sub): void
               WHERE block_id = ? ORDER BY reihenfolge, id',
             [$blockId]
         );
-        $segArr = array_map(fn($s) => [
-            'wiederholungen' => $s['wiederholungen'],
-            'distanz_m'      => $s['distanz_m'],
-            'pause_m'        => $s['pause_m'],
-            'pause_typ'      => $s['pause_typ'],
-            'pace_referenz'  => $s['pace_referenz'],
-            'notiz'          => $s['notiz'],
-            'block_id'       => $s['gruppen_id'],
-        ], $segs);
+        $segArr = blockSegmenteFuerEinheit($segs);
 
         $pdo = DB::get();
         $pdo->beginTransaction();
@@ -4213,7 +4213,8 @@ function handleBloecke(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
             return;
         }
-        $subSeg = "(SELECT COUNT(*) FROM " . DB::tbl('training_block_segmente') . " s WHERE s.block_id = b.id)";
+        $subSeg = "(SELECT COUNT(*) FROM " . DB::tbl('training_block_segmente') . " s
+                    WHERE s.block_id = b.id AND s.abschnitt_typ <> 'gruppe')";
         if ($istTrainer) {
             $rows = DB::fetchAll(
                 "SELECT b.*, $subSeg AS seg_count FROM " . DB::tbl('training_bloecke') . " b ORDER BY b.titel"
@@ -4344,17 +4345,7 @@ function handleBloecke(string $method, string $sub): void
                 ]
             );
             $einheitId = (int)DB::lastInsertId();
-            $segArr = array_map(function ($s) {
-                return [
-                    'wiederholungen' => $s['wiederholungen'],
-                    'distanz_m'      => $s['distanz_m'],
-                    'pause_m'        => $s['pause_m'],
-                    'pause_typ'      => $s['pause_typ'],
-                    'pace_referenz'  => $s['pace_referenz'],
-                    'notiz'          => $s['notiz'],
-                    'block_id'       => $s['gruppen_id'],
-                ];
-            }, $segs);
+            $segArr = blockSegmenteFuerEinheit($segs);
             replaceSegmente($einheitId, $segArr);
             $pdo->commit();
         } catch (Throwable $e) {
@@ -4527,9 +4518,11 @@ function mapBlockSegment(array $r): array {
         'id'             => (int)$r['id'],
         'reihenfolge'    => (int)$r['reihenfolge'],
         'abschnitt_typ'  => $r['abschnitt_typ'] ?? 'work',
+        'knoten_id'      => isset($r['knoten_id']) && $r['knoten_id'] !== null ? (int)$r['knoten_id'] : null,
+        'eltern_id'      => isset($r['eltern_id']) && $r['eltern_id'] !== null ? (int)$r['eltern_id'] : null,
         'gruppen_id'     => $r['gruppen_id'] !== null ? (int)$r['gruppen_id'] : null,
         'wiederholungen' => (int)$r['wiederholungen'],
-        'distanz_m'      => (int)$r['distanz_m'],
+        'distanz_m'      => $r['distanz_m'] !== null ? (int)$r['distanz_m'] : null,
         'pause_m'        => $r['pause_m'] !== null ? (int)$r['pause_m'] : null,
         'pause_typ'      => $r['pause_typ'],
         'pace_referenz'  => $r['pace_referenz'],
@@ -4537,35 +4530,43 @@ function mapBlockSegment(array $r): array {
     ];
 }
 
+/**
+ * Blocksegmente in das Format der Einheiten-Segmente übersetzen.
+ * Der Segment-Baum (knoten_id/eltern_id/abschnitt_typ) wird 1:1 übernommen;
+ * `gruppen_id` heißt bei Einheiten `block_id` (Altbestand).
+ */
+function blockSegmenteFuerEinheit(array $segs): array {
+    return array_map(fn($s) => [
+        'abschnitt_typ'  => $s['abschnitt_typ'] ?? 'work',
+        'knoten_id'      => $s['knoten_id'] ?? null,
+        'eltern_id'      => $s['eltern_id'] ?? null,
+        'block_id'       => $s['gruppen_id'] ?? null,
+        'wiederholungen' => $s['wiederholungen'] ?? 1,
+        'distanz_m'      => $s['distanz_m'] ?? null,
+        'pause_m'        => $s['pause_m'] ?? null,
+        'pause_typ'      => $s['pause_typ'] ?? null,
+        'pace_referenz'  => $s['pace_referenz'] ?? null,
+        'notiz'          => $s['notiz'] ?? null,
+    ], $segs);
+}
+
 function replaceBlockSegmente(int $blockId, $segmente): void {
     DB::query('DELETE FROM ' . DB::tbl('training_block_segmente') . ' WHERE block_id = ?', [$blockId]);
     if (!is_array($segmente)) return;
     $i = 0;
     foreach ($segmente as $s) {
-        if (!is_array($s)) continue;
-        $dist = isset($s['distanz_m']) ? (int)$s['distanz_m'] : 0;
-        if ($dist <= 0) continue;
-        $ptyp = $s['pause_typ'] ?? null;
-        if ($ptyp !== null) {
-            $ptyp = strtoupper((string)$ptyp);
-            if (!in_array($ptyp, ['TP','GP','BP','frei','FREI'], true)) $ptyp = null;
-            else if ($ptyp === 'FREI') $ptyp = 'frei';
-        }
+        $s = normalisiereSegmentZeile($s);
+        if ($s === null) continue;
         DB::query(
             'INSERT INTO ' . DB::tbl('training_block_segmente') . '
-             (block_id, reihenfolge, abschnitt_typ, gruppen_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
-             VALUES (?,?,?,?,?,?,?,?,?,?)',
+             (block_id, reihenfolge, abschnitt_typ, knoten_id, eltern_id, gruppen_id,
+              wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
             [
-                $blockId,
-                $i++,
-                in_array($s['abschnitt_typ'] ?? '', ['work','pause'], true) ? $s['abschnitt_typ'] : 'work',
-                isset($s['gruppen_id']) && $s['gruppen_id'] !== '' ? (int)$s['gruppen_id'] : null,
-                isset($s['wiederholungen']) ? max(1, (int)$s['wiederholungen']) : 1,
-                $dist,
-                isset($s['pause_m']) && $s['pause_m'] !== '' ? (int)$s['pause_m'] : null,
-                $ptyp,
-                isset($s['pace_referenz']) && $s['pace_referenz'] !== '' ? substr((string)$s['pace_referenz'], 0, 40) : null,
-                isset($s['notiz']) && $s['notiz'] !== '' ? substr((string)$s['notiz'], 0, 200) : null,
+                $blockId, $i++,
+                $s['abschnitt_typ'], $s['knoten_id'], $s['eltern_id'], $s['gruppen_id'],
+                $s['wiederholungen'], $s['distanz_m'], $s['pause_m'],
+                $s['pause_typ'], $s['pace_referenz'], $s['notiz'],
             ]
         );
     }
@@ -5242,9 +5243,12 @@ function mapSegment(array $r): array {
     return [
         'id'             => (int)$r['id'],
         'reihenfolge'    => (int)$r['reihenfolge'],
+        'abschnitt_typ'  => $r['abschnitt_typ'] ?? 'work',
+        'knoten_id'      => isset($r['knoten_id']) && $r['knoten_id'] !== null ? (int)$r['knoten_id'] : null,
+        'eltern_id'      => isset($r['eltern_id']) && $r['eltern_id'] !== null ? (int)$r['eltern_id'] : null,
         'block_id'       => $r['block_id'] !== null ? (int)$r['block_id'] : null,
         'wiederholungen' => (int)$r['wiederholungen'],
-        'distanz_m'      => (int)$r['distanz_m'],
+        'distanz_m'      => $r['distanz_m'] !== null ? (int)$r['distanz_m'] : null,
         'pause_m'        => $r['pause_m'] !== null ? (int)$r['pause_m'] : null,
         'pause_typ'      => $r['pause_typ'],
         'pace_referenz'  => $r['pace_referenz'],
@@ -5257,32 +5261,63 @@ function replaceSegmente(int $einheitId, $segmente): void {
     if (!is_array($segmente)) return;
     $i = 0;
     foreach ($segmente as $s) {
-        if (!is_array($s)) continue;
-        $dist = isset($s['distanz_m']) ? (int)$s['distanz_m'] : 0;
-        if ($dist <= 0) continue;
-        $ptyp = $s['pause_typ'] ?? null;
-        if ($ptyp !== null) {
-            $ptyp = strtoupper((string)$ptyp);
-            if (!in_array($ptyp, ['TP','GP','BP','frei','FREI'], true)) $ptyp = null;
-            else if ($ptyp === 'FREI') $ptyp = 'frei';
-        }
+        $s = normalisiereSegmentZeile($s);
+        if ($s === null) continue;
         DB::query(
             'INSERT INTO ' . DB::tbl('training_segmente') . '
-             (einheit_id, reihenfolge, block_id, wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
-             VALUES (?,?,?,?,?,?,?,?,?)',
+             (einheit_id, reihenfolge, abschnitt_typ, knoten_id, eltern_id, block_id,
+              wiederholungen, distanz_m, pause_m, pause_typ, pace_referenz, notiz)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
             [
-                $einheitId,
-                $i++,
-                isset($s['block_id']) && $s['block_id'] !== '' ? (int)$s['block_id'] : null,
-                isset($s['wiederholungen']) ? max(1, (int)$s['wiederholungen']) : 1,
-                $dist,
-                isset($s['pause_m']) && $s['pause_m'] !== '' ? (int)$s['pause_m'] : null,
-                $ptyp,
-                isset($s['pace_referenz']) && $s['pace_referenz'] !== '' ? substr((string)$s['pace_referenz'], 0, 40) : null,
-                isset($s['notiz']) && $s['notiz'] !== '' ? substr((string)$s['notiz'], 0, 200) : null,
+                $einheitId, $i++,
+                $s['abschnitt_typ'], $s['knoten_id'], $s['eltern_id'], $s['gruppen_id'],
+                $s['wiederholungen'], $s['distanz_m'], $s['pause_m'],
+                $s['pause_typ'], $s['pace_referenz'], $s['notiz'],
             ]
         );
     }
+}
+
+/**
+ * Eine eingehende Segmentzeile prüfen und vereinheitlichen.
+ * Gibt null zurück, wenn die Zeile nicht speicherbar ist.
+ * Gruppenknoten ('gruppe') haben keine Distanz, Blätter brauchen eine.
+ */
+function normalisiereSegmentZeile($s): ?array {
+    if (!is_array($s)) return null;
+    $typ = $s['abschnitt_typ'] ?? 'work';
+    if (!in_array($typ, ['work', 'pause', 'gruppe'], true)) $typ = 'work';
+
+    $dist = isset($s['distanz_m']) && $s['distanz_m'] !== '' && $s['distanz_m'] !== null
+        ? (int)$s['distanz_m'] : null;
+    if ($typ === 'gruppe') {
+        $dist = null;
+    } elseif ($dist === null || $dist <= 0) {
+        return null;
+    }
+
+    $ptyp = $s['pause_typ'] ?? null;
+    if ($ptyp !== null) {
+        $ptyp = strtoupper((string)$ptyp);
+        if ($ptyp === 'FREI') $ptyp = 'frei';
+        if (!in_array($ptyp, ['TP','GP','BP','frei'], true)) $ptyp = null;
+    }
+
+    // gruppen_id/block_id: nur noch für den Altbestand relevant
+    $gid = $s['gruppen_id'] ?? $s['block_id'] ?? null;
+
+    return [
+        'abschnitt_typ'  => $typ,
+        'knoten_id'      => isset($s['knoten_id']) && $s['knoten_id'] !== '' && $s['knoten_id'] !== null ? (int)$s['knoten_id'] : null,
+        'eltern_id'      => isset($s['eltern_id']) && $s['eltern_id'] !== '' && $s['eltern_id'] !== null ? (int)$s['eltern_id'] : null,
+        'gruppen_id'     => ($gid !== null && $gid !== '') ? (int)$gid : null,
+        'wiederholungen' => isset($s['wiederholungen']) ? max(1, (int)$s['wiederholungen']) : 1,
+        'distanz_m'      => $dist,
+        'pause_m'        => isset($s['pause_m']) && $s['pause_m'] !== '' && $s['pause_m'] !== null ? (int)$s['pause_m'] : null,
+        'pause_typ'      => $ptyp,
+        'pace_referenz'  => isset($s['pace_referenz']) && $s['pace_referenz'] !== '' ? substr((string)$s['pace_referenz'], 0, 40) : null,
+        'notiz'          => isset($s['notiz']) && $s['notiz'] !== '' ? substr((string)$s['notiz'], 0, 200) : null,
+    ];
 }
 
 function readJsonBody(): array {
@@ -5562,16 +5597,16 @@ function handleMeinPlan(string $method, string $tail): void
         if ($refIds) {
             $placeholders = implode(',', array_fill(0, count($refIds), '?'));
             $segRows = DB::fetchAll(
-                "SELECT einheit_id, wiederholungen, distanz_m, pause_m
-                   FROM " . DB::tbl('training_segmente') . "
-                  WHERE einheit_id IN ($placeholders)",
+                "SELECT * FROM " . DB::tbl('training_segmente') . "
+                  WHERE einheit_id IN ($placeholders)
+               ORDER BY einheit_id, reihenfolge, id",
                 $refIds
             );
-            foreach ($segRows as $sr) {
-                $eid = (int)$sr['einheit_id'];
-                $wdh = max(1, (int)$sr['wiederholungen']);
-                $km  = $wdh * (((int)$sr['distanz_m'] + (int)($sr['pause_m'] ?? 0)) / 1000.0);
-                $segKmByEinheit[$eid] = ($segKmByEinheit[$eid] ?? 0.0) + $km;
+            require_once __DIR__ . '/../../includes/segbaum.php';
+            $proEinheit = [];
+            foreach ($segRows as $sr) $proEinheit[(int)$sr['einheit_id']][] = $sr;
+            foreach ($proEinheit as $eid => $rows) {
+                $segKmByEinheit[$eid] = Segbaum::gesamtDistanz(Segbaum::ausRows($rows)) / 1000.0;
             }
         }
         $privatMapped = array_map(function ($r) use ($segKmByEinheit) {

@@ -28,30 +28,30 @@ class FitWorkout {
     /**
      * @param int $einheitId
      * @param string $name           Workout-Name (max 15 Zeichen + NUL)
-     * @param array $segmente        Liste von Segmenten (s. training_segmente)
+     * @param array $segmente        Segmentzeilen (s. training_segmente, beliebig verschachtelt)
      * @return string Binärinhalt der .fit-Datei
      */
     public static function encode(int $einheitId, string $name, array $segmente): string {
-        // Schritte aus Segmenten ableiten
+        // Schritte aus dem Segment-Baum ableiten. Verschachtelte Blöcke werden
+        // von Segbaum auf eine Ebene gebracht (Garmin kann keine geschachtelten
+        // Wiederholungen), die innerste Wiederholung bleibt kompakt.
+        require_once __DIR__ . '/segbaum.php';
         $steps = [];
-        foreach ($segmente as $s) {
-            $wdh   = max(1, (int)($s['wiederholungen'] ?? 1));
-            $dist  = (int)($s['distanz_m'] ?? 0);
-            $pause = (int)($s['pause_m']   ?? 0);
-            if ($dist <= 0) continue;
-
-            if ($wdh === 1) {
-                $steps[] = ['type' => 'active', 'distanz_m' => $dist];
-                if ($pause > 0) {
-                    $steps[] = ['type' => 'recovery', 'distanz_m' => $pause];
-                }
-            } else {
-                $aktivIndex = count($steps);
-                $steps[] = ['type' => 'active',   'distanz_m' => $dist];
-                if ($pause > 0) {
-                    $steps[] = ['type' => 'recovery', 'distanz_m' => $pause];
-                }
-                $steps[] = ['type' => 'repeat', 'from_index' => $aktivIndex, 'wdh' => $wdh];
+        foreach (Segbaum::exportBloecke(Segbaum::ausRows($segmente)) as $blk) {
+            $wdh    = max(1, (int)$blk['wiederholungen']);
+            $start  = count($steps);
+            $anzahl = 0;
+            foreach ($blk['schritte'] as $sch) {
+                $dist = (int)($sch['distanz_m'] ?? 0);
+                if ($dist <= 0) continue;
+                $steps[] = [
+                    'type'      => ($sch['typ'] ?? 'work') === 'pause' ? 'recovery' : 'active',
+                    'distanz_m' => $dist,
+                ];
+                $anzahl++;
+            }
+            if ($anzahl > 0 && $wdh > 1) {
+                $steps[] = ['type' => 'repeat', 'from_index' => $start, 'wdh' => $wdh];
             }
         }
 
