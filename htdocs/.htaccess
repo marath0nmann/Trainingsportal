@@ -1,6 +1,15 @@
 # favicon.ico → dynamisches favicon.php umleiten
 RedirectMatch 302 ^/favicon\.ico$ /favicon.php?size=32
 
+# Apple-Workout unter einer URL, die auf .workout endet.
+# com.apple.workout ist ausschließlich über die Dateiendung deklariert
+# (kein MIME-Typ). Steht die Endung nur in der Query, kann Safari den Typ
+# nicht bestimmen; als echtes Pfad-Ende schon.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^workout/(\d+)\.workout$ api/index.php?p=workout/einheit/$1.workout [L,QSA]
+</IfModule>
+
 # index.html nie cachen – damit neue JS/CSS-Versionen sofort greifen
 <Files "index.html">
   Header set Cache-Control "no-cache, must-revalidate"
