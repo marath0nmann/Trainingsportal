@@ -1,5 +1,8 @@
 # Changelog
 
+## v292
+- Apple-Watch-Export jetzt auch auf der „Heute"-Karte – der Button „⌚ Apple Watch" steht überall dort, wo es schon den FIT-Export für Garmin gibt (Heute-Karte und Termin-Detailansicht).
+
 ## v291
 - **Apple-Watch-Export**: Trainingseinheiten mit Segmenten lassen sich als `.workout`-Datei herunterladen und am iPhone in die Fitness-App importieren – dort landen sie als eigenes Training auf der Apple Watch. Neuer Button „⌚ Apple Watch" in der Detailansicht, direkt neben dem FIT-Export für Garmin.
 - Jedes Segment wird zu einem Wiederholungsblock (z. B. „8 x 600m") mit Trainings- und Erholungsschritt; die Pause erscheint als eigener Schritt mit Distanz und Bezeichnung (Trabpause/Gehpause/Blockpause).

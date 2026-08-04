@@ -1563,6 +1563,7 @@ async function ladHeuteDetails(items) {
       }
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
+        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=workout/einheit/${einheit.id}.workout" download title="Apple Watch: am iPhone öffnen und in der Fitness-App importieren">⌚ Apple Watch</a>`);
       }
       if (einheit.strecke_id) {
         actions.push(`<button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${einheit.strecke_id})">🗺 Auf Karte</button>`);
