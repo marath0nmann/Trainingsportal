@@ -1,5 +1,10 @@
 # Changelog
 
+## v300
+- **Apple-Watch-Export wieder als einfacher Download.** Die Route mit Dateiendung im Pfad (v299) brachte auf dem iPhone nur eine zusätzliche Rückfrage vor dem Download, ohne dass Fitness dadurch erreichbar wurde. Auslieferung deshalb wieder als `attachment` über `api/index.php?p=workout/einheit/{id}.workout`, Rewrite-Regel entfernt.
+- Der Button „⌚ Apple Watch" erscheint jetzt nur noch auf Apple-Plattformen (iOS, iPadOS, macOS) – anderswo gibt es keine App, die `.workout` öffnen kann.
+- Der Dateiname bleibt der Titel der Einheit (z. B. `3 x (4 x 400, 100 TP), BP 400 TP.workout`), damit die Datei in der Dateiablage wiederzufinden ist.
+
 ## v299
 - **Apple-Watch-Export über eine URL mit echter Dateiendung.** `com.apple.workout` ist im System ausschließlich über `public.filename-extension` deklariert – ohne MIME-Typ. Steht die Endung nur in der Query (`api/index.php?p=…workout`), kann Safari den Typ nicht bestimmen. Neue Route `/workout/{id}.workout` per `.htaccess`, ausgeliefert als `inline` statt `attachment`, damit Safari die Datei selbst typisiert.
 - Der Dateiname kommt jetzt aus dem Titel der Einheit (mit RFC-5987-Kodierung für Umlaute) statt `training-2026-08-05-42.workout` – er ist in der iOS-Vorschau sichtbar.

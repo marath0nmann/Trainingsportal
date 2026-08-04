@@ -1566,7 +1566,8 @@ async function ladHeuteDetails(items) {
       }
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
-        actions.push(APPLEWORKOUT.buttonHtml(einheit.id, einheit.titel, 'btn-sm'));
+        const appleBtn = APPLEWORKOUT.buttonHtml(einheit.id, einheit.titel, 'btn-sm');
+        if (appleBtn) actions.push(appleBtn);
       }
       if (einheit.strecke_id) {
         actions.push(`<button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${einheit.strecke_id})">🗺 Auf Karte</button>`);
