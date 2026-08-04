@@ -671,14 +671,37 @@ const WETTKAMPFPLANUNG = (() => {
   }
 
   // ── Disziplin-Anmeldung ──────────────────────────────────────
+  function _fmtKurz(iso) {
+    const d  = new Date(iso + 'T00:00:00');
+    const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+    return `${WT[d.getDay()]}, ${d.toLocaleDateString('de-DE')}`;
+  }
+
   async function _anDisziplin(serieId, disziplin) {
     const serie = _serien.find(s => s.id === serieId);
     if (!serie) return;
-    const datum = _datumFuerJahr(serie, _jahr);
+    let jahr  = _jahr;
+    let datum = _datumFuerJahr(serie, jahr);
+
+    // Termin des angezeigten Jahres liegt in der Vergangenheit → die Anmeldung würde
+    // für eine bereits gelaufene Ausgabe gelten und im Statistikportal als
+    // „Ergebnis ausstehend" auftauchen. Nächste Ausgabe anbieten.
+    const heute = (new Date()).toISOString().slice(0, 10);
+    if (datum && datum < heute) {
+      const naechstesJahr  = jahr + 1;
+      const naechstesDatum = _datumFuerJahr(serie, naechstesJahr);
+      if (naechstesDatum) {
+        const frage =
+          `„${serie.name}" fand am ${_fmtKurz(datum)} bereits statt.\n\n` +
+          `OK\t\t= für ${naechstesJahr} anmelden (${_fmtKurz(naechstesDatum)})\n` +
+          `Abbrechen\t= trotzdem für ${jahr} eintragen`;
+        if (confirm(frage)) { jahr = naechstesJahr; datum = naechstesDatum; }
+      }
+    }
 
     try {
-      // Formale Anmeldung (Teilnehmerliste) – für das angezeigte Jahr
-      await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '', jahr: _jahr });
+      // Formale Anmeldung (Teilnehmerliste) – für die gewählte Ausgabe
+      await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '', jahr });
 
       // Kalender-Eintrag (Mein Plan)
       if (datum) {
@@ -694,6 +717,9 @@ const WETTKAMPFPLANUNG = (() => {
           });
         } catch (_) { /* Plan-Eintrag ist optional */ }
       }
+
+      // Auf das Jahr umschalten, für das tatsächlich angemeldet wurde
+      if (jahr !== _jahr) { await setJahr(jahr); return; }
 
       await _lade();
       _renderListe();
