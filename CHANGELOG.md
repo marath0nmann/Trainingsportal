@@ -1,5 +1,11 @@
 # Changelog
 
+## v290
+- **Apple-Watch-Export**: Trainingseinheiten mit Segmenten lassen sich als `.workout`-Datei herunterladen und am iPhone in die Fitness-App importieren – dort landen sie als eigenes Training auf der Apple Watch. Neuer Button „⌚ Apple Watch" in der Detailansicht, direkt neben dem FIT-Export für Garmin.
+- Jedes Segment wird zu einem Wiederholungsblock (z. B. „8 x 600m") mit Trainings- und Erholungsschritt; die Pause erscheint als eigener Schritt mit Distanz und Bezeichnung (Trabpause/Gehpause/Blockpause).
+- Für angemeldete Nutzer enthält der Trainingsschritt eine **Pace-Vorgabe** als Korridor (Zielpace ±5 s/km), berechnet aus den persönlichen Pace-Referenzen – dieselbe Auflösung wie im Portal (manuell → 12 Monate → Bestzeit).
+- Neuer Endpunkt `GET workout/einheit/{id}.workout` und Encoder `includes/apple_workout.php`. Das Dateiformat (Protobuf ohne öffentliches Schema) wurde aus einer von iOS exportierten Referenzdatei abgeleitet; der Encoder reproduziert diese byte-identisch.
+
 ## v289
 - **Kartenhintergrund im Kalender-Tooltip**: Die Streckenvorschau liegt jetzt auf echten OpenStreetMap-Kacheln statt auf leerem Grund. Umgesetzt als kleiner statischer Kachel-Renderer (Web-Mercator, ohne Leaflet) – Kacheln und Linie teilen sich dasselbe Pixelsystem und liegen exakt übereinander. Die Zoomstufe wird automatisch so gewählt, dass die Strecke komplett hineinpasst. Im dunklen Theme werden die Kacheln invertiert; die rote Linie liegt im SVG darüber und bleibt davon unberührt.
 - Kalenderübersicht: Karten-Emoji entfernt, die Distanz steht jetzt in einer eigenen Zeile unter dem Titel – im Monatsraster war es neben dem Titel zu eng und wurde abgeschnitten.

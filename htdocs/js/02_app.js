@@ -2424,6 +2424,7 @@ async function zeigeEinheit(id) {
             ${segHtml}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
+              ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=workout/einheit/${e.id}.workout" download title="Apple Watch: am iPhone öffnen und in der Fitness-App importieren">⌚ Apple Watch</a>` : ''}
               ${e.strecke_id ? `<button class="btn btn-ghost" onclick="STRECKEN.karteOeffnen(${e.strecke_id})">🗺 Auf Karte</button>` : ''}
               ${e.strecke_id ? `<a class="btn btn-ghost" href="api/index.php?p=strecken/${e.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>` : ''}
               ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
