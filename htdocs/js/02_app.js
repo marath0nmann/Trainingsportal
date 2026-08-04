@@ -1566,7 +1566,8 @@ async function ladHeuteDetails(items) {
       }
       if (seg.length) {
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=fit/einheit/${einheit.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>`);
-        actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=workout/einheit/${einheit.id}.workout" download title="Apple Watch: am iPhone öffnen und in der Fitness-App importieren">⌚ Apple Watch</a>`);
+        actions.push(APPLEWORKOUT.buttonHtml(einheit.id, einheit.titel, 'btn-sm'));
+        APPLEWORKOUT.vorladen(einheit.id, einheit.titel);
       }
       if (einheit.strecke_id) {
         actions.push(`<button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${einheit.strecke_id})">🗺 Auf Karte</button>`);
@@ -2369,7 +2370,7 @@ async function zeigeEinheit(id) {
             ${segHtml}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ FIT für Garmin</a>` : ''}
-              ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=workout/einheit/${e.id}.workout" download title="Apple Watch: am iPhone öffnen und in der Fitness-App importieren">⌚ Apple Watch</a>` : ''}
+              ${seg.length ? APPLEWORKOUT.buttonHtml(e.id, e.titel) : ''}
               ${e.strecke_id ? `<button class="btn btn-ghost" onclick="STRECKEN.karteOeffnen(${e.strecke_id})">🗺 Auf Karte</button>` : ''}
               ${e.strecke_id ? `<a class="btn btn-ghost" href="api/index.php?p=strecken/${e.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>` : ''}
               ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
@@ -2378,6 +2379,9 @@ async function zeigeEinheit(id) {
           </div>
         </div>
       </div>`;
+
+    // Workout-Datei vorladen, damit das Teilen-Sheet ohne Verzögerung aufgeht
+    if (seg.length) APPLEWORKOUT.vorladen(e.id, e.titel);
 
     if (e.strecke_id) {
       STRECKEN.vorschauEinbinden(

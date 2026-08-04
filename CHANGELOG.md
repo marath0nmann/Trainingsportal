@@ -1,5 +1,9 @@
 # Changelog
 
+## v297
+- **Apple-Watch-Export öffnet sich direkt.** Auf dem iPhone landete die `.workout`-Datei bisher als Download in „Dateien" und musste dort von Hand gesucht und geöffnet werden. Auf Touch-Geräten öffnet der Button jetzt das native Teilen-Sheet, in dem „Fitness" direkt als Ziel steht – ein Tipp, und das Training ist auf der Uhr.
+- Die Datei wird dafür beim Öffnen der Ansicht im Hintergrund geladen (wenige hundert Byte), weil iOS `navigator.share()` nur unmittelbar im Klick-Ereignis erlaubt. Ohne Web-Share-API und am Desktop bleibt es beim gewohnten Download.
+
 ## v296
 - **Apple-Watch-Export: Pausen laufen jetzt offen** statt über eine feste Distanz – der Erholungsschritt endet erst, wenn man an der Uhr weiterdrückt (Garmin-Pendant: „bis Drücken der LAP-Taste"). Die vorgesehene Pausendistanz steht weiterhin in der Bezeichnung des Schritts, z. B. „Trabpause 100m".
 
