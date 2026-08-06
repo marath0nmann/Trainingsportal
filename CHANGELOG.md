@@ -1,5 +1,11 @@
 # Changelog
 
+## v302
+- **Block-Editor: Titel steht jetzt oben** – als erstes Feld im Modal, hervorgehoben und größer. Vorher lag er ganz unten unter den Segmenten.
+- Direkt daneben der Button **„⚡ Segmente aus Titel"**: Kurzschrift eintippen, klicken, fertig – Klammern werden zu verschachtelten Blöcken (`3 x (4 x 400, 100 TP), BP 400 TP`). Bisher versteckte sich die Funktion als unscheinbarer Button in der Segment-Kopfzeile.
+- Darunter drei anklickbare Beispiel-Kurzschriften, die das Titelfeld füllen und sofort die Segmente erzeugen.
+- Nach dem Parsen meldet das Portal, wie viel Gesamtdistanz erkannt wurde; bei leerem oder unverständlichem Titel gibt es einen klaren Hinweis statt eines stummen Klicks.
+
 ## v301
 - Der Garmin-Button heißt jetzt nur noch „⌚ Garmin" statt „⌚ FIT für Garmin" – kürzer und passend zum „⌚ Apple Watch" daneben.
 - Buttons, die als Link umgesetzt sind (Garmin, Apple Watch, GPX, Komoot), werden nicht mehr unterstrichen: `.btn` setzte kein `text-decoration`, sodass der Standard-Linkstil durchschlug.

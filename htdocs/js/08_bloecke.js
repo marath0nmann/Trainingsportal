@@ -576,6 +576,29 @@ const BLOECKE = (() => {
             <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
           </div>
           <div class="modal-body">
+            <div class="ed-titel-top"${istRunde ? ' data-runde="1"' : ''}>
+              <label for="be-titel">Titel
+                <span class="ed-hint" id="be-titel-hint">${istRunde ? '' : '(Kurzschrift – daraus lassen sich die Segmente erzeugen)'}</span>
+              </label>
+              <div class="ed-titel-row">
+                <input type="text" id="be-titel" value="${escapeHtml(b.titel || '')}"
+                  placeholder="${istRunde ? 'Name der Runde / Strecke' : 'z. B. 3 x (4 x 400, 100 TP), BP 400 TP'}">
+                <button class="btn btn-primary ed-titel-parse" id="be-titel-parse-btn"
+                  onclick="BLOECKE.parsenAusTitel()"
+                  title="Kurzschrift im Titel in Segmente umwandeln"${istRunde ? ' style="display:none"' : ''}>⚡ Segmente aus Titel</button>
+                <button class="btn btn-ghost ed-titel-reset" id="be-titel-reset-btn"
+                  onclick="BLOECKE.titelNeuGenerieren()"
+                  title="Titel aus den Segmenten neu erzeugen"${istRunde ? ' style="display:none"' : ''}>↺</button>
+              </div>
+              <div class="ed-titel-tipp" id="be-titel-tipp"${istRunde ? ' style="display:none"' : ''}>
+                Kurzschrift eintippen und „Segmente aus Titel“ klicken – Klammern werden zu verschachtelten Blöcken.
+                Beispiele zum Übernehmen:
+                ${['3 x (4 x 400, 100 TP), BP 400 TP', '12 x 400 (100 GP)', '400 (200 TP) / 600 (200 TP) / 800']
+                  .map(bsp => `<button type="button" class="ed-titel-bsp" onclick="BLOECKE.beispielUebernehmen('${escapeHtml(bsp)}')">${escapeHtml(bsp)}</button>`)
+                  .join('')}
+              </div>
+            </div>
+
             <div class="ed-grid">
               <div class="ed-fg">
                 <label>Typ</label>
@@ -619,24 +642,11 @@ const BLOECKE = (() => {
             <div id="be-seg-wrap" class="ed-segwrap"${istRunde ? ' style="display:none"' : ''}>
               <div class="ed-segheader">
                 <h3>Segmente</h3>
-                <div class="ed-segactions">
-                  <button class="btn btn-ghost" onclick="BLOECKE.parsenAusTitel()">Aus Titel parsen</button>
-                </div>
               </div>
               <div id="be-segmente-tabelle"></div>
               <div id="be-gesamtdistanz" class="be-gesamtdistanz"></div>
               <div class="ed-seghint">
                 Distanz in Metern · TP/GP/BP = Trab-/Geh-/Blockpause · Pace-Referenz für persönliche Pace
-              </div>
-            </div>
-
-            <div class="ed-titelwrap">
-              <div class="ed-fg">
-                <label>Titel <span class="ed-hint" id="be-titel-hint">${istRunde ? '' : '(automatisch aus Segmenten – kann überschrieben werden)'}</span></label>
-                <div class="ed-titel-row">
-                  <input type="text" id="be-titel" value="${escapeHtml(b.titel || '')}" placeholder="${istRunde ? 'Name der Runde / Strecke' : 'Wird aus Segmenten generiert…'}">
-                  <button class="btn btn-ghost btn-sm ed-titel-reset" id="be-titel-reset-btn" onclick="BLOECKE.titelNeuGenerieren()" title="Titel aus Segmenten neu generieren"${istRunde ? ' style="display:none"' : ''}>↺</button>
-                </div>
               </div>
             </div>
 
@@ -682,13 +692,17 @@ const BLOECKE = (() => {
     const komootWrap = document.getElementById('be-komoot-wrap');
     const segWrap    = document.getElementById('be-seg-wrap');
     const resetBtn   = document.getElementById('be-titel-reset-btn');
+    const parseBtn   = document.getElementById('be-titel-parse-btn');
+    const tipp       = document.getElementById('be-titel-tipp');
     const titelHint  = document.getElementById('be-titel-hint');
     if (komootWrap) komootWrap.style.display = istRunde ? '' : 'none';
     if (segWrap)    segWrap.style.display    = istRunde ? 'none' : '';
     if (resetBtn)   resetBtn.style.display   = istRunde ? 'none' : '';
-    if (titelHint)  titelHint.textContent    = istRunde ? '' : '(automatisch aus Segmenten – kann überschrieben werden)';
+    if (parseBtn)   parseBtn.style.display   = istRunde ? 'none' : '';
+    if (tipp)       tipp.style.display       = istRunde ? 'none' : '';
+    if (titelHint)  titelHint.textContent    = istRunde ? '' : '(Kurzschrift – daraus lassen sich die Segmente erzeugen)';
     const titelEl = document.getElementById('be-titel');
-    if (titelEl) titelEl.placeholder = istRunde ? 'Name der Runde / Strecke' : 'Wird aus Segmenten generiert…';
+    if (titelEl) titelEl.placeholder = istRunde ? 'Name der Runde / Strecke' : 'z. B. 3 x (4 x 400, 100 TP), BP 400 TP';
     if (!istRunde) {
       titelManuellBearbeitet = false;
       aktualisiereBlockTitelFeld();
@@ -716,12 +730,28 @@ const BLOECKE = (() => {
     });
   }
 
+  // Kurzschrift aus dem Titelfeld in Segmente umwandeln
   function parsenAusTitel() {
     const titel = val('be-titel');
+    if (!titel) { notify('Bitte zuerst eine Kurzschrift in das Titelfeld eintragen.', 'warn'); return; }
     const baum = PARSER.parseBaum(titel);
-    if (!baum.length) { notify('Konnte keine Segmente aus dem Titel erkennen.', 'warn'); return; }
+    if (!baum.length) {
+      notify('Aus „' + titel + '“ ließen sich keine Segmente lesen.', 'warn');
+      return;
+    }
     editorBaum = baum;
     rendereBlockEditor();
+    const dist = formatDistanz(SEG.gesamtDistanz(baum));
+    notify('Segmente erzeugt' + (dist ? ' – ' + dist + ' gesamt' : '') + '.', 'ok');
+  }
+
+  // Beispiel-Kurzschrift in das Titelfeld übernehmen und gleich parsen
+  function beispielUebernehmen(text) {
+    const el = document.getElementById('be-titel');
+    if (!el) return;
+    el.value = text;
+    titelManuellBearbeitet = true;
+    parsenAusTitel();
   }
 
   async function speichern(blockId) {
@@ -787,7 +817,7 @@ const BLOECKE = (() => {
 
   return {
     render, neuerBlock, bearbeiten, anwenden, anwendenSpeichern,
-    parsenAusTitel, speichern, loeschen,
+    parsenAusTitel, beispielUebernehmen, speichern, loeschen,
     titelNeuGenerieren, onTypChange,
     onWiederkehrendChange, onApplyDatumChange,
     onApplyFreqChange, onApplyEndeTypChange,
