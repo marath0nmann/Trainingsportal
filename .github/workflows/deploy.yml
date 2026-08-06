@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  # Manuell auslösbar: falls GitHub für einen Push keinen Lauf anlegt,
+  # lässt sich der Deploy so ohne Leer-Commit nachholen
+  # (Actions → „Deploy to all-inkl.com" → Run workflow).
+  workflow_dispatch:
 
 jobs:
   deploy:
