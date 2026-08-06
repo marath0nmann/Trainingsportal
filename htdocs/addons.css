@@ -905,16 +905,48 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   text-align: right; min-height: 1em;
 }
 
-.ed-titelwrap {
-  padding-top: 14px; margin-top: 4px;
-  border-top: 1px solid var(--border);
+/* Titel-Panel oben im Block-Editor: Kurzschrift → Segmente */
+.ed-titel-top {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surf2));
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 10px;
+  padding: 12px 14px 10px;
+  margin-bottom: 16px;
+}
+.ed-titel-top > label {
+  display: block; margin-bottom: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text2);
 }
 .ed-titel-row {
   display: flex; gap: 6px; align-items: center;
 }
-.ed-titel-row input { flex: 1; }
+.ed-titel-row input {
+  flex: 1; min-width: 0;
+  background: var(--surface); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 0 12px;
+  height: 42px; font-family: inherit; font-size: 15px; font-weight: 600;
+}
+.ed-titel-row input:focus { outline: none; border-color: var(--accent); }
+.ed-titel-parse { flex-shrink: 0; white-space: nowrap; }
 .ed-titel-reset {
   flex-shrink: 0; font-size: 16px; padding: 6px 10px;
+}
+.ed-titel-tipp {
+  margin-top: 8px; font-size: 11px; line-height: 1.7; color: var(--text2);
+}
+.ed-titel-bsp {
+  display: inline-block; margin: 2px 4px 0 0;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 2px 7px;
+  font-family: inherit; font-size: 11px; cursor: pointer;
+}
+.ed-titel-bsp:hover { border-color: var(--accent); color: var(--accent); }
+
+@media (max-width: 640px) {
+  .ed-titel-row { flex-wrap: wrap; }
+  .ed-titel-row input { flex: 1 1 100%; }
+  .ed-titel-parse { flex: 1; }
 }
 
 .ed-footer {
