@@ -121,6 +121,9 @@ const WETTKAMPFPLANUNG = (() => {
         } else if (_sortKey === 'status') {
           av = a.status || 'z';
           bv = b.status || 'z';
+        } else if (_sortKey === 'teilnehmer') {
+          av = (a.teilnehmer || []).length;
+          bv = (b.teilnehmer || []).length;
         }
         if (av < bv) return _sortDir === 'asc' ? -1 : 1;
         if (av > bv) return _sortDir === 'asc' ? 1 : -1;
@@ -258,6 +261,10 @@ const WETTKAMPFPLANUNG = (() => {
               Datum ${_jahr}${si('datum')}
             </th>
             <th>Disziplinen</th>
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('teilnehmer')" class="${_sortKey==='teilnehmer'?'sorted':''}"
+                style="text-align:center;white-space:nowrap" title="Angemeldete Teilnehmer">
+              👥${si('teilnehmer')}
+            </th>
             <th onclick="WETTKAMPFPLANUNG._toggleSort('status')" class="${_sortKey==='status'?'sorted':''}">
               Status${si('status')}
             </th>
@@ -310,21 +317,24 @@ const WETTKAMPFPLANUNG = (() => {
           }
         });
       }
-      // Angemeldete Teilnehmer (alle Nutzer) – eigener Eintrag hervorgehoben
-      let anmHtml = '';
+      // Angemeldete Teilnehmer (alle Nutzer) – eigene Spalte mit Anzahl + Mouseover
       const teiln = Array.isArray(s.teilnehmer) ? s.teilnehmer : [];
-      if (teiln.length) {
-        const myId = (typeof state !== 'undefined' && state.user) ? (state.user.id || 0) : 0;
-        const chips = teiln.map(t => {
-          const isMe = myId && t.benutzer_id === myId;
-          const disz = t.disziplin ? ` · ${escapeHtml(t.disziplin)}` : '';
-          return `<span style="font-size:10px;padding:1px 7px;border-radius:8px;margin:2px 3px 0 0;
-            display:inline-block;background:${isMe ? '#27ae6022' : 'var(--border)'};
-            color:${isMe ? '#27ae60' : 'var(--text2)'}${isMe ? ';font-weight:700' : ''}">${escapeHtml(t.name || '?')}${disz}</span>`;
-        }).join('');
-        anmHtml = `<div style="margin-top:4px" title="Angemeldete Teilnehmer">
-          <span style="font-size:10px;color:var(--text2)">👥 </span>${chips}</div>`;
-      }
+      const myId  = (typeof state !== 'undefined' && state.user) ? (state.user.id || 0) : 0;
+      const teilnTitle = teiln.length
+        ? teiln.map(t => {
+            const nm = t.name || 'Unbekannt';
+            const me = (myId && t.benutzer_id === myId) ? ' (ich)' : '';
+            return (t.disziplin ? `${nm} · ${t.disziplin}` : nm) + me;
+          }).join('\n')
+        : '';
+      const binIchDabei = myId && teiln.some(t => t.benutzer_id === myId);
+      const teilnHtml = teiln.length
+        ? `<span title="${escapeHtml(teilnTitle)}"
+             style="display:inline-block;min-width:22px;padding:1px 8px;border-radius:10px;
+                    font-size:12px;font-weight:600;cursor:help;
+                    background:${binIchDabei ? '#27ae6022' : 'var(--border)'};
+                    color:${binIchDabei ? '#27ae60' : 'var(--text)'}">👥 ${teiln.length}</span>`
+        : '<span style="color:var(--text2);font-size:13px">–</span>';
 
       const y = String(_jahr);
       // Prognose = kein naechstes_datum für dieses Jahr UND Statistikportal
@@ -384,10 +394,10 @@ const WETTKAMPFPLANUNG = (() => {
                          background:var(--primary);color:#fff">Jetzt anmelden ↗</a>` : ''}
             </div>
             ${s.ort ? `<div class="wkp-ort">${escapeHtml(s.ort)}</div>` : ''}
-            ${anmHtml}
           </td>
           <td style="white-space:nowrap">${datumHtml}</td>
           <td><div style="display:flex;flex-wrap:wrap;gap:2px">${wbHtml}</div></td>
+          <td style="text-align:center;white-space:nowrap">${teilnHtml}</td>
           <td style="white-space:nowrap">
             <button class="wkp-status-btn"
               onclick="WETTKAMPFPLANUNG._openPopper(${s.id}, this)"

@@ -1,5 +1,8 @@
 # Changelog
 
+## v316
+- Wettkampfplanung: eigene Spalte „👥" mit Teilnehmeranzahl (sortierbar); bei Mouseover werden die angemeldeten Teilnehmer (Name · Disziplin, eigener Eintrag markiert) angezeigt – analog Admin → Wettkämpfe. Die bisherigen Inline-Teilnehmer-Chips unter dem Namen sind entfallen.
+
 ## v315
 - Wettkampfplanung-PDF: keine Teilnehmerinformationen mehr – der Export enthält nur noch Datum/KW, Veranstaltung (+Ort) und Disziplinen.
 
