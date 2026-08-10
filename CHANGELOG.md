@@ -1,5 +1,10 @@
 # Changelog
 
+## v311
+- Disziplin-Quelle vereinheitlicht: Der Picker (Admin → Wettkämpfe & „Wettkampf vorschlagen") und die Distanzen kommen jetzt ausschließlich aus der Statistikportal-Disziplinverwaltung (`disziplin_mapping`), nicht mehr aus rohen Ergebnis-Bezeichnungen. Alles Auswählbare ist damit 1:1 im Statistikportal vorhanden (z. B. „1 Meile").
+- Admin → Wettkämpfe: Disziplin-Chips (Tabelle + Bearbeiten-Modal) nach gepflegter Distanz (Meter) aufsteigend sortiert; `GET /wettkampf/disziplinen` liefert Namen distanzsortiert inkl. `distanzen`-Map.
+- Distanz-Parser erkennt zusätzlich „Meile"/„mile" (1 Meile = 1,609 km) für die namensbasierte Sortierung in der Wettkampfplanung.
+
 ## v310
 - **Wettkämpfe:** In der Planung lässt sich jetzt pro Wettkampf ein **Ausgabe-Jahr** wählen (Selektor in der Ausgabe-Box). Damit können Anmelde- und Ergebnis-URL auch für eine bereits **vergangene** Ausgabe nachgetragen werden – vorher ließ sich nur die (prognostizierte) kommende Ausgabe bearbeiten.
 - **Wettkämpfe:** Die **Import-Kategorie gilt jetzt serienweit** (für alle Ausgaben), nicht mehr pro Jahr – eine Straßenlauf-Serie ist schließlich jedes Jahr „Straße". Gespeichert in `training_wettkampf_planung.import_kategorie` (Migration 35, mit Backfill aus den bisherigen pro-Jahr-Werten). Anmelde-/Ergebnis-URL bleiben pro Ausgabe.

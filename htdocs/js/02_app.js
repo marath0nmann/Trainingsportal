@@ -3200,6 +3200,9 @@ function _disziplinKm(disziplin) {
   const s = disziplin.toLowerCase();
   if (/marathon/.test(s) && !/halb|half/.test(s)) return 42.195;
   if (/halb.?marathon|half.?marathon/.test(s))     return 21.098;
+  // Meile(n): "1 Meile", "Meile", "half mile" – 1 Meile = 1,609 km
+  const mi = s.match(/(?:(\d+(?:[,\.]\d+)?)\s*)?(?:meile[n]?|mile)/);
+  if (mi) return (mi[1] ? parseFloat(mi[1].replace(',', '.')) : 1) * 1.609344;
   // "X,X km" oder "X km"
   const km = s.match(/(\d+(?:[,\.]\d+)?)\s*km/);
   if (km) return parseFloat(km[1].replace(',', '.'));

@@ -14,6 +14,7 @@ const ADMIN_WETTKAMPF = (() => {
 
   // Disziplin-Picker
   let _alleDisziplinen = null; // null = noch nicht geladen
+  let _diszDistanzen   = {};   // { disziplinname: distanzInMetern | null } aus Statistikportal
   let _diszFilter      = '';
 
   // Ort-Picker
@@ -85,6 +86,13 @@ const ADMIN_WETTKAMPF = (() => {
     try {
       const resp = await apiGet('wettkampf', { silent: true });
       serien = resp.serien || [];
+      // Disziplinen + gepflegte Distanzen (Statistikportal) vorab laden,
+      // damit die Disziplin-Chips in der Tabelle nach Distanz sortiert werden.
+      try {
+        const d = await apiGet('wettkampf/disziplinen', { silent: true });
+        _alleDisziplinen = d.disziplinen || [];
+        _diszDistanzen   = d.distanzen   || {};
+      } catch (_) { /* Sortierung fällt auf Namensreihenfolge zurück */ }
       renderTabelle();
     } catch (e) {
       if (container) {
@@ -176,8 +184,21 @@ const ADMIN_WETTKAMPF = (() => {
            ['admin', 'trainer'].includes(state.user.rolle);
   }
 
+  // Distanz (Meter) einer Disziplin – gepflegter Wert aus dem Statistikportal;
+  // unbekannt → Infinity (sortiert ans Ende).
+  function _diszDistanz(name) {
+    const d = _diszDistanzen[name];
+    return (d != null && d > 0) ? d : Infinity;
+  }
+
+  // Disziplinen nach gepflegter Distanz aufsteigend sortieren (Name als Tiebreak).
+  function _sortiereDisziplinen(names) {
+    return [...names].sort((a, b) =>
+      (_diszDistanz(a) - _diszDistanz(b)) || a.localeCompare(b, 'de'));
+  }
+
   function allesDisziplinen(serie) {
-    return [...(serie.wettbewerbe || [])];
+    return _sortiereDisziplinen(serie.wettbewerbe || []);
   }
 
   function benachrichtigen(text, art) {
@@ -900,6 +921,7 @@ const ADMIN_WETTKAMPF = (() => {
         try {
           const resp = await apiGet('wettkampf/disziplinen', { silent: true });
           _alleDisziplinen = resp.disziplinen || [];
+          _diszDistanzen   = resp.distanzen   || {};
         } catch (_) { _alleDisziplinen = []; }
         _renderDiszArea();
       }
@@ -1012,7 +1034,7 @@ const ADMIN_WETTKAMPF = (() => {
       html += `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">
         Aktuelle Disziplinen &ndash; × zum Entfernen:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">`;
-      _edit.wettbewerbe.forEach(d => {
+      _sortiereDisziplinen(_edit.wettbewerbe).forEach(d => {
         const dJ = escapeHtml(JSON.stringify(d));
         html += `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
           border-radius:12px;font-size:13px;background:var(--border);color:var(--text)">

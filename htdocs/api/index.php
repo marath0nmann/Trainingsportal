@@ -7136,7 +7136,11 @@ function handleWettkampf(string $method, string $tail): void
     }
 
     // ── GET /wettkampf/disziplinen ────────────────────────────────
-    // Alle eindeutigen Disziplinbezeichnungen aus dem Statistikportal.
+    // Disziplinen AUSSCHLIESSLICH aus der Statistikportal-Verwaltung
+    // (Tabelle `disziplin_mapping`, gepflegt unter Statistikportal → Admin →
+    // Disziplinen). Keine Rohdisziplinen aus Ergebnissen mehr – so ist alles,
+    // was hier auswählbar ist, 1:1 auch im Statistikportal vorhanden.
+    // Rückgabe zusätzlich mit gepflegter Distanz (Meter) → Sortierung nach Distanz.
     // Nur für eingeloggte Nutzer.
     if ($method === 'GET' && $tail === 'disziplinen') {
         if (!$userId) {
@@ -7145,33 +7149,31 @@ function handleWettkampf(string $method, string $tail): void
             return;
         }
         try {
-            // Aus disziplin_mapping: COALESCE(anzeige_name, disziplin) –
-            // anzeige_name ist ein optionales Override-Feld, das meist NULL ist;
-            // Fallback auf den Pflicht-Rohdisziplin-Namen.
-            $mapped = DB::fetchAll(
-                "SELECT DISTINCT COALESCE(anzeige_name, disziplin) AS name
+            // COALESCE(anzeige_name, disziplin): anzeige_name ist das optionale
+            // Override-Feld; Fallback auf den Rohdisziplin-Namen.
+            $rows = DB::fetchAll(
+                "SELECT COALESCE(anzeige_name, disziplin) AS name,
+                        MAX(distanz)                       AS distanz
                    FROM $tdm
                   WHERE disziplin IS NOT NULL AND disziplin != ''
-                  ORDER BY name ASC"
+                  GROUP BY COALESCE(anzeige_name, disziplin)
+                  ORDER BY (MAX(distanz) IS NULL OR MAX(distanz) = 0) ASC,
+                           MAX(distanz) ASC,
+                           name ASC"
             );
-            // Nicht gemappte Rohdisziplinen aus Ergebnissen
-            $raw = DB::fetchAll(
-                "SELECT DISTINCT e.disziplin AS name
-                   FROM $ter e
-                  WHERE e.disziplin IS NOT NULL
-                    AND e.disziplin != ''
-                    AND e.disziplin_mapping_id IS NULL
-                    AND e.geloescht_am IS NULL
-                  ORDER BY e.disziplin ASC"
-            );
-            $alle = array_unique(array_merge(
-                array_column($mapped, 'name'),
-                array_column($raw, 'name')
-            ));
-            sort($alle);
-            echo json_encode(['ok' => true, 'disziplinen' => array_values($alle)]);
+            $namen     = [];
+            $distanzen = [];
+            foreach ($rows as $r) {
+                $namen[] = $r['name'];
+                $distanzen[$r['name']] = ($r['distanz'] !== null) ? (int)$r['distanz'] : null;
+            }
+            echo json_encode([
+                'ok'          => true,
+                'disziplinen' => $namen,
+                'distanzen'   => (object)$distanzen,
+            ]);
         } catch (\Throwable $e) {
-            echo json_encode(['ok' => true, 'disziplinen' => [], '_debug' => $e->getMessage()]);
+            echo json_encode(['ok' => true, 'disziplinen' => [], 'distanzen' => (object)[], '_debug' => $e->getMessage()]);
         }
         return;
     }
