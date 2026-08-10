@@ -1325,6 +1325,22 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig35b: ' . $e->getMessage()); }
         },
 
+        // ── 36: Anmelde-URL und Ergebnis-URL zusammenführen ─────────────────────────────
+        // In der Praxis ist die Anmeldeseite = die Ergebnisseite (dieselbe Event-URL).
+        // `ergebnis_url` (Statistikportal-Vertrag) wird die einzige Quelle; ein evtl.
+        // nur in `anmelde_url` hinterlegter Wert wird hineingezogen. `anmelde_url`
+        // bleibt als tote Spalte bestehen (kein destruktives DROP), wird aber nicht
+        // mehr geschrieben oder gelesen.
+        36 => static function (): void {
+            $twe = DB::tbl('training_wettkampf_ergebnis');
+            try {
+                DB::query("UPDATE `{$twe}`
+                    SET ergebnis_url = anmelde_url
+                    WHERE (ergebnis_url IS NULL OR ergebnis_url = '')
+                      AND anmelde_url IS NOT NULL AND anmelde_url <> ''");
+            } catch (Throwable $e) { error_log('mig36: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -6848,26 +6864,24 @@ function handleWettkampf(string $method, string $tail): void
             $params[] = $importKat;
         }
 
-        // Ausgaben-URLs (Ergebnis / Anmeldung) pro (serie_id, jahr).
-        // Nur berühren, wenn mindestens eine der beiden URLs mitgeschickt wurde.
-        if (array_key_exists('ergebnis_url', $in) || array_key_exists('anmelde_url', $in)) {
+        // Wettkampf-URL pro (serie_id, jahr) – Anmeldung UND Ergebnisse in einem
+        // Feld (dieselbe Event-Seite). Kanonische Spalte bleibt `ergebnis_url`
+        // (Statistikportal-Vertrag). Nur berühren, wenn `ergebnis_url` mitkam.
+        if (array_key_exists('ergebnis_url', $in)) {
             $twe  = DB::tbl('training_wettkampf_ergebnis');
             $jahr = (isset($in['ausgabe_jahr']) && (int)$in['ausgabe_jahr'] >= 2020 && (int)$in['ausgabe_jahr'] <= 2035)
                     ? (int)$in['ausgabe_jahr'] : (int)date('Y');
             $eUrl = trim((string)($in['ergebnis_url'] ?? '')) ?: null;
-            $aUrl = trim((string)($in['anmelde_url'] ?? '')) ?: null;
             try {
-                if ($eUrl === null && $aUrl === null) {
-                    // Beide URLs leer → Ausgabe-Zeile entfernen (Tabelle sauber halten)
+                if ($eUrl === null) {
+                    // Leer → Ausgabe-Zeile entfernen (Tabelle sauber halten)
                     DB::query("DELETE FROM `{$twe}` WHERE serie_id=? AND jahr=?", [$serieId, $jahr]);
                 } else {
                     DB::query(
-                        "INSERT INTO `{$twe}` (serie_id, jahr, ergebnis_url, anmelde_url)
-                         VALUES (?,?,?,?)
-                         ON DUPLICATE KEY UPDATE
-                           ergebnis_url=VALUES(ergebnis_url),
-                           anmelde_url=VALUES(anmelde_url)",
-                        [$serieId, $jahr, $eUrl, $aUrl]
+                        "INSERT INTO `{$twe}` (serie_id, jahr, ergebnis_url)
+                         VALUES (?,?,?)
+                         ON DUPLICATE KEY UPDATE ergebnis_url=VALUES(ergebnis_url)",
+                        [$serieId, $jahr, $eUrl]
                     );
                 }
             } catch (\Throwable $e) { error_log('wk-ergebnis-upsert: ' . $e->getMessage()); }
@@ -7042,21 +7056,20 @@ function handleWettkampf(string $method, string $tail): void
             } catch (\Throwable $e) { /* Anmeldungen sind optional */ }
         }
 
-        // Ausgaben-URLs (Ergebnis/Anmeldung) pro Serie und Jahr laden.
-        // Map: serie_id → { "2026": {ergebnis_url, anmelde_url}, … }
+        // Wettkampf-URL (Anmeldung + Ergebnisse) pro Serie und Jahr laden.
+        // Map: serie_id → { "2026": {ergebnis_url}, … }
         // (Import-Kategorie ist serienweit und kommt aus wp.import_kategorie.)
         $ergBySerie = [];
         try {
             $twe    = DB::tbl('training_wettkampf_ergebnis');
             $ergRows = DB::fetchAll(
-                "SELECT serie_id, jahr, ergebnis_url, anmelde_url
+                "SELECT serie_id, jahr, ergebnis_url
                    FROM $twe WHERE serie_id IN ($ph)",
                 $serieIds
             );
             foreach ($ergRows as $er) {
                 $ergBySerie[(int)$er['serie_id']][(string)(int)$er['jahr']] = [
                     'ergebnis_url'     => $er['ergebnis_url'] ?? null,
-                    'anmelde_url'      => $er['anmelde_url'] ?? null,
                 ];
             }
         } catch (\Throwable $e) { /* Ausgaben-URLs sind optional (Tabelle evtl. neu) */ }
@@ -7415,17 +7428,16 @@ function handleWettkampfplanung(string $method, string $tail): void
             }
         }
 
-        // Ausgaben-URLs (Anmeldung/Ergebnis) für das angezeigte Jahr laden
+        // Wettkampf-URL (Anmeldung + Ergebnisse) für das angezeigte Jahr laden
         $ergBySerie = [];
         try {
             $twe = DB::tbl('training_wettkampf_ergebnis');
             $ergRows = DB::fetchAll(
-                "SELECT serie_id, ergebnis_url, anmelde_url FROM `{$twe}` WHERE jahr = ?",
+                "SELECT serie_id, ergebnis_url FROM `{$twe}` WHERE jahr = ?",
                 [$jahr]
             );
             foreach ($ergRows as $er) {
                 $ergBySerie[(int)$er['serie_id']] = [
-                    'anmelde_url'  => $er['anmelde_url']  ?? null,
                     'ergebnis_url' => $er['ergebnis_url'] ?? null,
                 ];
             }
@@ -7516,8 +7528,7 @@ function handleWettkampfplanung(string $method, string $tail): void
                 'meine_anmeldungen'      => $anm,
                 // Nur Disziplinnamen (Abwärtskompatibilität + einfache Checks)
                 'angemeldet_disziplinen' => array_column($anm, 'disziplin'),
-                // Externe Ausgaben-URLs (für „Jetzt anmelden" / Ergebnis-Link)
-                'anmelde_url'            => $ergBySerie[$sid]['anmelde_url']  ?? null,
+                // Wettkampf-URL (Anmeldung + Ergebnisse) – Label je nach Datum
                 'ergebnis_url'           => $ergBySerie[$sid]['ergebnis_url'] ?? null,
             ];
         }

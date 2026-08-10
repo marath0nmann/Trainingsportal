@@ -704,7 +704,6 @@ const ADMIN_WETTKAMPF = (() => {
       // Ausgaben-abhängig (per Jahr)
       ausgabe_jahr:     ausgabeJahr,
       ergebnis_url:     ausgabe.ergebnis_url || '',
-      anmelde_url:      ausgabe.anmelde_url  || '',
     };
 
     // Auswählbare Ausgabe-Jahre: kommende Ausgabe + Vorjahr/laufendes/Folgejahr
@@ -835,7 +834,7 @@ const ADMIN_WETTKAMPF = (() => {
               </div>
             </div>
 
-            <!-- Ausgabe (pro Jahr): Anmelde- & Ergebnis-URL -->
+            <!-- Ausgabe (pro Jahr): Wettkampf-URL (Anmeldung + Ergebnisse) -->
             <div style="border:1px solid var(--border);border-radius:8px;padding:12px 12px 14px;
                         display:flex;flex-direction:column;gap:14px">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -847,23 +846,17 @@ const ADMIN_WETTKAMPF = (() => {
                   ${jahrOptionsHtml}
                 </select>
                 <span style="font-weight:400;font-size:11px;color:var(--text2)">
-                  &ndash; URLs gelten nur für die gewählte Austragung</span>
+                  &ndash; URL gilt nur für die gewählte Austragung</span>
               </div>
 
               <div>
-                <div style="${labelStyle}">Anmelde-URL (Jetzt-anmelden-Button)</div>
-                <input type="url" id="planung-anmelde-url"
-                  placeholder="https://… (externe Anmeldeseite)"
-                  value="${escapeHtml(_edit.anmelde_url)}" style="${inpStyle}">
-              </div>
-
-              <div>
-                <div style="${labelStyle}">Ergebnis-URL (fürs Statistikportal)</div>
+                <div style="${labelStyle}">Wettkampf-URL (Anmeldung &amp; Ergebnisse)</div>
                 <input type="url" id="planung-ergebnis-url"
-                  placeholder="https://… (Ergebnisliste nach dem Wettkampf)"
+                  placeholder="https://… (Event-Seite: Anmeldung, später Ergebnisse)"
                   value="${escapeHtml(_edit.ergebnis_url)}" style="${inpStyle}">
                 <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                  Das Statistikportal importiert die Ergebnisse nach dem Wettkampf von dieser Adresse.
+                  Vor dem Wettkampf „Jetzt anmelden", danach „Ergebnisse" – und das
+                  Statistikportal importiert die Ergebnisse von dieser Adresse.
                 </div>
               </div>
             </div>`}
@@ -941,31 +934,27 @@ const ADMIN_WETTKAMPF = (() => {
     if (_edit) delete _edit._clearDatum;
   }
 
-  // Ausgabe-Jahr im Modal wechseln → Anmelde-/Ergebnis-URL des Jahres nachladen.
+  // Ausgabe-Jahr im Modal wechseln → Wettkampf-URL des Jahres nachladen.
   // (Import-Kategorie ist serienweit und bleibt unberührt.)
   function _setAusgabeJahr(jahr) {
     if (!_edit) return;
-    // Aktuelle Eingaben des bisherigen Jahres übernehmen, bevor umgeschaltet wird,
+    // Aktuelle Eingabe des bisherigen Jahres übernehmen, bevor umgeschaltet wird,
     // damit ein versehentlicher Wechsel nichts Ungespeichertes verwirft.
-    const anEl = document.getElementById('planung-anmelde-url');
     const erEl = document.getElementById('planung-ergebnis-url');
-    _edit.anmelde_url  = anEl ? anEl.value.trim() : _edit.anmelde_url;
     _edit.ergebnis_url = erEl ? erEl.value.trim() : _edit.ergebnis_url;
-    _stashAusgabe(_edit.ausgabe_jahr, _edit.anmelde_url, _edit.ergebnis_url);
+    _stashAusgabe(_edit.ausgabe_jahr, _edit.ergebnis_url);
 
     _edit.ausgabe_jahr = parseInt(jahr, 10) || _edit.ausgabe_jahr;
     const a = _ausgabeFuer(_edit.serieId, _edit.ausgabe_jahr);
-    _edit.anmelde_url  = a.anmelde_url  || '';
     _edit.ergebnis_url = a.ergebnis_url || '';
-    if (anEl) anEl.value = _edit.anmelde_url;
     if (erEl) erEl.value = _edit.ergebnis_url;
   }
 
-  // Merker für im Modal geänderte (noch nicht gespeicherte) Ausgabe-URLs,
-  // damit ein Hin-und-Her zwischen Jahren die Eingaben nicht verliert.
+  // Merker für im Modal geänderte (noch nicht gespeicherte) Wettkampf-URLs,
+  // damit ein Hin-und-Her zwischen Jahren die Eingabe nicht verliert.
   let _ausgabeStash = {};
-  function _stashAusgabe(jahr, anmelde, ergebnis) {
-    if (anmelde || ergebnis) _ausgabeStash[String(jahr)] = { anmelde_url: anmelde, ergebnis_url: ergebnis };
+  function _stashAusgabe(jahr, ergebnis) {
+    if (ergebnis) _ausgabeStash[String(jahr)] = { ergebnis_url: ergebnis };
     else delete _ausgabeStash[String(jahr)];
   }
   function _ausgabeFuer(serieId, jahr) {
@@ -1140,7 +1129,6 @@ const ADMIN_WETTKAMPF = (() => {
     const refVal  = (document.getElementById('planung-refdatum')?.value || '').trim() || null;
     const datum   = (document.getElementById('planung-datum')?.value || '').trim() || null;
     const url     = (document.getElementById('planung-url')?.value || '').trim() || null;
-    const anmUrl  = (document.getElementById('planung-anmelde-url')?.value || '').trim() || null;
     const ergUrl  = (document.getElementById('planung-ergebnis-url')?.value || '').trim() || null;
     const impKat  = (document.getElementById('planung-import-kat')?.value || '').trim() || null;
 
@@ -1186,10 +1174,9 @@ const ADMIN_WETTKAMPF = (() => {
         ort_id: _edit.ort_id,
         lat:    _edit.lat,
         lon:    _edit.lon,
-        // Import-Kategorie gilt serienweit; Anmelde-/Ergebnis-URL pro Ausgabe-Jahr
+        // Import-Kategorie gilt serienweit; Wettkampf-URL pro Ausgabe-Jahr
         import_kategorie: impKat,
         ausgabe_jahr:     _edit.ausgabe_jahr,
-        anmelde_url:      anmUrl,
         ergebnis_url:     ergUrl,
         ...(istVorschlag ? { vorschlag_bestaetigt: true } : {}),
       };
@@ -1215,16 +1202,14 @@ const ADMIN_WETTKAMPF = (() => {
         if (istVorschlag) { serie.vorschlag_von = null; serie.vorschlag_von_name = null; }
         // Import-Kategorie ist serienweit
         serie.import_kategorie = impKat;
-        // Ausgaben-URLs (pro Jahr) lokal spiegeln (Wiedereröffnen ohne Reload)
+        // Wettkampf-URL (pro Jahr) lokal spiegeln (Wiedereröffnen ohne Reload)
         if (!serie.ergebnis_ausgaben || typeof serie.ergebnis_ausgaben !== 'object') {
           serie.ergebnis_ausgaben = {};
         }
-        if (!anmUrl && !ergUrl) {
+        if (!ergUrl) {
           delete serie.ergebnis_ausgaben[String(_edit.ausgabe_jahr)];
         } else {
-          serie.ergebnis_ausgaben[String(_edit.ausgabe_jahr)] = {
-            anmelde_url: anmUrl, ergebnis_url: ergUrl,
-          };
+          serie.ergebnis_ausgaben[String(_edit.ausgabe_jahr)] = { ergebnis_url: ergUrl };
         }
       }
 
