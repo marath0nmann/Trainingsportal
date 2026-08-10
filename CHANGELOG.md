@@ -1,5 +1,8 @@
 # Changelog
 
+## v312
+- **Wettkämpfe:** Anmelde-URL und Ergebnis-URL sind zu **einer** Wettkampf-URL pro Ausgabe zusammengeführt – in der Praxis ist es dieselbe Event-Seite. Im Admin-Modal gibt es nur noch ein Feld „Wettkampf-URL (Anmeldung & Ergebnisse)". In der Athleten-Ansicht zeigt derselbe Link vor dem Wettkampf „Jetzt anmelden ↗", danach „🏁 Ergebnisse ↗". Backend: `ergebnis_url` bleibt die kanonische Spalte (Statistikportal-Vertrag), `anmelde_url` wird stillgelegt und vorhandene Werte werden hineingemergt (Migration 36).
+
 ## v311
 - Disziplin-Quelle vereinheitlicht: Der Picker (Admin → Wettkämpfe & „Wettkampf vorschlagen") und die Distanzen kommen jetzt ausschließlich aus der Statistikportal-Disziplinverwaltung (`disziplin_mapping`), nicht mehr aus rohen Ergebnis-Bezeichnungen. Alles Auswählbare ist damit 1:1 im Statistikportal vorhanden (z. B. „1 Meile").
 - Admin → Wettkämpfe: Disziplin-Chips (Tabelle + Bearbeiten-Modal) nach gepflegter Distanz (Meter) aufsteigend sortiert; `GET /wettkampf/disziplinen` liefert Namen distanzsortiert inkl. `distanzen`-Map.
