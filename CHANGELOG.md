@@ -1,5 +1,8 @@
 # Changelog
 
+## v313
+- Admin → Wettkämpfe: „Neuer Wettkampf" bietet jetzt dieselben Felder wie das Bearbeiten – Nächster Termin (fester Termin), Import-Kategorie und Wettkampf-URL (Anmeldung & Ergebnisse) sind bei der Anlage verfügbar. (Absage bleibt Edit-only, da sie eine bestehende Austragung betrifft.) `POST /wettkampf` speichert `import_kategorie` + `ergebnis_url`.
+
 ## v312
 - **Wettkämpfe:** Anmelde-URL und Ergebnis-URL sind zu **einer** Wettkampf-URL pro Ausgabe zusammengeführt – in der Praxis ist es dieselbe Event-Seite. Im Admin-Modal gibt es nur noch ein Feld „Wettkampf-URL (Anmeldung & Ergebnisse)". In der Athleten-Ansicht zeigt derselbe Link vor dem Wettkampf „Jetzt anmelden ↗", danach „🏁 Ergebnisse ↗". Backend: `ergebnis_url` bleibt die kanonische Spalte (Statistikportal-Vertrag), `anmelde_url` wird stillgelegt und vorhandene Werte werden hineingemergt (Migration 36).
 

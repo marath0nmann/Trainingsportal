@@ -660,7 +660,8 @@ const ADMIN_WETTKAMPF = (() => {
     _ausgabeStash = {}; // ungespeicherte Ausgabe-URLs aus vorherigem Modal verwerfen
 
     // Import-Kategorien laden (gecacht) – füllt das Dropdown im Modal
-    if (!create) await _ladeKategorien();
+    // (auch bei Neuanlage, damit dort die gleichen Optionen zur Verfügung stehen)
+    await _ladeKategorien();
 
     // Prognose ermitteln (nur Edit-Modus)
     const prognose = create ? null : predictNextDate(serie.naechstes_datum || serie.letztes_datum);
@@ -749,28 +750,81 @@ const ADMIN_WETTKAMPF = (() => {
         </div>
       </div>` : '';
 
-    // Nächster-Termin-Feld (naechstes_datum, nur Edit-Modus)
-    const naechsterHtml = create ? '' : `
+    // Nächster-Termin-Feld (naechstes_datum) – jetzt auch bei Neuanlage
+    const naechsterHtml = `
       <!-- Nächster Termin -->
       <div>
-        <div style="${labelStyle}">Nächster Termin${isManual ? ' (fest, optional)' : ''}</div>
+        <div style="${labelStyle}">Nächster Termin${(create || isManual) ? ' (fest, optional)' : ''}</div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <input type="date" id="planung-datum"
             style="flex:1;min-width:150px;border:1px solid var(--border);border-radius:6px;
                    padding:6px 8px;font-size:13px;background:var(--bg);color:var(--text)"
             value="${escapeHtml(datumVorschlag)}">
-          ${serie.naechstes_datum
+          ${(!create && serie.naechstes_datum)
             ? `<button class="btn btn-sm btn-ghost" title="Manuelles Datum entfernen – Prognose wird wieder verwendet"
                 onclick="ADMIN_WETTKAMPF._clearDatumModal()">↺ Datum löschen</button>`
             : ''}
         </div>
         <div style="font-size:11px;color:var(--text2);margin-top:4px">
-          ${istPrognose
-            ? `Datum basiert auf Prognose (${escapeHtml(wtInfo)}) &ndash; Leer lassen = Prognose weiter verwenden`
-            : prognose
-              ? `Prognose: <strong>${WT_KURZ[new Date(prognose+'T00:00:00').getDay()]}, ${fmtDate(prognose)}</strong>${wtInfo ? ' &bull; ' + escapeHtml(wtInfo) : ''}`
-              : 'Leer lassen = kein fester Termin'}
-          &ndash; Vergangene Daten möglich (korrigiert die Prognose für das Folgejahr)
+          ${create
+            ? 'Fester Termin der ersten Austragung (optional). Leer lassen = aus „Datum des Wettkampfs" wird die Prognose abgeleitet.'
+            : (istPrognose
+                ? `Datum basiert auf Prognose (${escapeHtml(wtInfo)}) &ndash; Leer lassen = Prognose weiter verwenden`
+                : prognose
+                  ? `Prognose: <strong>${WT_KURZ[new Date(prognose+'T00:00:00').getDay()]}, ${fmtDate(prognose)}</strong>${wtInfo ? ' &bull; ' + escapeHtml(wtInfo) : ''}`
+                  : 'Leer lassen = kein fester Termin')
+              + ' &ndash; Vergangene Daten möglich (korrigiert die Prognose für das Folgejahr)'}
+        </div>
+      </div>`;
+
+    // Import-Kategorie (serienweit) – jetzt auch bei Neuanlage
+    const importKatHtml = `
+      <div>
+        <div style="${labelStyle}">Import-Kategorie (optional)</div>
+        <select id="planung-import-kat" style="${inpStyle}">
+          ${_katOptionsHtml(_edit.import_kategorie)}
+        </select>
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">
+          Gilt für <strong>alle Ausgaben</strong> dieser Serie und ermöglicht dem
+          Statistikportal den Ein-Klick-Import ohne Kategorie-Nachfrage.
+        </div>
+      </div>`;
+
+    // Ausgabe / Wettkampf-URL – Neuanlage: einzelnes URL-Feld (eine Austragung);
+    // Bearbeiten: voller Block mit Jahr-Selektor (mehrere Austragungen).
+    const ausgabeHtml = create ? `
+      <div>
+        <div style="${labelStyle}">Wettkampf-URL (Anmeldung &amp; Ergebnisse)</div>
+        <input type="url" id="planung-ergebnis-url"
+          placeholder="https://… (Event-Seite: Anmeldung, später Ergebnisse)"
+          value="${escapeHtml(_edit.ergebnis_url)}" style="${inpStyle}">
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">
+          Vor dem Wettkampf „Jetzt anmelden", danach „Ergebnisse" – und das
+          Statistikportal importiert die Ergebnisse von dieser Adresse.
+        </div>
+      </div>` : `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px 12px 14px;
+                  display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="${labelStyle};margin-bottom:0">Ausgabe</span>
+          <select id="planung-ausgabe-jahr"
+            onchange="ADMIN_WETTKAMPF._setAusgabeJahr(this.value)"
+            style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;
+                   font-size:13px;font-weight:700;background:var(--bg);color:var(--text)">
+            ${jahrOptionsHtml}
+          </select>
+          <span style="font-weight:400;font-size:11px;color:var(--text2)">
+            &ndash; URL gilt nur für die gewählte Austragung</span>
+        </div>
+        <div>
+          <div style="${labelStyle}">Wettkampf-URL (Anmeldung &amp; Ergebnisse)</div>
+          <input type="url" id="planung-ergebnis-url"
+            placeholder="https://… (Event-Seite: Anmeldung, später Ergebnisse)"
+            value="${escapeHtml(_edit.ergebnis_url)}" style="${inpStyle}">
+          <div style="font-size:11px;color:var(--text2);margin-top:4px">
+            Vor dem Wettkampf „Jetzt anmelden", danach „Ergebnisse" – und das
+            Statistikportal importiert die Ergebnisse von dieser Adresse.
+          </div>
         </div>
       </div>`;
 
@@ -821,45 +875,9 @@ const ADMIN_WETTKAMPF = (() => {
                        background:var(--bg);color:var(--text)">
             </div>
 
-            ${create ? '' : `
-            <!-- Import-Kategorie – serienweit (alle Ausgaben) -->
-            <div>
-              <div style="${labelStyle}">Import-Kategorie (optional)</div>
-              <select id="planung-import-kat" style="${inpStyle}">
-                ${_katOptionsHtml(_edit.import_kategorie)}
-              </select>
-              <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                Gilt für <strong>alle Ausgaben</strong> dieser Serie und ermöglicht dem
-                Statistikportal den Ein-Klick-Import ohne Kategorie-Nachfrage.
-              </div>
-            </div>
-
-            <!-- Ausgabe (pro Jahr): Wettkampf-URL (Anmeldung + Ergebnisse) -->
-            <div style="border:1px solid var(--border);border-radius:8px;padding:12px 12px 14px;
-                        display:flex;flex-direction:column;gap:14px">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="${labelStyle};margin-bottom:0">Ausgabe</span>
-                <select id="planung-ausgabe-jahr"
-                  onchange="ADMIN_WETTKAMPF._setAusgabeJahr(this.value)"
-                  style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;
-                         font-size:13px;font-weight:700;background:var(--bg);color:var(--text)">
-                  ${jahrOptionsHtml}
-                </select>
-                <span style="font-weight:400;font-size:11px;color:var(--text2)">
-                  &ndash; URL gilt nur für die gewählte Austragung</span>
-              </div>
-
-              <div>
-                <div style="${labelStyle}">Wettkampf-URL (Anmeldung &amp; Ergebnisse)</div>
-                <input type="url" id="planung-ergebnis-url"
-                  placeholder="https://… (Event-Seite: Anmeldung, später Ergebnisse)"
-                  value="${escapeHtml(_edit.ergebnis_url)}" style="${inpStyle}">
-                <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                  Vor dem Wettkampf „Jetzt anmelden", danach „Ergebnisse" – und das
-                  Statistikportal importiert die Ergebnisse von dieser Adresse.
-                </div>
-              </div>
-            </div>`}
+            <!-- Import-Kategorie (serienweit) + Ausgabe / Wettkampf-URL -->
+            ${importKatHtml}
+            ${ausgabeHtml}
 
             <!-- Disziplinen -->
             <div>
@@ -1141,8 +1159,12 @@ const ADMIN_WETTKAMPF = (() => {
     try {
       // ── Anlage-Modus ──
       if (_edit.create) {
-        // Zukünftiges Datum direkt als fester Termin, vergangenes nur als Prognose-Basis
-        const naechstes = (refVal && refVal >= _heute()) ? refVal : null;
+        // Expliziter „Nächster Termin" hat Vorrang; sonst zukünftiges
+        // Referenzdatum direkt als fester Termin, vergangenes nur als Prognose-Basis.
+        const naechstes = datum || ((refVal && refVal >= _heute()) ? refVal : null);
+        // Ausgabe-Jahr (für die Wettkampf-URL) aus dem Termin ableiten
+        const jahrBasis   = naechstes || refVal || _heute();
+        const ausgabeJahr = parseInt(String(jahrBasis).slice(0, 4), 10) || new Date().getFullYear();
         await apiPost('wettkampf', {
           name:            nameVal,
           referenz_datum:  refVal,
@@ -1152,6 +1174,9 @@ const ADMIN_WETTKAMPF = (() => {
           ort_id: _edit.ort_id,
           lat:    _edit.lat,
           lon:    _edit.lon,
+          import_kategorie: impKat,
+          ergebnis_url:     ergUrl,
+          ausgabe_jahr:     ausgabeJahr,
         });
         schliesseModal();
         _edit = null;

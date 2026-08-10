@@ -6689,6 +6689,14 @@ function handleWettkampf(string $method, string $tail): void
         $lat = (isset($in['lat']) && is_numeric($in['lat'])) ? (float)$in['lat'] : null;
         $lon = (isset($in['lon']) && is_numeric($in['lon'])) ? (float)$in['lon'] : null;
 
+        // Import-Kategorie (serienweit) + Wettkampf-URL (pro Ausgabe-Jahr) –
+        // gleiche Felder wie beim Bearbeiten, damit Anlage und Edit deckungsgleich sind.
+        $importKat = trim((string)($in['import_kategorie'] ?? '')) ?: null;
+        $ergUrl    = trim((string)($in['ergebnis_url'] ?? '')) ?: null;
+        $ausgJahr  = (isset($in['ausgabe_jahr']) && (int)$in['ausgabe_jahr'] >= 2020 && (int)$in['ausgabe_jahr'] <= 2035)
+                     ? (int)$in['ausgabe_jahr']
+                     : (int)substr((string)($nd ?: $rd ?: date('Y-m-d')), 0, 4);
+
         // Eindeutiges kuerzel aus dem Namen ableiten (Spalte ist NOT NULL)
         $base = strtolower($name);
         $base = strtr($base, ['ä'=>'ae','ö'=>'oe','ü'=>'ue','ß'=>'ss']);
@@ -6713,9 +6721,20 @@ function handleWettkampf(string $method, string $tail): void
                 [$name, $kuerzel, $rd, $si, $url, $wbJson, $ortId, $lat, $lon]
             );
             $serieId = (int)DB::lastInsertId();
-            // Planung anlegen (aktiv) – damit der Wettkampf sofort im Kalender erscheint
-            DB::query("INSERT INTO `{$twp}` (serie_id, naechstes_datum, aktiv) VALUES (?, ?, 1)",
-                [$serieId, $nd]);
+            // Planung anlegen (aktiv, inkl. Import-Kategorie) – damit der Wettkampf
+            // sofort im Kalender erscheint
+            DB::query("INSERT INTO `{$twp}` (serie_id, naechstes_datum, aktiv, import_kategorie) VALUES (?, ?, 1, ?)",
+                [$serieId, $nd, $importKat]);
+            // Wettkampf-URL (Anmeldung & Ergebnisse) für die Ausgabe hinterlegen
+            if ($ergUrl !== null) {
+                $twe = DB::tbl('training_wettkampf_ergebnis');
+                DB::query(
+                    "INSERT INTO `{$twe}` (serie_id, jahr, ergebnis_url)
+                     VALUES (?,?,?)
+                     ON DUPLICATE KEY UPDATE ergebnis_url=VALUES(ergebnis_url)",
+                    [$serieId, $ausgJahr, $ergUrl]
+                );
+            }
         } catch (\Throwable $e) {
             http_response_code(500);
             echo json_encode(['ok' => false, 'fehler' => 'Speichern fehlgeschlagen', 'detail' => $e->getMessage()]);
