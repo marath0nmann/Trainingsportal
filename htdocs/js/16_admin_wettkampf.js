@@ -37,18 +37,12 @@ const ADMIN_WETTKAMPF = (() => {
   const MONATE  = ['Januar','Februar','März','April','Mai','Juni','Juli',
                    'August','September','Oktober','November','Dezember'];
 
-  // Import-Kategorien fürs Statistikportal (tbl_key + name). Werden dynamisch
-  // via GET wettkampf/kategorien aus der geteilten DB (Tabelle
-  // `disziplin_kategorien`) geladen. Diese Liste ist nur der Fallback, falls
-  // der Abruf scheitert oder die Tabelle fehlt.
-  const IMPORT_KATEGORIEN_FALLBACK = [
-    { tbl_key: 'strasse',       name: 'Straße' },
-    { tbl_key: 'sprint',        name: 'Sprint' },
-    { tbl_key: 'mittelstrecke', name: 'Mittelstrecke' },
-    { tbl_key: 'sprungwurf',    name: 'Sprung & Wurf' },
-    { tbl_key: 'bahn',          name: 'Bahn' },
-    { tbl_key: 'halle',         name: 'Halle' },
-  ];
+  // Import-Kategorien fürs Statistikportal (tbl_key + name). Einzige gültige
+  // Quelle ist die geteilte Tabelle `disziplin_kategorien`, geladen via
+  // GET wettkampf/kategorien. Bewusst KEINE hartkodierte Ersatzliste: schlägt
+  // der Abruf fehl, wird nur „— keine —" angeboten, statt evtl. ungültige
+  // Kategorien (die es im Statistikportal gar nicht gibt) vorzuschlagen.
+  const IMPORT_KATEGORIEN_FALLBACK = [];
   let _importKategorien = null; // null = noch nicht geladen
 
   // Kategorien einmalig laden (mit Fallback). Ergebnis wird gecacht.
