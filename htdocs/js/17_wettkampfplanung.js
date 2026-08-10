@@ -270,8 +270,17 @@ const WETTKAMPFPLANUNG = (() => {
       // Absage betrifft die Ausgabe des angezeigten Jahres
       const abgesagt    = !!(s.abgesagt_datum && s.abgesagt_datum.startsWith(String(_jahr)));
 
-      // Disziplinen: wettbewerbe als klickbare An-/Abmelde-Buttons
-      const wb          = Array.isArray(s.wettbewerbe) ? s.wettbewerbe : [];
+      // Disziplinen: wettbewerbe als klickbare An-/Abmelde-Buttons,
+      // sortiert nach Distanz aufsteigend (unbekannte Distanz ans Ende)
+      const _km = (typeof _disziplinKm === 'function') ? _disziplinKm : () => null;
+      const wb          = (Array.isArray(s.wettbewerbe) ? [...s.wettbewerbe] : [])
+        .sort((a, b) => {
+          const ka = _km(a), kb = _km(b);
+          if (ka == null && kb == null) return 0;
+          if (ka == null) return 1;
+          if (kb == null) return -1;
+          return ka - kb;
+        });
       const meineAnm    = s.meine_anmeldungen || [];      // [{id, disziplin}]
       const liste       = wb.length ? wb : [null];        // null = allgemeine Teilnahme
 

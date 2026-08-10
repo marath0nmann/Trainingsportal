@@ -1,5 +1,8 @@
 # Changelog
 
+## v305
+- Wettkampfplanung: Disziplin-Badges in der Spalte „Disziplinen" jetzt nach Distanz aufsteigend sortiert (unbekannte Distanz ans Ende).
+
 ## v304
 - **Nächste Wettkämpfe:** Abgesagte Wettkämpfe zeigen jetzt gar keine Badges mehr. Bei allen übrigen Wettkämpfen sind die Disziplin-Badges nach Wettkampfdistanz (m) sortiert.
 
