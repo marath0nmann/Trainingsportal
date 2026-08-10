@@ -1,5 +1,9 @@
 # Changelog
 
+## v310
+- **Wettkämpfe:** In der Planung lässt sich jetzt pro Wettkampf ein **Ausgabe-Jahr** wählen (Selektor in der Ausgabe-Box). Damit können Anmelde- und Ergebnis-URL auch für eine bereits **vergangene** Ausgabe nachgetragen werden – vorher ließ sich nur die (prognostizierte) kommende Ausgabe bearbeiten.
+- **Wettkämpfe:** Die **Import-Kategorie gilt jetzt serienweit** (für alle Ausgaben), nicht mehr pro Jahr – eine Straßenlauf-Serie ist schließlich jedes Jahr „Straße". Gespeichert in `training_wettkampf_planung.import_kategorie` (Migration 35, mit Backfill aus den bisherigen pro-Jahr-Werten). Anmelde-/Ergebnis-URL bleiben pro Ausgabe.
+
 ## v309
 - **Wettkämpfe:** Die hartkodierte Ersatzliste für das „Import-Kategorie"-Dropdown wurde komplett entfernt. Einzige Quelle ist jetzt die geteilte Tabelle `disziplin_kategorien` (Endpunkt `GET /wettkampf/kategorien`). Schlägt der Abruf fehl, erscheint nur noch „— keine —" statt evtl. ungültiger Kategorien, die es im Statistikportal gar nicht gibt.
 

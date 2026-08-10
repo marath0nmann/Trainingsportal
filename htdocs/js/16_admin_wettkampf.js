@@ -636,6 +636,8 @@ const ADMIN_WETTKAMPF = (() => {
     _wkmMap    = null;
     _wkmMarker = null;
 
+    _ausgabeStash = {}; // ungespeicherte Ausgabe-URLs aus vorherigem Modal verwerfen
+
     // Import-Kategorien laden (gecacht) – füllt das Dropdown im Modal
     if (!create) await _ladeKategorien();
 
@@ -654,7 +656,8 @@ const ADMIN_WETTKAMPF = (() => {
     const istPrognose = !create && !serie.naechstes_datum && !!prognose;
 
     // Jahr der bearbeiteten Ausgabe: kommender Termin (inkl. Prognose), sonst
-    // Referenzdatum, sonst laufendes Jahr. Ergebnis-/Anmelde-URL hängen daran.
+    // Referenzdatum, sonst laufendes Jahr. Ergebnis-/Anmelde-URL hängen daran;
+    // per Selektor auch auf eine vergangene Ausgabe umstellbar (Nachtragen).
     const ausgabeDatum = create
       ? _heute()
       : ((naechstesDatum(serie) || {}).datum || serie.referenz_datum || _heute());
@@ -675,11 +678,28 @@ const ADMIN_WETTKAMPF = (() => {
       lat:            create ? null : (serie.lat ?? null),
       lon:            create ? null : (serie.lon ?? null),
       abgesagt_datum: create ? null : (istAbgesagt(serie) ? serie.abgesagt_datum : null),
+      // Import-Kategorie gilt serienweit (alle Ausgaben)
+      import_kategorie: create ? '' : (serie.import_kategorie || ''),
+      // Ausgaben-abhängig (per Jahr)
       ausgabe_jahr:     ausgabeJahr,
-      ergebnis_url:     ausgabe.ergebnis_url     || '',
-      anmelde_url:      ausgabe.anmelde_url      || '',
-      import_kategorie: ausgabe.import_kategorie || '',
+      ergebnis_url:     ausgabe.ergebnis_url || '',
+      anmelde_url:      ausgabe.anmelde_url  || '',
     };
+
+    // Auswählbare Ausgabe-Jahre: kommende Ausgabe + Vorjahr/laufendes/Folgejahr
+    // + alle Jahre, für die schon URLs hinterlegt sind. So ist auch eine gerade
+    // vergangene Ausgabe (Ergebnisse nachtragen) erreichbar.
+    const _cy = new Date().getFullYear();
+    const _jahre = new Set([_cy - 1, _cy, _cy + 1, ausgabeJahr]);
+    if (!create && serie.ergebnis_ausgaben) {
+      Object.keys(serie.ergebnis_ausgaben).forEach(y => {
+        const n = parseInt(y, 10); if (n) _jahre.add(n);
+      });
+    }
+    const ausgabeJahre = [..._jahre].filter(Boolean).sort((a, b) => a - b);
+    const jahrOptionsHtml = ausgabeJahre.map(j =>
+      `<option value="${j}" ${j === _edit.ausgabe_jahr ? 'selected' : ''}>${j}</option>`
+    ).join('');
 
     const cont = document.getElementById('modal-container');
     if (!cont) return;
@@ -782,13 +802,31 @@ const ADMIN_WETTKAMPF = (() => {
             </div>
 
             ${create ? '' : `
-            <!-- Ausgabe ${_edit.ausgabe_jahr}: Anmelde- & Ergebnis-URL -->
+            <!-- Import-Kategorie – serienweit (alle Ausgaben) -->
+            <div>
+              <div style="${labelStyle}">Import-Kategorie (optional)</div>
+              <select id="planung-import-kat" style="${inpStyle}">
+                ${_katOptionsHtml(_edit.import_kategorie)}
+              </select>
+              <div style="font-size:11px;color:var(--text2);margin-top:4px">
+                Gilt für <strong>alle Ausgaben</strong> dieser Serie und ermöglicht dem
+                Statistikportal den Ein-Klick-Import ohne Kategorie-Nachfrage.
+              </div>
+            </div>
+
+            <!-- Ausgabe (pro Jahr): Anmelde- & Ergebnis-URL -->
             <div style="border:1px solid var(--border);border-radius:8px;padding:12px 12px 14px;
                         display:flex;flex-direction:column;gap:14px">
-              <div style="${labelStyle};margin-bottom:0">
-                Ausgabe ${_edit.ausgabe_jahr}
-                <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text2)">
-                  &ndash; gilt nur für diese Austragung</span>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="${labelStyle};margin-bottom:0">Ausgabe</span>
+                <select id="planung-ausgabe-jahr"
+                  onchange="ADMIN_WETTKAMPF._setAusgabeJahr(this.value)"
+                  style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;
+                         font-size:13px;font-weight:700;background:var(--bg);color:var(--text)">
+                  ${jahrOptionsHtml}
+                </select>
+                <span style="font-weight:400;font-size:11px;color:var(--text2)">
+                  &ndash; URLs gelten nur für die gewählte Austragung</span>
               </div>
 
               <div>
@@ -805,16 +843,6 @@ const ADMIN_WETTKAMPF = (() => {
                   value="${escapeHtml(_edit.ergebnis_url)}" style="${inpStyle}">
                 <div style="font-size:11px;color:var(--text2);margin-top:4px">
                   Das Statistikportal importiert die Ergebnisse nach dem Wettkampf von dieser Adresse.
-                </div>
-              </div>
-
-              <div>
-                <div style="${labelStyle}">Import-Kategorie (optional)</div>
-                <select id="planung-import-kat" style="${inpStyle}">
-                  ${_katOptionsHtml(_edit.import_kategorie)}
-                </select>
-                <div style="font-size:11px;color:var(--text2);margin-top:4px">
-                  Ermöglicht dem Statistikportal den Ein-Klick-Import ohne Kategorie-Nachfrage.
                 </div>
               </div>
             </div>`}
@@ -889,6 +917,40 @@ const ADMIN_WETTKAMPF = (() => {
     const inp = document.getElementById('planung-datum');
     if (inp) inp.value = ''; // leer → savePlanung schickt null → Prognose wird wieder verwendet
     if (_edit) delete _edit._clearDatum;
+  }
+
+  // Ausgabe-Jahr im Modal wechseln → Anmelde-/Ergebnis-URL des Jahres nachladen.
+  // (Import-Kategorie ist serienweit und bleibt unberührt.)
+  function _setAusgabeJahr(jahr) {
+    if (!_edit) return;
+    // Aktuelle Eingaben des bisherigen Jahres übernehmen, bevor umgeschaltet wird,
+    // damit ein versehentlicher Wechsel nichts Ungespeichertes verwirft.
+    const anEl = document.getElementById('planung-anmelde-url');
+    const erEl = document.getElementById('planung-ergebnis-url');
+    _edit.anmelde_url  = anEl ? anEl.value.trim() : _edit.anmelde_url;
+    _edit.ergebnis_url = erEl ? erEl.value.trim() : _edit.ergebnis_url;
+    _stashAusgabe(_edit.ausgabe_jahr, _edit.anmelde_url, _edit.ergebnis_url);
+
+    _edit.ausgabe_jahr = parseInt(jahr, 10) || _edit.ausgabe_jahr;
+    const a = _ausgabeFuer(_edit.serieId, _edit.ausgabe_jahr);
+    _edit.anmelde_url  = a.anmelde_url  || '';
+    _edit.ergebnis_url = a.ergebnis_url || '';
+    if (anEl) anEl.value = _edit.anmelde_url;
+    if (erEl) erEl.value = _edit.ergebnis_url;
+  }
+
+  // Merker für im Modal geänderte (noch nicht gespeicherte) Ausgabe-URLs,
+  // damit ein Hin-und-Her zwischen Jahren die Eingaben nicht verliert.
+  let _ausgabeStash = {};
+  function _stashAusgabe(jahr, anmelde, ergebnis) {
+    if (anmelde || ergebnis) _ausgabeStash[String(jahr)] = { anmelde_url: anmelde, ergebnis_url: ergebnis };
+    else delete _ausgabeStash[String(jahr)];
+  }
+  function _ausgabeFuer(serieId, jahr) {
+    const key = String(jahr);
+    if (_ausgabeStash[key]) return _ausgabeStash[key];
+    const serie = serien.find(s => s.id === serieId);
+    return (serie && serie.ergebnis_ausgaben && serie.ergebnis_ausgaben[key]) || {};
   }
 
   // ── Absage-Sektion im Modal ───────────────────────────────────
@@ -1102,11 +1164,11 @@ const ADMIN_WETTKAMPF = (() => {
         ort_id: _edit.ort_id,
         lat:    _edit.lat,
         lon:    _edit.lon,
-        // Ausgaben-URLs (pro Jahr) – Anmelde-/Ergebnis-URL + Import-Kategorie
+        // Import-Kategorie gilt serienweit; Anmelde-/Ergebnis-URL pro Ausgabe-Jahr
+        import_kategorie: impKat,
         ausgabe_jahr:     _edit.ausgabe_jahr,
         anmelde_url:      anmUrl,
         ergebnis_url:     ergUrl,
-        import_kategorie: impKat,
         ...(istVorschlag ? { vorschlag_bestaetigt: true } : {}),
       };
       // Name & Datum nur bei manuellen Wettkämpfen mitschicken
@@ -1129,15 +1191,17 @@ const ADMIN_WETTKAMPF = (() => {
         serie.lon             = _edit.lon;
         if (_edit.isManual) { serie.name = nameVal; serie.referenz_datum = refVal; }
         if (istVorschlag) { serie.vorschlag_von = null; serie.vorschlag_von_name = null; }
-        // Ausgaben-URLs lokal spiegeln (damit Wiedereröffnen ohne Reload stimmt)
+        // Import-Kategorie ist serienweit
+        serie.import_kategorie = impKat;
+        // Ausgaben-URLs (pro Jahr) lokal spiegeln (Wiedereröffnen ohne Reload)
         if (!serie.ergebnis_ausgaben || typeof serie.ergebnis_ausgaben !== 'object') {
           serie.ergebnis_ausgaben = {};
         }
-        if (!anmUrl && !ergUrl && !impKat) {
+        if (!anmUrl && !ergUrl) {
           delete serie.ergebnis_ausgaben[String(_edit.ausgabe_jahr)];
         } else {
           serie.ergebnis_ausgaben[String(_edit.ausgabe_jahr)] = {
-            anmelde_url: anmUrl, ergebnis_url: ergUrl, import_kategorie: impKat,
+            anmelde_url: anmUrl, ergebnis_url: ergUrl,
           };
         }
       }
@@ -1213,7 +1277,7 @@ const ADMIN_WETTKAMPF = (() => {
     showPlanungModal, savePlanung, neuerWettkampf,
     _removeWb, _addDiszFromList, _setDiszFilter,
     _clearOrt, _setOrtFilter, _waehleOrt,
-    _clearDatumModal, _toggleAbsage,
+    _clearDatumModal, _toggleAbsage, _setAusgabeJahr,
     toggleAktiv, imKalenderEintragen,
     predictNextDate, sortiereNach,
   };
