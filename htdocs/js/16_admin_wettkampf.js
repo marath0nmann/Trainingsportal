@@ -37,16 +37,17 @@ const ADMIN_WETTKAMPF = (() => {
   const MONATE  = ['Januar','Februar','März','April','Mai','Juni','Juli',
                    'August','September','Oktober','November','Dezember'];
 
-  // Import-Kategorien fürs Statistikportal (Slug muss zu dessen Importern passen).
-  // Bei Änderungen im Statistikportal hier nachziehen.
+  // Import-Kategorien fürs Statistikportal – Slug = tbl_key aus dessen Tabelle
+  // `disziplin_kategorien`. Bei Änderungen im Statistikportal hier nachziehen
+  // (Reihenfolge = dortige Spalte `reihenfolge`).
   const IMPORT_KATEGORIEN = [
-    { slug: '',           label: '— keine —' },
-    { slug: 'strasse',    label: 'Straße / Straßenlauf' },
-    { slug: 'bahn',       label: 'Bahn / Stadion' },
-    { slug: 'cross',      label: 'Cross / Crosslauf' },
-    { slug: 'trail',      label: 'Trail / Berglauf' },
-    { slug: 'sprint',     label: 'Sprint' },
-    { slug: 'mehrkampf',  label: 'Mehrkampf' },
+    { slug: '',              label: '— keine —' },
+    { slug: 'strasse',       label: 'Straße' },
+    { slug: 'sprint',        label: 'Sprint' },
+    { slug: 'mittelstrecke', label: 'Mittelstrecke' },
+    { slug: 'sprungwurf',    label: 'Sprung & Wurf' },
+    { slug: 'bahn',          label: 'Bahn' },
+    { slug: 'halle',         label: 'Halle' },
   ];
 
   function decodeHtml(s) {
