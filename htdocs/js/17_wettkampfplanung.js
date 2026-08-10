@@ -1026,8 +1026,6 @@ const WETTKAMPFPLANUNG = (() => {
         ? (istPrognose ? '~ ' : '') + fmtDatum(datum) + (datum ? ` (KW ${kwOf(datum)})` : '')
         : '–';
       const disz  = _diszSortiert(s).join(', ');
-      const teiln = (Array.isArray(s.teilnehmer) ? s.teilnehmer : [])
-        .map(t => esc(t.name || '?') + (t.disziplin ? ` (${esc(t.disziplin)})` : '')).join(', ');
       const nameCell = `<strong${abgesagt ? ' style="text-decoration:line-through"' : ''}>${esc(s.name)}</strong>`
         + (abgesagt ? ' <span style="color:#b00">(abgesagt)</span>' : '')
         + (s.ort ? `<div class="ort">${esc(s.ort)}</div>` : '');
@@ -1035,11 +1033,10 @@ const WETTKAMPFPLANUNG = (() => {
         <td class="c-datum">${esc(datumTxt)}</td>
         <td>${nameCell}</td>
         <td>${esc(disz) || '–'}</td>
-        <td>${teiln || '–'}</td>
       </tr>`;
     }).join('');
 
-    const leer = bodyRows ? '' : `<tr><td colspan="4" style="text-align:center;color:#666">Keine Veranstaltungen im aktuellen Filter.</td></tr>`;
+    const leer = bodyRows ? '' : `<tr><td colspan="3" style="text-align:center;color:#666">Keine Veranstaltungen im aktuellen Filter.</td></tr>`;
     const titel = `Wettkampfplanung ${_jahr}`;
 
     const html = `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
@@ -1059,10 +1056,9 @@ const WETTKAMPFPLANUNG = (() => {
         <h1>${esc(titel)}</h1>
         <table>
           <thead><tr>
-            <th style="width:120px">Datum</th>
-            <th style="width:32%">Veranstaltung</th>
+            <th style="width:150px">Datum</th>
+            <th style="width:40%">Veranstaltung</th>
             <th>Disziplinen</th>
-            <th>Angemeldete Teilnehmer</th>
           </tr></thead>
           <tbody>${bodyRows}${leer}</tbody>
         </table>

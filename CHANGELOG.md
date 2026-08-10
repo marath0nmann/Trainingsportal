@@ -1,5 +1,8 @@
 # Changelog
 
+## v315
+- Wettkampfplanung-PDF: keine Teilnehmerinformationen mehr – der Export enthält nur noch Datum/KW, Veranstaltung (+Ort) und Disziplinen.
+
 ## v314
 - Wettkampfplanung: Man sieht jetzt pro Wettkampf, wer sonst noch angemeldet ist (Teilnehmerliste mit Disziplin, eigener Eintrag grün hervorgehoben). `GET /wettkampfplanung` liefert `teilnehmer` je Serie.
 - Wettkampfplanung: Neuer Button „📄 PDF" – exportiert die aktuelle (gefilterte/sortierte) Ansicht als neutrales PDF ohne persönlichen Status (Datum/KW, Veranstaltung, Disziplinen, angemeldete Teilnehmer).
