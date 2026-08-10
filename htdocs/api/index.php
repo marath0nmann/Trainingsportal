@@ -1294,6 +1294,37 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig34: ' . $e->getMessage()); }
         },
 
+        // ── 35: Import-Kategorie auf Serien-Ebene ───────────────────────────────────────
+        // Die Import-Kategorie (z. B. „strasse") ändert sich nicht pro Ausgabe – eine
+        // Straßenlauf-Serie ist jedes Jahr Straße. Sie wandert daher von der Ausgaben-
+        // Tabelle (training_wettkampf_ergebnis, per Jahr) in die Planungs-Zeile
+        // (training_wettkampf_planung, eine je Serie). ergebnis_url/anmelde_url bleiben
+        // pro Ausgabe. Backfill hebt vorhandene Werte (jüngste Ausgabe gewinnt).
+        35 => static function (): void {
+            $twp = DB::tbl('training_wettkampf_planung');
+            $twe = DB::tbl('training_wettkampf_ergebnis');
+            try {
+                DB::query("ALTER TABLE `{$twp}`
+                    ADD COLUMN IF NOT EXISTS import_kategorie VARCHAR(40) NULL DEFAULT NULL
+                    COMMENT 'Import-Kategorie (tbl_key) für alle Ausgaben dieser Serie'");
+            } catch (Throwable $e) { error_log('mig35a: ' . $e->getMessage()); }
+            try {
+                DB::query("UPDATE `{$twp}` p
+                    JOIN (
+                        SELECT e.serie_id, e.import_kategorie
+                          FROM `{$twe}` e
+                         WHERE e.import_kategorie IS NOT NULL AND e.import_kategorie <> ''
+                           AND e.jahr = (
+                               SELECT MAX(e2.jahr) FROM `{$twe}` e2
+                                WHERE e2.serie_id = e.serie_id
+                                  AND e2.import_kategorie IS NOT NULL AND e2.import_kategorie <> ''
+                           )
+                    ) k ON k.serie_id = p.serie_id
+                    SET p.import_kategorie = k.import_kategorie
+                    WHERE p.import_kategorie IS NULL");
+            } catch (Throwable $e) { error_log('mig35b: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -6808,30 +6839,35 @@ function handleWettkampf(string $method, string $tail): void
             DB::query("UPDATE `{$tws}` SET vorschlag_von=NULL WHERE id=?", [$serieId]);
         }
 
-        // Ausgaben-URLs (Ergebnis / Anmeldung / Import-Kategorie) pro (serie_id, jahr).
-        // Nur berühren, wenn mindestens eines der Felder mitgeschickt wurde.
-        if (array_key_exists('ergebnis_url', $in)
-            || array_key_exists('anmelde_url', $in)
-            || array_key_exists('import_kategorie', $in)) {
+        // Import-Kategorie gilt für die GESAMTE Serie (jede Ausgabe) → in die
+        // Planungs-Zeile (training_wettkampf_planung), nicht pro Jahr.
+        $importKat = null;
+        if (array_key_exists('import_kategorie', $in)) {
+            $importKat = trim((string)($in['import_kategorie'] ?? '')) ?: null;
+            $sets[]   = 'import_kategorie=?';
+            $params[] = $importKat;
+        }
+
+        // Ausgaben-URLs (Ergebnis / Anmeldung) pro (serie_id, jahr).
+        // Nur berühren, wenn mindestens eine der beiden URLs mitgeschickt wurde.
+        if (array_key_exists('ergebnis_url', $in) || array_key_exists('anmelde_url', $in)) {
             $twe  = DB::tbl('training_wettkampf_ergebnis');
             $jahr = (isset($in['ausgabe_jahr']) && (int)$in['ausgabe_jahr'] >= 2020 && (int)$in['ausgabe_jahr'] <= 2035)
                     ? (int)$in['ausgabe_jahr'] : (int)date('Y');
             $eUrl = trim((string)($in['ergebnis_url'] ?? '')) ?: null;
             $aUrl = trim((string)($in['anmelde_url'] ?? '')) ?: null;
-            $kat  = trim((string)($in['import_kategorie'] ?? '')) ?: null;
             try {
-                if ($eUrl === null && $aUrl === null && $kat === null) {
-                    // Alles leer → Ausgabe-Zeile entfernen (Tabelle sauber halten)
+                if ($eUrl === null && $aUrl === null) {
+                    // Beide URLs leer → Ausgabe-Zeile entfernen (Tabelle sauber halten)
                     DB::query("DELETE FROM `{$twe}` WHERE serie_id=? AND jahr=?", [$serieId, $jahr]);
                 } else {
                     DB::query(
-                        "INSERT INTO `{$twe}` (serie_id, jahr, ergebnis_url, anmelde_url, import_kategorie)
-                         VALUES (?,?,?,?,?)
+                        "INSERT INTO `{$twe}` (serie_id, jahr, ergebnis_url, anmelde_url)
+                         VALUES (?,?,?,?)
                          ON DUPLICATE KEY UPDATE
                            ergebnis_url=VALUES(ergebnis_url),
-                           anmelde_url=VALUES(anmelde_url),
-                           import_kategorie=VALUES(import_kategorie)",
-                        [$serieId, $jahr, $eUrl, $aUrl, $kat]
+                           anmelde_url=VALUES(anmelde_url)",
+                        [$serieId, $jahr, $eUrl, $aUrl]
                     );
                 }
             } catch (\Throwable $e) { error_log('wk-ergebnis-upsert: ' . $e->getMessage()); }
@@ -6854,8 +6890,9 @@ function handleWettkampf(string $method, string $tail): void
             }
             $ak = array_key_exists('aktiv', $in) ? ($in['aktiv'] ? 1 : 0) : 1;
             DB::query(
-                "INSERT INTO $twp (serie_id, naechstes_datum, abgesagt_datum, aktiv) VALUES (?,?,?,?)",
-                [$serieId, $nd, $ad, $ak]
+                "INSERT INTO $twp (serie_id, naechstes_datum, abgesagt_datum, aktiv, import_kategorie)
+                 VALUES (?,?,?,?,?)",
+                [$serieId, $nd, $ad, $ak, $importKat]
             );
         }
         echo json_encode(['ok' => true]);
@@ -6891,6 +6928,7 @@ function handleWettkampf(string $method, string $tail): void
                         wp.disziplinen_extra,
                         wp.disziplinen_ausgeschlossen,
                         wp.aktiv,
+                        wp.import_kategorie,
                         tst.status,
                         vs.vorschlag_von,
                         vs.vorschlag_am,
@@ -6911,7 +6949,7 @@ function handleWettkampf(string $method, string $tail): void
                  GROUP BY vs.id, vs.name, vs.kuerzel, vs.wettbewerbe, vs.referenz_datum,
                           vs.url, vs.ort_id, vs.lat, vs.lon,
                           wp.id, wp.naechstes_datum, wp.abgesagt_datum, wp.disziplinen_extra,
-                          wp.disziplinen_ausgeschlossen, wp.aktiv, tst.status,
+                          wp.disziplinen_ausgeschlossen, wp.aktiv, wp.import_kategorie, tst.status,
                           vs.vorschlag_von, vs.vorschlag_am, vorschlag_von_name
                  ORDER BY MONTH(COALESCE(MAX(v.datum), vs.referenz_datum)) ASC,
                           DAY(COALESCE(MAX(v.datum), vs.referenz_datum))   ASC,
@@ -7004,13 +7042,14 @@ function handleWettkampf(string $method, string $tail): void
             } catch (\Throwable $e) { /* Anmeldungen sind optional */ }
         }
 
-        // Ausgaben-URLs (Ergebnis/Anmeldung/Kategorie) pro Serie und Jahr laden.
-        // Map: serie_id → { "2026": {ergebnis_url, anmelde_url, import_kategorie}, … }
+        // Ausgaben-URLs (Ergebnis/Anmeldung) pro Serie und Jahr laden.
+        // Map: serie_id → { "2026": {ergebnis_url, anmelde_url}, … }
+        // (Import-Kategorie ist serienweit und kommt aus wp.import_kategorie.)
         $ergBySerie = [];
         try {
             $twe    = DB::tbl('training_wettkampf_ergebnis');
             $ergRows = DB::fetchAll(
-                "SELECT serie_id, jahr, ergebnis_url, anmelde_url, import_kategorie
+                "SELECT serie_id, jahr, ergebnis_url, anmelde_url
                    FROM $twe WHERE serie_id IN ($ph)",
                 $serieIds
             );
@@ -7018,7 +7057,6 @@ function handleWettkampf(string $method, string $tail): void
                 $ergBySerie[(int)$er['serie_id']][(string)(int)$er['jahr']] = [
                     'ergebnis_url'     => $er['ergebnis_url'] ?? null,
                     'anmelde_url'      => $er['anmelde_url'] ?? null,
-                    'import_kategorie' => $er['import_kategorie'] ?? null,
                 ];
             }
         } catch (\Throwable $e) { /* Ausgaben-URLs sind optional (Tabelle evtl. neu) */ }
@@ -7086,8 +7124,10 @@ function handleWettkampf(string $method, string $tail): void
                 'vorschlag_von'       => isset($s['vorschlag_von']) && $s['vorschlag_von'] !== null ? (int)$s['vorschlag_von'] : null,
                 'vorschlag_von_name'  => $s['vorschlag_von_name'] ?? null,
                 'vorschlag_am'        => $s['vorschlag_am'] ?? null,
-                // Ausgaben-URLs je Jahr (Ergebnis/Anmeldung/Import-Kategorie)
+                // Ausgaben-URLs je Jahr (Ergebnis/Anmeldung)
                 'ergebnis_ausgaben'   => (object)($ergBySerie[$sid] ?? []),
+                // Import-Kategorie gilt serienweit (alle Ausgaben)
+                'import_kategorie'    => $s['import_kategorie'] ?? null,
             ];
         }
 
