@@ -1341,6 +1341,54 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig36: ' . $e->getMessage()); }
         },
 
+        // ── 37: Import-Kategorie einmalig aus absolvierten Wettkämpfen ableiten ──────────
+        // Je regelmäßige Veranstaltung (veranstaltung_serien) die häufigste Kategorie der
+        // tatsächlichen Ergebnisse übernehmen. Kette:
+        //   ergebnisse → disziplin_mapping.kategorie_id → disziplin_kategorien.tbl_key
+        // Nur Serien ohne bereits gepflegte Kategorie werden gefüllt (kein Überschreiben
+        // manueller Admin-Werte).
+        37 => static function (): void {
+            $ter = DB::tbl('ergebnisse');
+            $tvv = DB::tbl('veranstaltungen');
+            $tdm = DB::tbl('disziplin_mapping');
+            $tdk = DB::tbl('disziplin_kategorien');
+            $twp = DB::tbl('training_wettkampf_planung');
+            try {
+                $rows = DB::fetchAll(
+                    "SELECT v.serie_id AS sid, dk.tbl_key AS kat, COUNT(*) AS anz
+                       FROM `{$ter}` e
+                       JOIN `{$tvv}` v  ON v.id  = e.veranstaltung_id
+                       JOIN `{$tdm}` dm ON dm.id = e.disziplin_mapping_id
+                       JOIN `{$tdk}` dk ON dk.id = dm.kategorie_id
+                      WHERE e.geloescht_am IS NULL
+                        AND v.geloescht_am IS NULL
+                        AND v.genehmigt   = 1
+                        AND v.serie_id   IS NOT NULL
+                        AND dk.tbl_key   IS NOT NULL AND dk.tbl_key <> ''
+                      GROUP BY v.serie_id, dk.tbl_key"
+                );
+                // Häufigste Kategorie je Serie bestimmen
+                $best = [];
+                foreach ($rows as $r) {
+                    $sid = (int)$r['sid'];
+                    $anz = (int)$r['anz'];
+                    if (!isset($best[$sid]) || $anz > $best[$sid]['anz']) {
+                        $best[$sid] = ['kat' => $r['kat'], 'anz' => $anz];
+                    }
+                }
+                foreach ($best as $sid => $b) {
+                    // Planungs-Zeile anlegen ODER – falls vorhanden – nur füllen wenn leer
+                    DB::query(
+                        "INSERT INTO `{$twp}` (serie_id, import_kategorie, aktiv) VALUES (?,?,1)
+                         ON DUPLICATE KEY UPDATE import_kategorie =
+                           IF(import_kategorie IS NULL OR import_kategorie = '',
+                              VALUES(import_kategorie), import_kategorie)",
+                        [$sid, $b['kat']]
+                    );
+                }
+            } catch (Throwable $e) { error_log('mig37: ' . $e->getMessage()); }
+        },
+
     ];
 }
 

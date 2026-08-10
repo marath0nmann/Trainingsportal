@@ -1,5 +1,8 @@
 # Changelog
 
+## v318
+- Einmaliger Import (DB-Migration 37): Import-Kategorie je regelmäßiger Veranstaltung wird aus den absolvierten Wettkämpfen im Statistikportal abgeleitet (häufigste Kategorie der Ergebnisse: `ergebnisse` → `disziplin_mapping.kategorie_id` → `disziplin_kategorien.tbl_key`). Bereits manuell gepflegte Kategorien bleiben unangetastet.
+
 ## v317
 - Wettkampfplanung: Karte (Leaflet/OpenStreetMap) unter der Tabelle mit allen georeferenzierten Wettkämpfen der aktuellen Ansicht – aktualisiert sich mit jedem Filter; Marker-Popup mit Name/Datum/Ort/Kategorie/Link.
 - Wettkampfplanung: neue Filter „Disziplin" und „Kategorie" (Dropdowns in der Toolbar) sowie neue, sortierbare Spalte „Kategorie" (aus der serienweiten Import-Kategorie / Statistikportal-Disziplinkategorien).
