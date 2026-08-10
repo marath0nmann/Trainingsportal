@@ -1,5 +1,8 @@
 # Changelog
 
+## v308
+- **Wettkämpfe:** Das Dropdown „Import-Kategorie" lädt seine Einträge jetzt dynamisch aus der geteilten DB (Statistikportal-Tabelle `disziplin_kategorien`, neuer Endpunkt `GET /wettkampf/kategorien`) statt aus einer fest verdrahteten Liste. Neue oder umbenannte Kategorien im Statistikportal erscheinen damit automatisch; die bekannte Liste bleibt nur noch als Fallback.
+
 ## v307
 - **Wettkämpfe:** Das Dropdown „Import-Kategorie" verwendet jetzt exakt die `tbl_key`-Werte des Statistikportals (`strasse`, `sprint`, `mittelstrecke`, `sprungwurf`, `bahn`, `halle`) – damit funktioniert der Ein-Klick-Import dort ohne Kategorie-Nachfrage. Die vorher geratenen Slugs (`cross`, `trail`, `mehrkampf`) wurden entfernt.
 
