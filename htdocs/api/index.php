@@ -7341,7 +7341,9 @@ function handleWettkampfplanung(string $method, string $tail): void
         $serien = DB::fetchAll("
             SELECT
                 vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
-                wp.naechstes_datum, wp.abgesagt_datum, COALESCE(wp.aktiv, 1) AS aktiv,
+                vs.lat, vs.lon,
+                wp.naechstes_datum, wp.abgesagt_datum, wp.import_kategorie,
+                COALESCE(wp.aktiv, 1) AS aktiv,
                 MAX(vv.datum)                              AS letztes_datum_statistik,
                 CASE
                     WHEN MAX(vv.datum) IS NULL AND vs.referenz_datum IS NULL THEN NULL
@@ -7361,7 +7363,8 @@ function handleWettkampfplanung(string $method, string $tail): void
                                    AND tst.benutzer_id = ?
                                    AND tst.jahr        = ?
             GROUP BY vs.id, vs.name, vs.sortierindex, vs.url, vs.wettbewerbe,
-                     vs.referenz_datum, wp.naechstes_datum, wp.abgesagt_datum, wp.aktiv, tst.status
+                     vs.lat, vs.lon, vs.referenz_datum,
+                     wp.naechstes_datum, wp.abgesagt_datum, wp.import_kategorie, wp.aktiv, tst.status
             ORDER BY COALESCE(vs.sortierindex, 9999) ASC, vs.name ASC
         ", [$userId, $jahr]);
 
@@ -7581,6 +7584,10 @@ function handleWettkampfplanung(string $method, string $tail): void
                 'ergebnis_url'           => $ergBySerie[$sid]['ergebnis_url'] ?? null,
                 // Alle Teilnehmer (alle Nutzer) dieser Ausgabe: [{benutzer_id, name, disziplin}]
                 'teilnehmer'             => $teilnBySerie[$sid] ?? [],
+                // Geokoordinaten (für die Karte) + Kategorie (serienweit)
+                'lat'                    => isset($s['lat']) && $s['lat'] !== null ? (float)$s['lat'] : null,
+                'lon'                    => isset($s['lon']) && $s['lon'] !== null ? (float)$s['lon'] : null,
+                'import_kategorie'       => $s['import_kategorie'] ?? null,
             ];
         }
 

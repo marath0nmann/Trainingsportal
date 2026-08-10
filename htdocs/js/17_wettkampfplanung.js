@@ -21,6 +21,18 @@ const WETTKAMPFPLANUNG = (() => {
   let _selected        = new Set();   // ausgewählte Serie-IDs
   let _hideVergangen   = false;       // vergangene Veranstaltungen ausblenden
   let _hidePasstNicht  = false;       // "passt nicht"-Einträge ausblenden
+  let _filterDisziplin = '';          // leer = alle Disziplinen
+  let _filterKategorie = '';          // leer = alle Kategorien
+
+  // Kategorien (Statistikportal: disziplin_kategorien) für Filter + Spalte
+  let _kategorien = [];               // [{tbl_key, name}]
+
+  // Karte (Leaflet) unter der Tabelle
+  let _listEl        = null;          // Tabellen-Container (wird bei Filter/Sort neu gerendert)
+  let _mapSectionEl  = null;          // Karten-Container (persistent)
+  let _map           = null;
+  let _markerLayer   = null;
+  let _leafletLoading = false;
 
   // Vorschlag-Modal: Disziplin-Picker
   let _vorschlagAlleDisz   = null;    // null = noch nicht geladen
@@ -67,6 +79,12 @@ const WETTKAMPFPLANUNG = (() => {
     _loadPrefs();
     _container.innerHTML = '<div class="loading"><div class="spinner"></div>Lade Wettkampfplanung&hellip;</div>';
     try {
+      if (!_kategorien.length) {
+        try {
+          const r = await apiGet('wettkampf/kategorien', { silent: true });
+          _kategorien = r.kategorien || [];
+        } catch (_) { /* Kategorien optional */ }
+      }
       await _lade();
       _renderListe();
     } catch (e) {
@@ -76,6 +94,27 @@ const WETTKAMPFPLANUNG = (() => {
           escapeHtml(e.message || String(e)) + '</div>';
       }
     }
+  }
+
+  // Zwei persistente Container: Tabelle (#wkp-list) + Karte (#wkp-map-section).
+  // So bleibt die Karte beim Neu-Rendern der Tabelle (Filter/Sort/Suche) erhalten.
+  function _ensureLayout() {
+    if (!_container) return;
+    if (!_container.querySelector('#wkp-list')) {
+      try { if (_map) _map.remove(); } catch (_) {}
+      _map = null; _markerLayer = null;
+      _container.innerHTML =
+        '<div id="wkp-list"></div><div id="wkp-map-section" style="margin-top:16px"></div>';
+    }
+    _listEl       = _container.querySelector('#wkp-list');
+    _mapSectionEl = _container.querySelector('#wkp-map-section');
+  }
+
+  // ── Kategorie-Label (Statistikportal) ────────────────────────
+  function _katLabel(key) {
+    if (!key) return '';
+    const k = _kategorien.find(x => x.tbl_key === key);
+    return k ? k.name : key;
   }
 
   async function _lade() {
@@ -95,6 +134,14 @@ const WETTKAMPFPLANUNG = (() => {
 
     if (_filterStatus.size > 0) {
       arr = arr.filter(s => _filterStatus.has(s.status));
+    }
+
+    if (_filterDisziplin) {
+      arr = arr.filter(s => Array.isArray(s.wettbewerbe) && s.wettbewerbe.includes(_filterDisziplin));
+    }
+
+    if (_filterKategorie) {
+      arr = arr.filter(s => (s.import_kategorie || '') === _filterKategorie);
     }
 
     if (_hidePasstNicht) {
@@ -124,6 +171,9 @@ const WETTKAMPFPLANUNG = (() => {
         } else if (_sortKey === 'teilnehmer') {
           av = (a.teilnehmer || []).length;
           bv = (b.teilnehmer || []).length;
+        } else if (_sortKey === 'kategorie') {
+          av = _katLabel(a.import_kategorie) || 'zzz';
+          bv = _katLabel(b.import_kategorie) || 'zzz';
         }
         if (av < bv) return _sortDir === 'asc' ? -1 : 1;
         if (av > bv) return _sortDir === 'asc' ? 1 : -1;
@@ -138,11 +188,13 @@ const WETTKAMPFPLANUNG = (() => {
   function _renderListe() {
     if (!_container) return;
     _closePopper();
+    _ensureLayout();
 
     // Fokus-ID merken damit Search-Input nach DOM-Rebuild refokussiert werden kann
     const prevFocusId = document.activeElement?.id;
 
     const sichtbar = _gefilterteSerien();
+    _updateMap(sichtbar);
 
     // Statistiken über alle Serien (nicht nur gefilterte)
     const stati = {};
@@ -165,6 +217,32 @@ const WETTKAMPFPLANUNG = (() => {
       if (_sortKey !== key) return '<span style="color:var(--border);font-size:10px;margin-left:3px">↕</span>';
       return `<span style="font-size:10px;margin-left:3px">${_sortDir === 'asc' ? '↑' : '↓'}</span>`;
     };
+
+    // Disziplin-Filter-Optionen: alle vorkommenden Disziplinen, nach Distanz sortiert
+    const _km = (typeof _disziplinKm === 'function') ? _disziplinKm : () => null;
+    const alleDisz = [...new Set(_serien.flatMap(s => Array.isArray(s.wettbewerbe) ? s.wettbewerbe : []))]
+      .sort((a, b) => {
+        const ka = _km(a), kb = _km(b);
+        if (ka == null && kb == null) return a.localeCompare(b, 'de');
+        if (ka == null) return 1;
+        if (kb == null) return -1;
+        return ka - kb;
+      });
+    const diszOptions = ['<option value="">Alle Disziplinen</option>']
+      .concat(alleDisz.map(d =>
+        `<option value="${escapeHtml(d)}" ${_filterDisziplin === d ? 'selected' : ''}>${escapeHtml(d)}</option>`
+      )).join('');
+
+    // Kategorie-Filter-Optionen: alle in den Daten vorkommenden Kategorien
+    const alleKat = [...new Set(_serien.map(s => s.import_kategorie).filter(Boolean))]
+      .sort((a, b) => _katLabel(a).localeCompare(_katLabel(b), 'de'));
+    const katOptions = ['<option value="">Alle Kategorien</option>']
+      .concat(alleKat.map(k =>
+        `<option value="${escapeHtml(k)}" ${_filterKategorie === k ? 'selected' : ''}>${escapeHtml(_katLabel(k))}</option>`
+      )).join('');
+
+    const selStyle = 'padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;' +
+                     'background:var(--bg2);color:var(--text);max-width:170px';
 
     let html = `
       <div style="display:flex;justify-content:space-between;align-items:flex-end;
@@ -214,7 +292,19 @@ const WETTKAMPFPLANUNG = (() => {
                  font-size:12px;cursor:pointer;white-space:nowrap">
           ${escapeHtml(filterLabel)} ▾
         </button>
-        ${(_filterText || _filterStatus.size) ? `
+        <select onchange="WETTKAMPFPLANUNG._setFilterDisziplin(this.value)"
+          title="Nach Disziplin filtern"
+          style="${selStyle};border:1px solid ${_filterDisziplin ? 'var(--primary)' : 'var(--border)'};
+                 color:${_filterDisziplin ? 'var(--primary)' : 'var(--text)'}">
+          ${diszOptions}
+        </select>
+        <select onchange="WETTKAMPFPLANUNG._setFilterKategorie(this.value)"
+          title="Nach Kategorie filtern"
+          style="${selStyle};border:1px solid ${_filterKategorie ? 'var(--primary)' : 'var(--border)'};
+                 color:${_filterKategorie ? 'var(--primary)' : 'var(--text)'}">
+          ${katOptions}
+        </select>
+        ${(_filterText || _filterStatus.size || _filterDisziplin || _filterKategorie) ? `
           <button onclick="WETTKAMPFPLANUNG._resetFilter()"
             style="padding:4px 8px;border:none;background:none;color:var(--text2);
                    font-size:12px;cursor:pointer">✕ zurücksetzen</button>` : ''}
@@ -241,7 +331,7 @@ const WETTKAMPFPLANUNG = (() => {
 
     if (!sichtbar.length) {
       html += '<div style="padding:40px;text-align:center;color:var(--text2)">Keine Veranstaltungen gefunden.</div>';
-      _container.innerHTML = html;
+      _listEl.innerHTML = html;
       return;
     }
 
@@ -261,6 +351,9 @@ const WETTKAMPFPLANUNG = (() => {
               Datum ${_jahr}${si('datum')}
             </th>
             <th>Disziplinen</th>
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('kategorie')" class="${_sortKey==='kategorie'?'sorted':''}">
+              Kategorie${si('kategorie')}
+            </th>
             <th onclick="WETTKAMPFPLANUNG._toggleSort('teilnehmer')" class="${_sortKey==='teilnehmer'?'sorted':''}"
                 style="text-align:center;white-space:nowrap" title="Angemeldete Teilnehmer">
               👥${si('teilnehmer')}
@@ -397,6 +490,10 @@ const WETTKAMPFPLANUNG = (() => {
           </td>
           <td style="white-space:nowrap">${datumHtml}</td>
           <td><div style="display:flex;flex-wrap:wrap;gap:2px">${wbHtml}</div></td>
+          <td style="white-space:nowrap">${s.import_kategorie
+            ? `<span style="font-size:11px;padding:2px 9px;border-radius:10px;
+                 background:var(--border);color:var(--text)">${escapeHtml(_katLabel(s.import_kategorie))}</span>`
+            : '<span style="color:var(--text2);font-size:13px">–</span>'}</td>
           <td style="text-align:center;white-space:nowrap">${teilnHtml}</td>
           <td style="white-space:nowrap">
             <button class="wkp-status-btn"
@@ -432,10 +529,10 @@ const WETTKAMPFPLANUNG = (() => {
         </div>`;
     }
 
-    _container.innerHTML = html;
+    _listEl.innerHTML = html;
 
     // Indeterminate-Zustand für "Alle auswählen"-Checkbox
-    const chkAll = _container.querySelector('.wkp-check-all');
+    const chkAll = _listEl.querySelector('.wkp-check-all');
     if (chkAll) {
       chkAll.checked       = alleSelected;
       chkAll.indeterminate = !alleSelected && someSelected;
@@ -443,7 +540,7 @@ const WETTKAMPFPLANUNG = (() => {
 
     // Fokus nach DOM-Rebuild wiederherstellen (z. B. Search-Input)
     if (prevFocusId) {
-      const el = _container.querySelector('#' + prevFocusId);
+      const el = _listEl.querySelector('#' + prevFocusId);
       if (el) {
         el.focus();
         // Cursor ans Ende setzen
@@ -477,6 +574,20 @@ const WETTKAMPFPLANUNG = (() => {
   function _resetFilter() {
     _filterText = '';
     _filterStatus.clear();
+    _filterDisziplin = '';
+    _filterKategorie = '';
+    _selected.clear();
+    _renderListe();
+  }
+
+  function _setFilterDisziplin(val) {
+    _filterDisziplin = val || '';
+    _selected.clear();
+    _renderListe();
+  }
+
+  function _setFilterKategorie(val) {
+    _filterKategorie = val || '';
     _selected.clear();
     _renderListe();
   }
@@ -992,6 +1103,91 @@ const WETTKAMPFPLANUNG = (() => {
     }
   }
 
+  // ── Karte (Leaflet) ──────────────────────────────────────────
+  function _loadLeaflet() {
+    return new Promise((resolve) => {
+      if (window.L) { resolve(); return; }
+      if (_leafletLoading) {
+        const poll = setInterval(() => { if (window.L) { clearInterval(poll); resolve(); } }, 100);
+        return;
+      }
+      _leafletLoading = true;
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+      const sc = document.createElement('script');
+      sc.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      sc.onload  = () => { _leafletLoading = false; resolve(); };
+      sc.onerror = () => { _leafletLoading = false; resolve(); };
+      document.head.appendChild(sc);
+    });
+  }
+
+  async function _updateMap(serien) {
+    const sec = _mapSectionEl;
+    if (!sec) return;
+
+    const geo = (serien || []).filter(s => s.lat != null && s.lon != null);
+
+    // Grundgerüst der Karten-Sektion nur einmal aufbauen (bleibt bei Filter/Sort erhalten)
+    if (!sec.querySelector('#wkp-map')) {
+      sec.innerHTML = `
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+                    color:var(--text2);margin:0 0 8px">Karte der Wettkämpfe</div>
+        <div id="wkp-map" style="width:100%;height:380px;border-radius:10px;
+             border:1px solid var(--border);background:var(--bg2)"></div>
+        <div id="wkp-map-hint" style="font-size:12px;color:var(--text2);margin-top:6px"></div>`;
+      _map = null; _markerLayer = null;
+    }
+
+    const hint = sec.querySelector('#wkp-map-hint');
+    if (hint) {
+      hint.textContent = geo.length
+        ? `${geo.length} von ${(serien || []).length} angezeigten Wettkämpfen mit hinterlegtem Standort`
+        : 'Keine georeferenzierten Wettkämpfe in der aktuellen Auswahl.';
+    }
+
+    await _loadLeaflet();
+    if (!window.L) return;
+    const mapEl = sec.querySelector('#wkp-map');
+    if (!mapEl) return;
+
+    if (!_map) {
+      _map = L.map(mapEl, { scrollWheelZoom: false }).setView([51.3, 6.7], 7);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(_map);
+      _markerLayer = L.layerGroup().addTo(_map);
+    }
+
+    _markerLayer.clearLayers();
+    const pts = [];
+    geo.forEach(s => {
+      const datum = _datumFuerJahr(s, _jahr);
+      const dtxt  = datum
+        ? new Date(datum + 'T00:00:00').toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' })
+        : '';
+      const kat = s.import_kategorie ? _katLabel(s.import_kategorie) : '';
+      const popup = `<strong>${escapeHtml(s.name)}</strong>`
+        + (dtxt ? `<br>${escapeHtml(dtxt)}` : '')
+        + (s.ort ? `<br>${escapeHtml(s.ort)}` : '')
+        + (kat ? `<br><span style="color:#666">${escapeHtml(kat)}</span>` : '')
+        + (s.url ? `<br><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">Website ↗</a>` : '');
+      L.marker([s.lat, s.lon]).bindPopup(popup).addTo(_markerLayer);
+      pts.push([s.lat, s.lon]);
+    });
+
+    if (pts.length === 1) {
+      _map.setView(pts[0], 11);
+    } else if (pts.length > 1) {
+      try { _map.fitBounds(pts, { padding: [30, 30] }); } catch (_) {}
+    }
+    // Kartengröße neu berechnen (Sichtbarkeit/Layout kann sich geändert haben)
+    setTimeout(() => { try { _map.invalidateSize(); } catch (_) {} }, 60);
+  }
+
   // ── Disziplinen einer Serie nach Distanz sortiert ────────────
   function _diszSortiert(s) {
     const _km = (typeof _disziplinKm === 'function') ? _disziplinKm : () => null;
@@ -1134,6 +1330,7 @@ const WETTKAMPFPLANUNG = (() => {
     _openPopper, _waehleStatus,
     _toggleSort,
     _setFilter, _resetFilter, _openFilterPopper, _toggleFilterStatus, _resetStatusFilter,
+    _setFilterDisziplin, _setFilterKategorie,
     _toggleHideVergangen, _toggleHidePasstNicht,
     _toggleSelect, _toggleAll, _clearSelection,
     _openBulkPopper, _bulkSetStatus,

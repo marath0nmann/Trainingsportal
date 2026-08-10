@@ -1,5 +1,10 @@
 # Changelog
 
+## v317
+- Wettkampfplanung: Karte (Leaflet/OpenStreetMap) unter der Tabelle mit allen georeferenzierten Wettkämpfen der aktuellen Ansicht – aktualisiert sich mit jedem Filter; Marker-Popup mit Name/Datum/Ort/Kategorie/Link.
+- Wettkampfplanung: neue Filter „Disziplin" und „Kategorie" (Dropdowns in der Toolbar) sowie neue, sortierbare Spalte „Kategorie" (aus der serienweiten Import-Kategorie / Statistikportal-Disziplinkategorien).
+- `GET /wettkampfplanung` liefert jetzt `lat`/`lon` und `import_kategorie` je Serie.
+
 ## v316
 - Wettkampfplanung: eigene Spalte „👥" mit Teilnehmeranzahl (sortierbar); bei Mouseover werden die angemeldeten Teilnehmer (Name · Disziplin, eigener Eintrag markiert) angezeigt – analog Admin → Wettkämpfe. Die bisherigen Inline-Teilnehmer-Chips unter dem Namen sind entfallen.
 
