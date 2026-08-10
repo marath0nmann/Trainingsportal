@@ -1442,7 +1442,19 @@ async function ladeWettkampfSektionInto(containerId) {
     // ── Disziplin-Buttons (identisch mit Kalender-Popover) ───
     let diszHtml = '';
     if (abgesagt) {
-      diszHtml = `<div class="wk-disz-buttons"><span class="wk-pop-btn wk-disz-static" style="opacity:.7">Keine Anmeldung möglich</span></div>`;
+      // Kein "Keine Anmeldung möglich"-Badge; nur die Disziplinen, nach Distanz (m) sortiert
+      const sorted = disziplinen.slice().sort((a, b) => {
+        const ka = _disziplinKm(a), kb = _disziplinKm(b);
+        if (ka == null && kb == null) return 0;
+        if (ka == null) return 1;
+        if (kb == null) return -1;
+        return ka - kb;
+      });
+      if (sorted.length) {
+        const pills = sorted.map(d =>
+          `<span class="wk-pop-btn wk-disz-static">${escapeHtml(d)}</span>`).join('');
+        diszHtml = `<div class="wk-disz-buttons">${pills}</div>`;
+      }
     } else if (angemeldet) {
       const liste = disziplinen.length ? disziplinen : [null]; // null = allgemeine Teilnahme
       const btns = liste.map(d => {

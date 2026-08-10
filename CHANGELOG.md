@@ -1,5 +1,8 @@
 # Changelog
 
+## v303
+- **Nächste Wettkämpfe: abgesagte Wettkämpfe** zeigen jetzt statt „Keine Anmeldung möglich" ihre Disziplinen als Badges – sortiert nach Wettkampfdistanz (m).
+
 ## v302
 - **Block-Editor: Titel steht jetzt oben** – als erstes Feld im Modal, hervorgehoben und größer. Vorher lag er ganz unten unter den Segmenten.
 - Direkt daneben der Button **„⚡ Segmente aus Titel"**: Kurzschrift eintippen, klicken, fertig – Klammern werden zu verschachtelten Blöcken (`3 x (4 x 400, 100 TP), BP 400 TP`). Bisher versteckte sich die Funktion als unscheinbarer Button in der Segment-Kopfzeile.
