@@ -7463,6 +7463,22 @@ function handleWettkampfplanung(string $method, string $tail): void
             }
         } catch (\Throwable $e) { /* Teilnehmerliste ist optional */ }
 
+        // Anzahl bereits im Statistikportal vorliegender Ergebnisse je Serie
+        $ergCountBySerie = [];
+        try {
+            $ecRows = DB::fetchAll("
+                SELECT vv.serie_id AS sid, COUNT(*) AS anz
+                FROM `" . DB::tbl('ergebnisse') . "` e
+                JOIN `{$tvv}` vv ON vv.id = e.veranstaltung_id
+                WHERE e.geloescht_am  IS NULL
+                  AND vv.geloescht_am IS NULL
+                  AND vv.genehmigt    = 1
+                  AND vv.serie_id     IS NOT NULL
+                GROUP BY vv.serie_id
+            ");
+            foreach ($ecRows as $r) $ergCountBySerie[(int)$r['sid']] = (int)$r['anz'];
+        } catch (\Throwable $e) { /* Ergebniszähler ist optional */ }
+
         // ── Disziplinen aus dem Statistikportal (hat Vorrang vor CSV-wettbewerbe) ──────────
         // COALESCE(anzeige_name, e.disziplin) liefert den normierten Anzeigenamen;
         // Admin-Ausschlüsse (disziplinen_ausgeschlossen) und Extras (disziplinen_extra)
@@ -7636,10 +7652,17 @@ function handleWettkampfplanung(string $method, string $tail): void
                 'lat'                    => isset($s['lat']) && $s['lat'] !== null ? (float)$s['lat'] : null,
                 'lon'                    => isset($s['lon']) && $s['lon'] !== null ? (float)$s['lon'] : null,
                 'import_kategorie'       => $s['import_kategorie'] ?? null,
+                // Anzahl bereits vorliegender Ergebnisse im Statistikportal
+                'anz_ergebnisse'         => $ergCountBySerie[$sid] ?? 0,
             ];
         }
 
-        echo json_encode(['ok' => true, 'serien' => $result, 'jahr' => $jahr]);
+        echo json_encode([
+            'ok'                  => true,
+            'serien'              => $result,
+            'jahr'                => $jahr,
+            'statistikportal_url' => Settings::get('statistikportal_url', ''),
+        ]);
         return;
     }
 

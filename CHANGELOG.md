@@ -1,5 +1,8 @@
 # Changelog
 
+## v319
+- Wettkampfplanung: neue Spalte „📊" mit der Anzahl der bereits im Statistikportal vorliegenden Ergebnisse je Wettkampf (sortierbar); Klick verlinkt auf die Serienseite im Statistikportal (…/#veranstaltungen/serie/ID). `GET /wettkampfplanung` liefert `anz_ergebnisse` je Serie + `statistikportal_url`.
+
 ## v318
 - Einmaliger Import (DB-Migration 37): Import-Kategorie je regelmäßiger Veranstaltung wird aus den absolvierten Wettkämpfen im Statistikportal abgeleitet (häufigste Kategorie der Ergebnisse: `ergebnisse` → `disziplin_mapping.kategorie_id` → `disziplin_kategorien.tbl_key`). Bereits manuell gepflegte Kategorien bleiben unangetastet.
 

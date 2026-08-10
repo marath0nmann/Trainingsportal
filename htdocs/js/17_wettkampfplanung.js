@@ -26,6 +26,7 @@ const WETTKAMPFPLANUNG = (() => {
 
   // Kategorien (Statistikportal: disziplin_kategorien) für Filter + Spalte
   let _kategorien = [];               // [{tbl_key, name}]
+  let _statistikUrl = 'https://statistik.tus-oedt.de';  // Basis-URL Statistikportal
 
   // Karte (Leaflet) unter der Tabelle
   let _listEl        = null;          // Tabellen-Container (wird bei Filter/Sort neu gerendert)
@@ -120,6 +121,7 @@ const WETTKAMPFPLANUNG = (() => {
   async function _lade() {
     const resp = await apiGet('wettkampfplanung?jahr=' + _jahr, { silent: true });
     _serien = resp.serien || [];
+    _statistikUrl = (resp.statistikportal_url || 'https://statistik.tus-oedt.de').replace(/\/+$/, '');
   }
 
   // ── Gefilterte + sortierte Serien ────────────────────────────
@@ -174,6 +176,9 @@ const WETTKAMPFPLANUNG = (() => {
         } else if (_sortKey === 'kategorie') {
           av = _katLabel(a.import_kategorie) || 'zzz';
           bv = _katLabel(b.import_kategorie) || 'zzz';
+        } else if (_sortKey === 'ergebnisse') {
+          av = a.anz_ergebnisse || 0;
+          bv = b.anz_ergebnisse || 0;
         }
         if (av < bv) return _sortDir === 'asc' ? -1 : 1;
         if (av > bv) return _sortDir === 'asc' ? 1 : -1;
@@ -358,6 +363,11 @@ const WETTKAMPFPLANUNG = (() => {
                 style="text-align:center;white-space:nowrap" title="Angemeldete Teilnehmer">
               👥${si('teilnehmer')}
             </th>
+            <th onclick="WETTKAMPFPLANUNG._toggleSort('ergebnisse')" class="${_sortKey==='ergebnisse'?'sorted':''}"
+                style="text-align:center;white-space:nowrap"
+                title="Anzahl bereits im Statistikportal vorliegender Ergebnisse">
+              📊${si('ergebnisse')}
+            </th>
             <th onclick="WETTKAMPFPLANUNG._toggleSort('status')" class="${_sortKey==='status'?'sorted':''}">
               Status${si('status')}
             </th>
@@ -495,6 +505,16 @@ const WETTKAMPFPLANUNG = (() => {
                  background:var(--border);color:var(--text)">${escapeHtml(_katLabel(s.import_kategorie))}</span>`
             : '<span style="color:var(--text2);font-size:13px">–</span>'}</td>
           <td style="text-align:center;white-space:nowrap">${teilnHtml}</td>
+          <td style="text-align:center;white-space:nowrap">${(() => {
+            const n = s.anz_ergebnisse || 0;
+            if (!n) return '<span style="color:var(--text2);font-size:13px">–</span>';
+            return `<a href="${escapeHtml(_statistikUrl)}/#veranstaltungen/serie/${s.id}"
+              target="_blank" rel="noopener"
+              title="${n} Ergebnis${n === 1 ? '' : 'se'} im Statistikportal ansehen"
+              style="display:inline-block;min-width:22px;padding:1px 8px;border-radius:10px;
+                     font-size:12px;font-weight:600;text-decoration:none;
+                     background:var(--border);color:var(--text)">${n} ↗</a>`;
+          })()}</td>
           <td style="white-space:nowrap">
             <button class="wkp-status-btn"
               onclick="WETTKAMPFPLANUNG._openPopper(${s.id}, this)"
