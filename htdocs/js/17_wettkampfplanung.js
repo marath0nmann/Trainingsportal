@@ -354,6 +354,16 @@ const WETTKAMPFPLANUNG = (() => {
               ${abgesagt ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#cc000022;color:var(--primary);font-weight:700">Abgesagt</span>' : ''}
               ${s.url ? `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener"
                   class="wkp-url-link" title="${escapeHtml(s.url)}">↗</a>` : ''}
+              ${(s.anmelde_url && !abgesagt) ? `<a href="${escapeHtml(s.anmelde_url)}" target="_blank" rel="noopener"
+                  title="Externe Anmeldeseite öffnen"
+                  style="font-size:11px;font-weight:600;text-decoration:none;
+                         padding:2px 8px;border-radius:10px;white-space:nowrap;
+                         background:var(--primary);color:#fff">Jetzt anmelden ↗</a>` : ''}
+              ${s.ergebnis_url ? `<a href="${escapeHtml(s.ergebnis_url)}" target="_blank" rel="noopener"
+                  title="Ergebnisliste öffnen"
+                  style="font-size:11px;font-weight:600;text-decoration:none;
+                         padding:2px 8px;border-radius:10px;white-space:nowrap;
+                         border:1px solid var(--border);color:var(--text2)">🏁 Ergebnisse ↗</a>` : ''}
             </div>
             ${s.ort ? `<div class="wkp-ort">${escapeHtml(s.ort)}</div>` : ''}
             ${anmHtml}

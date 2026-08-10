@@ -1273,6 +1273,27 @@ function _migrationStmts(): array
             }
         },
 
+        // ── 34: Ausgaben-URLs (Ergebnis / Anmeldung) pro Wettkampf-Ausgabe ───────────────
+        // Ein Eintrag je (serie_id, jahr) – NICHT pro Person. `ergebnis_url` wird vom
+        // Statistikportal nach dem absolvierten Wettkampf zum Ergebnis-Import gelesen
+        // (Vertrag: Tabelle `training_wettkampf_ergebnis`, Schlüssel serie_id+jahr).
+        // `import_kategorie` erlaubt dort den Ein-Klick-Import inkl. Kategorie.
+        // `anmelde_url` speist den „Jetzt anmelden"-Button im Trainingsportal.
+        34 => static function (): void {
+            $twe = DB::tbl('training_wettkampf_ergebnis');
+            try {
+                DB::query("CREATE TABLE IF NOT EXISTS `{$twe}` (
+                  serie_id         INT               NOT NULL COMMENT 'Referenz auf veranstaltung_serien.id',
+                  jahr             SMALLINT UNSIGNED  NOT NULL COMMENT 'Jahr der Ausgabe',
+                  ergebnis_url     VARCHAR(500)       NULL COMMENT 'Ergebnisliste (vom Statistikportal importiert)',
+                  anmelde_url      VARCHAR(500)       NULL COMMENT 'Externe Anmeldeseite (Jetzt-anmelden-Button)',
+                  import_kategorie VARCHAR(40)        NULL COMMENT 'Importkategorie fürs Statistikportal (z. B. strasse)',
+                  aktualisiert_am  DATETIME           NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  PRIMARY KEY (serie_id, jahr)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            } catch (Throwable $e) { error_log('mig34: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -6787,6 +6808,35 @@ function handleWettkampf(string $method, string $tail): void
             DB::query("UPDATE `{$tws}` SET vorschlag_von=NULL WHERE id=?", [$serieId]);
         }
 
+        // Ausgaben-URLs (Ergebnis / Anmeldung / Import-Kategorie) pro (serie_id, jahr).
+        // Nur berühren, wenn mindestens eines der Felder mitgeschickt wurde.
+        if (array_key_exists('ergebnis_url', $in)
+            || array_key_exists('anmelde_url', $in)
+            || array_key_exists('import_kategorie', $in)) {
+            $twe  = DB::tbl('training_wettkampf_ergebnis');
+            $jahr = (isset($in['ausgabe_jahr']) && (int)$in['ausgabe_jahr'] >= 2020 && (int)$in['ausgabe_jahr'] <= 2035)
+                    ? (int)$in['ausgabe_jahr'] : (int)date('Y');
+            $eUrl = trim((string)($in['ergebnis_url'] ?? '')) ?: null;
+            $aUrl = trim((string)($in['anmelde_url'] ?? '')) ?: null;
+            $kat  = trim((string)($in['import_kategorie'] ?? '')) ?: null;
+            try {
+                if ($eUrl === null && $aUrl === null && $kat === null) {
+                    // Alles leer → Ausgabe-Zeile entfernen (Tabelle sauber halten)
+                    DB::query("DELETE FROM `{$twe}` WHERE serie_id=? AND jahr=?", [$serieId, $jahr]);
+                } else {
+                    DB::query(
+                        "INSERT INTO `{$twe}` (serie_id, jahr, ergebnis_url, anmelde_url, import_kategorie)
+                         VALUES (?,?,?,?,?)
+                         ON DUPLICATE KEY UPDATE
+                           ergebnis_url=VALUES(ergebnis_url),
+                           anmelde_url=VALUES(anmelde_url),
+                           import_kategorie=VALUES(import_kategorie)",
+                        [$serieId, $jahr, $eUrl, $aUrl, $kat]
+                    );
+                }
+            } catch (\Throwable $e) { error_log('wk-ergebnis-upsert: ' . $e->getMessage()); }
+        }
+
         $planung = DB::fetchOne("SELECT id FROM $twp WHERE serie_id=?", [$serieId]);
         if ($planung) {
             if ($sets) {
@@ -6954,6 +7004,25 @@ function handleWettkampf(string $method, string $tail): void
             } catch (\Throwable $e) { /* Anmeldungen sind optional */ }
         }
 
+        // Ausgaben-URLs (Ergebnis/Anmeldung/Kategorie) pro Serie und Jahr laden.
+        // Map: serie_id → { "2026": {ergebnis_url, anmelde_url, import_kategorie}, … }
+        $ergBySerie = [];
+        try {
+            $twe    = DB::tbl('training_wettkampf_ergebnis');
+            $ergRows = DB::fetchAll(
+                "SELECT serie_id, jahr, ergebnis_url, anmelde_url, import_kategorie
+                   FROM $twe WHERE serie_id IN ($ph)",
+                $serieIds
+            );
+            foreach ($ergRows as $er) {
+                $ergBySerie[(int)$er['serie_id']][(string)(int)$er['jahr']] = [
+                    'ergebnis_url'     => $er['ergebnis_url'] ?? null,
+                    'anmelde_url'      => $er['anmelde_url'] ?? null,
+                    'import_kategorie' => $er['import_kategorie'] ?? null,
+                ];
+            }
+        } catch (\Throwable $e) { /* Ausgaben-URLs sind optional (Tabelle evtl. neu) */ }
+
         $result = [];
         foreach ($serien as $s) {
             $sid       = (int)$s['id'];
@@ -7017,6 +7086,8 @@ function handleWettkampf(string $method, string $tail): void
                 'vorschlag_von'       => isset($s['vorschlag_von']) && $s['vorschlag_von'] !== null ? (int)$s['vorschlag_von'] : null,
                 'vorschlag_von_name'  => $s['vorschlag_von_name'] ?? null,
                 'vorschlag_am'        => $s['vorschlag_am'] ?? null,
+                // Ausgaben-URLs je Jahr (Ergebnis/Anmeldung/Import-Kategorie)
+                'ergebnis_ausgaben'   => (object)($ergBySerie[$sid] ?? []),
             ];
         }
 
@@ -7276,6 +7347,22 @@ function handleWettkampfplanung(string $method, string $tail): void
             }
         }
 
+        // Ausgaben-URLs (Anmeldung/Ergebnis) für das angezeigte Jahr laden
+        $ergBySerie = [];
+        try {
+            $twe = DB::tbl('training_wettkampf_ergebnis');
+            $ergRows = DB::fetchAll(
+                "SELECT serie_id, ergebnis_url, anmelde_url FROM `{$twe}` WHERE jahr = ?",
+                [$jahr]
+            );
+            foreach ($ergRows as $er) {
+                $ergBySerie[(int)$er['serie_id']] = [
+                    'anmelde_url'  => $er['anmelde_url']  ?? null,
+                    'ergebnis_url' => $er['ergebnis_url'] ?? null,
+                ];
+            }
+        } catch (\Throwable $ignored) { /* Tabelle evtl. neu */ }
+
         // Finale Status-Zuordnung und auto-persistieren
         $final_nicht_setzen = ['absolviert', 'nicht_angetreten', 'findet_nicht_statt'];
         $result = [];
@@ -7361,6 +7448,9 @@ function handleWettkampfplanung(string $method, string $tail): void
                 'meine_anmeldungen'      => $anm,
                 // Nur Disziplinnamen (Abwärtskompatibilität + einfache Checks)
                 'angemeldet_disziplinen' => array_column($anm, 'disziplin'),
+                // Externe Ausgaben-URLs (für „Jetzt anmelden" / Ergebnis-Link)
+                'anmelde_url'            => $ergBySerie[$sid]['anmelde_url']  ?? null,
+                'ergebnis_url'           => $ergBySerie[$sid]['ergebnis_url'] ?? null,
             ];
         }
 

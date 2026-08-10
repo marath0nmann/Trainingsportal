@@ -37,6 +37,18 @@ const ADMIN_WETTKAMPF = (() => {
   const MONATE  = ['Januar','Februar','März','April','Mai','Juni','Juli',
                    'August','September','Oktober','November','Dezember'];
 
+  // Import-Kategorien fürs Statistikportal (Slug muss zu dessen Importern passen).
+  // Bei Änderungen im Statistikportal hier nachziehen.
+  const IMPORT_KATEGORIEN = [
+    { slug: '',           label: '— keine —' },
+    { slug: 'strasse',    label: 'Straße / Straßenlauf' },
+    { slug: 'bahn',       label: 'Bahn / Stadion' },
+    { slug: 'cross',      label: 'Cross / Crosslauf' },
+    { slug: 'trail',      label: 'Trail / Berglauf' },
+    { slug: 'sprint',     label: 'Sprint' },
+    { slug: 'mehrkampf',  label: 'Mehrkampf' },
+  ];
+
   function decodeHtml(s) {
     if (!s) return '';
     const el = document.createElement('textarea');
@@ -621,6 +633,16 @@ const ADMIN_WETTKAMPF = (() => {
 
     const istPrognose = !create && !serie.naechstes_datum && !!prognose;
 
+    // Jahr der bearbeiteten Ausgabe: kommender Termin (inkl. Prognose), sonst
+    // Referenzdatum, sonst laufendes Jahr. Ergebnis-/Anmelde-URL hängen daran.
+    const ausgabeDatum = create
+      ? _heute()
+      : ((naechstesDatum(serie) || {}).datum || serie.referenz_datum || _heute());
+    const ausgabeJahr = parseInt(String(ausgabeDatum).slice(0, 4), 10) || new Date().getFullYear();
+    const ausgabe = (!create && serie.ergebnis_ausgaben)
+      ? (serie.ergebnis_ausgaben[String(ausgabeJahr)] || {})
+      : {};
+
     _edit = {
       serieId: create ? null : serieId,
       create,
@@ -633,6 +655,10 @@ const ADMIN_WETTKAMPF = (() => {
       lat:            create ? null : (serie.lat ?? null),
       lon:            create ? null : (serie.lon ?? null),
       abgesagt_datum: create ? null : (istAbgesagt(serie) ? serie.abgesagt_datum : null),
+      ausgabe_jahr:     ausgabeJahr,
+      ergebnis_url:     ausgabe.ergebnis_url     || '',
+      anmelde_url:      ausgabe.anmelde_url      || '',
+      import_kategorie: ausgabe.import_kategorie || '',
     };
 
     const cont = document.getElementById('modal-container');
@@ -734,6 +760,46 @@ const ADMIN_WETTKAMPF = (() => {
                        border-radius:6px;padding:6px 8px;font-size:13px;
                        background:var(--bg);color:var(--text)">
             </div>
+
+            ${create ? '' : `
+            <!-- Ausgabe ${_edit.ausgabe_jahr}: Anmelde- & Ergebnis-URL -->
+            <div style="border:1px solid var(--border);border-radius:8px;padding:12px 12px 14px;
+                        display:flex;flex-direction:column;gap:14px">
+              <div style="${labelStyle};margin-bottom:0">
+                Ausgabe ${_edit.ausgabe_jahr}
+                <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text2)">
+                  &ndash; gilt nur für diese Austragung</span>
+              </div>
+
+              <div>
+                <div style="${labelStyle}">Anmelde-URL (Jetzt-anmelden-Button)</div>
+                <input type="url" id="planung-anmelde-url"
+                  placeholder="https://… (externe Anmeldeseite)"
+                  value="${escapeHtml(_edit.anmelde_url)}" style="${inpStyle}">
+              </div>
+
+              <div>
+                <div style="${labelStyle}">Ergebnis-URL (fürs Statistikportal)</div>
+                <input type="url" id="planung-ergebnis-url"
+                  placeholder="https://… (Ergebnisliste nach dem Wettkampf)"
+                  value="${escapeHtml(_edit.ergebnis_url)}" style="${inpStyle}">
+                <div style="font-size:11px;color:var(--text2);margin-top:4px">
+                  Das Statistikportal importiert die Ergebnisse nach dem Wettkampf von dieser Adresse.
+                </div>
+              </div>
+
+              <div>
+                <div style="${labelStyle}">Import-Kategorie (optional)</div>
+                <select id="planung-import-kat" style="${inpStyle}">
+                  ${IMPORT_KATEGORIEN.map(k => `
+                    <option value="${escapeHtml(k.slug)}" ${_edit.import_kategorie === k.slug ? 'selected' : ''}>${escapeHtml(k.label)}</option>
+                  `).join('')}
+                </select>
+                <div style="font-size:11px;color:var(--text2);margin-top:4px">
+                  Ermöglicht dem Statistikportal den Ein-Klick-Import ohne Kategorie-Nachfrage.
+                </div>
+              </div>
+            </div>`}
 
             <!-- Disziplinen -->
             <div>
@@ -972,6 +1038,9 @@ const ADMIN_WETTKAMPF = (() => {
     const refVal  = (document.getElementById('planung-refdatum')?.value || '').trim() || null;
     const datum   = (document.getElementById('planung-datum')?.value || '').trim() || null;
     const url     = (document.getElementById('planung-url')?.value || '').trim() || null;
+    const anmUrl  = (document.getElementById('planung-anmelde-url')?.value || '').trim() || null;
+    const ergUrl  = (document.getElementById('planung-ergebnis-url')?.value || '').trim() || null;
+    const impKat  = (document.getElementById('planung-import-kat')?.value || '').trim() || null;
 
     if (_edit.isManual && !nameVal) {
       benachrichtigen('Bitte einen Namen eingeben.', 'err');
@@ -1015,6 +1084,11 @@ const ADMIN_WETTKAMPF = (() => {
         ort_id: _edit.ort_id,
         lat:    _edit.lat,
         lon:    _edit.lon,
+        // Ausgaben-URLs (pro Jahr) – Anmelde-/Ergebnis-URL + Import-Kategorie
+        ausgabe_jahr:     _edit.ausgabe_jahr,
+        anmelde_url:      anmUrl,
+        ergebnis_url:     ergUrl,
+        import_kategorie: impKat,
         ...(istVorschlag ? { vorschlag_bestaetigt: true } : {}),
       };
       // Name & Datum nur bei manuellen Wettkämpfen mitschicken
@@ -1037,6 +1111,17 @@ const ADMIN_WETTKAMPF = (() => {
         serie.lon             = _edit.lon;
         if (_edit.isManual) { serie.name = nameVal; serie.referenz_datum = refVal; }
         if (istVorschlag) { serie.vorschlag_von = null; serie.vorschlag_von_name = null; }
+        // Ausgaben-URLs lokal spiegeln (damit Wiedereröffnen ohne Reload stimmt)
+        if (!serie.ergebnis_ausgaben || typeof serie.ergebnis_ausgaben !== 'object') {
+          serie.ergebnis_ausgaben = {};
+        }
+        if (!anmUrl && !ergUrl && !impKat) {
+          delete serie.ergebnis_ausgaben[String(_edit.ausgabe_jahr)];
+        } else {
+          serie.ergebnis_ausgaben[String(_edit.ausgabe_jahr)] = {
+            anmelde_url: anmUrl, ergebnis_url: ergUrl, import_kategorie: impKat,
+          };
+        }
       }
 
       schliesseModal();
