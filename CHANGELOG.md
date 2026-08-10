@@ -1,5 +1,9 @@
 # Changelog
 
+## v306
+- **Wettkämpfe:** Pro Ausgabe (Serie + Jahr) lassen sich jetzt eine **Anmelde-URL**, eine **Ergebnis-URL** und eine **Import-Kategorie** hinterlegen (Admin-Modal „Planung bearbeiten"). Die Ergebnis-URL liest das Statistikportal nach dem Wettkampf zum Ergebnis-Import; die Import-Kategorie ermöglicht dort den Ein-Klick-Import. Neue Tabelle `training_wettkampf_ergebnis` (Migration 34).
+- **Wettkampfplanung (Athleten):** Wettkämpfe mit hinterlegter Anmelde-URL zeigen einen **„Jetzt anmelden ↗"**-Button; nach dem Wettkampf erscheint bei hinterlegter Ergebnis-URL ein **„🏁 Ergebnisse ↗"**-Link.
+
 ## v305
 - Wettkampfplanung: Disziplin-Badges in der Spalte „Disziplinen" jetzt nach Distanz aufsteigend sortiert (unbekannte Distanz ans Ende).
 
