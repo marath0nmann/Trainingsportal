@@ -7382,6 +7382,36 @@ function handleWettkampfplanung(string $method, string $tail): void
             ];
         }
 
+        // Alle Teilnehmer (alle Nutzer) pro Serie für das angezeigte Jahr –
+        // damit man in der Wettkampfplanung sieht, wer sonst noch angemeldet ist.
+        $tbu = DB::tbl('benutzer');
+        $tat = DB::tbl('athleten');
+        $teilnBySerie = [];
+        try {
+            $teiln = DB::fetchAll("
+                SELECT wp.serie_id,
+                       twa.benutzer_id,
+                       twa.disziplin,
+                       COALESCE(
+                         NULLIF(TRIM(CONCAT_WS(' ', ath.vorname, ath.nachname)), ''),
+                         b.benutzername
+                       ) AS name
+                FROM `{$twa}` twa
+                JOIN `{$twp}` wp ON wp.id = twa.planung_id
+                JOIN `{$tbu}` b  ON b.id  = twa.benutzer_id
+                LEFT JOIN `{$tat}` ath ON ath.id = b.athlet_id
+                WHERE twa.jahr = ?
+                ORDER BY name ASC
+            ", [$jahr]);
+            foreach ($teiln as $t) {
+                $teilnBySerie[(int)$t['serie_id']][] = [
+                    'benutzer_id' => (int)$t['benutzer_id'],
+                    'name'        => $t['name'],
+                    'disziplin'   => $t['disziplin'],
+                ];
+            }
+        } catch (\Throwable $e) { /* Teilnehmerliste ist optional */ }
+
         // ── Disziplinen aus dem Statistikportal (hat Vorrang vor CSV-wettbewerbe) ──────────
         // COALESCE(anzeige_name, e.disziplin) liefert den normierten Anzeigenamen;
         // Admin-Ausschlüsse (disziplinen_ausgeschlossen) und Extras (disziplinen_extra)
@@ -7549,6 +7579,8 @@ function handleWettkampfplanung(string $method, string $tail): void
                 'angemeldet_disziplinen' => array_column($anm, 'disziplin'),
                 // Wettkampf-URL (Anmeldung + Ergebnisse) – Label je nach Datum
                 'ergebnis_url'           => $ergBySerie[$sid]['ergebnis_url'] ?? null,
+                // Alle Teilnehmer (alle Nutzer) dieser Ausgabe: [{benutzer_id, name, disziplin}]
+                'teilnehmer'             => $teilnBySerie[$sid] ?? [],
             ];
         }
 

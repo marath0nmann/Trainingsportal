@@ -1,5 +1,9 @@
 # Changelog
 
+## v314
+- Wettkampfplanung: Man sieht jetzt pro Wettkampf, wer sonst noch angemeldet ist (Teilnehmerliste mit Disziplin, eigener Eintrag grün hervorgehoben). `GET /wettkampfplanung` liefert `teilnehmer` je Serie.
+- Wettkampfplanung: Neuer Button „📄 PDF" – exportiert die aktuelle (gefilterte/sortierte) Ansicht als neutrales PDF ohne persönlichen Status (Datum/KW, Veranstaltung, Disziplinen, angemeldete Teilnehmer).
+
 ## v313
 - Admin → Wettkämpfe: „Neuer Wettkampf" bietet jetzt dieselben Felder wie das Bearbeiten – Nächster Termin (fester Termin), Import-Kategorie und Wettkampf-URL (Anmeldung & Ergebnisse) sind bei der Anlage verfügbar. (Absage bleibt Edit-only, da sie eine bestehende Austragung betrifft.) `POST /wettkampf` speichert `import_kategorie` + `ergebnis_url`.
 

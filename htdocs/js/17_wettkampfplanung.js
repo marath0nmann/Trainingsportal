@@ -180,6 +180,10 @@ const WETTKAMPFPLANUNG = (() => {
             onclick="WETTKAMPFPLANUNG._openVorschlagModal()"
             title="Einen bisher unbekannten Wettkampf zur Planungsliste hinzufügen">
             + Wettkampf vorschlagen</button>
+          <button class="btn btn-ghost btn-sm"
+            onclick="WETTKAMPFPLANUNG._exportPDF()"
+            title="Aktuelle Ansicht als neutrales PDF exportieren (ohne persönlichen Status)">
+            📄 PDF</button>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-ghost btn-sm"
               onclick="WETTKAMPFPLANUNG.setJahr(${_jahr - 1})">‹ ${_jahr - 1}</button>
@@ -306,7 +310,21 @@ const WETTKAMPFPLANUNG = (() => {
           }
         });
       }
-      const anmHtml = '';
+      // Angemeldete Teilnehmer (alle Nutzer) – eigener Eintrag hervorgehoben
+      let anmHtml = '';
+      const teiln = Array.isArray(s.teilnehmer) ? s.teilnehmer : [];
+      if (teiln.length) {
+        const myId = (typeof state !== 'undefined' && state.user) ? (state.user.id || 0) : 0;
+        const chips = teiln.map(t => {
+          const isMe = myId && t.benutzer_id === myId;
+          const disz = t.disziplin ? ` · ${escapeHtml(t.disziplin)}` : '';
+          return `<span style="font-size:10px;padding:1px 7px;border-radius:8px;margin:2px 3px 0 0;
+            display:inline-block;background:${isMe ? '#27ae6022' : 'var(--border)'};
+            color:${isMe ? '#27ae60' : 'var(--text2)'}${isMe ? ';font-weight:700' : ''}">${escapeHtml(t.name || '?')}${disz}</span>`;
+        }).join('');
+        anmHtml = `<div style="margin-top:4px" title="Angemeldete Teilnehmer">
+          <span style="font-size:10px;color:var(--text2)">👥 </span>${chips}</div>`;
+      }
 
       const y = String(_jahr);
       // Prognose = kein naechstes_datum für dieses Jahr UND Statistikportal
@@ -964,6 +982,100 @@ const WETTKAMPFPLANUNG = (() => {
     }
   }
 
+  // ── Disziplinen einer Serie nach Distanz sortiert ────────────
+  function _diszSortiert(s) {
+    const _km = (typeof _disziplinKm === 'function') ? _disziplinKm : () => null;
+    return (Array.isArray(s.wettbewerbe) ? [...s.wettbewerbe] : [])
+      .sort((a, b) => {
+        const ka = _km(a), kb = _km(b);
+        if (ka == null && kb == null) return 0;
+        if (ka == null) return 1;
+        if (kb == null) return -1;
+        return ka - kb;
+      });
+  }
+
+  // ── PDF-Export der aktuellen Ansicht (neutral, ohne eigenen Status) ──
+  function _exportPDF() {
+    const serien = _gefilterteSerien();
+    const esc = (typeof escapeHtml === 'function') ? escapeHtml : (x => String(x));
+
+    const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+    const fmtDatum = (iso) => {
+      if (!iso) return '–';
+      const d = new Date(iso + 'T00:00:00');
+      return `${WT[d.getDay()]}, ${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+    };
+    const kwOf = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso + 'T00:00:00');
+      const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+      return Math.ceil(((tmp - new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7);
+    };
+
+    const bodyRows = serien.map(s => {
+      const datum   = _datumFuerJahr(s, _jahr);
+      const abgesagt = !!(s.abgesagt_datum && s.abgesagt_datum.startsWith(String(_jahr)));
+      const y = String(_jahr);
+      const istPrognose = datum && !(
+        (s.naechstes_datum         && s.naechstes_datum.startsWith(y)) ||
+        (s.letztes_datum_statistik && s.letztes_datum_statistik.startsWith(y))
+      );
+      const datumTxt = datum
+        ? (istPrognose ? '~ ' : '') + fmtDatum(datum) + (datum ? ` (KW ${kwOf(datum)})` : '')
+        : '–';
+      const disz  = _diszSortiert(s).join(', ');
+      const teiln = (Array.isArray(s.teilnehmer) ? s.teilnehmer : [])
+        .map(t => esc(t.name || '?') + (t.disziplin ? ` (${esc(t.disziplin)})` : '')).join(', ');
+      const nameCell = `<strong${abgesagt ? ' style="text-decoration:line-through"' : ''}>${esc(s.name)}</strong>`
+        + (abgesagt ? ' <span style="color:#b00">(abgesagt)</span>' : '')
+        + (s.ort ? `<div class="ort">${esc(s.ort)}</div>` : '');
+      return `<tr>
+        <td class="c-datum">${esc(datumTxt)}</td>
+        <td>${nameCell}</td>
+        <td>${esc(disz) || '–'}</td>
+        <td>${teiln || '–'}</td>
+      </tr>`;
+    }).join('');
+
+    const leer = bodyRows ? '' : `<tr><td colspan="4" style="text-align:center;color:#666">Keine Veranstaltungen im aktuellen Filter.</td></tr>`;
+    const titel = `Wettkampfplanung ${_jahr}`;
+
+    const html = `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+      <title>${esc(titel)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color:#000; margin:0; padding:18px; font-size:11px; }
+        h1 { font-size:14px; text-align:center; margin:0 0 12px; font-weight:bold; }
+        table { width:100%; border-collapse:collapse; }
+        th, td { border:1px solid #000; padding:4px 6px; vertical-align:top; text-align:left; }
+        th { background:#d9d9d9; font-weight:bold; }
+        td.c-datum { white-space:nowrap; }
+        .ort { font-size:10px; color:#444; margin-top:1px; }
+        @page { size:A4 portrait; margin:14mm; }
+      </style></head>
+      <body>
+        <h1>${esc(titel)}</h1>
+        <table>
+          <thead><tr>
+            <th style="width:120px">Datum</th>
+            <th style="width:32%">Veranstaltung</th>
+            <th>Disziplinen</th>
+            <th>Angemeldete Teilnehmer</th>
+          </tr></thead>
+          <tbody>${bodyRows}${leer}</tbody>
+        </table>
+      </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) { benachrichtigen('Bitte Popups für diese Seite erlauben, um das PDF zu erstellen.', 'warn'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { try { win.print(); } catch (_) {} }, 350);
+  }
+
   // ── Datum für ein bestimmtes Jahr berechnen ──────────────────
   // Prognose: gleicher N-ter Wochentag im gleichen Monat des Zieljahres
   // (identische Logik zu predictNextDate in 16_admin_wettkampf.js)
@@ -1022,5 +1134,6 @@ const WETTKAMPFPLANUNG = (() => {
     _anDisziplin, _abDisziplin,
     _openVorschlagModal, _submitVorschlag,
     _addVorschlagDisz, _removeVorschlagDisz, _setVorschlagDiszFilter,
+    _exportPDF,
   };
 })();
