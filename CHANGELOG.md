@@ -1,5 +1,8 @@
 # Changelog
 
+## v309
+- **Wettkämpfe:** Die hartkodierte Ersatzliste für das „Import-Kategorie"-Dropdown wurde komplett entfernt. Einzige Quelle ist jetzt die geteilte Tabelle `disziplin_kategorien` (Endpunkt `GET /wettkampf/kategorien`). Schlägt der Abruf fehl, erscheint nur noch „— keine —" statt evtl. ungültiger Kategorien, die es im Statistikportal gar nicht gibt.
+
 ## v308
 - **Wettkämpfe:** Das Dropdown „Import-Kategorie" lädt seine Einträge jetzt dynamisch aus der geteilten DB (Statistikportal-Tabelle `disziplin_kategorien`, neuer Endpunkt `GET /wettkampf/kategorien`) statt aus einer fest verdrahteten Liste. Neue oder umbenannte Kategorien im Statistikportal erscheinen damit automatisch; die bekannte Liste bleibt nur noch als Fallback.
 
