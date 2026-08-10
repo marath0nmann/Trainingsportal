@@ -1,5 +1,8 @@
 # Changelog
 
+## v304
+- **Nächste Wettkämpfe:** Abgesagte Wettkämpfe zeigen jetzt gar keine Badges mehr. Bei allen übrigen Wettkämpfen sind die Disziplin-Badges nach Wettkampfdistanz (m) sortiert.
+
 ## v303
 - **Nächste Wettkämpfe: abgesagte Wettkämpfe** zeigen jetzt statt „Keine Anmeldung möglich" ihre Disziplinen als Badges – sortiert nach Wettkampfdistanz (m).
 
