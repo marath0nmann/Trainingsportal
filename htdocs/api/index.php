@@ -7136,6 +7136,32 @@ function handleWettkampf(string $method, string $tail): void
         return;
     }
 
+    // ── GET /wettkampf/kategorien ─────────────────────────────────
+    // Import-Kategorien direkt aus der geteilten DB (Statistikportal-Tabelle
+    // `disziplin_kategorien`). Wert = tbl_key, Label = name. Bei fehlender
+    // Tabelle graceful leer, damit das Frontend auf einen Fallback zurückfällt.
+    if ($method === 'GET' && $tail === 'kategorien') {
+        if (!$userId) {
+            http_response_code(401);
+            echo json_encode(['ok' => false, 'fehler' => 'Login erforderlich']);
+            return;
+        }
+        $kats = [];
+        try {
+            $tdk  = DB::tbl('disziplin_kategorien');
+            $rows = DB::fetchAll(
+                "SELECT tbl_key, name FROM `{$tdk}`
+                  WHERE tbl_key IS NOT NULL AND tbl_key != ''
+                  ORDER BY reihenfolge ASC, name ASC"
+            );
+            foreach ($rows as $r) {
+                $kats[] = ['tbl_key' => $r['tbl_key'], 'name' => $r['name']];
+            }
+        } catch (\Throwable $e) { /* Tabelle evtl. nicht vorhanden */ }
+        echo json_encode(['ok' => true, 'kategorien' => $kats]);
+        return;
+    }
+
     // ── GET /wettkampf/orte ───────────────────────────────────────
     // Alle Orte aus dem Statistikportal (für Ort-Picker im Admin-Modal).
     // Nur für eingeloggte Nutzer.

@@ -37,18 +37,40 @@ const ADMIN_WETTKAMPF = (() => {
   const MONATE  = ['Januar','Februar','März','April','Mai','Juni','Juli',
                    'August','September','Oktober','November','Dezember'];
 
-  // Import-Kategorien fürs Statistikportal – Slug = tbl_key aus dessen Tabelle
-  // `disziplin_kategorien`. Bei Änderungen im Statistikportal hier nachziehen
-  // (Reihenfolge = dortige Spalte `reihenfolge`).
-  const IMPORT_KATEGORIEN = [
-    { slug: '',              label: '— keine —' },
-    { slug: 'strasse',       label: 'Straße' },
-    { slug: 'sprint',        label: 'Sprint' },
-    { slug: 'mittelstrecke', label: 'Mittelstrecke' },
-    { slug: 'sprungwurf',    label: 'Sprung & Wurf' },
-    { slug: 'bahn',          label: 'Bahn' },
-    { slug: 'halle',         label: 'Halle' },
+  // Import-Kategorien fürs Statistikportal (tbl_key + name). Werden dynamisch
+  // via GET wettkampf/kategorien aus der geteilten DB (Tabelle
+  // `disziplin_kategorien`) geladen. Diese Liste ist nur der Fallback, falls
+  // der Abruf scheitert oder die Tabelle fehlt.
+  const IMPORT_KATEGORIEN_FALLBACK = [
+    { tbl_key: 'strasse',       name: 'Straße' },
+    { tbl_key: 'sprint',        name: 'Sprint' },
+    { tbl_key: 'mittelstrecke', name: 'Mittelstrecke' },
+    { tbl_key: 'sprungwurf',    name: 'Sprung & Wurf' },
+    { tbl_key: 'bahn',          name: 'Bahn' },
+    { tbl_key: 'halle',         name: 'Halle' },
   ];
+  let _importKategorien = null; // null = noch nicht geladen
+
+  // Kategorien einmalig laden (mit Fallback). Ergebnis wird gecacht.
+  async function _ladeKategorien() {
+    if (_importKategorien) return _importKategorien;
+    try {
+      const r = await apiGet('wettkampf/kategorien', { silent: true });
+      _importKategorien = (r && Array.isArray(r.kategorien) && r.kategorien.length)
+        ? r.kategorien : IMPORT_KATEGORIEN_FALLBACK;
+    } catch (e) {
+      _importKategorien = IMPORT_KATEGORIEN_FALLBACK;
+    }
+    return _importKategorien;
+  }
+
+  // <option>-Liste für das Import-Kategorie-Dropdown (inkl. Leer-Eintrag).
+  function _katOptionsHtml(selected) {
+    const liste = [{ tbl_key: '', name: '— keine —' }].concat(_importKategorien || IMPORT_KATEGORIEN_FALLBACK);
+    return liste.map(k =>
+      `<option value="${escapeHtml(k.tbl_key)}" ${selected === k.tbl_key ? 'selected' : ''}>${escapeHtml(k.name)}</option>`
+    ).join('');
+  }
 
   function decodeHtml(s) {
     if (!s) return '';
@@ -620,6 +642,9 @@ const ADMIN_WETTKAMPF = (() => {
     _wkmMap    = null;
     _wkmMarker = null;
 
+    // Import-Kategorien laden (gecacht) – füllt das Dropdown im Modal
+    if (!create) await _ladeKategorien();
+
     // Prognose ermitteln (nur Edit-Modus)
     const prognose = create ? null : predictNextDate(serie.naechstes_datum || serie.letztes_datum);
     const datumVorschlag = create ? '' : (serie.naechstes_datum || prognose || '');
@@ -792,9 +817,7 @@ const ADMIN_WETTKAMPF = (() => {
               <div>
                 <div style="${labelStyle}">Import-Kategorie (optional)</div>
                 <select id="planung-import-kat" style="${inpStyle}">
-                  ${IMPORT_KATEGORIEN.map(k => `
-                    <option value="${escapeHtml(k.slug)}" ${_edit.import_kategorie === k.slug ? 'selected' : ''}>${escapeHtml(k.label)}</option>
-                  `).join('')}
+                  ${_katOptionsHtml(_edit.import_kategorie)}
                 </select>
                 <div style="font-size:11px;color:var(--text2);margin-top:4px">
                   Ermöglicht dem Statistikportal den Ein-Klick-Import ohne Kategorie-Nachfrage.
