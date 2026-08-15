@@ -481,7 +481,7 @@ const WETTKAMPFPLANUNG = (() => {
           </td>
           <td>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <strong style="${abgesagt ? 'text-decoration:line-through' : ''}">${escapeHtml(s.name)}</strong>
+              <strong style="${abgesagt ? 'text-decoration:line-through' : ''}">${escapeHtml(stripOrtFromName(s.name, s.ort))}</strong>
               ${abgesagt ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#cc000022;color:var(--primary);font-weight:700">Abgesagt</span>' : ''}
               ${s.url ? `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener"
                   class="wkp-url-link" title="${escapeHtml(s.url)}">↗</a>` : ''}
@@ -1190,7 +1190,7 @@ const WETTKAMPFPLANUNG = (() => {
         ? new Date(datum + 'T00:00:00').toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' })
         : '';
       const kat = s.import_kategorie ? _katLabel(s.import_kategorie) : '';
-      const popup = `<strong>${escapeHtml(s.name)}</strong>`
+      const popup = `<strong>${escapeHtml(stripOrtFromName(s.name, s.ort))}</strong>`
         + (dtxt ? `<br>${escapeHtml(dtxt)}` : '')
         + (s.ort ? `<br>${escapeHtml(s.ort)}` : '')
         + (kat ? `<br><span style="color:#666">${escapeHtml(kat)}</span>` : '')
@@ -1252,7 +1252,7 @@ const WETTKAMPFPLANUNG = (() => {
         ? (istPrognose ? '~ ' : '') + fmtDatum(datum) + (datum ? ` (KW ${kwOf(datum)})` : '')
         : '–';
       const disz  = _diszSortiert(s).join(', ');
-      const nameCell = `<strong${abgesagt ? ' style="text-decoration:line-through"' : ''}>${esc(s.name)}</strong>`
+      const nameCell = `<strong${abgesagt ? ' style="text-decoration:line-through"' : ''}>${esc(stripOrtFromName(s.name, s.ort))}</strong>`
         + (abgesagt ? ' <span style="color:#b00">(abgesagt)</span>' : '')
         + (s.ort ? `<div class="ort">${esc(s.ort)}</div>` : '');
       return `<tr>

@@ -264,6 +264,9 @@
 .wk-card-name {
   font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3;
 }
+.wk-card-ort {
+  font-size: 12px; color: var(--text2); margin-top: 1px;
+}
 /* Disziplin-Buttons (An-/Abmelden) – nutzen .wk-pop-btn wie das Kalender-Popover */
 .wk-disz-buttons {
   display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;

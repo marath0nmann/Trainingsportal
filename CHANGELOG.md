@@ -1,5 +1,10 @@
 # Changelog
 
+## v321
+- Wettkampfname: der Ort wird aus dem Namen ausgeblendet, wenn er dort als vollständiges, eigenständiges Wort vorkommt (z. B. „Citylauf Korschenbroich" → „Citylauf"); Bindestrich-Komposita bleiben erhalten. Gilt in Admin → Wettkämpfe, Wettkampfplanung (Tabelle/Karte/PDF) und „Nächste Wettkämpfe".
+- Startseite „Nächste Wettkämpfe": Ort wird jetzt unter dem Namen angezeigt.
+- Ort-Anzeige mit Admin-Fallback (`ort_id` → `orte.name`) jetzt auch in Admin → Wettkämpfe und „Nächste Wettkämpfe" (GET /wettkampf `ort_letzter`).
+
 ## v320
 - Fix: Ort eines Wettkampfs blieb leer, wenn keine genehmigte Veranstaltung im Statistikportal vorlag (z. B. Ruhr Trail Run) – die Wettkampfplanung nutzt jetzt zusätzlich den im Admin gesetzten Ort (`ort_id` → `orte.name`) als Fallback zum zuletzt bekannten Veranstaltungsort.
 

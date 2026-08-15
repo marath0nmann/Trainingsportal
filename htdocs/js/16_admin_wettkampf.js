@@ -361,6 +361,11 @@ const ADMIN_WETTKAMPF = (() => {
         ? `<span style="font-size:12px;color:var(--text2);margin-left:6px">${safeHtml(s.ort_letzter)}</span>`
         : '';
 
+      // Wettkampfname – Ort ausblenden, wenn er als eigenständiges Wort vorkommt
+      const anzeigeName = escapeHtml(
+        stripOrtFromName(decodeHtml(s.name || s.kuerzel), decodeHtml(s.ort_letzter || ''))
+      );
+
       const rowClick = admin
         ? `onclick="ADMIN_WETTKAMPF.showPlanungModal(${s.id})"`
         : '';
@@ -368,7 +373,7 @@ const ADMIN_WETTKAMPF = (() => {
       html += `
         <tr style="cursor:${admin ? 'pointer' : 'default'};${rowOpacity}" ${rowClick}>
           <td>
-            <strong style="${nameStrike}">${safeHtml(s.name || s.kuerzel)}</strong>${urlLink}
+            <strong style="${nameStrike}">${anzeigeName}</strong>${urlLink}
             ${abgesagt ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#cc000022;color:var(--primary);font-weight:700;margin-left:6px">Abgesagt</span>' : ''}
             ${inaktiv ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--border);color:var(--text2);margin-left:6px">Inaktiv</span>' : ''}
             ${s.vorschlag_von ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#e67e2222;color:#e67e22;font-weight:700;margin-left:6px">Vorschlag</span>' : ''}

@@ -1421,7 +1421,8 @@ async function ladeWettkampfSektionInto(containerId) {
       { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
     const abgesagt = modus === 'abgesagt';
     const isFest = modus === 'manuell';
-    const name   = escapeHtml(s.name || s.kuerzel || '?');
+    const ortTxt = _decodeHtml(s.ort_letzter || '');
+    const name   = escapeHtml(stripOrtFromName(_decodeHtml(s.name || s.kuerzel || '?'), ortTxt));
 
     // Disziplinen: wettbewerbe ist die einzige editierbare Quelle – nach Distanz (m) sortiert
     const disziplinen = [...(s.wettbewerbe || [])].sort((a, b) => {
@@ -1507,6 +1508,7 @@ async function ladeWettkampfSektionInto(containerId) {
           : '<span class="heute-badge wk-badge-prognose">Prognose</span>'}
       </div>
       <div class="wk-card-name"${abgesagt ? ' style="text-decoration:line-through"' : ''}>${name}</div>
+      ${ortTxt ? `<div class="wk-card-ort">${escapeHtml(ortTxt)}</div>` : ''}
       ${diszHtml}
       ${teilnehmerHtml}
     </div>`;
@@ -3195,6 +3197,33 @@ async function _wkEintragen(serieId, disziplin) {
 }
 
 // Wettkampfdistanz aus Disziplinname ableiten (für Wochenkilometer)
+// Ort aus dem Wettkampfnamen entfernen, wenn er dort als vollständiges,
+// eigenständiges Wort vorkommt (z. B. "Citylauf Korschenbroich" + Ort
+// "Korschenbroich" → "Citylauf"). Compounds bleiben erhalten ("Kölnmarathon"
+// + "Köln" → unverändert, da "Köln" von einem Buchstaben gefolgt wird).
+function stripOrtFromName(name, ort) {
+  if (!name) return name || '';
+  const o = (ort || '').trim();
+  if (!o) return name;
+  const esc = o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let out = name;
+  // Wortgrenze über Unicode-Buchstaben (inkl. Umlaute) UND Bindestrich – so bleibt
+  // ein Bindestrich-Kompositum erhalten ("Gronau-Epe" wird bei Ort "Gronau" NICHT
+  // zerlegt), während der vollständige Ort ("Gronau-Epe") sehr wohl entfernt wird.
+  try {
+    out = name.replace(new RegExp('(^|[^\\p{L}\\-])' + esc + '(?![\\p{L}\\-])', 'giu'), '$1');
+  } catch (_) {
+    out = name.replace(new RegExp('(^|[^A-Za-zÀ-ÿ\\-])' + esc + '(?![A-Za-zÀ-ÿ\\-])', 'gi'), '$1');
+  }
+  out = out
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s*[-–—,·|/]\s*$/, '')
+    .replace(/^\s*[-–—,·|/]\s*/, '')
+    .trim();
+  return out || name;   // niemals komplett leeren (z. B. Name == Ort)
+}
+
 function _disziplinKm(disziplin) {
   if (!disziplin) return null;
   const s = disziplin.toLowerCase();

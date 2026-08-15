@@ -6649,6 +6649,7 @@ function handleWettkampf(string $method, string $tail): void
     $twa = DB::tbl('training_wettkampf_anmeldungen');
     $tbu = DB::tbl('benutzer');
     $tat = DB::tbl('athleten');
+    $tor = DB::tbl('orte');
 
     // ── POST /vorschlag ──────────────────────────────────────────
     // Jeder eingeloggte Nutzer kann einen bisher unbekannten Wettkampf vorschlagen.
@@ -6998,11 +6999,14 @@ function handleWettkampf(string $method, string $tail): void
                                 COALESCE(vs.referenz_datum,  '1900-01-01')
                             )
                         END                       AS letztes_datum,
-                        (SELECT v2.ort FROM $tvv v2
-                         WHERE v2.serie_id = vs.id
-                           AND v2.geloescht_am IS NULL
-                           AND v2.genehmigt   = 1
-                         ORDER BY v2.datum DESC LIMIT 1) AS ort_letzter,
+                        COALESCE(
+                          NULLIF((SELECT v2.ort FROM $tvv v2
+                                   WHERE v2.serie_id = vs.id
+                                     AND v2.geloescht_am IS NULL
+                                     AND v2.genehmigt   = 1
+                                   ORDER BY v2.datum DESC LIMIT 1), ''),
+                          (SELECT o.name FROM $tor o WHERE o.id = vs.ort_id)
+                        )                          AS ort_letzter,
                         wp.id                     AS planung_id,
                         wp.naechstes_datum,
                         wp.abgesagt_datum,
