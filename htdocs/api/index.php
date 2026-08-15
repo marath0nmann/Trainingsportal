@@ -7381,6 +7381,7 @@ function handleWettkampfplanung(string $method, string $tail): void
     $twp = DB::tbl('training_wettkampf_planung');
     $twa = DB::tbl('training_wettkampf_anmeldungen');
     $tst = DB::tbl('training_wettkampf_status');
+    $tor = DB::tbl('orte');
 
     // ── GET /wettkampfplanung?jahr=YYYY ───────────────────────────
     if ($method === 'GET' && $tail === '') {
@@ -7401,9 +7402,13 @@ function handleWettkampfplanung(string $method, string $tail): void
                     )
                 END                                        AS letztes_datum,
                 tst.status,
-                (SELECT v2.ort FROM `{$tvv}` v2
-                  WHERE v2.serie_id = vs.id AND v2.geloescht_am IS NULL
-                  ORDER BY v2.datum DESC LIMIT 1)          AS ort
+                -- Ort: zuletzt bekannter Veranstaltungsort; sonst Admin-Ort (ort_id → orte)
+                COALESCE(
+                  NULLIF((SELECT v2.ort FROM `{$tvv}` v2
+                           WHERE v2.serie_id = vs.id AND v2.geloescht_am IS NULL
+                           ORDER BY v2.datum DESC LIMIT 1), ''),
+                  (SELECT o.name FROM `{$tor}` o WHERE o.id = vs.ort_id)
+                )                                          AS ort
             FROM `{$tws}` vs
             LEFT JOIN `{$twp}` wp  ON wp.serie_id  = vs.id
             LEFT JOIN `{$tvv}` vv  ON vv.serie_id  = vs.id AND vv.geloescht_am IS NULL

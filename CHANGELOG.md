@@ -1,5 +1,8 @@
 # Changelog
 
+## v320
+- Fix: Ort eines Wettkampfs blieb leer, wenn keine genehmigte Veranstaltung im Statistikportal vorlag (z. B. Ruhr Trail Run) – die Wettkampfplanung nutzt jetzt zusätzlich den im Admin gesetzten Ort (`ort_id` → `orte.name`) als Fallback zum zuletzt bekannten Veranstaltungsort.
+
 ## v319
 - Wettkampfplanung: neue Spalte „📊" mit der Anzahl der bereits im Statistikportal vorliegenden Ergebnisse je Wettkampf (sortierbar); Klick verlinkt auf die Serienseite im Statistikportal (…/#veranstaltungen/serie/ID). `GET /wettkampfplanung` liefert `anz_ergebnisse` je Serie + `statistikportal_url`.
 
