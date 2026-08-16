@@ -15,6 +15,7 @@ const PROFIL = (() => {
   let _alleGruppen  = [];   // alle verfügbaren Gruppen
   let _meineGruppen = [];   // eigene Gruppen-IDs (Set)
   let _freigabeData = null; // profil/freigaben response (Trainer-Liste + Stufen)
+  let _workoutData  = null;   // { format: 'garmin' | 'apple' | 'keine' }
 
   // _typOptions nutzt globales getTypen() aus 02_app.js
   function _typOptions() {
@@ -37,12 +38,13 @@ const PROFIL = (() => {
       '</div>';
 
     try {
-      [_prefsData, _wegData, _alleGruppen, _meineGruppen, _freigabeData] = await Promise.all([
+      [_prefsData, _wegData, _alleGruppen, _meineGruppen, _freigabeData, _workoutData] = await Promise.all([
         apiGet('pace/prefs',     { silent: true }),
         apiGet('weg/prefs',      { silent: true }),
         GRUPPEN.laden(),
         GRUPPEN.ladeMeine(),
         apiGet('profil/freigaben', { silent: true }).catch(() => ({ trainer: [] })),
+        apiGet('profil/workout',   { silent: true }).catch(() => ({ format: 'keine' })),
       ]);
     } catch (e) {
       cont.innerHTML =
@@ -230,6 +232,25 @@ const PROFIL = (() => {
     return '';
   }
 
+  // Uhren-Format für den persönlichen Kalender-Feed
+  function _buildWorkoutSection() {
+    const aktuell = (_workoutData && _workoutData.format) || 'keine';
+    const optionen = [
+      { value: 'garmin', titel: '⌚ Garmin (.fit)',          text: 'Workout-Datei für Garmin Connect' },
+      { value: 'apple',  titel: '⌚ Apple Watch (.workout)', text: 'Am iPhone öffnen → Fitness-App' },
+      { value: 'keine',  titel: 'Keine',                     text: 'Termine ohne Workout-Datei' },
+    ];
+    return `<div class="profil-workout-wahl">
+      ${optionen.map(o => `
+        <label class="profil-workout-opt${o.value === aktuell ? ' is-aktiv' : ''}">
+          <input type="radio" name="profil-workout" value="${o.value}"${o.value === aktuell ? ' checked' : ''}
+            onchange="PROFIL._onWorkoutChange(this.value)">
+          <span class="profil-workout-titel">${escapeHtml(o.titel)}</span>
+          <span class="profil-workout-text">${escapeHtml(o.text)}</span>
+        </label>`).join('')}
+    </div>`;
+  }
+
   function _buildFreigabeSection() {
     const trainer = (_freigabeData && _freigabeData.trainer) || [];
     if (!trainer.length) {
@@ -313,6 +334,14 @@ const PROFIL = (() => {
             </p>
             ${_buildWegSection()}
 
+            <div class="profil-section-title" style="margin-top:28px">Workout-Datei im Kalender</div>
+            <p class="profil-hint-global">
+              Dein persönlicher Kalender-Feed („Mein Plan“ als ICS-Abo) kann zu jedem Training mit
+              Segmenten die passende Workout-Datei mitliefern – als Link im Termin und als Anhang.
+              Wähle, welches Format du nutzt; angehängt wird immer nur dieses eine.
+            </p>
+            ${_buildWorkoutSection()}
+
             ${_alleGruppen.length ? `
             <div class="profil-section-title" style="margin-top:28px">Trainingsgruppen</div>
             <p class="profil-hint-global">
@@ -348,6 +377,15 @@ const PROFIL = (() => {
 
   function _onManualInput(ref) {
     _updatePaceChip(ref);
+  }
+
+  function _onWorkoutChange(val) {
+    if (!_workoutData) _workoutData = {};
+    _workoutData.format = val;
+    document.querySelectorAll('.profil-workout-opt').forEach(el => {
+      const inp = el.querySelector('input');
+      el.classList.toggle('is-aktiv', !!inp && inp.value === val);
+    });
   }
 
   function _wegHinzufuegen() {
@@ -430,6 +468,7 @@ const PROFIL = (() => {
         apiPut('weg/prefs',      { config: newWeg }),
         apiPut('profil/gruppen', { gruppen_ids: gruppenIds }),
         apiPut('profil/freigaben', { freigaben }),
+        apiPut('profil/workout', { format: (document.querySelector('input[name="profil-workout"]:checked') || {}).value || 'keine' }),
       ]);
       PACE.invalidate();
       WEG.invalidate();
@@ -452,5 +491,5 @@ const PROFIL = (() => {
     setTimeout(() => div.remove(), 3500);
   }
 
-  return { open, speichern, _onModusChange, _onManualInput, _wegHinzufuegen, _wegEntfernen };
+  return { open, speichern, _onModusChange, _onManualInput, _onWorkoutChange, _wegHinzufuegen, _wegEntfernen };
 })();

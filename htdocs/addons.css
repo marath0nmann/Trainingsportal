@@ -2752,3 +2752,21 @@ body.planung-active #app-footer    { display: none; }
 [data-theme="dark"] .strecke-karte-mini-attr {
   color: #ddd; background: rgba(0,0,0,.55);
 }
+
+/* ── Profil: Workout-Format für den ICS-Feed ──────────────────────────── */
+.profil-workout-wahl {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.profil-workout-opt {
+  flex: 1 1 190px; display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; cursor: pointer;
+  background: var(--surf2); border: 1.5px solid var(--border); border-radius: 8px;
+}
+.profil-workout-opt:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.profil-workout-opt.is-aktiv {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surf2));
+}
+.profil-workout-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.profil-workout-titel { font-size: 13px; font-weight: 700; color: var(--text); }
+.profil-workout-text  { font-size: 11px; color: var(--text2); }

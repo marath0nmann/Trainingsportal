@@ -2911,7 +2911,9 @@ function handleFit(string $method, string $sub): void
     $id = (int)$m[1];
     $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_einheiten') . ' WHERE id = ?', [$id]);
     if (!$row) { http_response_code(404); echo 'Einheit nicht gefunden'; return; }
-    if ($row['sichtbarkeit'] !== 'oeffentlich' && !Auth::check()) {
+    // Aus der Kalender-App heraus gibt es keine Session – dann zählt das ICS-Token
+    $user = Auth::check() ?: benutzerAusIcsToken();
+    if ($row['sichtbarkeit'] !== 'oeffentlich' && !$user) {
         http_response_code(401); echo 'Nicht angemeldet'; return;
     }
 
@@ -2952,7 +2954,8 @@ function handleAppleWorkout(string $method, string $sub): void
     $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_einheiten') . ' WHERE id = ?', [$id]);
     if (!$row) { http_response_code(404); echo 'Einheit nicht gefunden'; return; }
 
-    $user = Auth::check();
+    // Ohne Session (Kalender-App) zählt das ICS-Token – damit stimmen auch die Paces
+    $user = Auth::check() ?: benutzerAusIcsToken();
     if ($row['sichtbarkeit'] !== 'oeffentlich' && !$user) {
         http_response_code(401); echo 'Nicht angemeldet'; return;
     }
@@ -3110,6 +3113,46 @@ function handleIcs(string $method, string $sub): void
     echo 'ICS-Endpoint nicht gefunden';
 }
 
+/**
+ * Bevorzugtes Uhren-Format für den persönlichen ICS-Feed.
+ * 'garmin' = FIT-Datei, 'apple' = .workout-Datei, 'keine' = nichts anhängen.
+ */
+function ladeWorkoutFormat(int $userId): string {
+    $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    $wert = is_array($prefs) ? ($prefs['training_workout_format'] ?? 'keine') : 'keine';
+    return in_array($wert, ['garmin', 'apple', 'keine'], true) ? $wert : 'keine';
+}
+
+function speichereWorkoutFormat(int $userId, string $format): void {
+    if (!in_array($format, ['garmin', 'apple', 'keine'], true)) $format = 'keine';
+    $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
+    $prefs = ($row && $row['prefs']) ? json_decode((string)$row['prefs'], true) : [];
+    if (!is_array($prefs)) $prefs = [];
+    $prefs['training_workout_format'] = $format;
+    DB::query('UPDATE ' . DB::tbl('benutzer') . ' SET prefs = ? WHERE id = ?', [json_encode($prefs, JSON_UNESCAPED_UNICODE), $userId]);
+}
+
+/** Absolute Basis-URL der API – für Links in ICS-Dateien. */
+function apiBasisUrl(): string {
+    $schema = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'training.tus-oedt.de';
+    $pfad   = $_SERVER['SCRIPT_NAME'] ?? '/api/index.php';
+    return $schema . '://' . $host . $pfad;
+}
+
+/**
+ * Nutzer aus dem ICS-Token in der Query bestimmen (für Downloads, die aus
+ * einer Kalender-App heraus geöffnet werden – dort gibt es keine Session).
+ */
+function benutzerAusIcsToken(): ?array {
+    $token = isset($_GET['token']) ? trim((string)$_GET['token']) : '';
+    if (!preg_match('/^[a-f0-9]{32}$/', $token)) return null;
+    $uid = findeBenutzerByToken($token);
+    if (!$uid) return null;
+    return DB::fetchOne('SELECT * FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$uid]) ?: null;
+}
+
 function ladeIcsToken(int $userId): ?string {
     $row = DB::fetchOne('SELECT prefs FROM ' . DB::tbl('benutzer') . ' WHERE id = ?', [$userId]);
     if (!$row || !$row['prefs']) return null;
@@ -3210,6 +3253,14 @@ function buildIcsForUser(int $userId, bool $mitUhrzeit = false): string {
 
     $typenDauer = ladeTypenDauerMap();
 
+    // Bevorzugtes Uhren-Format (Profil) – nur der gewählte Typ wird angehängt.
+    // Das Token wandert mit in die Download-URL, damit die Datei auch aus der
+    // Kalender-App heraus (ohne Login) die persönlichen Pace-Vorgaben enthält.
+    $workoutFormat = ladeWorkoutFormat($userId);
+    $workout = $workoutFormat === 'keine'
+        ? []
+        : ['format' => $workoutFormat, 'token' => ladeIcsToken($userId)];
+
     // Nur Einheiten aus „Mein Plan" des Nutzers (privat_einheiten)
     $privatRows = DB::fetchAll(
         'SELECT p.id, p.datum, p.uhrzeit, p.typ, p.titel, p.bemerkung,
@@ -3236,7 +3287,7 @@ function buildIcsForUser(int $userId, bool $mitUhrzeit = false): string {
         }
         $p['_dauer_min'] = $typenDauer[$p['typ']] ?? null;
         $uid = 'privat-' . (int)$p['id'] . '@training.tus-oedt.de';
-        $events[] = bauVevent($p, $segs, $bestzeiten, $uid, $mitUhrzeit);
+        $events[] = bauVevent($p, $segs, $bestzeiten, $uid, $mitUhrzeit, $workout);
     }
     // Tagesnotizen: global (kein gruppe_id) + alle Gruppen des Nutzers
     try {
@@ -3294,7 +3345,11 @@ function bauNotizVevent(array $n): string {
     return implode("\r\n", array_map('icsFold', $lines));
 }
 
-function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid = null, bool $mitUhrzeit = false): string {
+/**
+ * @param array       $workout  ['format' => 'garmin'|'apple', 'token' => '…'] oder []
+ *                              – hängt die Workout-Datei der Einheit an den Termin
+ */
+function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid = null, bool $mitUhrzeit = false, array $workout = []): string {
     $uid = $uid ?? ('einheit-' . (int)$e['id'] . '@training.tus-oedt.de');
     $stamp = gmdate('Ymd\\THis\\Z');
     $datum = preg_replace('/-/', '', $e['datum']);
@@ -3359,9 +3414,36 @@ function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid =
         $gesamt = Segbaum::gesamtDistanz($baum);
         if ($gesamt > 0) $descLines[] = 'Gesamt: ' . Segbaum::distText($gesamt);
     }
+
+    // Workout-Datei für die Uhr: als Link in der Beschreibung (funktioniert in
+    // jeder Kalender-App) und zusätzlich als ATTACH (Apple Kalender & Co.)
+    $attachZeile = null;
+    // Im persönlichen Feed steht die Einheit hinter ref_einheit_id; ohne Bezug
+    // (rein private Einträge) gibt es keine Segmente und damit kein Workout.
+    $einheitId   = !empty($e['ref_einheit_id']) ? (int)$e['ref_einheit_id'] : 0;
+    $format      = $workout['format'] ?? 'keine';
+    if ($einheitId > 0 && !empty($segs) && in_array($format, ['garmin', 'apple'], true)) {
+        $tokenQs = !empty($workout['token']) ? '&token=' . rawurlencode((string)$workout['token']) : '';
+        if ($format === 'garmin') {
+            $url  = apiBasisUrl() . '?p=fit/einheit/' . $einheitId . '.fit' . $tokenQs;
+            $typ  = 'application/vnd.ant.fit';
+            $lbl  = 'Garmin-Workout (.fit)';
+        } else {
+            $url  = apiBasisUrl() . '?p=workout/einheit/' . $einheitId . '.workout' . $tokenQs;
+            $typ  = 'application/octet-stream';
+            $lbl  = 'Apple-Watch-Workout (.workout)';
+        }
+        $descLines[] = '';
+        $descLines[] = '⌚ ' . $lbl . ': ' . $url;
+        $attachZeile = 'ATTACH;FMTTYPE=' . $typ . ':' . $url;
+    }
     $desc = implode("\n", $descLines);
     if ($desc !== '') {
         $lines[] = 'DESCRIPTION:' . icsEsc($desc);
+    }
+    // ATTACH trägt die URI unescaped (RFC 5545: kein TEXT-Wert)
+    if ($attachZeile !== null) {
+        $lines[] = $attachZeile;
     }
 
     $lines[] = 'END:VEVENT';
@@ -6387,6 +6469,25 @@ function handleProfil(string $method, string $sub): void
             }
         }
         echo json_encode(['ok' => true]);
+        return;
+    }
+
+    // ── Uhren-Format für den persönlichen ICS-Feed ──
+    if ($sub === 'workout' && $method === 'GET') {
+        echo json_encode(['ok' => true, 'format' => ladeWorkoutFormat($userId)]);
+        return;
+    }
+
+    if ($sub === 'workout' && $method === 'PUT') {
+        $in = readJsonBody();
+        $format = is_string($in['format'] ?? null) ? $in['format'] : 'keine';
+        if (!in_array($format, ['garmin', 'apple', 'keine'], true)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Feld "format" muss garmin, apple oder keine sein']);
+            return;
+        }
+        speichereWorkoutFormat($userId, $format);
+        echo json_encode(['ok' => true, 'format' => $format]);
         return;
     }
 

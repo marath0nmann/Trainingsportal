@@ -56,6 +56,20 @@ const ICS = (() => {
     }
   }
 
+  // Zeigt, welche Workout-Datei laut Profil an die Termine gehängt wird
+  async function _zeigeWorkoutHinweis() {
+    const el = document.getElementById('ics-workout-hint');
+    if (!el) return;
+    let format = 'keine';
+    try { format = (await apiGet('profil/workout', { silent: true })).format || 'keine'; } catch (_) {}
+    const label = { garmin: 'Garmin (.fit)', apple: 'Apple Watch (.workout)' }[format];
+    el.innerHTML = label
+      ? `Zu Einheiten mit Segmenten wird die Workout-Datei <strong>${label}</strong> angehängt. `
+        + `<button class="btn-link" onclick="schliesseModal();PROFIL.open()">Format ändern</button>`
+      : `Workout-Dateien für die Uhr werden nicht angehängt. `
+        + `<button class="btn-link" onclick="schliesseModal();PROFIL.open()">Im Profil aktivieren</button>`;
+  }
+
   async function open() {
     const cont = document.getElementById('modal-container');
     cont.innerHTML = `
@@ -104,11 +118,13 @@ const ICS = (() => {
             <h4>Mein Plan</h4>
             <p class="ics-hint">Nur deine Einheiten aus „Mein Plan" – mit Pace pro Segment basierend auf deinen Bestzeiten.</p>
             ${ics_url_block(meUrl(r.token), 'ics-me-url', r.token)}
+            <p class="ics-hint ics-workout-hint" id="ics-workout-hint"></p>
             <div class="ics-actions">
               <button class="btn btn-ghost" onclick="ICS.tokenErzeugen()">Token rotieren</button>
               <button class="btn btn-ghost" onclick="ICS.tokenWiderrufen()">Widerrufen</button>
             </div>
             <p class="ics-warn">⚠️ Der Link enthält ein Token, das deinen persönlichen Plan ausliefert. Nur in vertrauenswürdige Kalender einbinden.</p>`;
+          _zeigeWorkoutHinweis();
         }
       } catch (e) {
         document.getElementById('ics-me-block').innerHTML = `<h4>Mein Plan</h4><p class="ics-hint">Fehler: ${escapeHtml(e.message)}</p>`;
