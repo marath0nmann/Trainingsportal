@@ -1,5 +1,11 @@
 # Changelog
 
+## v323
+- **Workout-Dateien im persönlichen Kalender-Abo.** Jeder Termin aus „Mein Plan", der Segmente hat, bekommt im ICS-Feed die Workout-Datei mitgeliefert: als anklickbarer Link in der Terminbeschreibung und zusätzlich als `ATTACH`-Anhang (Apple Kalender zeigt ihn direkt an, Google & Co. ignorieren Anhänge – der Link funktioniert überall).
+- Neue Profil-Einstellung **„Workout-Datei im Kalender"**: Garmin (.fit), Apple Watch (.workout) oder keine. Angehängt wird immer nur das gewählte Format – kein doppelter Ballast im Kalender.
+- Die Download-Links im Feed tragen das ICS-Token. Damit funktionieren sie direkt aus der Kalender-App heraus (dort gibt es keine Anmeldung) – inklusive der persönlichen Pace-Vorgaben im Apple-Workout und Zugriff auf interne Einheiten.
+- Das ICS-Modal zeigt, welches Format aktuell angehängt wird, und verlinkt zum Umstellen ins Profil.
+
 ## v322
 - Admin → Wettkämpfe: neue (sortierbare) Spalte „Kategorie" zeigt die Import-Kategorie je Serie an.
 - Admin-Modal: unter „Disziplinen" werden bei gesetzter Import-Kategorie nur noch die Distanzen angeboten, die zu dieser Disziplin-Kategorie gehören (live nachgefiltert beim Wechsel der Kategorie). `GET /wettkampf/disziplinen` liefert dafür die Kategorie(n) je Disziplin mit.
