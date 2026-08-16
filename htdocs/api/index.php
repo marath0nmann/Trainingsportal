@@ -7235,29 +7235,44 @@ function handleWettkampf(string $method, string $tail): void
         try {
             // COALESCE(anzeige_name, disziplin): anzeige_name ist das optionale
             // Override-Feld; Fallback auf den Rohdisziplin-Namen.
+            // kategorie_id → disziplin_kategorien.tbl_key liefert die Disziplin-
+            // Kategorie (z. B. „strasse"), nach der im Modal gefiltert wird.
+            $tdk  = DB::tbl('disziplin_kategorien');
             $rows = DB::fetchAll(
-                "SELECT COALESCE(anzeige_name, disziplin) AS name,
-                        MAX(distanz)                       AS distanz
-                   FROM $tdm
-                  WHERE disziplin IS NOT NULL AND disziplin != ''
-                  GROUP BY COALESCE(anzeige_name, disziplin)
-                  ORDER BY (MAX(distanz) IS NULL OR MAX(distanz) = 0) ASC,
-                           MAX(distanz) ASC,
+                "SELECT COALESCE(dm.anzeige_name, dm.disziplin) AS name,
+                        MAX(dm.distanz)                          AS distanz,
+                        dk.tbl_key                               AS kategorie
+                   FROM $tdm dm
+                   LEFT JOIN `{$tdk}` dk ON dk.id = dm.kategorie_id
+                  WHERE dm.disziplin IS NOT NULL AND dm.disziplin != ''
+                  GROUP BY COALESCE(dm.anzeige_name, dm.disziplin), dk.tbl_key
+                  ORDER BY (MAX(dm.distanz) IS NULL OR MAX(dm.distanz) = 0) ASC,
+                           MAX(dm.distanz) ASC,
                            name ASC"
             );
             $namen     = [];
             $distanzen = [];
+            $kategorien = [];  // name → [tbl_key, …] (Disziplin kann mehreren Kategorien angehören)
             foreach ($rows as $r) {
-                $namen[] = $r['name'];
-                $distanzen[$r['name']] = ($r['distanz'] !== null) ? (int)$r['distanz'] : null;
+                $name = $r['name'];
+                if (!isset($distanzen[$name])) {
+                    $namen[] = $name;
+                    $distanzen[$name] = ($r['distanz'] !== null) ? (int)$r['distanz'] : null;
+                    $kategorien[$name] = [];
+                }
+                if ($r['kategorie'] !== null && $r['kategorie'] !== ''
+                    && !in_array($r['kategorie'], $kategorien[$name], true)) {
+                    $kategorien[$name][] = $r['kategorie'];
+                }
             }
             echo json_encode([
                 'ok'          => true,
                 'disziplinen' => $namen,
                 'distanzen'   => (object)$distanzen,
+                'kategorien'  => (object)$kategorien,
             ]);
         } catch (\Throwable $e) {
-            echo json_encode(['ok' => true, 'disziplinen' => [], 'distanzen' => (object)[], '_debug' => $e->getMessage()]);
+            echo json_encode(['ok' => true, 'disziplinen' => [], 'distanzen' => (object)[], 'kategorien' => (object)[], '_debug' => $e->getMessage()]);
         }
         return;
     }

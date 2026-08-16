@@ -1,5 +1,9 @@
 # Changelog
 
+## v322
+- Admin → Wettkämpfe: neue (sortierbare) Spalte „Kategorie" zeigt die Import-Kategorie je Serie an.
+- Admin-Modal: unter „Disziplinen" werden bei gesetzter Import-Kategorie nur noch die Distanzen angeboten, die zu dieser Disziplin-Kategorie gehören (live nachgefiltert beim Wechsel der Kategorie). `GET /wettkampf/disziplinen` liefert dafür die Kategorie(n) je Disziplin mit.
+
 ## v321
 - Wettkampfname: der Ort wird aus dem Namen ausgeblendet, wenn er dort als vollständiges, eigenständiges Wort vorkommt (z. B. „Citylauf Korschenbroich" → „Citylauf"); Bindestrich-Komposita bleiben erhalten. Gilt in Admin → Wettkämpfe, Wettkampfplanung (Tabelle/Karte/PDF) und „Nächste Wettkämpfe".
 - Startseite „Nächste Wettkämpfe": Ort wird jetzt unter dem Namen angezeigt.

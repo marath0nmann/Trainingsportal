@@ -15,6 +15,7 @@ const ADMIN_WETTKAMPF = (() => {
   // Disziplin-Picker
   let _alleDisziplinen = null; // null = noch nicht geladen
   let _diszDistanzen   = {};   // { disziplinname: distanzInMetern | null } aus Statistikportal
+  let _diszKategorien  = {};   // { disziplinname: [kategorie_tbl_key, …] } aus Statistikportal
   let _diszFilter      = '';
 
   // Ort-Picker
@@ -67,6 +68,13 @@ const ADMIN_WETTKAMPF = (() => {
     ).join('');
   }
 
+  // Anzeigename einer Import-Kategorie (tbl_key → name); Fallback: der Slug selbst.
+  function _katName(slug) {
+    if (!slug) return '';
+    const k = (_importKategorien || []).find(x => x.tbl_key === slug);
+    return k ? k.name : slug;
+  }
+
   function decodeHtml(s) {
     if (!s) return '';
     const el = document.createElement('textarea');
@@ -92,7 +100,10 @@ const ADMIN_WETTKAMPF = (() => {
         const d = await apiGet('wettkampf/disziplinen', { silent: true });
         _alleDisziplinen = d.disziplinen || [];
         _diszDistanzen   = d.distanzen   || {};
+        _diszKategorien  = d.kategorien  || {};
       } catch (_) { /* Sortierung fällt auf Namensreihenfolge zurück */ }
+      // Import-Kategorien für die Kategorie-Spalte (Slug → Anzeigename)
+      await _ladeKategorien();
       renderTabelle();
     } catch (e) {
       if (container) {
@@ -224,6 +235,9 @@ const ADMIN_WETTKAMPF = (() => {
       } else if (_sortCol === 'anmeldungen') {
         va = _anzAnmeldungen(a);
         vb = _anzAnmeldungen(b);
+      } else if (_sortCol === 'kategorie') {
+        va = _katName(a.import_kategorie || '').toLowerCase();
+        vb = _katName(b.import_kategorie || '').toLowerCase();
       } else {
         const na = naechstesDatum(a);
         const nb = naechstesDatum(b);
@@ -282,7 +296,7 @@ const ADMIN_WETTKAMPF = (() => {
     }
 
     html += `<div class="panel"><div class="table-scroll">
-    <table style="min-width:720px">
+    <table style="min-width:820px">
       <thead>
         <tr>
           <th class="${_sortCol==='name'?'sorted':''}" onclick="ADMIN_WETTKAMPF.sortiereNach('name')">
@@ -292,6 +306,9 @@ const ADMIN_WETTKAMPF = (() => {
           <th class="${_sortCol==='naechster'?'sorted':''}" onclick="ADMIN_WETTKAMPF.sortiereNach('naechster')">
             Nächster Termin${_arrow('naechster')}</th>
           <th>Disziplinen</th>
+          <th class="${_sortCol==='kategorie'?'sorted':''}" style="white-space:nowrap"
+              onclick="ADMIN_WETTKAMPF.sortiereNach('kategorie')">
+            Kategorie${_arrow('kategorie')}</th>
           <th class="${_sortCol==='anmeldungen'?'sorted':''}" style="text-align:center;white-space:nowrap"
               onclick="ADMIN_WETTKAMPF.sortiereNach('anmeldungen')">
             Anmeldungen${_arrow('anmeldungen')}</th>
@@ -393,6 +410,12 @@ const ADMIN_WETTKAMPF = (() => {
           <td style="white-space:nowrap">${nextCell}</td>
           <td>
             ${chips || '<span style="color:var(--text2)">–</span>'}
+          </td>
+          <td style="white-space:nowrap">
+            ${s.import_kategorie
+              ? `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;
+                   background:var(--border);color:var(--text)">${escapeHtml(_katName(s.import_kategorie))}</span>`
+              : '<span style="color:var(--text2);font-size:13px">–</span>'}
           </td>
           <td style="text-align:center;white-space:nowrap">
             ${anzAnm > 0
@@ -786,12 +809,14 @@ const ADMIN_WETTKAMPF = (() => {
     const importKatHtml = `
       <div>
         <div style="${labelStyle}">Import-Kategorie (optional)</div>
-        <select id="planung-import-kat" style="${inpStyle}">
+        <select id="planung-import-kat" style="${inpStyle}"
+          onchange="ADMIN_WETTKAMPF._setImportKat(this.value)">
           ${_katOptionsHtml(_edit.import_kategorie)}
         </select>
         <div style="font-size:11px;color:var(--text2);margin-top:4px">
           Gilt für <strong>alle Ausgaben</strong> dieser Serie und ermöglicht dem
           Statistikportal den Ein-Klick-Import ohne Kategorie-Nachfrage.
+          Bestimmt außerdem, welche Distanzen unter „Disziplinen" angeboten werden.
         </div>
       </div>`;
 
@@ -938,6 +963,7 @@ const ADMIN_WETTKAMPF = (() => {
           const resp = await apiGet('wettkampf/disziplinen', { silent: true });
           _alleDisziplinen = resp.disziplinen || [];
           _diszDistanzen   = resp.distanzen   || {};
+          _diszKategorien  = resp.kategorien  || {};
         } catch (_) { _alleDisziplinen = []; }
         _renderDiszArea();
       }
@@ -1074,10 +1100,23 @@ const ADMIN_WETTKAMPF = (() => {
     } else {
       const bereitsAktiv = new Set(_edit.wettbewerbe);
       const suchterm     = _diszFilter.trim().toLowerCase();
+      // Kategorie-Filter: bei gesetzter Import-Kategorie nur passende Distanzen
+      const kat          = _edit.import_kategorie || '';
+      const passtKat     = (d) => {
+        if (!kat) return true;
+        const ks = _diszKategorien[d];
+        return Array.isArray(ks) && ks.includes(kat);
+      };
       const gefiltert    = _alleDisziplinen.filter(d =>
-        !suchterm || d.toLowerCase().includes(suchterm)
+        passtKat(d) && (!suchterm || d.toLowerCase().includes(suchterm))
       );
       const MAX_LIST = 40;
+
+      if (kat) {
+        html += `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">
+          Gefiltert auf Kategorie <strong>${escapeHtml(_katName(kat))}</strong>
+          &ndash; zum Anzeigen aller Distanzen die Import-Kategorie auf „— keine —" setzen.</div>`;
+      }
 
       html += `<input type="text" id="disz-filter-inp"
         placeholder="Suchen…"
@@ -1092,7 +1131,7 @@ const ADMIN_WETTKAMPF = (() => {
           Keine Disziplinen aus dem Statistikportal verfügbar.</div>`;
       } else if (gefiltert.length === 0) {
         html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
-          Keine passenden Disziplinen gefunden.</div>`;
+          ${kat ? 'Keine Distanzen in dieser Kategorie gefunden.' : 'Keine passenden Disziplinen gefunden.'}</div>`;
       } else {
         html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
           border-radius:6px;padding:3px">`;
@@ -1142,6 +1181,13 @@ const ADMIN_WETTKAMPF = (() => {
     _renderDiszArea();
     const inp = document.getElementById('disz-filter-inp');
     if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+
+  // Import-Kategorie im Modal wechseln → Disziplin-Picker neu filtern
+  function _setImportKat(val) {
+    if (!_edit) return;
+    _edit.import_kategorie = (val || '').trim();
+    _renderDiszArea();
   }
 
   // ── Speichern (Anlage oder Bearbeitung) ───────────────────────
@@ -1312,7 +1358,7 @@ const ADMIN_WETTKAMPF = (() => {
   return {
     render,
     showPlanungModal, savePlanung, neuerWettkampf,
-    _removeWb, _addDiszFromList, _setDiszFilter,
+    _removeWb, _addDiszFromList, _setDiszFilter, _setImportKat,
     _clearOrt, _setOrtFilter, _waehleOrt,
     _clearDatumModal, _toggleAbsage, _setAusgabeJahr,
     toggleAktiv, imKalenderEintragen,
