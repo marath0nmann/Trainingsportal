@@ -196,6 +196,11 @@ const PROFIL = (() => {
                  placeholder="z.B. 1,5" value="${escapeHtml(kmVal)}" style="width:80px">
           <span class="weg-km-label">km einfach</span>
         </div>
+        <div class="weg-km-wrap">
+          <input type="number" min="0" max="300" class="settings-input weg-min-inp" data-i="${safeI}"
+                 placeholder="z.B. 20" value="${entry.minuten != null ? entry.minuten : ''}" style="width:70px">
+          <span class="weg-km-label">min Weg</span>
+        </div>
         <button class="btn-icon weg-del-btn" onclick="PROFIL._wegEntfernen(${safeI})" title="Entfernen">×</button>
       </div>`;
   }
@@ -331,6 +336,8 @@ const PROFIL = (() => {
             <p class="profil-hint-global">
               Trage ein, wie viele Kilometer du zum Startpunkt läufst (einfache Strecke).
               Hin- und Rückweg werden automatisch zu den Trainingskilometern addiert.
+              Die Wegzeit in Minuten erzeugt im Kalender-Abo eine Erinnerung „Aufbruch zum Training“
+              – so lange vor dem Start, wie du für den Weg brauchst.
             </p>
             ${_buildWegSection()}
 
@@ -437,7 +444,9 @@ const PROFIL = (() => {
       const tpId = tpEl && tpEl.value ? parseInt(tpEl.value, 10) : null;
       const km   = parseFloat((kmEl.value || '').replace(',', '.'));
       if (!typ || !km || km <= 0) return;
-      newWeg.push({ typ, treffpunkt_id: tpId, km });
+      const minEl = document.querySelector(`.weg-min-inp[data-i="${i}"]`);
+      const min   = minEl ? parseInt(minEl.value, 10) : NaN;
+      newWeg.push({ typ, treffpunkt_id: tpId, km, minuten: (!isNaN(min) && min > 0) ? min : null });
     });
 
     // Doppelte Typ+Treffpunkt-Kombinationen prüfen

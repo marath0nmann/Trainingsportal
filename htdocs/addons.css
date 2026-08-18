@@ -2770,3 +2770,6 @@ body.planung-active #app-footer    { display: none; }
 .profil-workout-opt input { position: absolute; opacity: 0; pointer-events: none; }
 .profil-workout-titel { font-size: 13px; font-weight: 700; color: var(--text); }
 .profil-workout-text  { font-size: 11px; color: var(--text2); }
+
+/* Adresse in der Treffpunkt-Karte */
+.tp-adresse { font-size: 11px; color: var(--text2); margin-top: 2px; }

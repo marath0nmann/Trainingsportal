@@ -129,6 +129,7 @@ const TREFFPUNKTE = (() => {
         ${mapPreview}
         <div class="tp-karte-body">
           <div class="tp-karte-name">${escapeHtml(t.name)}</div>
+          ${t.adresse ? `<div class="tp-adresse">${escapeHtml(t.adresse)}</div>` : ''}
           ${coords}
           ${mapLinks}
           ${istTrainer ? `
@@ -166,6 +167,11 @@ const TREFFPUNKTE = (() => {
               <div class="ed-fg ed-fg-wide">
                 <label>Name *</label>
                 <input type="text" id="tp-ed-name" value="${escapeHtml(t ? t.name : '')}" placeholder="z. B. Sportplatz, Vereinsheim">
+              </div>
+              <div class="ed-fg ed-fg-wide">
+                <label>Adresse <span class="ed-hint">(für Navigation und „Zeit zum Aufbrechen“ im Kalender)</span></label>
+                <input type="text" id="tp-ed-adresse" value="${escapeHtml(t && t.adresse ? t.adresse : '')}"
+                  placeholder="z. B. Niersweg 12, 47929 Grefrath">
               </div>
               <div class="ed-fg">
                 <label>Breitengrad (Lat)</label>
@@ -274,7 +280,8 @@ const TREFFPUNKTE = (() => {
     const lngStr = document.getElementById('tp-ed-lng')?.value;
     const lat = latStr !== '' && latStr != null ? parseFloat(latStr) : null;
     const lng = lngStr !== '' && lngStr != null ? parseFloat(lngStr) : null;
-    const payload = { name, lat: (isNaN(lat) ? null : lat), lng: (isNaN(lng) ? null : lng) };
+    const adresse = (document.getElementById('tp-ed-adresse')?.value || '').trim();
+    const payload = { name, adresse: adresse || null, lat: (isNaN(lat) ? null : lat), lng: (isNaN(lng) ? null : lng) };
     try {
       if (id) {
         await apiPut(`treffpunkte/${id}`, payload);
