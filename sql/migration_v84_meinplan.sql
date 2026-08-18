@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS training_privat_einheiten (
   erstellt_am     TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   geaendert_am    TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  KEY idx_benutzer_datum (benutzer_id, datum),
-  CONSTRAINT fk_priv_benutzer FOREIGN KEY (benutzer_id)
-    REFERENCES benutzer(id) ON DELETE CASCADE
+  KEY idx_benutzer_datum (benutzer_id, datum)
+  -- Bewusst kein Fremdschluessel auf benutzer: eine ON-DELETE-CASCADE wuerde
+  -- private Trainingsplaene still mitloeschen, sobald ein Konto im
+  -- Statistikportal endgueltig entfernt wird (v39). Verwaiste Zeilen sind
+  -- wiederherstellbar, kaskadiert geloeschte nicht.
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
