@@ -1,5 +1,10 @@
 # Changelog
 
+## v324
+- **Treffpunkte haben jetzt eine Adresse.** Neues Feld im Treffpunkt-Editor (Admin → Treffpunkte); der Kalender-Eintrag zeigt statt „Nierskampfbahn" die vollständige Anschrift „Nierskampfbahn, Stadionstr. 1, 47929 Grefrath". Navigation und Routenplanung funktionieren damit direkt aus dem Termin heraus.
+- ICS-Termine tragen zusätzlich `GEO` und `X-APPLE-STRUCTURED-LOCATION` mit den Koordinaten des Treffpunkts. Das ist die Voraussetzung dafür, dass Apple Kalender **„Zeit zum Aufbrechen"** für den Termin berechnen kann.
+- **Wegzeit-Erinnerung**: Im Profil lässt sich pro Trainingstyp und Treffpunkt neben den Weg-Kilometern jetzt auch die Wegzeit in Minuten hinterlegen. Der persönliche Kalender-Feed erzeugt daraus eine Erinnerung „Aufbruch zum Training", die entsprechend früher vor dem Start auslöst (nur bei Terminen mit Uhrzeit).
+
 ## v323
 - **Workout-Dateien im persönlichen Kalender-Abo.** Jeder Termin aus „Mein Plan", der Segmente hat, bekommt im ICS-Feed die Workout-Datei mitgeliefert: als anklickbarer Link in der Terminbeschreibung und zusätzlich als `ATTACH`-Anhang (Apple Kalender zeigt ihn direkt an, Google & Co. ignorieren Anhänge – der Link funktioniert überall).
 - Neue Profil-Einstellung **„Workout-Datei im Kalender"**: Garmin (.fit), Apple Watch (.workout) oder keine. Angehängt wird immer nur das gewählte Format – kein doppelter Ballast im Kalender.

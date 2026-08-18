@@ -1389,6 +1389,16 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig37: ' . $e->getMessage()); }
         },
 
+        // ── 34: Adresse am Treffpunkt ───────────────────────────────────────────────────
+        // Für Anfahrt und Apple „Zeit zum Aufbrechen“ braucht der Kalender die
+        // vollständige Adresse, nicht nur den Namen des Treffpunkts.
+        34 => static function (): void {
+            try {
+                DB::query('ALTER TABLE `' . DB::tbl('training_treffpunkte') . '`
+                    ADD COLUMN IF NOT EXISTS adresse VARCHAR(300) NULL AFTER name');
+            } catch (Throwable $e) { error_log('mig34: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -3189,7 +3199,8 @@ function sendeIcs(string $body, string $filename): void {
 function buildIcsPublic(bool $mitUhrzeit = false): string {
     $typenDauer = ladeTypenDauerMap();
     $rows = DB::fetchAll(
-        'SELECT e.*, t.name AS tp_name FROM ' . DB::tbl('training_einheiten') . ' e
+        'SELECT e.*, t.name AS tp_name, t.adresse AS tp_adresse, t.lat AS tp_lat, t.lng AS tp_lng
+           FROM ' . DB::tbl('training_einheiten') . ' e
          LEFT JOIN ' . DB::tbl('training_treffpunkte') . " t ON t.id = e.treffpunkt_id
           WHERE e.sichtbarkeit = 'oeffentlich'
             AND e.datum >= (CURDATE() - INTERVAL 60 DAY)
@@ -3256,6 +3267,7 @@ function buildIcsForUser(int $userId, bool $mitUhrzeit = false): string {
     // Bevorzugtes Uhren-Format (Profil) – nur der gewählte Typ wird angehängt.
     // Das Token wandert mit in die Download-URL, damit die Datei auch aus der
     // Kalender-App heraus (ohne Login) die persönlichen Pace-Vorgaben enthält.
+    $wegPrefs      = ladeWegPrefs($userId);
     $workoutFormat = ladeWorkoutFormat($userId);
     $workout = $workoutFormat === 'keine'
         ? []
@@ -3265,7 +3277,8 @@ function buildIcsForUser(int $userId, bool $mitUhrzeit = false): string {
     $privatRows = DB::fetchAll(
         'SELECT p.id, p.datum, p.uhrzeit, p.typ, p.titel, p.bemerkung,
                 p.ref_einheit_id, p.erstellt_am, p.geaendert_am,
-                e.status, t.name AS tp_name
+                e.status, t.name AS tp_name, t.adresse AS tp_adresse,
+                t.lat AS tp_lat, t.lng AS tp_lng, e.treffpunkt_id AS tp_id
            FROM ' . DB::tbl('training_privat_einheiten') . ' p
            LEFT JOIN ' . DB::tbl('training_einheiten') . ' e ON e.id = p.ref_einheit_id
            LEFT JOIN ' . DB::tbl('training_treffpunkte') . ' t ON t.id = e.treffpunkt_id
@@ -3287,7 +3300,12 @@ function buildIcsForUser(int $userId, bool $mitUhrzeit = false): string {
         }
         $p['_dauer_min'] = $typenDauer[$p['typ']] ?? null;
         $uid = 'privat-' . (int)$p['id'] . '@training.tus-oedt.de';
-        $events[] = bauVevent($p, $segs, $bestzeiten, $uid, $mitUhrzeit, $workout);
+        $wegMin = wegMinutenFuer(
+            $wegPrefs,
+            (string)($p['typ'] ?? ''),
+            isset($p['tp_id']) && $p['tp_id'] !== null ? (int)$p['tp_id'] : null
+        );
+        $events[] = bauVevent($p, $segs, $bestzeiten, $uid, $mitUhrzeit, $workout, $wegMin);
     }
     // Tagesnotizen: global (kein gruppe_id) + alle Gruppen des Nutzers
     try {
@@ -3349,7 +3367,7 @@ function bauNotizVevent(array $n): string {
  * @param array       $workout  ['format' => 'garmin'|'apple', 'token' => '…'] oder []
  *                              – hängt die Workout-Datei der Einheit an den Termin
  */
-function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid = null, bool $mitUhrzeit = false, array $workout = []): string {
+function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid = null, bool $mitUhrzeit = false, array $workout = [], int $wegMinuten = 0): string {
     $uid = $uid ?? ('einheit-' . (int)$e['id'] . '@training.tus-oedt.de');
     $stamp = gmdate('Ymd\\THis\\Z');
     $datum = preg_replace('/-/', '', $e['datum']);
@@ -3379,8 +3397,25 @@ function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid =
     }
 
     $lines[] = 'SUMMARY:' . icsEsc($e['titel']);
-    if (!empty($e['tp_name'])) {
-        $lines[] = 'LOCATION:' . icsEsc($e['tp_name']);
+    // Ort: möglichst vollständige Adresse – Navigation und Apples „Zeit zum
+    // Aufbrechen“ brauchen mehr als den Namen des Treffpunkts.
+    $ortText = treffpunktAdresse($e['tp_name'] ?? null, $e['tp_adresse'] ?? null);
+    if ($ortText !== null && $ortText !== '') {
+        $lines[] = 'LOCATION:' . icsEsc($ortText);
+        $lat = isset($e['tp_lat']) && $e['tp_lat'] !== null ? (float)$e['tp_lat'] : null;
+        $lng = isset($e['tp_lng']) && $e['tp_lng'] !== null ? (float)$e['tp_lng'] : null;
+        if ($lat !== null && $lng !== null) {
+            $lines[] = 'GEO:' . $lat . ';' . $lng;
+            // Strukturierter Ort: erst damit kann Apple die Wegzeit berechnen.
+            // Parameterwerte sind kein TEXT – Kommas gehören in Anführungszeichen,
+            // nicht escaped (RFC 5545, 3.2).
+            $param = fn(string $v) => '"' . str_replace(['"', "\r", "\n"], ['', '', ' '], $v) . '"';
+            $lines[] = 'X-APPLE-STRUCTURED-LOCATION;VALUE=URI'
+                . ';X-ADDRESS=' . $param($ortText)
+                . ';X-APPLE-RADIUS=100'
+                . ';X-TITLE=' . $param((string)($e['tp_name'] ?? $ortText))
+                . ':geo:' . $lat . ',' . $lng;
+        }
     }
     if (($e['status'] ?? '') === 'abgesagt') {
         $lines[] = 'STATUS:CANCELLED';
@@ -3444,6 +3479,16 @@ function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid =
     // ATTACH trägt die URI unescaped (RFC 5545: kein TEXT-Wert)
     if ($attachZeile !== null) {
         $lines[] = $attachZeile;
+    }
+
+    // Aufbruch-Erinnerung: nur sinnvoll bei Terminen mit Uhrzeit
+    if ($wegMinuten > 0 && $hatZeit && ($e['status'] ?? '') !== 'abgesagt') {
+        $lines[] = 'BEGIN:VALARM';
+        $lines[] = 'ACTION:DISPLAY';
+        $lines[] = 'TRIGGER;RELATED=START:-PT' . $wegMinuten . 'M';
+        $lines[] = 'DESCRIPTION:' . icsEsc('Aufbruch zum Training – ' . $wegMinuten . ' min Weg'
+            . (!empty($e['tp_name']) ? ' zur/zum ' . $e['tp_name'] : ''));
+        $lines[] = 'END:VALARM';
     }
 
     $lines[] = 'END:VEVENT';
@@ -3762,12 +3807,28 @@ function ensureTreffpunkteTabelle(): void {
     }
 }
 
+/**
+ * Name und Adresse zu einer Zeile verbinden – ohne den Namen zu doppeln,
+ * wenn er bereits in der Adresse steckt.
+ */
+function treffpunktAdresse(?string $name, ?string $adresse): ?string {
+    $name    = trim((string)$name);
+    $adresse = trim((string)$adresse);
+    if ($adresse === '') return $name !== '' ? $name : null;
+    if ($name === '')    return $adresse;
+    if (mb_stripos($adresse, $name) !== false) return $adresse;
+    return $name . ', ' . $adresse;
+}
+
 function mapTreffpunkt(array $r): array {
     $lat = $r['lat'] !== null ? (float)$r['lat'] : null;
     $lng = $r['lng'] !== null ? (float)$r['lng'] : null;
     return [
         'id'          => (int)$r['id'],
         'name'        => $r['name'],
+        'adresse'     => $r['adresse'] ?? null,
+        // Für Kalender/Navigation: Name + Adresse in einer Zeile
+        'volle_adresse' => treffpunktAdresse($r['name'], $r['adresse'] ?? null),
         'lat'         => $lat,
         'lng'         => $lng,
         'maps_google' => ($lat !== null && $lng !== null)
@@ -4207,6 +4268,22 @@ function speichereWegPrefs(int $userId, array $config): void
     );
 }
 
+/**
+ * Wegzeit (Minuten, einfache Strecke) für eine Einheit aus den Weg-Prefs.
+ * Matching wie in WEG.wegKm: Typ muss passen, treffpunkt_id exakt
+ * (null passt nur auf Einheiten ohne Treffpunkt). 0 = keine Angabe.
+ */
+function wegMinutenFuer(array $wegPrefs, string $typ, ?int $tpId): int
+{
+    foreach ($wegPrefs as $p) {
+        if (($p['typ'] ?? '') !== $typ) continue;
+        $pTp = (isset($p['treffpunkt_id']) && $p['treffpunkt_id'] !== null) ? (int)$p['treffpunkt_id'] : null;
+        if ($pTp !== $tpId) continue;
+        return max(0, (int)($p['minuten'] ?? 0));
+    }
+    return 0;
+}
+
 function handleWegPrefsGet(int $userId): void
 {
     $prefs = ladeWegPrefs($userId);
@@ -4240,10 +4317,13 @@ function handleWegPrefsSet(int $userId): void
         $km = (isset($entry['km']) && is_numeric($entry['km']) && (float)$entry['km'] > 0)
             ? round((float)$entry['km'], 2) : null;
         if (!$km) continue;
+        // Wegzeit (Minuten, einfache Strecke) – Basis für die Aufbruch-Erinnerung
+        $min = (isset($entry['minuten']) && is_numeric($entry['minuten']) && (int)$entry['minuten'] > 0)
+            ? min(300, (int)$entry['minuten']) : null;
         $key = $typ . '|' . ($tpId ?? '');
         if (isset($seen[$key])) continue; // Duplikate überspringen
         $seen[$key] = true;
-        $validated[] = ['typ' => $typ, 'treffpunkt_id' => $tpId, 'km' => $km];
+        $validated[] = ['typ' => $typ, 'treffpunkt_id' => $tpId, 'km' => $km, 'minuten' => $min];
     }
     speichereWegPrefs($userId, $validated);
     echo json_encode(['ok' => true]);
@@ -4284,9 +4364,11 @@ function handleTreffpunkte(string $method, string $sub): void
         }
         $lat = isset($in['lat']) && $in['lat'] !== '' && $in['lat'] !== null ? (float)$in['lat'] : null;
         $lng = isset($in['lng']) && $in['lng'] !== '' && $in['lng'] !== null ? (float)$in['lng'] : null;
+        $adresse = isset($in['adresse']) && trim((string)$in['adresse']) !== ''
+            ? mb_substr(trim((string)$in['adresse']), 0, 300) : null;
         DB::query(
-            'INSERT INTO ' . DB::tbl('training_treffpunkte') . ' (name, lat, lng, erstellt_von) VALUES (?,?,?,?)',
-            [trim($in['name']), $lat, $lng, (int)$user['id']]
+            'INSERT INTO ' . DB::tbl('training_treffpunkte') . ' (name, adresse, lat, lng, erstellt_von) VALUES (?,?,?,?,?)',
+            [trim($in['name']), $adresse, $lat, $lng, (int)$user['id']]
         );
         $id = (int)DB::lastInsertId();
         $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_treffpunkte') . ' WHERE id = ?', [$id]);
@@ -4310,9 +4392,11 @@ function handleTreffpunkte(string $method, string $sub): void
         }
         $lat = isset($in['lat']) && $in['lat'] !== '' && $in['lat'] !== null ? (float)$in['lat'] : null;
         $lng = isset($in['lng']) && $in['lng'] !== '' && $in['lng'] !== null ? (float)$in['lng'] : null;
+        $adresse = isset($in['adresse']) && trim((string)$in['adresse']) !== ''
+            ? mb_substr(trim((string)$in['adresse']), 0, 300) : null;
         DB::query(
-            'UPDATE ' . DB::tbl('training_treffpunkte') . ' SET name=?, lat=?, lng=? WHERE id=?',
-            [trim($in['name']), $lat, $lng, $id]
+            'UPDATE ' . DB::tbl('training_treffpunkte') . ' SET name=?, adresse=?, lat=?, lng=? WHERE id=?',
+            [trim($in['name']), $adresse, $lat, $lng, $id]
         );
         $row = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_treffpunkte') . ' WHERE id = ?', [$id]);
         echo json_encode(['ok' => true, 'treffpunkt' => mapTreffpunkt($row)]);
