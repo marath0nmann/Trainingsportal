@@ -1399,7 +1399,115 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig38: ' . $e->getMessage()); }
         },
 
+        // ── 39: Archiv – im Trainingsportal wird nichts endgueltig geloescht ──
+        //   training_geloescht nimmt jede fachlich geloeschte Zeile als JSON auf,
+        //   inklusive der Kind-Zeilen, die per ON DELETE CASCADE mitgehen wuerden.
+        //   Zusaetzlich faellt die CASCADE von training_privat_einheiten auf
+        //   benutzer weg: sonst verschwinden private Trainingsplaene still,
+        //   sobald ein Konto im Statistikportal endgueltig geloescht wird.
+        39 => static function (): void {
+            try {
+                DB::query('CREATE TABLE IF NOT EXISTS `' . DB::tbl('training_geloescht') . '` (
+                    id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    tabelle      VARCHAR(64)  NOT NULL,
+                    datensatz_id INT UNSIGNED NULL,
+                    daten        LONGTEXT     NOT NULL COMMENT \'komplette Zeile als JSON\',
+                    grund        VARCHAR(200) NULL,
+                    benutzer_id  INT UNSIGNED NULL,
+                    benutzername VARCHAR(190) NULL,
+                    geloescht_am TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    KEY idx_tabelle (tabelle, datensatz_id),
+                    KEY idx_zeit (geloescht_am)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+            } catch (Throwable $e) { error_log('mig39a: ' . $e->getMessage()); }
+            try {
+                DB::query('ALTER TABLE `' . DB::tbl('training_privat_einheiten') . '`
+                    DROP FOREIGN KEY IF EXISTS fk_priv_benutzer');
+            } catch (Throwable $e) { error_log('mig39b: ' . $e->getMessage()); }
+        },
+
     ];
+}
+
+// ── Archiv: Loeschen ist im Trainingsportal nie endgueltig ────────────────
+// Jede fachliche Loeschung laeuft ueber archiviereUndLoesche(): die betroffenen
+// Zeilen werden vorher vollstaendig als JSON nach training_geloescht geschrieben,
+// samt der Kind-Zeilen, die per ON DELETE CASCADE stillschweigend mitgingen.
+// Rein technische DELETEs (Segmente beim Speichern neu schreiben, Zuordnungs-,
+// Skip- und Token-Tabellen) laufen bewusst weiterhin direkt: sie erzeugen keinen
+// Datenverlust, sondern nur Rauschen im Archiv.
+//
+// Wiederherstellen (Beispiel, in phpMyAdmin):
+//   SELECT id, tabelle, datensatz_id, daten, benutzername, geloescht_am
+//     FROM training_geloescht ORDER BY id DESC LIMIT 50;
+//   Das JSON aus `daten` liefert alle Spaltenwerte fuer ein INSERT.
+
+/** Kind-Tabellen, die per FK-CASCADE mitgeloescht werden [tabelle, spalte]. */
+function _archivKinder(string $tabelle): array
+{
+    $map = [
+        'training_einheiten' => [['training_segmente', 'einheit_id']],
+        'training_bloecke'   => [['training_block_segmente', 'block_id'],
+                                 ['training_block_gruppen',  'block_id']],
+    ];
+    return $map[$tabelle] ?? [];
+}
+
+/** Schreibt Zeilen ins Archiv. Wirft, wenn das Archiv nicht erreichbar ist. */
+function _archivSchreibe(string $tabelle, array $rows, ?string $grund): void
+{
+    $ta   = DB::tbl('training_geloescht');
+    $user = null;
+    try { $user = Auth::check(); } catch (Throwable $e) {}
+    $uid  = $user ? (int)$user['id'] : null;
+    $name = $user ? (string)($user['email'] ?? $user['benutzername'] ?? '') : null;
+
+    foreach (array_chunk($rows, 50) as $chunk) {
+        $ph = []; $vals = [];
+        foreach ($chunk as $r) {
+            $ph[]   = '(?,?,?,?,?,?)';
+            $vals[] = $tabelle;
+            $vals[] = isset($r['id']) && ctype_digit((string)$r['id']) ? (int)$r['id'] : null;
+            $vals[] = json_encode($r, JSON_UNESCAPED_UNICODE);
+            $vals[] = $grund;
+            $vals[] = $uid;
+            $vals[] = $name;
+        }
+        DB::query(
+            "INSERT INTO `{$ta}` (tabelle, datensatz_id, daten, grund, benutzer_id, benutzername)
+             VALUES " . implode(',', $ph),
+            $vals
+        );
+    }
+}
+
+/**
+ * Archiviert die betroffenen Zeilen und loescht sie erst danach.
+ * Schlaegt das Archivieren fehl, wird NICHT geloescht – lieber ein Fehler
+ * als ein unwiederbringlicher Datensatz.
+ *
+ * @return int Anzahl archivierter (und geloeschter) Zeilen der Haupttabelle
+ */
+function archiviereUndLoesche(string $tabelle, string $where, array $params = [], ?string $grund = null): int
+{
+    $tbl  = DB::tbl($tabelle);
+    $rows = DB::fetchAll("SELECT * FROM `{$tbl}` WHERE {$where}", $params);
+    if (!$rows) return 0;
+
+    // Kinder zuerst – sie verschwinden sonst still per CASCADE
+    $ids = array_values(array_filter(array_map(fn($r) => (int)($r['id'] ?? 0), $rows)));
+    if ($ids) {
+        $kph = implode(',', array_fill(0, count($ids), '?'));
+        foreach (_archivKinder($tabelle) as [$kindTabelle, $kindSpalte]) {
+            archiviereUndLoesche($kindTabelle, "`{$kindSpalte}` IN ({$kph})", $ids,
+                                 $grund ?? ('mit ' . $tabelle));
+        }
+    }
+
+    _archivSchreibe($tabelle, $rows, $grund);
+    DB::query("DELETE FROM `{$tbl}` WHERE {$where}", $params);
+    return count($rows);
 }
 
 Auth::startSession();
@@ -1747,7 +1855,7 @@ function handleEinheiten(string $method, string $sub): void
 
     if ($sub !== '' && $method === 'DELETE' && ctype_digit($sub)) {
         $id = (int)$sub;
-        DB::query('DELETE FROM ' . DB::tbl('training_einheiten') . ' WHERE id = ?', [$id]);
+        archiviereUndLoesche('training_einheiten', 'id = ?', [$id]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -2482,7 +2590,7 @@ function handleAdmin(string $method, string $sub): void {
             return;
         }
         $ph = implode(',', array_fill(0, count($ids), '?'));
-        DB::query('DELETE FROM ' . DB::tbl('training_einheiten') . ' WHERE id IN (' . $ph . ')', $ids);
+        archiviereUndLoesche('training_einheiten', 'id IN (' . $ph . ')', $ids, 'Sammel-Loeschung');
         echo json_encode(['ok' => true, 'geloescht' => count($ids)]);
         return;
     }
@@ -3724,7 +3832,7 @@ function handleAdminTypen(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => "Typ wird von $blockCount Block(s) verwendet und kann nicht gelöscht werden."]);
             return;
         }
-        DB::query('DELETE FROM ' . DB::tbl('training_typen') . ' WHERE slug = ?', [$slug]);
+        archiviereUndLoesche('training_typen', 'slug = ?', [$slug]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -4015,8 +4123,8 @@ function handleSerien(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
             return;
         }
-        DB::query('DELETE FROM ' . DB::tbl('training_einheiten') . ' WHERE serie_id = ?', [$serieId]);
-        DB::query('DELETE FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
+        archiviereUndLoesche('training_einheiten', 'serie_id = ?', [$serieId], 'Serie geloescht');
+        archiviereUndLoesche('training_serien', 'id = ?', [$serieId]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -4036,16 +4144,14 @@ function handleSerien(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
             return;
         }
-        DB::query(
-            'DELETE FROM ' . DB::tbl('training_einheiten') . ' WHERE serie_id = ? AND datum >= ?',
-            [$serieId, $abDatum]
-        );
+        archiviereUndLoesche('training_einheiten', 'serie_id = ? AND datum >= ?',
+                             [$serieId, $abDatum], 'Serie ab Datum geloescht');
         $rest = DB::fetchOne(
             'SELECT COUNT(*) AS n FROM ' . DB::tbl('training_einheiten') . ' WHERE serie_id = ?',
             [$serieId]
         );
         if ((int)($rest['n'] ?? 0) === 0) {
-            DB::query('DELETE FROM ' . DB::tbl('training_serien') . ' WHERE id = ?', [$serieId]);
+            archiviereUndLoesche('training_serien', 'id = ?', [$serieId]);
         }
         echo json_encode(['ok' => true]);
         return;
@@ -4416,7 +4522,7 @@ function handleTreffpunkte(string $method, string $sub): void
             'UPDATE ' . DB::tbl('training_einheiten') . ' SET treffpunkt_id = NULL WHERE treffpunkt_id = ?',
             [$id]
         );
-        DB::query('DELETE FROM ' . DB::tbl('training_treffpunkte') . ' WHERE id = ?', [$id]);
+        archiviereUndLoesche('training_treffpunkte', 'id = ?', [$id]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -4783,7 +4889,7 @@ function handleBloecke(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
             return;
         }
-        DB::query('DELETE FROM ' . DB::tbl('training_bloecke') . ' WHERE id = ?', [$id]);
+        archiviereUndLoesche('training_bloecke', 'id = ?', [$id]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -5079,7 +5185,7 @@ function handleStrecken(string $method, string $sub): void
             echo json_encode(['ok' => false, 'fehler' => "Strecke wird noch von $n Einheit(en)/Block(s) verwendet."]);
             return;
         }
-        DB::query('DELETE FROM ' . DB::tbl('training_strecken') . ' WHERE id = ?', [$id]);
+        archiviereUndLoesche('training_strecken', 'id = ?', [$id]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -5783,11 +5889,9 @@ function handleMeinPlan(string $method, string $tail): void
         );
         // Alle künftigen privaten Abo-Einheiten dieses Typs löschen (vergangene bleiben)
         $today = date('Y-m-d');
-        DB::query(
-            'DELETE FROM ' . DB::tbl('training_privat_einheiten') . '
-             WHERE benutzer_id = ? AND typ = ? AND datum >= ? AND ref_einheit_id IS NOT NULL',
-            [$userId, $typ, $today]
-        );
+        archiviereUndLoesche('training_privat_einheiten',
+            'benutzer_id = ? AND typ = ? AND datum >= ? AND ref_einheit_id IS NOT NULL',
+            [$userId, $typ, $today], 'Abo abbestellt');
         echo json_encode(['ok' => true]);
         return;
     }
@@ -6051,10 +6155,8 @@ function handleMeinPlan(string $method, string $tail): void
                 [$ownerId, (int)$privRow['ref_einheit_id']]
             );
         }
-        DB::query(
-            'DELETE FROM ' . DB::tbl('training_privat_einheiten') . ' WHERE id = ? AND benutzer_id = ?',
-            [$id, $ownerId]
-        );
+        archiviereUndLoesche('training_privat_einheiten', 'id = ? AND benutzer_id = ?',
+                             [$id, $ownerId]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -6286,7 +6388,7 @@ function handleTagesnotizen(string $method, string $sub = ''): void
             echo json_encode(['ok' => false, 'fehler' => 'Notiz nicht gefunden']);
             return;
         }
-        DB::query("DELETE FROM $tbl WHERE id = ?", [$id]);
+        archiviereUndLoesche('training_tagesnotizen', 'id = ?', [$id]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -7035,7 +7137,7 @@ function handleWettkampf(string $method, string $tail): void
             echo json_encode(['ok' => false, 'fehler' => 'Kein Zugriff']);
             return;
         }
-        DB::query("DELETE FROM $twa WHERE id=?", [$anmId]);
+        archiviereUndLoesche('training_wettkampf_anmeldungen', 'id=?', [$anmId]);
         echo json_encode(['ok' => true]);
         return;
     }
@@ -7128,7 +7230,8 @@ function handleWettkampf(string $method, string $tail): void
             try {
                 if ($eUrl === null) {
                     // Leer → Ausgabe-Zeile entfernen (Tabelle sauber halten)
-                    DB::query("DELETE FROM `{$twe}` WHERE serie_id=? AND jahr=?", [$serieId, $jahr]);
+                    archiviereUndLoesche('training_wettkampf_ergebnis', 'serie_id=? AND jahr=?',
+                                         [$serieId, $jahr], 'Wettkampf-URL geleert');
                 } else {
                     DB::query(
                         "INSERT INTO `{$twe}` (serie_id, jahr, ergebnis_url)

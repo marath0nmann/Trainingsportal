@@ -1,5 +1,12 @@
 # Changelog
 
+## v326
+- **Gelöschtes ist ab jetzt wiederherstellbar.** Jede fachliche Löschung (Einheit, Serie, Block, Strecke, Treffpunkt, Trainingstyp, Tagesnotiz, private Einheit, Wettkampf-Anmeldung) schreibt die komplette Zeile vorher als JSON in die neue Tabelle `training_geloescht` – mit Zeitpunkt und Benutzer, der gelöscht hat. Nichts verlässt das Portal mehr endgültig.
+- Kind-Zeilen, die bisher per Fremdschlüssel-CASCADE still mitgingen (Segmente einer Einheit, Segmente und Gruppen eines Blocks), werden mitarchiviert.
+- Schlägt das Archivieren fehl, wird **nicht** gelöscht – lieber eine Fehlermeldung als ein unwiederbringlicher Datensatz.
+- `training_privat_einheiten` hängt nicht mehr per `ON DELETE CASCADE` an `benutzer`: Wird ein Konto endgültig entfernt, verschwand der private Trainingsplan bisher unbemerkt mit. Jetzt bleibt er erhalten und ist wiederherstellbar.
+- Technische Löschungen (Segmente beim Speichern neu schreiben, Gruppen- und Freigabe-Zuordnungen, Abo-Skips, ICS-Token) laufen bewusst unverändert direkt – sie erzeugen keinen Datenverlust, sondern nur Rauschen im Archiv.
+
 ## v325
 - Fix: Die Adress-Migration aus v324 trug die bereits vergebene Nummer 34 und überschrieb damit die Wettkampf-Migration – sie lief nie, der ICS-Feed lief in einen Serverfehler („Unknown column t.adresse"). Jetzt Nummer 38.
 
