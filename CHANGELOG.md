@@ -1,5 +1,8 @@
 # Changelog
 
+## v325
+- Fix: Die Adress-Migration aus v324 trug die bereits vergebene Nummer 34 und überschrieb damit die Wettkampf-Migration – sie lief nie, der ICS-Feed lief in einen Serverfehler („Unknown column t.adresse"). Jetzt Nummer 38.
+
 ## v324
 - **Treffpunkte haben jetzt eine Adresse.** Neues Feld im Treffpunkt-Editor (Admin → Treffpunkte); der Kalender-Eintrag zeigt statt „Nierskampfbahn" die vollständige Anschrift „Nierskampfbahn, Stadionstr. 1, 47929 Grefrath". Navigation und Routenplanung funktionieren damit direkt aus dem Termin heraus.
 - ICS-Termine tragen zusätzlich `GEO` und `X-APPLE-STRUCTURED-LOCATION` mit den Koordinaten des Treffpunkts. Das ist die Voraussetzung dafür, dass Apple Kalender **„Zeit zum Aufbrechen"** für den Termin berechnen kann.

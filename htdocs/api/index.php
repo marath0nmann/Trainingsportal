@@ -1389,14 +1389,14 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig37: ' . $e->getMessage()); }
         },
 
-        // ── 34: Adresse am Treffpunkt ───────────────────────────────────────────────────
+        // ── 38: Adresse am Treffpunkt ───────────────────────────────────────────────────
         // Für Anfahrt und Apple „Zeit zum Aufbrechen“ braucht der Kalender die
         // vollständige Adresse, nicht nur den Namen des Treffpunkts.
-        34 => static function (): void {
+        38 => static function (): void {
             try {
                 DB::query('ALTER TABLE `' . DB::tbl('training_treffpunkte') . '`
                     ADD COLUMN IF NOT EXISTS adresse VARCHAR(300) NULL AFTER name');
-            } catch (Throwable $e) { error_log('mig34: ' . $e->getMessage()); }
+            } catch (Throwable $e) { error_log('mig38: ' . $e->getMessage()); }
         },
 
     ];
