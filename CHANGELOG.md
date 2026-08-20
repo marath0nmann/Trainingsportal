@@ -1,6 +1,9 @@
 # Changelog
 
 ## v326
+- Fix: Die Workout-Datei aus dem Kalender-Termin landete als „index.php" auf dem Gerät. Kalender-Apps benennen einen geladenen Anhang nach dem letzten Pfadsegment der URL und ignorieren den vom Server gesetzten Dateinamen – die Endung steht deshalb jetzt im Pfad (`…/api/index.php/workout/einheit/242.workout`) statt in der Query. Damit kommt die Datei als `.workout` bzw. `.fit` an und lässt sich direkt öffnen.
+
+## v326
 - **Gelöschtes ist ab jetzt wiederherstellbar.** Jede fachliche Löschung (Einheit, Serie, Block, Strecke, Treffpunkt, Trainingstyp, Tagesnotiz, private Einheit, Wettkampf-Anmeldung) schreibt die komplette Zeile vorher als JSON in die neue Tabelle `training_geloescht` – mit Zeitpunkt und Benutzer, der gelöscht hat. Nichts verlässt das Portal mehr endgültig.
 - Kind-Zeilen, die bisher per Fremdschlüssel-CASCADE still mitgingen (Segmente einer Einheit, Segmente und Gruppen eines Blocks), werden mitarchiviert.
 - Schlägt das Archivieren fehl, wird **nicht** gelöscht – lieber eine Fehlermeldung als ein unwiederbringlicher Datensatz.
