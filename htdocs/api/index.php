@@ -3566,13 +3566,16 @@ function bauVevent(array $e, array $segs, array $bestzeiten = [], ?string $uid =
     $einheitId   = !empty($e['ref_einheit_id']) ? (int)$e['ref_einheit_id'] : 0;
     $format      = $workout['format'] ?? 'keine';
     if ($einheitId > 0 && !empty($segs) && in_array($format, ['garmin', 'apple'], true)) {
-        $tokenQs = !empty($workout['token']) ? '&token=' . rawurlencode((string)$workout['token']) : '';
+        // Endung gehört in den Pfad, nicht in die Query: Kalender-Apps benennen
+        // die geladene Datei nach dem letzten Pfadsegment und ignorieren
+        // Content-Disposition – sonst landet sie als „index.php" auf dem Gerät.
+        $tokenQs = !empty($workout['token']) ? '?token=' . rawurlencode((string)$workout['token']) : '';
         if ($format === 'garmin') {
-            $url  = apiBasisUrl() . '?p=fit/einheit/' . $einheitId . '.fit' . $tokenQs;
+            $url  = apiBasisUrl() . '/fit/einheit/' . $einheitId . '.fit' . $tokenQs;
             $typ  = 'application/vnd.ant.fit';
             $lbl  = 'Garmin-Workout (.fit)';
         } else {
-            $url  = apiBasisUrl() . '?p=workout/einheit/' . $einheitId . '.workout' . $tokenQs;
+            $url  = apiBasisUrl() . '/workout/einheit/' . $einheitId . '.workout' . $tokenQs;
             $typ  = 'application/octet-stream';
             $lbl  = 'Apple-Watch-Workout (.workout)';
         }
