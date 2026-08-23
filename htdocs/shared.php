@@ -8,7 +8,7 @@
 //
 // Beispiel: shared.php?file=app.css
 // Erlaubte Dateien: app.css, favicon.svg, apple-touch-icon.png,
-// uploads/<assetname>
+// uploads/<assetname>, js/09b_tabellenfilter.js (gemeinsame Filterleiste)
 // ============================================================
 
 declare(strict_types=1);
@@ -29,6 +29,8 @@ $erlaubt = [
     '#^favicon\.(?:svg|ico)$#',
     '#^apple-touch-icon\.png$#',
     '#^uploads/[a-zA-Z0-9_./-]+\.(?:png|jpg|jpeg|svg|webp|gif)$#',
+    // Gemeinsame Tabellen-Filterleiste – eine Quelle fuer beide Portale
+    '#^js/09b_tabellenfilter\.js$#',
 ];
 $ok = false;
 foreach ($erlaubt as $re) {
@@ -45,6 +47,7 @@ if (!$real || !$base || !str_starts_with($real, $base) || !is_file($real)) {
 
 $mimeMap = [
     'css'  => 'text/css; charset=utf-8',
+    'js'   => 'application/javascript; charset=utf-8',
     'svg'  => 'image/svg+xml',
     'ico'  => 'image/x-icon',
     'png'  => 'image/png',

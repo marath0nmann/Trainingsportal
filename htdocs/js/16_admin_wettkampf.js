@@ -223,8 +223,49 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   // ── Sortierung ────────────────────────────────────────────────
+  // ── Gemeinsame Filterleiste (Statistikportal-Modul, via shared.php) ──
+  const TF = 'tp-wettkaempfe';
+
+  function _filterInit() {
+    tfInit(TF, {
+      platzhalter: 'Wettkampf, Ort, Disziplin…',
+      rows: () => serien,
+      suche: s => [decodeHtml(s.name || ''), s.kuerzel, decodeHtml(s.ort_letzter || '')]
+                    .concat(allesDisziplinen(s)),
+      spalten: [
+        { key: 'kategorie', label: 'Kategorie',
+          wert: s => s.import_kategorie ? _katName(s.import_kategorie) : '— ohne Kategorie —' },
+        // Mehrfachzuordnung: jede Disziplin der Serie zählt einzeln
+        { key: 'disziplin', label: 'Disziplin', wert: s => allesDisziplinen(s) },
+        { key: 'ort',       label: 'Ort', wert: s => decodeHtml(s.ort_letzter || '') },
+        { key: 'monat',     label: 'Monat (nächster Termin)', wert: s => {
+            const n = naechstesDatum(s);
+            return n ? n.datum.slice(5, 7) : '';
+          }, anzeige: w => MONATE[parseInt(w, 10) - 1] || w },
+        { key: 'termin', label: 'Termin', wert: s => {
+            const n = naechstesDatum(s);
+            if (!n) return 'kein Termin';
+            return n.modus === 'abgesagt' ? 'abgesagt'
+                 : n.modus === 'manuell'  ? 'fest' : 'Prognose';
+          } },
+        { key: 'status', label: 'Status', wert: s => s.vorschlag_von ? 'Vorschlag'
+                                                    : s.aktiv === 0 ? 'Inaktiv' : 'Aktiv' },
+        { key: 'anmeldungen', label: 'Anmeldungen',
+          wert: s => _anzAnmeldungen(s) > 0 ? 'vorhanden' : 'keine' },
+        { key: 'seit', label: 'Erste Ausgabe', absteigend: true,
+          wert: s => s.erstes_datum ? String(s.erstes_datum).slice(0, 4) : '' },
+      ],
+      onChange: () => renderTabelle(),
+    });
+  }
+
+  function _gefilterteSerien() {
+    _filterInit();
+    return tfFilter(TF, serien);
+  }
+
   function _sortiereSerien() {
-    return [...serien].sort((a, b) => {
+    return [..._gefilterteSerien()].sort((a, b) => {
       let va, vb;
       if (_sortCol === 'name') {
         va = decodeHtml(a.name || a.kuerzel || '').toLowerCase();
@@ -268,34 +309,52 @@ const ADMIN_WETTKAMPF = (() => {
   }
 
   // ── Tabelle ───────────────────────────────────────────────────
+  // Die Filterleiste wird nur einmal gebaut – sonst verliert das Suchfeld beim
+  // Tippen den Fokus. Neu gezeichnet wird ausschliesslich der Tabellenblock.
   function renderTabelle() {
     if (!container) return;
+    _filterInit();
+    let box = document.getElementById('awk-box');
+    if (!box) {
+      container.innerHTML = '<div id="awk-kopf"></div>' +
+        tfBarHtml(TF, { suchbreite: '1 1 240px' }) + '<div id="awk-box"></div>';
+      box = document.getElementById('awk-box');
+    }
+    document.getElementById('awk-kopf').innerHTML = _kopfHtml();
+    box.innerHTML = _tabellenHtml();
+    tfRefresh(TF);
+  }
+
+  function _kopfHtml() {
     const admin = istAdmin();
-
     const anzVorschlaege = serien.filter(s => s.vorschlag_von).length;
-
-    let html = `
+    const sichtbar = _gefilterteSerien().length;
+    return `
       <div style="display:flex;justify-content:space-between;align-items:flex-end;
                   margin-bottom:16px;gap:12px;flex-wrap:wrap">
         <div>
           <h2 style="margin:0 0 2px;font-size:1.2rem;font-weight:700">Wettkämpfe</h2>
           <div style="font-size:12px;color:var(--text2)">
             Regelmäßige Veranstaltungen aus dem Statistikportal &bull;
-            ${serien.length} Serien
+            ${tfAktiv(TF) ? `${sichtbar} von ${serien.length}` : serien.length} Serien
             ${anzVorschlaege ? ` &bull; <strong style="color:#e67e22">${anzVorschlaege} Vorschlag${anzVorschlaege !== 1 ? '&auml;ge' : ''} zur Prüfung</strong>` : ''}
           </div>
         </div>
         ${admin ? `<button class="btn btn-primary btn-sm"
           onclick="ADMIN_WETTKAMPF.neuerWettkampf()">+ Neuer Wettkampf</button>` : ''}
       </div>`;
+  }
 
+  function _tabellenHtml() {
+    const admin = istAdmin();
     if (!serien.length) {
-      html += '<div style="padding:40px;text-align:center;color:var(--text2)">Keine Veranstaltungsserien vorhanden.</div>';
-      container.innerHTML = html;
-      return;
+      return '<div style="padding:40px;text-align:center;color:var(--text2)">Keine Veranstaltungsserien vorhanden.</div>';
+    }
+    if (!_gefilterteSerien().length) {
+      return '<div style="padding:40px;text-align:center;color:var(--text2)">Keine Veranstaltung für diesen Filter.</div>';
     }
 
-    html += `<div class="panel"><div class="table-scroll">
+    let html = `<div class="panel"><div class="table-scroll">
     <table style="min-width:820px">
       <thead>
         <tr>
@@ -435,7 +494,7 @@ const ADMIN_WETTKAMPF = (() => {
     });
 
     html += `</tbody></table></div></div>`;
-    container.innerHTML = html;
+    return html;
   }
 
   // ── Ort-Verwaltung ────────────────────────────────────────────

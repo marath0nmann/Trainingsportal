@@ -5,13 +5,10 @@
 const ADMIN_TRAININGS = (() => {
   let einheiten   = [];
   let treffpunkte = [];
-  let gruppen     = [];
   let sortKey     = 'datum';
   let sortDir     = 1;      //  1 = ASC (aufsteigend = älteste zuerst)
   let selected    = new Set();
   let container   = null;
-  let filterTyp   = '';
-  let filterGruppe = '';
 
   const WOCHENTAG = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 
@@ -33,10 +30,8 @@ const ADMIN_TRAININGS = (() => {
       const resp = await apiGet('admin/einheiten?limit=2000', { silent: true });
       einheiten   = resp.einheiten || [];
       treffpunkte = await TREFFPUNKTE.laden().catch(() => []);
-      gruppen     = await GRUPPEN.laden().catch(() => []);
       selected.clear();
-      filterTyp    = '';
-      filterGruppe = '';
+      tfLeeren(TF);
       rendereTabelle();
     } catch (e) {
       if (container) {
@@ -55,25 +50,38 @@ const ADMIN_TRAININGS = (() => {
     rendereTabelle();
   }
 
-  function setFilter(val) {
-    filterTyp = val;
-    selected.clear();
-    rendereTabelle();
-  }
+  // ── Gemeinsame Filterleiste (Statistikportal-Modul, via shared.php) ──
+  const TF = 'tp-trainings';
+  const WOCHENTAG_LANG = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+  const MONATE = ['Januar','Februar','März','April','Mai','Juni',
+                  'Juli','August','September','Oktober','November','Dezember'];
 
-  function setFilterGruppe(val) {
-    filterGruppe = val;
-    selected.clear();
-    rendereTabelle();
+  function filterInit() {
+    tfInit(TF, {
+      platzhalter: 'Titel, Treffpunkt, Gruppe…',
+      rows: () => einheiten,
+      suche: e => [e.titel, e.treffpunkt, e.gruppe, getTypLabel(e.typ)],
+      spalten: [
+        { key: 'jahr',  label: 'Jahr', absteigend: true, wert: e => (e.datum || '').slice(0, 4) },
+        { key: 'monat', label: 'Monat', wert: e => (e.datum || '').slice(5, 7),
+          anzeige: w => MONATE[parseInt(w, 10) - 1] || w },
+        { key: 'wochentag', label: 'Wochentag', wert: e => {
+            if (!e.datum) return '';
+            const d = new Date(e.datum + 'T00:00:00');
+            return isNaN(d) ? '' : WOCHENTAG_LANG[d.getDay()];
+          } },
+        { key: 'typ',        label: 'Typ',            wert: e => getTypLabel(e.typ) || '' },
+        { key: 'gruppe',     label: 'Trainingsgruppe', wert: e => e.gruppe || '— ohne Gruppe —' },
+        { key: 'treffpunkt', label: 'Treffpunkt',     wert: e => e.treffpunkt || '— ohne Treffpunkt —' },
+        { key: 'status',     label: 'Status',         wert: e => e.status === 'abgesagt' ? 'Abgesagt' : 'Geplant' },
+      ],
+      onChange: () => { selected.clear(); rendereTabelle(); },
+    });
   }
 
   function getSortiert() {
-    let basis = filterTyp ? einheiten.filter(e => e.typ === filterTyp) : einheiten;
-    if (filterGruppe === '__keine__') {
-      basis = basis.filter(e => !e.gruppe_id);
-    } else if (filterGruppe) {
-      basis = basis.filter(e => String(e.gruppe_id) === filterGruppe);
-    }
+    filterInit();
+    const basis = tfFilter(TF, einheiten);
     return basis.slice().sort((a, b) => {
       let av = a[sortKey] ?? '';
       let bv = b[sortKey] ?? '';
@@ -87,8 +95,21 @@ const ADMIN_TRAININGS = (() => {
     });
   }
 
+  // Die Filterleiste wird nur einmal gebaut – sonst verliert das Suchfeld beim
+  // Tippen den Fokus. Neu gezeichnet wird ausschliesslich der Tabellenblock.
   function rendereTabelle() {
     if (!container || !container.isConnected) return;
+    filterInit();
+    let box = document.getElementById('atr-box');
+    if (!box) {
+      container.innerHTML = tfBarHtml(TF, { suchbreite: '1 1 240px' }) + '<div id="atr-box"></div>';
+      box = document.getElementById('atr-box');
+    }
+    box.innerHTML = tabellenHtml();
+    tfRefresh(TF);
+  }
+
+  function tabellenHtml() {
     const data = getSortiert();
     const allChecked = data.length > 0 && data.every(e => selected.has(e.id));
     const selCount   = selected.size;
@@ -130,19 +151,7 @@ const ADMIN_TRAININGS = (() => {
       </tr>`;
     }).join('');
 
-    // ── Typ-Filter ───────────────────────────────────────────
-    const vorhandeneTypen = [...new Set(einheiten.map(e => e.typ))].sort();
-    const typFilterOptionen = vorhandeneTypen.map(t =>
-      `<option value="${t}"${filterTyp === t ? ' selected' : ''}>${escapeHtml(getTypLabel(t))}</option>`
-    ).join('');
-
-    // ── Gruppen-Filter ────────────────────────────────────────
-    const hatGruppenFilter = gruppen.length > 0;
-    const gruppenFilterOptionen = gruppen.map(g =>
-      `<option value="${g.id}"${filterGruppe === String(g.id) ? ' selected' : ''}>${escapeHtml(g.name)}</option>`
-    ).join('');
-
-    const filterAnzeige = (filterTyp || filterGruppe)
+    const filterAnzeige = tfAktiv(TF)
       ? `${data.length} von ${einheiten.length}`
       : `${einheiten.length}`;
 
@@ -174,24 +183,11 @@ const ADMIN_TRAININGS = (() => {
         <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="ADMIN_TRAININGS.deleteSelected()">Löschen</button>
       </div>` : '';
 
-    container.innerHTML = `
+    return `
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">Alle Trainings (${filterAnzeige})</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <select class="settings-input" style="height:30px;font-size:13px;padding:2px 8px"
-              onchange="ADMIN_TRAININGS.setFilter(this.value)">
-              <option value="">Alle Typen</option>
-              ${typFilterOptionen}
-            </select>
-            ${hatGruppenFilter ? `<select class="settings-input" style="height:30px;font-size:13px;padding:2px 8px"
-              onchange="ADMIN_TRAININGS.setFilterGruppe(this.value)">
-              <option value="">Alle Gruppen</option>
-              <option value="__keine__"${filterGruppe === '__keine__' ? ' selected' : ''}>— ohne Gruppe —</option>
-              ${gruppenFilterOptionen}
-            </select>` : ''}
-            <button class="btn btn-ghost btn-sm" onclick="ADMIN_TRAININGS.reload()" title="Liste neu laden">↻</button>
-          </div>
+          <button class="btn btn-ghost btn-sm" onclick="ADMIN_TRAININGS.reload()" title="Liste neu laden">↻</button>
         </div>
         ${aktionsleiste}
         <div class="table-scroll">
@@ -214,7 +210,7 @@ const ADMIN_TRAININGS = (() => {
                 ${headerCols}
               </tr>
             </thead>
-            <tbody>${rows || '<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text2)">Keine Trainingseinheiten vorhanden.</td></tr>'}</tbody>
+            <tbody>${rows || `<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text2)">${tfAktiv(TF) ? 'Keine Trainingseinheiten für diesen Filter.' : 'Keine Trainingseinheiten vorhanden.'}</td></tr>`}</tbody>
           </table>
         </div>
       </div>`;
@@ -321,5 +317,5 @@ const ADMIN_TRAININGS = (() => {
     setTimeout(() => d.remove(), 3500);
   }
 
-  return { render, sort, setFilter, setFilterGruppe, toggle, toggleAll, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
+  return { render, sort, toggle, toggleAll, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
 })();

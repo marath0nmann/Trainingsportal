@@ -14,15 +14,12 @@ const WETTKAMPFPLANUNG = (() => {
   let _bulkPopper   = null;
 
   // Filter / Sort / Select state
-  let _filterText      = '';
   let _filterStatus    = new Set();   // leer = alle Status anzeigen
   let _sortKey         = 'datum';     // 'name' | 'datum' | 'status'
   let _sortDir         = 'asc';
   let _selected        = new Set();   // ausgewählte Serie-IDs
   let _hideVergangen   = false;       // vergangene Veranstaltungen ausblenden
   let _hidePasstNicht  = false;       // "passt nicht"-Einträge ausblenden
-  let _filterDisziplin = '';          // leer = alle Disziplinen
-  let _filterKategorie = '';          // leer = alle Kategorien
 
   // Kategorien (Statistikportal: disziplin_kategorien) für Filter + Spalte
   let _kategorien = [];               // [{tbl_key, name}]
@@ -124,26 +121,39 @@ const WETTKAMPFPLANUNG = (() => {
     _statistikUrl = (resp.statistikportal_url || 'https://statistik.tus-oedt.de').replace(/\/+$/, '');
   }
 
+  // ── Gemeinsame Filterleiste (Statistikportal-Modul, via shared.php) ──
+  const TF = 'tp-wkplanung';
+  const WKP_MONATE = ['Januar','Februar','März','April','Mai','Juni',
+                      'Juli','August','September','Oktober','November','Dezember'];
+
+  function _filterInit() {
+    tfInit(TF, {
+      platzhalter: 'Veranstaltung, Ort, Disziplin…',
+      rows: () => _serien.filter(s => s.aktiv !== 0),
+      suche: s => [s.name, s.ort].concat(Array.isArray(s.wettbewerbe) ? s.wettbewerbe : []),
+      spalten: [
+        // Mehrfachzuordnung: jede Disziplin der Veranstaltung zählt einzeln
+        { key: 'disziplin', label: 'Disziplin',
+          wert: s => Array.isArray(s.wettbewerbe) ? s.wettbewerbe : [] },
+        { key: 'kategorie', label: 'Kategorie',
+          wert: s => s.import_kategorie ? _katLabel(s.import_kategorie) : '— ohne Kategorie —' },
+        { key: 'ort',   label: 'Ort',   wert: s => s.ort || '' },
+        { key: 'monat', label: 'Monat', wert: s => (_datumFuerJahr(s, _jahr) || '').slice(5, 7),
+          anzeige: w => WKP_MONATE[parseInt(w, 10) - 1] || w },
+        { key: 'teilnehmer', label: 'Teilnehmende',
+          wert: s => (s.teilnehmer || []).length > 0 ? 'vorhanden' : 'keine' },
+      ],
+      onChange: () => { _selected.clear(); _renderListe(); },
+    });
+  }
+
   // ── Gefilterte + sortierte Serien ────────────────────────────
   function _gefilterteSerien() {
-    let arr = _serien.filter(s => s.aktiv !== 0);
-
-    if (_filterText.trim()) {
-      const q = _filterText.trim().toLowerCase();
-      arr = arr.filter(s => s.name.toLowerCase().includes(q) ||
-                            (s.ort && s.ort.toLowerCase().includes(q)));
-    }
+    _filterInit();
+    let arr = tfFilter(TF, _serien.filter(s => s.aktiv !== 0));
 
     if (_filterStatus.size > 0) {
       arr = arr.filter(s => _filterStatus.has(s.status));
-    }
-
-    if (_filterDisziplin) {
-      arr = arr.filter(s => Array.isArray(s.wettbewerbe) && s.wettbewerbe.includes(_filterDisziplin));
-    }
-
-    if (_filterKategorie) {
-      arr = arr.filter(s => (s.import_kategorie || '') === _filterKategorie);
     }
 
     if (_hidePasstNicht) {
@@ -223,32 +233,6 @@ const WETTKAMPFPLANUNG = (() => {
       return `<span style="font-size:10px;margin-left:3px">${_sortDir === 'asc' ? '↑' : '↓'}</span>`;
     };
 
-    // Disziplin-Filter-Optionen: alle vorkommenden Disziplinen, nach Distanz sortiert
-    const _km = (typeof _disziplinKm === 'function') ? _disziplinKm : () => null;
-    const alleDisz = [...new Set(_serien.flatMap(s => Array.isArray(s.wettbewerbe) ? s.wettbewerbe : []))]
-      .sort((a, b) => {
-        const ka = _km(a), kb = _km(b);
-        if (ka == null && kb == null) return a.localeCompare(b, 'de');
-        if (ka == null) return 1;
-        if (kb == null) return -1;
-        return ka - kb;
-      });
-    const diszOptions = ['<option value="">Alle Disziplinen</option>']
-      .concat(alleDisz.map(d =>
-        `<option value="${escapeHtml(d)}" ${_filterDisziplin === d ? 'selected' : ''}>${escapeHtml(d)}</option>`
-      )).join('');
-
-    // Kategorie-Filter-Optionen: alle in den Daten vorkommenden Kategorien
-    const alleKat = [...new Set(_serien.map(s => s.import_kategorie).filter(Boolean))]
-      .sort((a, b) => _katLabel(a).localeCompare(_katLabel(b), 'de'));
-    const katOptions = ['<option value="">Alle Kategorien</option>']
-      .concat(alleKat.map(k =>
-        `<option value="${escapeHtml(k)}" ${_filterKategorie === k ? 'selected' : ''}>${escapeHtml(_katLabel(k))}</option>`
-      )).join('');
-
-    const selStyle = 'padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;' +
-                     'background:var(--bg2);color:var(--text);max-width:170px';
-
     let html = `
       <div style="display:flex;justify-content:space-between;align-items:flex-end;
                   margin-bottom:16px;flex-wrap:wrap;gap:12px">
@@ -280,42 +264,23 @@ const WETTKAMPFPLANUNG = (() => {
         </div>
       </div>
 
-      <!-- Toolbar: Suche + Filter -->
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-        <input type="search" id="wkp-search"
-          placeholder="Veranstaltung suchen…"
-          value="${escapeHtml(_filterText)}"
-          oninput="WETTKAMPFPLANUNG._setFilter(this.value)"
-          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;
-                 background:var(--bg2);color:var(--text);font-size:13px;
-                 width:200px;outline:none;box-sizing:border-box">
+      <!-- Toolbar: gemeinsame Filterleiste + Status/Sichtbarkeits-Schalter -->
+      ${tfBarHtml(TF, { suchbreite: '0 1 220px', extra: `
         <button id="wkp-filter-btn"
           onclick="WETTKAMPFPLANUNG._openFilterPopper(this)"
           style="padding:6px 12px;border:1px solid ${_filterStatus.size ? 'var(--primary)' : 'var(--border)'};
                  border-radius:8px;background:${_filterStatus.size ? 'color-mix(in srgb,var(--primary) 15%,transparent)' : 'var(--bg2)'};
                  color:${_filterStatus.size ? 'var(--primary)' : 'var(--text)'};
-                 font-size:12px;cursor:pointer;white-space:nowrap">
+                 font-size:12px;cursor:pointer;white-space:nowrap;align-self:flex-end">
           ${escapeHtml(filterLabel)} ▾
         </button>
-        <select onchange="WETTKAMPFPLANUNG._setFilterDisziplin(this.value)"
-          title="Nach Disziplin filtern"
-          style="${selStyle};border:1px solid ${_filterDisziplin ? 'var(--primary)' : 'var(--border)'};
-                 color:${_filterDisziplin ? 'var(--primary)' : 'var(--text)'}">
-          ${diszOptions}
-        </select>
-        <select onchange="WETTKAMPFPLANUNG._setFilterKategorie(this.value)"
-          title="Nach Kategorie filtern"
-          style="${selStyle};border:1px solid ${_filterKategorie ? 'var(--primary)' : 'var(--border)'};
-                 color:${_filterKategorie ? 'var(--primary)' : 'var(--text)'}">
-          ${katOptions}
-        </select>
-        ${(_filterText || _filterStatus.size || _filterDisziplin || _filterKategorie) ? `
+        ${(tfAktiv(TF) || _filterStatus.size) ? `
           <button onclick="WETTKAMPFPLANUNG._resetFilter()"
             style="padding:4px 8px;border:none;background:none;color:var(--text2);
-                   font-size:12px;cursor:pointer">✕ zurücksetzen</button>` : ''}
+                   font-size:12px;cursor:pointer;align-self:flex-end">✕ zurücksetzen</button>` : ''}
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;
                        color:${_hideVergangen ? 'var(--primary)' : 'var(--text2)'};
-                       cursor:pointer;white-space:nowrap;user-select:none">
+                       cursor:pointer;white-space:nowrap;user-select:none;align-self:flex-end;padding-bottom:8px">
           <input type="checkbox" ${_hideVergangen ? 'checked' : ''}
             onchange="WETTKAMPFPLANUNG._toggleHideVergangen(this.checked)"
             style="accent-color:var(--primary);width:13px;height:13px;cursor:pointer">
@@ -323,12 +288,13 @@ const WETTKAMPFPLANUNG = (() => {
         </label>
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;
                        color:${_hidePasstNicht ? 'var(--primary)' : 'var(--text2)'};
-                       cursor:pointer;white-space:nowrap;user-select:none">
+                       cursor:pointer;white-space:nowrap;user-select:none;align-self:flex-end;padding-bottom:8px">
           <input type="checkbox" ${_hidePasstNicht ? 'checked' : ''}
             onchange="WETTKAMPFPLANUNG._toggleHidePasstNicht(this.checked)"
             style="accent-color:var(--primary);width:13px;height:13px;cursor:pointer">
           „passt nicht" ausblenden
-        </label>
+        </label>` })}
+      <div style="margin:-8px 0 12px">
         ${sichtbar.length !== _serien.length
           ? `<span style="font-size:12px;color:var(--text2)">${sichtbar.length} von ${_serien.length}</span>`
           : ''}
@@ -585,29 +551,9 @@ const WETTKAMPFPLANUNG = (() => {
   }
 
   // ── Filter ───────────────────────────────────────────────────
-  function _setFilter(text) {
-    _filterText = text;
-    _selected.clear();
-    _renderListe();
-  }
-
   function _resetFilter() {
-    _filterText = '';
+    tfLeeren(TF);
     _filterStatus.clear();
-    _filterDisziplin = '';
-    _filterKategorie = '';
-    _selected.clear();
-    _renderListe();
-  }
-
-  function _setFilterDisziplin(val) {
-    _filterDisziplin = val || '';
-    _selected.clear();
-    _renderListe();
-  }
-
-  function _setFilterKategorie(val) {
-    _filterKategorie = val || '';
     _selected.clear();
     _renderListe();
   }
@@ -1349,8 +1295,7 @@ const WETTKAMPFPLANUNG = (() => {
     render, setJahr,
     _openPopper, _waehleStatus,
     _toggleSort,
-    _setFilter, _resetFilter, _openFilterPopper, _toggleFilterStatus, _resetStatusFilter,
-    _setFilterDisziplin, _setFilterKategorie,
+    _resetFilter, _openFilterPopper, _toggleFilterStatus, _resetStatusFilter,
     _toggleHideVergangen, _toggleHidePasstNicht,
     _toggleSelect, _toggleAll, _clearSelection,
     _openBulkPopper, _bulkSetStatus,

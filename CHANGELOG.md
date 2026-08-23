@@ -1,5 +1,12 @@
 # Changelog
 
+## v328
+- **Die dynamische Filterleiste des Statistikportals steht jetzt auch hier zur Verfügung.** Sie wird über `shared.php` direkt aus dem Statistikportal geladen – eine Quelle, beide Portale: Suchfeld plus beliebig viele Filterregeln „Spalte + Wert", deren Auswahllisten nur noch erreichbare Werte samt Trefferzahl zeigen.
+- **Admin → Trainings:** statt der festen Dropdowns Typ/Gruppe jetzt Suche (Titel, Treffpunkt, Gruppe, Typ) und Filter nach Jahr, Monat, Wochentag, Typ, Trainingsgruppe, Treffpunkt und Status.
+- **Wettkämpfe:** erstmals durchsuchbar (Name, Ort, Disziplin) und filterbar nach Kategorie, Disziplin, Ort, Monat des nächsten Termins, Terminart (fest/Prognose/abgesagt), Status, Anmeldungen und erster Ausgabe.
+- **Wettkampfplanung:** Suchfeld und die Dropdowns Disziplin/Kategorie sind durch die Leiste ersetzt (zusätzlich filterbar nach Ort, Monat und Teilnehmenden). Der Status-Filter mit Mehrfachauswahl und die beiden Schalter „Vergangene / passt nicht ausblenden" bleiben unverändert.
+- **Strg+F (bzw. ⌘F) springt jetzt direkt ins Suchfeld der Seite** statt die Browsersuche zu öffnen. Gibt es auf der Seite kein Suchfeld, bleibt die Browsersuche wie gewohnt.
+
 ## v327
 - Fix: Anführungszeichen/Sonderzeichen in Wettkampfnamen wurden doppelt escaped angezeigt (z. B. `&quot;`). `stripOrtFromName()` dekodiert Name/Ort jetzt zentral, sodass alle Ansichten (Wettkampfplanung, Admin, Karte, PDF, Nächste Wettkämpfe) korrekt „…" darstellen.
 
