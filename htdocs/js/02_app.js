@@ -3202,8 +3202,13 @@ async function _wkEintragen(serieId, disziplin) {
 // "Korschenbroich" → "Citylauf"). Compounds bleiben erhalten ("Kölnmarathon"
 // + "Köln" → unverändert, da "Köln" von einem Buchstaben gefolgt wird).
 function stripOrtFromName(name, ort) {
-  if (!name) return name || '';
-  const o = (ort || '').trim();
+  // Namen/Orte können HTML-Entities aus der DB enthalten (z. B. &quot;) – zuerst
+  // dekodieren, damit der Aufrufer das Ergebnis sauber mit escapeHtml() ausgibt
+  // (sonst Doppel-Escaping → sichtbares &quot;).
+  const dec = (typeof _decodeHtml === 'function') ? _decodeHtml : (x => x);
+  name = dec(name || '');
+  if (!name) return '';
+  const o = dec(ort || '').trim();
   if (!o) return name;
   const esc = o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   let out = name;

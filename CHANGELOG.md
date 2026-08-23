@@ -1,5 +1,8 @@
 # Changelog
 
+## v327
+- Fix: Anführungszeichen/Sonderzeichen in Wettkampfnamen wurden doppelt escaped angezeigt (z. B. `&quot;`). `stripOrtFromName()` dekodiert Name/Ort jetzt zentral, sodass alle Ansichten (Wettkampfplanung, Admin, Karte, PDF, Nächste Wettkämpfe) korrekt „…" darstellen.
+
 ## v326
 - Fix: Die Workout-Datei aus dem Kalender-Termin landete als „index.php" auf dem Gerät. Kalender-Apps benennen einen geladenen Anhang nach dem letzten Pfadsegment der URL und ignorieren den vom Server gesetzten Dateinamen – die Endung steht deshalb jetzt im Pfad (`…/api/index.php/workout/einheit/242.workout`) statt in der Query. Damit kommt die Datei als `.workout` bzw. `.fit` an und lässt sich direkt öffnen.
 
