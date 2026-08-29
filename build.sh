@@ -24,7 +24,7 @@ rm -f "$REPO_DIR/htdocs/index.html.bak" "$REPO_DIR/htdocs/index.html.bak2"
 echo "✓ index.html → v${NEW_VER}"
 
 # ── README.md aktualisieren ──────────────────────────────────────────────────
-sed -i.bak "s/## Version v[0-9]\+/## Version v${NEW_VER}/" "$REPO_DIR/README.md"
+sed -i.bak "s/## Version v[0-9][0-9]*/## Version v${NEW_VER}/" "$REPO_DIR/README.md"
 sed -i.bak2 "s/| Stand: [^|]*/| Stand: ${DATUM} /" "$REPO_DIR/README.md"
 rm -f "$REPO_DIR/README.md.bak" "$REPO_DIR/README.md.bak2"
 echo "✓ README.md → v${NEW_VER}"
