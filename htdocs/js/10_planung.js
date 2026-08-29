@@ -164,6 +164,16 @@ const KAL_POPOVER = (() => {
   }
 
   function _position(pop, rect) {
+    // Schmale Screens: Bottom-Sheet statt frei positioniertem Popover.
+    if (istSheetBreite()) {
+      pop.classList.add('is-sheet');
+      pop.style.left = '';
+      pop.style.top  = '';
+      _backdrop(true);
+      return;
+    }
+    _backdrop(false);
+    pop.classList.remove('is-sheet');
     // Tatsächliche Breite messen – mit Streckenvorschau ist das Popover breiter
     const popW   = pop.offsetWidth || 244;
     const margin = 10;
@@ -179,6 +189,17 @@ const KAL_POPOVER = (() => {
     pop.style.top  = top  + 'px';
   }
 
+  /** Abdunkelnder Hintergrund – nur im Sheet-Modus. */
+  function _backdrop(an) {
+    let bd = document.getElementById('kal-pop-backdrop');
+    if (!an) { if (bd) bd.remove(); return; }
+    if (bd) return;
+    bd = document.createElement('div');
+    bd.id = 'kal-pop-backdrop';
+    bd.className = 'pop-backdrop';
+    document.body.appendChild(bd);
+  }
+
   function _outsideHide(ev) {
     const pop = document.getElementById('kal-popover');
     if (!pop || pop.style.display === 'none') return;
@@ -189,7 +210,8 @@ const KAL_POPOVER = (() => {
   function _scrollHide(ev) {
     const pop = document.getElementById('kal-popover');
     if (!pop || pop.style.display === 'none') return;
-    if (pop.contains(ev.target)) return; // Scrollen im Popover selbst
+    if (pop.contains(ev.target)) return;             // Scrollen im Popover selbst
+    if (pop.classList.contains('is-sheet')) return;  // Sheet klebt am Rand
     _hide();
   }
 
@@ -199,6 +221,7 @@ const KAL_POPOVER = (() => {
 
   function _hide() {
     clearTimeout(hideTimer);
+    _backdrop(false);
     const pop = document.getElementById('kal-popover');
     if (pop) pop.style.display = 'none';
     currentId = null;
@@ -829,10 +852,13 @@ const PLANUNG = (() => {
             ? `<span class="kal-notiz-autor">${escapeHtml(n.ersteller_name)}</span>`
             : '';
           return `<div class="kal-notiz kal-cal-${notizKey}" title="${escapeHtml(n.inhalt)}"
-            data-notiz-id="${n.id}"${kannEdit ? ' draggable="true"' : ''}>
+            data-notiz-id="${n.id}"${kannEdit && !IS_TOUCH ? ' draggable="true"' : ''}>
             <span class="kal-notiz-icon">📋</span>
             <span class="kal-notiz-text">${escapeHtml(n.inhalt)}</span>
             ${autorHtml}
+            ${kannEdit && IS_TOUCH
+              ? `<button class="kal-notiz-move" onclick="event.stopPropagation();PLANUNG.verschiebeNotizDialog(${n.id},'${k}')" title="Notiz verschieben">📅</button>`
+              : ''}
             ${kannEdit
               ? `<button class="kal-notiz-edit" onclick="event.stopPropagation();PLANUNG.notizBearbeiten(${n.id},'${escapeHtml(n.inhalt).replace(/'/g,"&#39;")}')" title="Notiz bearbeiten">✎</button>
                  <button class="kal-notiz-del" onclick="event.stopPropagation();PLANUNG.notizLoeschen(${n.id})" title="Notiz löschen">×</button>`
@@ -848,6 +874,9 @@ const PLANUNG = (() => {
           const abgesagt = e.status === 'abgesagt';
           const cls = `kal-item kal-cal-${kalKeyFor(e)}${abgesagt ? ' is-cancelled' : ''}`;
           const aktionsButtons = kannEdit ? `
+            ${IS_TOUCH
+              ? `<button class="kal-item-move" onclick="event.stopPropagation();PLANUNG.verschiebeEinheitDialog(${e.id},'${e.datum}')" title="Training verschieben">📅</button>`
+              : ''}
             ${abgesagt
               ? `<button class="kal-item-wiederherstellen" onclick="event.stopPropagation();PLANUNG.wiederherstellenEinheit(${e.id})" title="Absage aufheben">↩</button>`
               : `<button class="kal-item-absagen" onclick="event.stopPropagation();PLANUNG.absagenEinheit(${e.id})" title="Training absagen">⚠</button>`
@@ -1290,15 +1319,21 @@ const PLANUNG = (() => {
     const editBtn = kannBearbeiten(b)
       ? `<button class="btn btn-ghost btn-sm pblock-edit-btn" onclick="event.stopPropagation();BLOECKE.bearbeiten(${b.id})" title="Block bearbeiten">✎</button>`
       : '';
+    // Touch: Drag&Drop auf einen Kalendertag gibt es dort nicht – stattdessen
+    // ein Button, der nach dem Zieldatum fragt.
+    const applyBtn = IS_TOUCH
+      ? `<button class="btn btn-ghost btn-sm pblock-apply-btn" onclick="event.stopPropagation();PLANUNG.blockEinplanenDialog(${b.id})" title="Auf einen Tag einplanen">📅</button>`
+      : '';
     return `
       <div class="pblock-card block-typ-${escapeHtml(b.typ)}"
-           draggable="true" data-block-id="${b.id}"
-           title="${escapeHtml(b.titel)} – auf Kalendertag ziehen">
-        <div class="pblock-drag-handle" aria-hidden="true">⠿</div>
+           ${IS_TOUCH ? '' : 'draggable="true"'} data-block-id="${b.id}"
+           title="${escapeHtml(b.titel)}${IS_TOUCH ? '' : ' – auf Kalendertag ziehen'}">
+        ${IS_TOUCH ? '' : '<div class="pblock-drag-handle" aria-hidden="true">⠿</div>'}
         <div class="pblock-info">
           <div class="pblock-titel">${escapeHtml(b.titel)}</div>
           <div class="pblock-meta">${privBadge}</div>
         </div>
+        ${applyBtn}
         ${editBtn}
       </div>`;
   }
@@ -1341,6 +1376,25 @@ const PLANUNG = (() => {
       notify('Fehler: ' + (err.message || ''), 'err');
       renderKal();
     }
+  }
+
+  // ── Verschieben per Dialog (Touch-Ersatz für Drag & Drop) ─
+  function verschiebeEinheitDialog(einheitId, aktuellesDatum) {
+    datumWaehlenDialog('Training verschieben', aktuellesDatum, neuesDatum => {
+      if (neuesDatum !== aktuellesDatum) verschiebeEinheit(einheitId, neuesDatum);
+    });
+  }
+
+  function blockEinplanenDialog(blockId) {
+    datumWaehlenDialog('Block einplanen', null, datum => {
+      BLOECKE.anwenden(blockId, datum, aktivGruppe ? aktivGruppe.id : null);
+    }, 'Einplanen');
+  }
+
+  function verschiebeNotizDialog(notizId, aktuellesDatum) {
+    datumWaehlenDialog('Notiz verschieben', aktuellesDatum, neuesDatum => {
+      if (neuesDatum !== aktuellesDatum) verschiebeNotiz(notizId, neuesDatum);
+    });
   }
 
   // ── Einheit löschen ───────────────────────────────────────
@@ -1798,5 +1852,6 @@ const PLANUNG = (() => {
     notizLoeschen, notizDialogSchliessen,
     absagenEinheit, absagenSpeichern, absageDialogSchliessen,
     wiederherstellenEinheit, wiederherstellenSpeichern,
+    verschiebeEinheitDialog, verschiebeNotizDialog, blockEinplanenDialog,
   };
 })();

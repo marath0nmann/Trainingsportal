@@ -147,10 +147,19 @@ const STRECKEN = (() => {
    * Die Geometrie kommt weiterhin aus der eigenen DB – von außen
    * kommen nur die Kartenbilder (wie beim Treffpunkt-Picker).
    */
+  /** Feste Pixelbreite auf den verfügbaren Platz begrenzen – sonst läuft die
+      Kachelvorschau auf schmalen Screens (Popover-Sheet, Modal) über. */
+  function _breiteBegrenzen(w) {
+    const max = (window.innerWidth || 1024) - 48;
+    return Math.max(200, Math.min(w, max));
+  }
+
   function kartenVorschauHtml(s, opts) {
     const o   = opts || {};
-    const w   = o.breite || 276;
-    const h   = o.hoehe  || 170;
+    const wRoh = o.breite || 276;
+    const w   = _breiteBegrenzen(wRoh);
+    // Höhe proportional mitziehen, damit der Ausschnitt nicht verzerrt wirkt
+    const h   = Math.round((o.hoehe || 170) * (w / wRoh));
     const pad = o.pad != null ? o.pad : 10;
     const pts = (s && s.geometrie) || [];
     if (pts.length < 2) return '<div class="strecke-svg-leer">Kein Streckenverlauf</div>';

@@ -134,20 +134,20 @@ const ADMIN_TRAININGS = (() => {
       const tdClip = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0';
 
       return `<tr style="${rowStyle}" onclick="ADMIN_TRAININGS.editRow(event,${e.id})">
-        <td style="width:40px" onclick="event.stopPropagation()">
+        <td class="karte-cb" style="width:40px" onclick="event.stopPropagation()">
           <input type="checkbox" data-id="${e.id}"${chk} onchange="ADMIN_TRAININGS.toggle(${e.id})">
         </td>
-        <td style="${tdClip}">${escapeHtml(datStr)}</td>
-        <td style="${tdClip}">${escapeHtml(zeitStr)}</td>
-        <td style="overflow:hidden;max-width:0">
+        <td data-label="Datum" style="${tdClip}">${escapeHtml(datStr)}</td>
+        <td data-label="Zeit" style="${tdClip}">${escapeHtml(zeitStr)}</td>
+        <td data-label="Typ" style="overflow:hidden;max-width:0">
           <span class="liste-typ-badge liste-typ-${escapeHtml(e.typ)}"
             style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;white-space:nowrap"
           >${escapeHtml(typLbl)}</span>
         </td>
-        <td style="${tdClip}" title="${escapeHtml(e.gruppe || '')}">${escapeHtml(e.gruppe || '–')}</td>
-        <td style="${tdClip}" title="${escapeHtml(e.titel)}">${escapeHtml(e.titel)}</td>
-        <td style="${tdClip}" title="${escapeHtml(e.treffpunkt || '')}">${escapeHtml(e.treffpunkt || '–')}</td>
-        <td style="white-space:nowrap;${statusSty}">${abgesagt ? 'Abgesagt' : 'Geplant'}</td>
+        <td data-label="Gruppe" style="${tdClip}" title="${escapeHtml(e.gruppe || '')}">${escapeHtml(e.gruppe || '–')}</td>
+        <td class="karte-titel" style="${tdClip}" title="${escapeHtml(e.titel)}">${escapeHtml(e.titel)}</td>
+        <td data-label="Treffpunkt" style="${tdClip}" title="${escapeHtml(e.treffpunkt || '')}">${escapeHtml(e.treffpunkt || '–')}</td>
+        <td data-label="Status" style="white-space:nowrap;${statusSty}">${abgesagt ? 'Abgesagt' : 'Geplant'}</td>
       </tr>`;
     }).join('');
 
@@ -191,7 +191,7 @@ const ADMIN_TRAININGS = (() => {
         </div>
         ${aktionsleiste}
         <div class="table-scroll">
-          <table style="table-layout:fixed;min-width:700px">
+          <table class="karten-tabelle" style="table-layout:fixed;min-width:700px">
             <colgroup>
               <col style="width:40px">
               <col style="width:155px">

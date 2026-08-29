@@ -1,5 +1,15 @@
 # Changelog
 
+## v330
+- **Mobil: Startseite bleibt auf schmalen Screens die Liste.** `#kalender` leitet unter 720px auf den Quartalsplan um – im Monatsraster bleiben dort ~45px pro Tag. Der Umschalter „▦ Kalender" hebt die Umleitung für die laufende Sitzung auf, das Vereinslogo führt zurück zur Liste.
+- **Mindest-Tapflächen von 44px** für Buttons, Umschalter und Icon-Aktionen auf Touch-Geräten; die kleinen Kalender-Icons bekommen eine unsichtbar vergrößerte Trefferfläche. Eingabefelder sind mobil 16px groß – darunter zoomt iOS Safari beim Fokus hinein.
+- **Löschen privater Einheiten mit „↩ Rückgängig" statt Sicherheitsabfrage.** Der Confirm-Dialog wurde mobil reflexhaft weggetippt; jetzt erscheint 8 Sekunden lang ein Toast, der die Einheit vollständig wiederherstellt. Toasts liegen mobil unten über die volle Breite.
+- **Popover als Bottom-Sheet unter 560px.** Wettkampf- und Detail-Popover erscheinen von unten über die volle Breite, mit Griffleiste, abgedunkeltem Hintergrund und großflächigen Buttons, statt sich neben eine schmale Kalenderzelle zu quetschen.
+- **Wettkampfplanung und Admin → Trainings als Karten unter 720px** – eine Karte je Zeile mit Spaltenbeschriftung, statt eine 560–700px breite Tabelle horizontal zu scrollen.
+- **Verschieben ohne Drag & Drop.** HTML5-Drag&Drop funktioniert auf iOS/Android nicht; Trainings, Tagesnotizen und private Einheiten haben auf Touch-Geräten jetzt einen 📅-Button mit Datumsdialog, Trainingsblöcke lassen sich darüber einplanen.
+- **Installierbar als App (PWA):** Web-App-Manifest (`manifest.php`, Name und Farben aus den Vereinseinstellungen) plus Service Worker. Die App startet damit auch offline und zeigt die zuletzt geladenen Plandaten; beim Abmelden wird der Datencache gelöscht.
+- **Streckenvorschauen passen sich der Bildschirmbreite an** statt mit fester Pixelbreite überzulaufen.
+
 ## v329
 - **Fix: Kalender-Tooltips blieben auf dem Smartphone offen hängen.** Auf Geräten ohne Maus (`hover: none` / grober Zeiger) gibt es das Hover-Popover der Trainingseinheiten gar nicht mehr – dort öffnet ein Tap wie gewohnt direkt die Detailansicht. Das Wettkampf-Popover wird mobil per Tap auf-/zugeklappt, hat einen eigenen Schließen-Button und schließt zusätzlich bei Tap daneben, beim Scrollen und mit Escape. Dieselben Notausgänge (Klick daneben, Scrollen, Escape) gelten jetzt auch am Desktop für beide Popover.
 

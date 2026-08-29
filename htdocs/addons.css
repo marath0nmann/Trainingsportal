@@ -726,12 +726,130 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
 @media (hover: none) {
   .kal-item-del,
   .kal-item-absagen,
-  .kal-item-wiederherstellen { display: inline-block; opacity: .85; }
+  .kal-item-wiederherstellen,
+  .kal-item-move,
+  .kal-notiz-edit,
+  .kal-notiz-del,
+  .kal-notiz-move { display: inline-block; opacity: .85; }
   .kal-add-btn  { opacity: .7; }
+
+  /* ── Mindest-Tapflächen ──────────────────────────────────
+     44px (Apple HIG) bzw. 48dp (Material) für alles, was bedient wird.
+     Nur min-height/min-width – so bleiben bestehende !important-Paddings
+     (z. B. .share-copy-btn) und die Optik unverändert, die Trefferfläche
+     wächst über die Zentrierung des Button-Inhalts. */
+  .btn, .btn-sm, .btn-ghost, .btn-primary, .btn-warning,
+  .view-toggle .btn,
+  .kal-action-btn, .liste-nav .btn, .liste-nav-right .btn,
+  .share-copy-btn, .share-del-btn, .share-banner-login,
+  .wk-pop-btn, .wk-pop-close,
+  .modal-foot .btn, .modal-head .btn,
+  .heute-card-actions .btn {
+    min-height: 44px;
+  }
+  /* Reine Icon-Buttons brauchen zusätzlich Breite */
+  .share-copy-btn, .share-del-btn, .share-banner-close,
+  .view-toggle .btn, .liste-nav .btn, .wk-pop-close {
+    min-width: 44px;
+  }
+  .share-banner-close { min-height: 44px; }
+
+  /* Kalender-Item-Icons: Trefferfläche über ein unsichtbares Overlay
+     vergrößern, ohne die Zeilenhöhe im engen Monatsraster zu sprengen. */
+  .kal-item-del,
+  .kal-item-absagen,
+  .kal-item-wiederherstellen,
+  .kal-item-move,
+  .kal-notiz-edit,
+  .kal-notiz-del,
+  .kal-notiz-move { position: relative; }
+  .kal-item-del::after,
+  .kal-item-absagen::after,
+  .kal-item-wiederherstellen::after,
+  .kal-item-move::after,
+  .kal-notiz-edit::after,
+  .kal-notiz-del::after,
+  .kal-notiz-move::after {
+    content: ''; position: absolute; inset: -9px -8px;
+  }
+
+  /* Listenzeilen: mehr Höhe, damit die ganze Zeile bequem treffbar ist */
+  .liste-row { padding-top: 13px; padding-bottom: 13px; min-height: 56px; }
+  .kal-add-btn { min-width: 32px; min-height: 32px; }
+
+  /* Formularfelder ≥16px – darunter zoomt iOS Safari beim Fokus hinein */
+  input[type="text"], input[type="number"], input[type="date"],
+  input[type="time"], input[type="search"], input[type="email"],
+  input[type="password"], select, textarea, .share-select {
+    font-size: 16px;
+  }
 }
 
 /* Breite Tabellen (Admin) horizontal scrollbar statt Layout sprengen */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ── Tabelle → Karten auf schmalen Screens ────────────────────────────
+   Horizontal scrollen innerhalb einer vertikal scrollenden Seite ist mobil
+   kaum bedienbar. Tabellen mit .karten-tabelle klappen unter 720px in eine
+   Karte pro Zeile um; die Spaltenüberschrift kommt aus data-label am <td>.
+   Viele Zellen tragen Inline-Styles (max-width:0, nowrap) – die müssen hier
+   mit !important überschrieben werden. */
+@media (max-width: 720px) {
+  .table-scroll:has(.karten-tabelle) { overflow-x: visible; }
+  .karten-tabelle {
+    display: block; width: 100%;
+    min-width: 0 !important; table-layout: auto !important;
+  }
+  .karten-tabelle colgroup,
+  .karten-tabelle thead { display: none; }
+  .karten-tabelle tbody { display: block; }
+  .karten-tabelle tr {
+    display: block; position: relative;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .karten-tabelle tr:last-child { border-bottom: none; }
+  .karten-tabelle td {
+    display: flex; align-items: baseline; gap: 10px;
+    border: none !important;
+    padding: 3px 0 !important;
+    width: auto !important; max-width: none !important;
+    white-space: normal !important; overflow: visible !important;
+    text-align: left !important;
+    font-size: 13px;
+  }
+  .karten-tabelle td::before {
+    content: attr(data-label);
+    flex: 0 0 92px;
+    font-size: 10px; font-weight: 700; letter-spacing: .6px;
+    text-transform: uppercase; color: var(--text2);
+    line-height: 1.6;
+  }
+  .karten-tabelle td:not([data-label])::before { content: none; }
+
+  /* Titelzelle = Kartenüberschrift, ohne Label und über volle Breite */
+  .karten-tabelle td.karte-titel {
+    display: block; font-size: 15px; font-weight: 700;
+    margin-bottom: 6px; padding-right: 34px !important;
+  }
+  .karten-tabelle td.karte-titel::before { content: none; }
+
+  /* Auswahl-Checkbox oben rechts statt in eigener Zeile */
+  .karten-tabelle td.karte-cb {
+    position: absolute; top: 12px; right: 12px;
+    display: block; padding: 0 !important;
+  }
+  .karten-tabelle td.karte-cb::before { content: none; }
+  .karten-tabelle td.karte-cb input[type="checkbox"] {
+    width: 22px !important; height: 22px !important;
+  }
+
+  /* Leerzustand (colspan-Zeile) bleibt normale Zelle */
+  .karten-tabelle td[colspan] { display: block; text-align: center !important; }
+  .karten-tabelle td[colspan]::before { content: none; }
+
+  .wkp-table { min-width: 0; }
+}
 
 /* ── Wettkampfplanung-Tabelle ── */
 /* Globale th/td-Regeln aus der shared app.css greifen; hier nur Spezifisches */
@@ -1001,6 +1119,27 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 }
 .notif-ok   { background: var(--green); color: white; }
 .notif-warn { background: #c08010; color: white; }
+/* Toast mit Rückgängig-Aktion (Löschen privater Einheiten) */
+.notif-undo {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+}
+.notif-undo-btn {
+  background: rgba(255,255,255,.2); color: inherit;
+  border: 1px solid rgba(255,255,255,.55); border-radius: 6px;
+  padding: 5px 10px; font-size: 12px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.notif-undo-btn:hover { background: rgba(255,255,255,.32); }
+
+/* Mobil: Toasts über die volle Breite unten – dort erreicht sie der Daumen,
+   und der Rückgängig-Button bekommt eine ordentliche Tapfläche. */
+@media (max-width: 560px) {
+  #notification-container {
+    left: 8px; right: 8px; bottom: 12px;
+  }
+  .notif { min-width: 0; padding: 13px 16px; font-size: 14px; }
+  .notif-undo-btn { min-height: 40px; padding: 8px 14px; font-size: 13px; }
+}
 
 /* Mobile-Anpassung Editor */
 @media (max-width: 640px) {
@@ -1276,6 +1415,14 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .kal-notiz-del:hover  { opacity: 1; color: var(--primary); }
 .kal-notiz:hover .kal-notiz-edit,
 .kal-notiz:hover .kal-notiz-del { display: block; }
+
+/* Verschieben-Buttons (nur Touch, Ersatz für Drag & Drop) */
+.kal-item-move,
+.kal-notiz-move {
+  flex-shrink: 0; background: none; border: none; cursor: pointer;
+  padding: 0 2px; font-size: 11px; line-height: 1;
+  color: inherit; opacity: .8;
+}
 
 /* Notiz-Hinzufügen-Button im Tageskopf */
 .kal-notiz-add {
@@ -2308,6 +2455,48 @@ body.planung-active #app-footer    { display: none; }
   font-weight: 700; font-size: 13px; color: var(--text);
   margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* ── Bottom-Sheet-Darstellung schmaler Screens (≤560px) ──────────────
+   Gilt für beide Popover: neben einer schmalen Kalenderzelle bleibt für ein
+   frei positioniertes Popover kein sinnvoller Platz. */
+.wk-popover.is-sheet,
+.kal-popover.is-sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0; top: auto;
+  width: auto; max-width: none;
+  max-height: 82vh; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 16px 16px 0 0;
+  border-left: none; border-right: none; border-bottom: none;
+  padding: 20px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 32px rgba(0,0,0,.28);
+  z-index: 1210;
+  animation: pop-sheet-up .18s ease-out;
+}
+/* Griffleiste als Affordanz „von unten eingeblendet" */
+.wk-popover.is-sheet::before,
+.kal-popover.is-sheet::before {
+  content: ''; display: block;
+  width: 38px; height: 4px; border-radius: 2px;
+  background: var(--border);
+  margin: -8px auto 12px;
+}
+.wk-popover.is-sheet .wk-pop-disz { gap: 10px; }
+.wk-popover.is-sheet .wk-pop-btn  { flex: 1 1 100%; justify-content: center; min-height: 48px; }
+.wk-popover.is-sheet .wk-pop-name { white-space: normal; font-size: 15px; }
+.kal-popover.is-sheet .kal-pop-actions { gap: 10px; }
+
+@keyframes pop-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.pop-backdrop {
+  position: fixed; inset: 0; z-index: 1205;
+  background: rgba(0,0,0,.4);
+  animation: pop-backdrop-in .18s ease-out;
+}
+@keyframes pop-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+
 /* Schließen-Button (nur Touch, per JS eingefügt) */
 .wk-pop-close {
   position: absolute; top: 4px; right: 4px;
@@ -2669,13 +2858,13 @@ body.planung-active #app-footer    { display: none; }
 
 /* ── Streckenvorschau im Kalender-Popover ──────────────────── */
 /* Mit Vorschau braucht das Popover mehr Breite als die Standard-280px */
-.kal-popover.kal-pop-has-strecke { width: 320px; }
+.kal-popover.kal-pop-has-strecke:not(.is-sheet) { width: 320px; }
 .kal-pop-strecke {
   margin-top: 8px; padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 .kal-pop-strecke-bild {
-  cursor: pointer; border-radius: 6px; overflow: hidden;
+  cursor: pointer; border-radius: 6px; overflow: hidden; max-width: 100%;
   background: color-mix(in srgb, var(--accent) 5%, var(--surface));
 }
 .kal-pop-strecke-bild:hover .strecke-svg-linie { stroke: var(--primary); }
@@ -2734,6 +2923,7 @@ body.planung-active #app-footer    { display: none; }
   position: relative; overflow: hidden;
   border-radius: 6px; border: 1px solid var(--border);
   background: #e8e4dd;                       /* OSM-Landfarbe, bis Kacheln da sind */
+  max-width: 100%;                           /* nie über den Container hinaus */
 }
 .strecke-karte-mini-kacheln { position: absolute; inset: 0; }
 .strecke-kachel {

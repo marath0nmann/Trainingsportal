@@ -48,16 +48,52 @@ const MEINPLAN = (() => {
     }
   }
 
+  // Löschen ohne Rückfrage, dafür mit Undo: Ein confirm()-Dialog ist mobil
+  // ein Fehlerquell (Fehltipper aufs × direkt neben dem Titel bestätigt man
+  // reflexhaft weg). Private Einheiten sind flach – ein POST stellt sie
+  // vollständig wieder her.
   async function loeschePrivat(id, fuer) {
-    if (!confirm('Private Einheit löschen?')) return;
     schliesseModal();
+
+    let sicherung = null;
+    try {
+      const data = await apiGet(`mein-plan/einheiten/${id}${_q(fuer)}`, { silent: true });
+      sicherung = data.einheit || null;
+    } catch (_) { /* ohne Sicherung entfällt nur das Undo */ }
+
     const el = document.querySelector(`.kal-item[data-privat-id="${id}"]`);
     if (el) el.remove();
+
     try {
       await apiDel(`mein-plan/einheiten/${id}${_q(fuer)}`);
-      _notify('Gelöscht.', 'ok');
     } catch (e) {
       _notify('Fehler: ' + (e.message || ''), 'err');
+      renderPage();
+      return;
+    }
+
+    if (sicherung) {
+      _undoNotify('Gelöscht.', () => _wiederherstellen(sicherung, fuer));
+    } else {
+      _notify('Gelöscht.', 'ok');
+    }
+    renderPage();
+  }
+
+  async function _wiederherstellen(e, fuer) {
+    try {
+      await apiPost(`mein-plan/einheiten${_q(fuer)}`, {
+        datum:          e.datum,
+        uhrzeit:        e.uhrzeit || null,
+        typ:            e.typ,
+        titel:          e.titel,
+        distanz_km:     e.distanz_km != null ? e.distanz_km : null,
+        bemerkung:      e.bemerkung || null,
+        ref_einheit_id: e.ref_einheit_id || null,
+      });
+      _notify('Wiederhergestellt.', 'ok');
+    } catch (err) {
+      _notify('Fehler: ' + (err.message || ''), 'err');
     }
     renderPage();
   }
@@ -206,6 +242,25 @@ const MEINPLAN = (() => {
     } catch (e) {
       _notify('Fehler: ' + (e.message || ''), 'err');
     }
+  }
+
+  // Toast mit Rückgängig-Button. 8s Standzeit – genug, um mobil zu reagieren.
+  function _undoNotify(text, onUndo) {
+    const cont = document.getElementById('notification-container');
+    if (!cont) { onUndo && console.log(text); return; }
+    const div = document.createElement('div');
+    div.className = 'notif notif-ok notif-undo';
+    const span = document.createElement('span');
+    span.textContent = text;
+    const btn = document.createElement('button');
+    btn.className   = 'notif-undo-btn';
+    btn.type        = 'button';
+    btn.textContent = '↩ Rückgängig';
+    btn.addEventListener('click', () => { div.remove(); onUndo(); });
+    div.appendChild(span);
+    div.appendChild(btn);
+    cont.appendChild(div);
+    setTimeout(() => div.remove(), 8000);
   }
 
   function _notify(text, art) {

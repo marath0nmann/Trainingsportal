@@ -18,6 +18,11 @@ var appConfig = {};
 // sodass Tooltips offen hängen bleiben. Stattdessen Tap-Toggle.
 var IS_TOUCH = !!(window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches);
 
+// Schmale Screens bekommen Popover als Bottom-Sheet statt frei positioniert:
+// neben einer 45px-Kalenderzelle findet ein 300px-Popover keinen guten Platz.
+// Schwelle identisch mit dem Modal-Breakpoint in addons.css.
+function istSheetBreite() { return window.innerWidth <= 560; }
+
 // ── Farbhelfer ─────────────────────────────────────────────
 function _hexToRgb(hex) {
   hex = (hex || '').replace(/^#/, '');

@@ -186,10 +186,34 @@ function navigate(tab) {
   }
 }
 
+// ── Schmale Bildschirme: Listenansicht statt Monatsraster ──────────────
+// Bei sieben Spalten bleiben unter 720px ~45px pro Tag – Titel sind dort nur
+// noch Ellipsen. #kalender landet deshalb auf der Liste. Ausnahme: der Nutzer
+// hat den Kalender in dieser Sitzung bewusst über den Umschalter gewählt.
+function istSchmal() { return window.innerWidth < 720; }
+
+function _kalMobilErlaubt() {
+  try { return sessionStorage.getItem('training_kal_mobil') === '1'; } catch (_) { return false; }
+}
+function _kalMobilSetzen(an) {
+  try {
+    if (an) sessionStorage.setItem('training_kal_mobil', '1');
+    else    sessionStorage.removeItem('training_kal_mobil');
+  } catch (_) {}
+}
+
+/** 'YYYY-MM' → 'YYYY-Qn'; ohne/ungültiges Argument das laufende Quartal. */
+function _quartalAusMonat(ym) {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym || '');
+  if (m) return `${m[1]}-Q${Math.floor((Number(m[2]) - 1) / 3) + 1}`;
+  const now = new Date();
+  return `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
+}
+
 // Startseite: auf dem Smartphone konsequent Listenansicht (aktuelles Quartal),
 // auf größeren Bildschirmen der Monatskalender.
 function startHash() {
-  if (window.innerWidth < 720) {
+  if (istSchmal()) {
     const now = new Date();
     const q = Math.floor(now.getMonth() / 3) + 1;
     return `#liste/${now.getFullYear()}-Q${q}`;
@@ -197,6 +221,7 @@ function startHash() {
   return '#kalender';
 }
 function navigateStart() {
+  _kalMobilSetzen(false);
   location.hash = startHash();
 }
 
@@ -269,6 +294,10 @@ function renderPage() {
   }
 
   if (state.tab === 'kalender') {
+    if (istSchmal() && !_kalMobilErlaubt()) {
+      location.replace(`#liste/${_quartalAusMonat(args && args[0])}`);
+      return;
+    }
     renderKalender(main, args && args[0]).catch(e => _showRenderError(main, e));
     return;
   }
@@ -333,6 +362,11 @@ function renderGastSeite(main) {
 
 async function logout() {
   try { await apiPost('auth/logout'); } catch (e) {}
+  // Offline-Cache der API-Antworten mitnehmen – sonst blieben die Plandaten
+  // des abgemeldeten Nutzers auf dem Gerät lesbar.
+  try {
+    if (window.caches) await caches.delete('ts-data');
+  } catch (_) {}
   window.location.reload();
 }
 
@@ -931,13 +965,20 @@ async function renderKalender(main, monthArg) {
           const adoptedAttr = e.ref_einheit_id
             ? `data-einheit-id="${e.ref_einheit_id}" data-is-adopted="1"`
             : '';
-          const dragAttr = !e.ref_einheit_id
+          // Touch: HTML5-Drag&Drop funktioniert nicht – stattdessen ein
+          // Verschieben-Button, der den Datumsdialog öffnet.
+          const dragAttr = (!e.ref_einheit_id && !IS_TOUCH)
             ? `draggable="true" ondragstart="_kalDragStart(${e.id},event)" ondragend="_kalDragEnd(event)"`
+            : '';
+          const moveBtn = (!e.ref_einheit_id && IS_TOUCH)
+            ? `<button class="kal-item-move" title="Verschieben"
+                 onclick="event.stopPropagation();verschiebePrivatEinheitDialog(${e.id},'${e.datum}')">📅</button>`
             : '';
           return `<div class="${cls}" data-privat-id="${e.id}" ${adoptedAttr} ${dragAttr}
                        onclick="${clickFn}">
             ${timeHtml}<span class="kal-item-title">${escapeHtml(e.titel)}</span>
             ${kmBadge}
+            ${moveBtn}
             <button class="kal-item-del" onclick="event.stopPropagation();MEINPLAN.loeschePrivat(${e.id})" title="Löschen">×</button>
           </div>`;
         }
@@ -1847,6 +1888,9 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
 }
 
 function navigateKalender(monthYM) {
+  // Bewusster Griff zum Kalender – auf schmalen Screens die Umleitung zur
+  // Liste für diese Sitzung aussetzen.
+  _kalMobilSetzen(true);
   location.hash = `#kalender/${monthYM}`;
 }
 
@@ -1890,6 +1934,7 @@ function navigateListeFromKal(monthYM) {
 }
 
 function navigateListe(quarterKey) {
+  _kalMobilSetzen(false);
   if (!quarterKey) {
     const now = new Date();
     quarterKey = `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
@@ -2406,6 +2451,65 @@ async function zeigeEinheit(id) {
 function schliesseModal(ev) {
   if (ev && ev.target && !ev.target.classList.contains('modal-overlay')) return;
   document.getElementById('modal-container').innerHTML = '';
+}
+
+// ── Verschieben per Dialog (Touch-Ersatz für Drag & Drop) ─────────────────────
+// HTML5-Drag&Drop funktioniert auf iOS/Android nicht. Ohne diesen Dialog wäre
+// das Verschieben von Einheiten und Notizen mobil schlicht unerreichbar.
+function datumWaehlenDialog(titel, aktuellesDatum, onOk, okLabel) {
+  const cont = document.getElementById('modal-container');
+  if (!cont) return;
+  const heute = ymd(new Date());
+  cont.innerHTML = `
+    <div class="modal-overlay" onclick="schliesseModal(event)">
+      <div class="modal-card" style="max-width:360px">
+        <div class="modal-head">
+          <div class="modal-title">${escapeHtml(titel)}</div>
+          <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
+        </div>
+        <div class="modal-body">
+          <label for="dwd-datum" style="display:block;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);margin-bottom:6px">Neues Datum</label>
+          <input type="date" id="dwd-datum" class="settings-input" style="width:100%"
+                 value="${escapeHtml(aktuellesDatum || heute)}">
+        </div>
+        <div class="modal-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px 16px">
+          <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
+          <button class="btn btn-primary" id="dwd-ok">${escapeHtml(okLabel || 'Verschieben')}</button>
+        </div>
+      </div>
+    </div>`;
+  const inp = document.getElementById('dwd-datum');
+  document.getElementById('dwd-ok').addEventListener('click', () => {
+    const val = inp.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) { benachrichtigen('Bitte ein Datum wählen.', 'err'); return; }
+    schliesseModal();
+    onOk(val);
+  });
+  setTimeout(() => inp && inp.focus(), 50);
+}
+
+/** Private Einheit per Dialog auf ein anderes Datum schieben. */
+async function verschiebePrivatEinheitDialog(id, aktuellesDatum) {
+  datumWaehlenDialog('Einheit verschieben', aktuellesDatum, async neuesDatum => {
+    if (neuesDatum === aktuellesDatum) return;
+    try {
+      const data = await apiGet(`mein-plan/einheiten/${id}`, { silent: true });
+      const e = data.einheit;
+      await apiPut(`mein-plan/einheiten/${id}`, {
+        datum:          neuesDatum,
+        uhrzeit:        e.uhrzeit || null,
+        typ:            e.typ,
+        titel:          e.titel,
+        distanz_km:     e.distanz_km != null ? e.distanz_km : null,
+        bemerkung:      e.bemerkung || null,
+        ref_einheit_id: e.ref_einheit_id || null,
+      });
+      benachrichtigen('Verschoben.', 'ok');
+    } catch (err) {
+      benachrichtigen('Verschieben fehlgeschlagen.', 'err');
+    }
+    renderPage();
+  });
 }
 
 // ── Drag & Drop Handler (private Einheiten im Kalender verschieben) ────────────
@@ -3085,6 +3189,7 @@ function _wkPopoverShow(serieId, anchorEl) {
     document.addEventListener('keydown', _wkEscHide);
   document.addEventListener('pointerdown', _wkOutsideHide, true);
   window.addEventListener('scroll', _wkOutsideHide, true);
+  _wkBackdrop(pop.classList.contains('is-sheet'));
     return;
   }
 
@@ -3144,6 +3249,7 @@ function _wkPopoverShow(serieId, anchorEl) {
   document.addEventListener('keydown', _wkEscHide);
   document.addEventListener('pointerdown', _wkOutsideHide, true);
   window.addEventListener('scroll', _wkOutsideHide, true);
+  _wkBackdrop(pop.classList.contains('is-sheet'));
 }
 
 function _wkEscHide(e) {
@@ -3156,13 +3262,28 @@ function _wkOutsideHide(e) {
   const pop = document.getElementById('wk-popover');
   if (!pop) return;
   if (pop.contains(e.target)) return;
+  // Im Sheet-Modus klebt das Popover am Bildschirmrand – Scrollen dahinter
+  // darf es nicht schließen (iOS feuert dabei ohnehin Scroll-Events am Body).
+  if (e.type === 'scroll' && pop.classList.contains('is-sheet')) return;
   if (e.type === 'pointerdown' && e.target.closest
       && e.target.closest('[data-serie-id]')) return;
   _wkPopoverHide();
 }
 
+/** Abdunkelnder Hintergrund – nur im Sheet-Modus. */
+function _wkBackdrop(an) {
+  let bd = document.getElementById('wk-pop-backdrop');
+  if (!an) { if (bd) bd.remove(); return; }
+  if (bd) return;
+  bd = document.createElement('div');
+  bd.id = 'wk-pop-backdrop';
+  bd.className = 'pop-backdrop';
+  document.body.appendChild(bd);
+}
+
 function _wkPopoverHide() {
   clearTimeout(_wkHideTimer);
+  _wkBackdrop(false);
   document.removeEventListener('keydown', _wkEscHide);
   document.removeEventListener('pointerdown', _wkOutsideHide, true);
   window.removeEventListener('scroll', _wkOutsideHide, true);
@@ -3172,6 +3293,14 @@ function _wkPopoverHide() {
 }
 
 function _wkPopPosition(pop, rect) {
+  // Schmale Screens: als Bottom-Sheet einblenden statt neben den Anker rechnen.
+  if (istSheetBreite()) {
+    pop.classList.add('is-sheet');
+    pop.style.left = '';
+    pop.style.top  = '';
+    return;
+  }
+  pop.classList.remove('is-sheet');
   const popW   = pop.offsetWidth  || 220;
   const popH   = pop.offsetHeight || 140;
   const margin = 8;

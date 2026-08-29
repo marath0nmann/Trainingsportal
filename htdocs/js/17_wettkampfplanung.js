@@ -307,7 +307,7 @@ const WETTKAMPFPLANUNG = (() => {
     }
 
     html += `<div class="panel"><div class="table-scroll">
-      <table class="wkp-table">
+      <table class="wkp-table karten-tabelle">
         <thead>
           <tr>
             <th class="wkp-th-cb">
@@ -439,13 +439,13 @@ const WETTKAMPFPLANUNG = (() => {
 
       html += `
         <tr${rowOp || rowBg ? ` style="${rowOp}${rowBg}"` : ''}>
-          <td class="wkp-td-cb">
+          <td class="wkp-td-cb karte-cb">
             <input type="checkbox" class="wkp-check" data-id="${s.id}"
               ${isSelected ? 'checked' : ''}
               onchange="WETTKAMPFPLANUNG._toggleSelect(${s.id}, this.checked)"
               style="cursor:pointer;width:15px;height:15px;accent-color:var(--primary)">
           </td>
-          <td>
+          <td class="karte-titel">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <strong style="${abgesagt ? 'text-decoration:line-through' : ''}">${escapeHtml(stripOrtFromName(s.name, s.ort))}</strong>
               ${abgesagt ? '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#cc000022;color:var(--primary);font-weight:700">Abgesagt</span>' : ''}
@@ -464,14 +464,14 @@ const WETTKAMPFPLANUNG = (() => {
             </div>
             ${s.ort ? `<div class="wkp-ort">${escapeHtml(s.ort)}</div>` : ''}
           </td>
-          <td style="white-space:nowrap">${datumHtml}</td>
-          <td><div style="display:flex;flex-wrap:wrap;gap:2px">${wbHtml}</div></td>
-          <td style="white-space:nowrap">${s.import_kategorie
+          <td data-label="Datum" style="white-space:nowrap">${datumHtml}</td>
+          <td data-label="Disziplinen"><div style="display:flex;flex-wrap:wrap;gap:2px">${wbHtml}</div></td>
+          <td data-label="Kategorie" style="white-space:nowrap">${s.import_kategorie
             ? `<span style="font-size:11px;padding:2px 9px;border-radius:10px;
                  background:var(--border);color:var(--text)">${escapeHtml(_katLabel(s.import_kategorie))}</span>`
             : '<span style="color:var(--text2);font-size:13px">–</span>'}</td>
-          <td style="text-align:center;white-space:nowrap">${teilnHtml}</td>
-          <td style="text-align:center;white-space:nowrap">${(() => {
+          <td data-label="Teilnehmer" style="text-align:center;white-space:nowrap">${teilnHtml}</td>
+          <td data-label="Ergebnisse" style="text-align:center;white-space:nowrap">${(() => {
             const n = s.anz_ergebnisse || 0;
             if (!n) return '<span style="color:var(--text2);font-size:13px">–</span>';
             return `<a href="${escapeHtml(_statistikUrl)}/#veranstaltungen/serie/${s.id}"
@@ -481,7 +481,7 @@ const WETTKAMPFPLANUNG = (() => {
                      font-size:12px;font-weight:600;text-decoration:none;
                      background:var(--border);color:var(--text)">${n} ↗</a>`;
           })()}</td>
-          <td style="white-space:nowrap">
+          <td data-label="Status" style="white-space:nowrap">
             <button class="wkp-status-btn"
               onclick="WETTKAMPFPLANUNG._openPopper(${s.id}, this)"
               style="background:${st.bg};color:${st.text};border:none;border-radius:12px;
