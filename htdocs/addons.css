@@ -2308,6 +2308,14 @@ body.planung-active #app-footer    { display: none; }
   font-weight: 700; font-size: 13px; color: var(--text);
   margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Schließen-Button (nur Touch, per JS eingefügt) */
+.wk-pop-close {
+  position: absolute; top: 4px; right: 4px;
+  width: 32px; height: 32px; line-height: 1;
+  background: none; border: none; cursor: pointer;
+  color: var(--text2); font-size: 15px;
+}
+.wk-popover:has(.wk-pop-close) .wk-pop-name { padding-right: 28px; }
 .wk-pop-datum {
   font-size: 11px; color: var(--text2); margin-bottom: 10px;
   display: flex; align-items: center; gap: 6px;

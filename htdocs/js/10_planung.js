@@ -9,6 +9,10 @@ const KAL_POPOVER = (() => {
   let currentId = null;
 
   function initItems(items) {
+    // Touch-Geräte: kein Hover-Popover. mouseleave feuert dort nach dem Tap
+    // nicht zuverlässig – das Popover blieb offen hängen. Die Detailansicht
+    // ist per Tap auf das Item (onclick → zeigeEinheit) ohnehin erreichbar.
+    if (IS_TOUCH) return;
     items.forEach(item => {
       item.addEventListener('mouseenter', () => {
         clearTimeout(hideTimer);
@@ -31,6 +35,10 @@ const KAL_POPOVER = (() => {
       pop.addEventListener('mouseenter', () => clearTimeout(hideTimer));
       pop.addEventListener('mouseleave', () => { hideTimer = setTimeout(_hide, 180); });
       document.body.appendChild(pop);
+      // Notausgänge: Klick/Tap daneben, Scrollen oder Escape schließen immer.
+      document.addEventListener('pointerdown', _outsideHide, true);
+      window.addEventListener('scroll', _scrollHide, true);
+      document.addEventListener('keydown', _escHide);
     }
     return pop;
   }
@@ -171,7 +179,26 @@ const KAL_POPOVER = (() => {
     pop.style.top  = top  + 'px';
   }
 
+  function _outsideHide(ev) {
+    const pop = document.getElementById('kal-popover');
+    if (!pop || pop.style.display === 'none') return;
+    if (pop.contains(ev.target)) return;
+    _hide();
+  }
+
+  function _scrollHide(ev) {
+    const pop = document.getElementById('kal-popover');
+    if (!pop || pop.style.display === 'none') return;
+    if (pop.contains(ev.target)) return; // Scrollen im Popover selbst
+    _hide();
+  }
+
+  function _escHide(ev) {
+    if (ev.key === 'Escape') _hide();
+  }
+
   function _hide() {
+    clearTimeout(hideTimer);
     const pop = document.getElementById('kal-popover');
     if (pop) pop.style.display = 'none';
     currentId = null;

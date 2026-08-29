@@ -12,6 +12,12 @@
 
 var appConfig = {};
 
+// ── Touch-Erkennung ────────────────────────────────────────
+// Geräte ohne Hover (Smartphone/Tablet) bekommen keine Hover-Popover:
+// dort feuert zwar mouseenter beim Tippen, mouseleave aber nie zuverlässig,
+// sodass Tooltips offen hängen bleiben. Stattdessen Tap-Toggle.
+var IS_TOUCH = !!(window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches);
+
 // ── Farbhelfer ─────────────────────────────────────────────
 function _hexToRgb(hex) {
   hex = (hex || '').replace(/^#/, '');

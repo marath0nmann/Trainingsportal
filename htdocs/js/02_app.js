@@ -907,9 +907,12 @@ async function renderKalender(main, monthArg) {
               return _privTitel.startsWith('🏆 ' + sn);
             }) || (wkSerieDatumMap[e.datum] || [])[0] || null;
             const sid     = wkSerie ? wkSerie.id : null;
-            const hAttr   = sid
-              ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${sid},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`
-              : '';
+            // Touch: Tap-Toggle statt Hover – mouseleave feuert mobil nicht,
+            // das Popover blieb sonst offen hängen.
+            const hAttr   = !sid ? ''
+              : IS_TOUCH
+                ? `onclick="event.stopPropagation();_wkPopoverToggle(${sid},this)"`
+                : `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${sid},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`;
             return `<div class="kal-item kal-cal-${kalKeyFor(e)} is-privat" data-privat-id="${e.id}"
                          ${sid ? `data-serie-id="${sid}"` : ''} ${hAttr}>
               <span class="kal-item-title">${escapeHtml(e.titel)}</span>
@@ -984,7 +987,9 @@ async function renderKalender(main, monthArg) {
             const titleSty = abgesagt ? 'text-decoration:line-through;opacity:.7' : '';
             return `<div class="kal-item kal-cal-wettkampf is-privat" data-serie-id="${s.id}"
               style="cursor:${canAdd ? 'pointer' : 'default'}"
-              ${canAdd ? `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${s.id},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"` : ''}>
+              ${!canAdd ? '' : IS_TOUCH
+                ? `onclick="event.stopPropagation();_wkPopoverToggle(${s.id},this)"`
+                : `onmouseenter="clearTimeout(_wkHideTimer);_wkPopoverShow(${s.id},this)" onmouseleave="_wkHideTimer=setTimeout(_wkPopoverHide,180)"`}>
               <span class="kal-item-title" style="${titleSty}">${emoji} ${escapeHtml(name)}</span>
             </div>`;
           }).join('')
@@ -3031,6 +3036,17 @@ function _wkPopoverShow(serieId, anchorEl) {
   pop.id        = 'wk-popover';
   pop.className = 'wk-popover kal-cal-wettkampf';
 
+  // Touch: sichtbarer Schließen-Button – ohne Hover gibt es kein „Maus weg"
+  if (IS_TOUCH) {
+    const closeBtn = document.createElement('button');
+    closeBtn.className   = 'wk-pop-close';
+    closeBtn.type        = 'button';
+    closeBtn.setAttribute('aria-label', 'Schließen');
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', _wkPopoverHide);
+    pop.appendChild(closeBtn);
+  }
+
   const nameEl = document.createElement('div');
   nameEl.className   = 'wk-pop-name';
   nameEl.textContent = (abgesagt ? '🚫 ' : '🏆 ') + name;
@@ -3067,6 +3083,8 @@ function _wkPopoverShow(serieId, anchorEl) {
     document.body.appendChild(pop);
     _wkPopPosition(pop, anchorEl.getBoundingClientRect());
     document.addEventListener('keydown', _wkEscHide);
+  document.addEventListener('pointerdown', _wkOutsideHide, true);
+  window.addEventListener('scroll', _wkOutsideHide, true);
     return;
   }
 
@@ -3124,15 +3142,30 @@ function _wkPopoverShow(serieId, anchorEl) {
 
   // Escape schließt den Popover
   document.addEventListener('keydown', _wkEscHide);
+  document.addEventListener('pointerdown', _wkOutsideHide, true);
+  window.addEventListener('scroll', _wkOutsideHide, true);
 }
 
 function _wkEscHide(e) {
   if (e.key === 'Escape') _wkPopoverHide();
 }
 
+// Tap/Klick daneben oder Scrollen schließt das Popover. Der Anker selbst ist
+// ausgenommen – dort übernimmt _wkPopoverToggle das Schließen.
+function _wkOutsideHide(e) {
+  const pop = document.getElementById('wk-popover');
+  if (!pop) return;
+  if (pop.contains(e.target)) return;
+  if (e.type === 'pointerdown' && e.target.closest
+      && e.target.closest('[data-serie-id]')) return;
+  _wkPopoverHide();
+}
+
 function _wkPopoverHide() {
   clearTimeout(_wkHideTimer);
   document.removeEventListener('keydown', _wkEscHide);
+  document.removeEventListener('pointerdown', _wkOutsideHide, true);
+  window.removeEventListener('scroll', _wkOutsideHide, true);
   const pop = document.getElementById('wk-popover');
   if (pop) pop.remove();
   _wkPopSerie = null;

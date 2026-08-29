@@ -1,5 +1,8 @@
 # Changelog
 
+## v329
+- **Fix: Kalender-Tooltips blieben auf dem Smartphone offen hängen.** Auf Geräten ohne Maus (`hover: none` / grober Zeiger) gibt es das Hover-Popover der Trainingseinheiten gar nicht mehr – dort öffnet ein Tap wie gewohnt direkt die Detailansicht. Das Wettkampf-Popover wird mobil per Tap auf-/zugeklappt, hat einen eigenen Schließen-Button und schließt zusätzlich bei Tap daneben, beim Scrollen und mit Escape. Dieselben Notausgänge (Klick daneben, Scrollen, Escape) gelten jetzt auch am Desktop für beide Popover.
+
 ## v328
 - **Die dynamische Filterleiste des Statistikportals steht jetzt auch hier zur Verfügung.** Sie wird über `shared.php` direkt aus dem Statistikportal geladen – eine Quelle, beide Portale: Suchfeld plus beliebig viele Filterregeln „Spalte + Wert", deren Auswahllisten nur noch erreichbare Werte samt Trefferzahl zeigen.
 - **Admin → Trainings:** statt der festen Dropdowns Typ/Gruppe jetzt Suche (Titel, Treffpunkt, Gruppe, Typ) und Filter nach Jahr, Monat, Wochentag, Typ, Trainingsgruppe, Treffpunkt und Status.
