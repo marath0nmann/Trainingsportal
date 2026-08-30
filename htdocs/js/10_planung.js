@@ -818,6 +818,12 @@ const PLANUNG = (() => {
     const head = `<div class="kal-head">${WOCHENTAGE.map(w =>
       `<div class="kal-head-cell">${w}</div>`).join('')}</div>`;
 
+    // Schmale Screens: Tagesliste statt Monatsraster. Bei sieben Spalten bleiben
+    // unter 720px ~40px pro Tag – Titel und Aktionsbuttons sind dort unbedienbar.
+    const schmal    = istSchmal();
+    const listRows  = [];
+    const WT_KURZ   = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
     const rows = [];
     let cursor = new Date(gridStart);
     while (cursor <= gridEnd) {
@@ -908,6 +914,34 @@ const PLANUNG = (() => {
               ${inMonth ? '<div class="planung-drop-hint">Hier ablegen</div>' : ''}
             </div>
           </div>`);
+
+        // Listenzeile für schmale Screens – gleicher Inhalt, gleiche
+        // data-Attribute (Popover und Drop-Ziele funktionieren unverändert).
+        if (schmal && inMonth) {
+          const leer = !itemsHtml && !notizenHtml && !ferienHtml;
+          const tagCls = [
+            'planung-tag', 'planung-kal-cell', 'in-month',
+            isToday ? 'is-today' : '',
+            (cursor.getDay() === 0 || cursor.getDay() === 6) ? 'weekend' : '',
+            ferien.length ? 'is-feiertag' : '',
+            leer ? 'planung-tag-leer' : '',
+          ].filter(Boolean).join(' ');
+          listRows.push(`
+            <div class="${tagCls}" data-datum="${k}">
+              <div class="planung-tag-head">
+                <span class="planung-tag-datum">
+                  <span class="planung-tag-wt">${WT_KURZ[cursor.getDay()]}</span>
+                  <span class="planung-tag-num">${cursor.getDate()}.</span>
+                </span>
+                ${notizAddBtn}
+              </div>
+              <div class="planung-tag-body">
+                ${ferienHtml ? `<div class="kal-feiertag-list">${ferienHtml}</div>` : ''}
+                ${notizenHtml ? `<div class="kal-notiz-list">${notizenHtml}</div>` : ''}
+                <div class="kal-cell-items">${itemsHtml}</div>
+              </div>
+            </div>`);
+        }
         cursor.setDate(cursor.getDate() + 1);
       }
       rows.push(`<div class="kal-row">${cells.join('')}</div>`);
@@ -915,7 +949,9 @@ const PLANUNG = (() => {
 
     const grid = document.getElementById('planung-kal-grid');
     if (grid) {
-      grid.outerHTML = `<div id="planung-kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
+      grid.outerHTML = schmal
+        ? `<div id="planung-kal-grid" class="planung-tage">${listRows.join('')}</div>`
+        : `<div id="planung-kal-grid" class="kal-grid">${head}${rows.join('')}</div>`;
     }
 
     // DnD: Drag von Kalender-Einheiten

@@ -48,8 +48,13 @@ async function renderAdminSystem(contentEl) {
   function shead(label) {
     return '<tr><th colspan="2" style="padding:8px 12px;background:var(--primary);color:#fff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">' + label + '</th></tr>';
   }
+  // Spaltenbreiten explizit: die erste Zeile ist ein colspan=2-Kopf, aus dem
+  // table-layout:fixed keine Spaltenbreiten ableiten kann. Ohne die Angabe
+  // sprengen lange Werte (DB-Version, E-Mail) die Tabelle auf Mobilgeräten.
   function stable(rows) {
-    return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden"><table style="width:100%;border-collapse:collapse"><colgroup><col><col></colgroup>' + rows + '</table></div>';
+    return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+      '<table class="admin-stat-table" style="width:100%;border-collapse:collapse">' +
+      '<colgroup><col style="width:48%"><col style="width:52%"></colgroup>' + rows + '</table></div>';
   }
 
   // Left column
@@ -98,19 +103,19 @@ async function renderAdminSystem(contentEl) {
     var ok = l.erfolg;
     var failRed = '#c0392b';
     return '<tr style="' + (ok?'':'background:rgba(192,57,43,.07)') + '">' +
-      '<td style="padding:6px 10px">' +
+      '<td class="karte-titel" style="padding:6px 10px">' +
       '<span style="font-weight:600">' + escapeHtml(l.anzeigeName || l.benutzername || '–') + '</span>' +
       (l.rolle ? ' ' + badge(l.rolle) : '') +
       ((l.benutzername && l.benutzername !== l.anzeigeName) ? '<br><span style="font-size:11px;color:var(--text2)">' + escapeHtml(l.benutzername) + '</span>' : '') +
     '</td>' +
-      '<td style="padding:6px 10px;font-size:12px;white-space:nowrap">' +
+      '<td data-label="Status" style="padding:6px 10px;font-size:12px;white-space:nowrap">' +
         '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(ok?'#27ae60':failRed)+';margin-right:5px"></span>' +
         '<span style="color:'+(ok?'inherit':failRed)+';font-weight:'+(ok?'400':'700')+'">' + (ok?'Erfolg':'Fehlschlag') + '</span>' +
         (l.methode ? ' <span style="font-size:10px;opacity:.7;margin-left:4px">' + ({'password':'&#x1F511;','email':'&#x1F4E7;','passkey':'&#x1F5DD;️','totp':'&#x1F4F1;'}[l.methode] || '') + ' ' + l.methode + '</span>' : '') +
       '</td>' +
-      '<td style="padding:6px 10px;font-size:11px;color:var(--text2)">' + escapeHtml(geoStr||'–') + '</td>' +
-      '<td style="padding:6px 10px;font-size:11px;font-family:monospace;color:var(--text2)">' + escapeHtml(l.ip||'–') + '</td>' +
-      '<td style="padding:6px 10px;font-size:11px;color:var(--text2)">' + fmtDate(l.datum) + '</td>' +
+      '<td data-label="Land" style="padding:6px 10px;font-size:11px;color:var(--text2)">' + escapeHtml(geoStr||'–') + '</td>' +
+      '<td data-label="IP" style="padding:6px 10px;font-size:11px;font-family:monospace;color:var(--text2)">' + escapeHtml(l.ip||'–') + '</td>' +
+      '<td data-label="Zeitpunkt" style="padding:6px 10px;font-size:11px;color:var(--text2)">' + fmtDate(l.datum) + '</td>' +
     '</tr>';
   }).join('') || '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text2);font-size:13px">Keine Eintr&auml;ge</td></tr>';
 
@@ -118,11 +123,11 @@ async function renderAdminSystem(contentEl) {
     var cc = (g.countryCode||'').toUpperCase();
     var flag = cc.length===2 ? String.fromCodePoint(0x1F1E6+cc.charCodeAt(0)-65)+String.fromCodePoint(0x1F1E6+cc.charCodeAt(1)-65)+' ' : '';
     return '<tr>' +
-      '<td style="padding:6px 10px;font-family:monospace;font-size:12px">' + escapeHtml(g.ip||'–') + '</td>' +
-      '<td style="padding:6px 10px;font-size:12px;color:var(--text2)">' + flag + escapeHtml(g.country || '–') + '</td>' +
-      '<td style="padding:6px 10px;font-size:11px;color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml((g.user_agent||'').replace(/^Mozilla\/5\.0 /,'').slice(0,70)) + '</td>' +
-      '<td style="padding:6px 10px;font-size:12px;color:var(--text2)">' + timeSince(g.zuletzt) + '</td>' +
-      '<td style="padding:6px 10px;font-size:12px;text-align:right">' + g.aufrufe + '</td>' +
+      '<td class="karte-titel" style="padding:6px 10px;font-family:monospace;font-size:12px">' + escapeHtml(g.ip||'–') + '</td>' +
+      '<td data-label="Land" style="padding:6px 10px;font-size:12px;color:var(--text2)">' + flag + escapeHtml(g.country || '–') + '</td>' +
+      '<td data-label="Browser" style="padding:6px 10px;font-size:11px;color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml((g.user_agent||'').replace(/^Mozilla\/5\.0 /,'').slice(0,70)) + '</td>' +
+      '<td data-label="Zuletzt" style="padding:6px 10px;font-size:12px;color:var(--text2)">' + timeSince(g.zuletzt) + '</td>' +
+      '<td data-label="Aufrufe" style="padding:6px 10px;font-size:12px;text-align:right">' + g.aufrufe + '</td>' +
     '</tr>';
   }).join('') || '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text2);font-size:13px">Keine Gast-Besucher</td></tr>';
 
@@ -139,17 +144,17 @@ async function renderAdminSystem(contentEl) {
 
     // Gäste
     '<div class="panel" style="margin-bottom:24px"><div class="panel-header"><div class="panel-title">&#x1F465; G&auml;ste <span style="font-size:12px;font-weight:400;opacity:.6">(letzte 15 Min.)</span></div></div>' +
-      '<div class="table-scroll"><table class="admin-sys-table" style="width:100%"><thead><tr>' +
+      '<div class="table-scroll"><table class="admin-sys-table karten-tabelle" style="width:100%"><thead><tr>' +
         thStyle('IP-Adresse') + thStyle('Land') + thStyle('Browser') + thStyle('Zuletzt') + thStyle('Aufrufe', ';text-align:right') +
       '</tr></thead><tbody>' + gaesteRows + '</tbody></table></div></div>' +
 
     // Aktive Benutzer + Letzte Logins
     '<div class="admin-sys-cols">' +
       '<div class="panel"><div class="panel-header"><div class="panel-title">&#x1F7E2; Aktiv <span style="font-size:12px;font-weight:400;opacity:.6">(letzte 10 Min.)</span></div></div>' +
-        '<table style="width:100%"><thead><tr>' + thStyle('Benutzer') + thStyle('Rolle') + thStyle('Aktiv seit') + '</tr></thead>' +
-        '<tbody>' + aktiveRows + '</tbody></table></div>' +
+        '<div class="table-scroll"><table style="width:100%"><thead><tr>' + thStyle('Benutzer') + thStyle('Rolle') + thStyle('Aktiv seit') + '</tr></thead>' +
+        '<tbody>' + aktiveRows + '</tbody></table></div></div>' +
       '<div class="panel"><div class="panel-header"><div class="panel-title">&#x1F550; Letzte Logins</div></div>' +
-        '<div class="table-scroll"><table class="admin-sys-table" style="width:100%;table-layout:fixed;border-collapse:collapse"><thead><tr>' + thStyle('Benutzer', ';width:28%') + thStyle('Status', ';width:22%') + thStyle('Land', ';width:14%') + thStyle('IP', ';width:16%') + thStyle('Zeitpunkt', ';width:20%') + '</tr></thead>' +
+        '<div class="table-scroll"><table class="admin-sys-table karten-tabelle" style="width:100%;table-layout:fixed;border-collapse:collapse"><thead><tr>' + thStyle('Benutzer', ';width:28%') + thStyle('Status', ';width:22%') + thStyle('Land', ';width:14%') + thStyle('IP', ';width:16%') + thStyle('Zeitpunkt', ';width:20%') + '</tr></thead>' +
         '<tbody>' + loginRows + '</tbody></table></div></div>' +
     '</div>';
 }

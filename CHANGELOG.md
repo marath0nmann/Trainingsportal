@@ -1,5 +1,13 @@
 # Changelog
 
+## v331
+- **Trainingsplanung mobil: Tagesliste statt Monatsraster.** Unter 720px blieben im 7-Spalten-Raster rund 40px pro Tag – Titel waren auf „Lan…" gekürzt und die Aktionsbuttons nicht treffbar. Die Liste zeigt pro Tag Wochentag, Datum, Feiertage, Notizen und alle Einheiten in voller Breite; Notiz-, Absage-, Lösch- und Verschieben-Buttons bleiben unverändert erreichbar.
+- **Fix: Admin → System lief seitlich aus dem Bildschirm.** Die Statistik-Tabellen sind Grid-Elemente und schrumpfen wegen `min-width: auto` nicht unter die Breite ihres längsten Wertes (DB-Version, E-Mail-Adresse). Mit `min-width: 0`, festen Spaltenanteilen und erlaubtem Zeilenumbruch passt das Dashboard jetzt auf jede Bildschirmbreite.
+- **Fix: In jeder Tabelle fehlte auf dem Smartphone stillschweigend die vierte Spalte.** Die geteilte `app.css` blendet unter 600px pauschal `td:nth-child(4)` aus – eine Heuristik für die Ergebnistabellen des Statistikportals. Im Trainingsportal verschwanden dadurch Spalten wie „Gruppe", „Disziplinen" oder „Zuletzt". Für die Tabellen dieses Portals ist die Regel aufgehoben.
+- **Gäste- und Login-Listen im System-Dashboard als Karten** unter 720px, „Aktive Benutzer" in einem eigenen Scroll-Container.
+- **Profil-Modal auf schmalen Screens gestapelt:** Distanz-Bezeichnung über dem Auswahlfeld statt in einer festen 115px-Spalte daneben. Damit ist der Optionstext („Letzte 12 Monate – 19:52 · 20.04.2026 · Frühlingslauf") wieder lesbar und das Eingabefeld zeigt den vollständigen Platzhalter. Auch Freigaben, Gruppenauswahl und das Hinzufügen-Formular stapeln jetzt.
+- Fix: Die Wettkampf-Schalter der Kalenderlegende („passt nicht" ausblenden) liefen aus ihrem Rahmen heraus statt umzubrechen.
+
 ## v330
 - **Mobil: Startseite bleibt auf schmalen Screens die Liste.** `#kalender` leitet unter 720px auf den Quartalsplan um – im Monatsraster bleiben dort ~45px pro Tag. Der Umschalter „▦ Kalender" hebt die Umleitung für die laufende Sitzung auf, das Vereinslogo führt zurück zur Liste.
 - **Mindest-Tapflächen von 44px** für Buttons, Umschalter und Icon-Aktionen auf Touch-Geräten; die kleinen Kalender-Icons bekommen eine unsichtbar vergrößerte Trefferfläche. Eingabefelder sind mobil 16px groß – darunter zoomt iOS Safari beim Fokus hinein.
