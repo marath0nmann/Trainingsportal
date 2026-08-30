@@ -12,6 +12,7 @@ const WETTKAMPFPLANUNG = (() => {
   let _popper       = null;
   let _filterPopper = null;
   let _bulkPopper   = null;
+  let _teilnPopper  = null;
 
   // Filter / Sort / Select state
   let _filterStatus    = new Set();   // leer = alle Status anzeigen
@@ -397,13 +398,25 @@ const WETTKAMPFPLANUNG = (() => {
           }).join('\n')
         : '';
       const binIchDabei = myId && teiln.some(t => t.benutzer_id === myId);
-      const teilnHtml = teiln.length
-        ? `<span title="${escapeHtml(teilnTitle)}"
+      const teilnBg   = binIchDabei ? '#27ae6022' : 'var(--border)';
+      const teilnCol  = binIchDabei ? '#27ae60' : 'var(--text)';
+      let teilnHtml;
+      if (!teiln.length) {
+        teilnHtml = '<span style="color:var(--text2);font-size:13px">–</span>';
+      } else if (_istAdmin()) {
+        // Admin/Trainer: klickbar → Popover zum Entfernen einzelner Anmeldungen
+        teilnHtml = `<button class="wkp-teiln-btn"
+          onclick="WETTKAMPFPLANUNG._openTeilnPopper(${s.id}, this)"
+          title="Teilnehmer verwalten"
+          style="min-width:22px;padding:1px 8px;border-radius:10px;border:none;
+                 font-size:12px;font-weight:600;cursor:pointer;
+                 background:${teilnBg};color:${teilnCol}">👥 ${teiln.length}</button>`;
+      } else {
+        teilnHtml = `<span title="${escapeHtml(teilnTitle)}"
              style="display:inline-block;min-width:22px;padding:1px 8px;border-radius:10px;
                     font-size:12px;font-weight:600;cursor:help;
-                    background:${binIchDabei ? '#27ae6022' : 'var(--border)'};
-                    color:${binIchDabei ? '#27ae60' : 'var(--text)'}">👥 ${teiln.length}</span>`
-        : '<span style="color:var(--text2);font-size:13px">–</span>';
+                    background:${teilnBg};color:${teilnCol}">👥 ${teiln.length}</span>`;
+      }
 
       const y = String(_jahr);
       // Prognose = kein naechstes_datum für dieses Jahr UND Statistikportal
@@ -791,6 +804,81 @@ const WETTKAMPFPLANUNG = (() => {
     } catch (e) {
       s.status = alt;
       _renderListe();
+    }
+  }
+
+  // ── Teilnehmer-Popover (Admin/Trainer: fremde Anmeldungen entfernen) ──
+  function _istAdmin() {
+    return typeof state !== 'undefined' && state.user &&
+           ['admin', 'trainer'].includes(state.user.rolle);
+  }
+
+  function _ensureTeilnPopper() {
+    if (_teilnPopper && _teilnPopper.isConnected) return _teilnPopper;
+    _teilnPopper = document.createElement('div');
+    _teilnPopper.style.cssText =
+      'position:fixed;z-index:9902;background:var(--bg);border:1px solid var(--border);' +
+      'border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:6px;' +
+      'min-width:220px;max-width:320px;display:none;';
+    document.body.appendChild(_teilnPopper);
+    document.addEventListener('mousedown', e => {
+      if (_teilnPopper && _teilnPopper.style.display !== 'none' &&
+          !_teilnPopper.contains(e.target) && !e.target.closest('.wkp-teiln-btn')) {
+        _teilnPopper.style.display = 'none';
+      }
+    });
+    return _teilnPopper;
+  }
+
+  function _openTeilnPopper(serieId, btnEl) {
+    if (!_istAdmin()) return;
+    const p = _ensureTeilnPopper();
+    const s = _serien.find(x => x.id === serieId);
+    if (!s) return;
+    const teiln = Array.isArray(s.teilnehmer) ? s.teilnehmer : [];
+    const myId  = (typeof state !== 'undefined' && state.user) ? (state.user.id || 0) : 0;
+
+    let html = `<div style="font-size:10px;font-weight:700;text-transform:uppercase;
+      letter-spacing:.4px;color:var(--text2);padding:4px 8px 6px">
+      Angemeldete Teilnehmer &ndash; × entfernt</div>`;
+    if (!teiln.length) {
+      html += `<div style="padding:6px 8px;font-size:13px;color:var(--text2)">Keine Anmeldungen.</div>`;
+    } else {
+      teiln.forEach(t => {
+        const isMe = myId && t.benutzer_id === myId;
+        const nm   = escapeHtml(t.name || 'Unbekannt') + (isMe ? ' (ich)' : '');
+        const disz = t.disziplin
+          ? `<span style="color:var(--text2);font-size:11px"> · ${escapeHtml(t.disziplin)}</span>` : '';
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px"
+          onmouseover="this.style.background='var(--border)'"
+          onmouseout="this.style.background=''">
+          <span style="flex:1;font-size:13px${isMe ? ';color:#27ae60;font-weight:700' : ''}">${nm}${disz}</span>
+          <button onclick="WETTKAMPFPLANUNG._removeAnmeldung(${serieId}, ${t.id})"
+            title="Anmeldung entfernen"
+            style="border:none;background:none;cursor:pointer;color:var(--primary);
+                   font-size:18px;line-height:1;padding:0 4px">&times;</button>
+        </div>`;
+      });
+    }
+    p.innerHTML = html;
+    p.style.display = 'block';
+    _positionPopper(p, btnEl, 220);
+  }
+
+  async function _removeAnmeldung(serieId, anmId) {
+    const s  = _serien.find(x => x.id === serieId);
+    const t  = s && (s.teilnehmer || []).find(x => x.id === anmId);
+    const nm = t ? (t.name || 'diese Anmeldung') : 'diese Anmeldung';
+    if (!confirm(`Anmeldung von „${nm}" wirklich entfernen?`)) return;
+    if (_teilnPopper) _teilnPopper.style.display = 'none';
+    try {
+      await apiDel(`wettkampf/anmeldungen/${anmId}`);
+      benachrichtigen('Anmeldung entfernt.', 'ok');
+      if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
+      await _lade();
+      _renderListe();
+    } catch (e) {
+      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -1300,6 +1388,7 @@ const WETTKAMPFPLANUNG = (() => {
     _toggleSelect, _toggleAll, _clearSelection,
     _openBulkPopper, _bulkSetStatus,
     _anDisziplin, _abDisziplin,
+    _openTeilnPopper, _removeAnmeldung,
     _openVorschlagModal, _submitVorschlag,
     _addVorschlagDisz, _removeVorschlagDisz, _setVorschlagDiszFilter,
     _exportPDF,

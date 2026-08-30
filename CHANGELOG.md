@@ -1,5 +1,8 @@
 # Changelog
 
+## v332
+- Wettkampfplanung: Admins/Trainer können fremde Anmeldungen entfernen – Klick auf die 👥-Zahl öffnet ein Popover mit allen Teilnehmern und einem ×-Button je Eintrag (mit Rückfrage). Die Anmeldung wird archiviert gelöscht. `GET /wettkampfplanung` liefert je Teilnehmer nun die Anmeldungs-`id`.
+
 ## v331
 - **Trainingsplanung mobil: Tagesliste statt Monatsraster.** Unter 720px blieben im 7-Spalten-Raster rund 40px pro Tag – Titel waren auf „Lan…" gekürzt und die Aktionsbuttons nicht treffbar. Die Liste zeigt pro Tag Wochentag, Datum, Feiertage, Notizen und alle Einheiten in voller Breite; Notiz-, Absage-, Lösch- und Verschieben-Buttons bleiben unverändert erreichbar.
 - **Fix: Admin → System lief seitlich aus dem Bildschirm.** Die Statistik-Tabellen sind Grid-Elemente und schrumpfen wegen `min-width: auto` nicht unter die Breite ihres längsten Wertes (DB-Version, E-Mail-Adresse). Mit `min-width: 0`, festen Spaltenanteilen und erlaubtem Zeilenumbruch passt das Dashboard jetzt auf jede Bildschirmbreite.

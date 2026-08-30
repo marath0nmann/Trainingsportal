@@ -7756,6 +7756,7 @@ function handleWettkampfplanung(string $method, string $tail): void
         try {
             $teiln = DB::fetchAll("
                 SELECT wp.serie_id,
+                       twa.id AS anm_id,
                        twa.benutzer_id,
                        twa.disziplin,
                        COALESCE(
@@ -7771,6 +7772,7 @@ function handleWettkampfplanung(string $method, string $tail): void
             ", [$jahr]);
             foreach ($teiln as $t) {
                 $teilnBySerie[(int)$t['serie_id']][] = [
+                    'id'          => (int)$t['anm_id'],
                     'benutzer_id' => (int)$t['benutzer_id'],
                     'name'        => $t['name'],
                     'disziplin'   => $t['disziplin'],
