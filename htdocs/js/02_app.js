@@ -146,6 +146,7 @@ function fillUserBadge() {
 // Seiten, die keinen eigenen Nav-Eintrag haben, aber im Mobil-Header
 // einen Titel brauchen (Unterseiten und Alt-Routen).
 const NAV_ALIAS_LABEL = {
+  konto:         'Mein Konto',
   liste:         'Kalender',
   treffpunkte:   'Treffpunkte',
   einstellungen: 'Einstellungen',
@@ -164,16 +165,20 @@ function navTabs() {
   const isTrainer = isAdmin || (!!u && u.rolle === 'trainer');
 
   const tabs = [
+    { id: 'dashboard',        icon: '&#x1F3E0;', label: 'Übersicht' },
     { id: 'kalender',         icon: '&#x1F4C5;', label: 'Kalender' },
     { id: 'wettkampfplanung', icon: '&#x1F3C5;', label: 'Wettkampfplanung',
       badge: navBadges.wettkampf_offen },
   ];
   if (isTrainer) {
-    tabs.push({ id: 'planung', icon: '&#x1F4CB;', label: 'Trainingsplanung' });
+    // Trainings ohne Treffpunkt sind eine Planungslücke – der Zähler gehört
+    // seit v338 zur Trainingsplanung, wo die Liste jetzt zu Hause ist.
+    tabs.push({ id: 'planung', icon: '&#x1F4CB;', label: 'Trainingsplanung',
+      badge: navBadges.ohne_treffpunkt });
   }
   if (isAdmin) {
     tabs.push({ id: 'admin', icon: '&#x2699;&#xFE0F;', label: 'Admin',
-      badge: (navBadges.papierkorb || 0) + (navBadges.ohne_treffpunkt || 0) });
+      badge: navBadges.papierkorb });
   }
   return tabs;
 }
@@ -208,7 +213,7 @@ function _renderNavTabs(tabs) {
         `${t.icon} ${t.label}${_navBadgeHtml(t.badge)}</button>`
     ).join('');
     if (u) {
-      html += `<button class="mobile-nav-item mobile-nav-profil" onclick="PROFIL.open();closeBurgerMenu()">Profil</button>`;
+      html += `<button class="mobile-nav-item mobile-nav-profil${akt('konto') ? ' active' : ''}" onclick="navigate('konto');closeBurgerMenu()">Mein Konto</button>`;
       html += `<button class="mobile-nav-item mobile-nav-logout" onclick="logout()">Abmelden</button>`;
     } else {
       html += `<button class="mobile-nav-item" onclick="goToLoginPortal()">Anmelden</button>`;
@@ -278,9 +283,13 @@ function _quartalAusMonat(ym) {
   return `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
 }
 
-// Startseite: auf dem Smartphone konsequent Listenansicht (aktuelles Quartal),
-// auf größeren Bildschirmen der Monatskalender.
+// Startseite: angemeldete Nutzer beginnen auf der Übersicht – sie beantwortet
+// „was ist als Nächstes dran" in einem Blick, statt sofort in den dichtesten
+// Bildschirm der Anwendung zu führen. Gäste (Share-Link) haben keine
+// persönlichen Daten und gehen weiter direkt in die freigegebene Ansicht:
+// auf dem Smartphone die Liste, sonst der Monatskalender.
 function startHash() {
+  if (state.user) return '#dashboard';
   if (istSchmal()) {
     const now = new Date();
     const q = Math.floor(now.getMonth() / 3) + 1;
@@ -361,6 +370,16 @@ function renderPage() {
     return;
   }
 
+  if (state.tab === 'dashboard') {
+    if (!state.user) { location.replace(startHash()); return; }
+    DASHBOARD.render(main).catch(e => _showRenderError(main, e));
+    return;
+  }
+  if (state.tab === 'konto') {
+    if (!state.user) { location.replace(startHash()); return; }
+    PROFIL.render(main).catch(e => _showRenderError(main, e));
+    return;
+  }
   if (state.tab === 'kalender') {
     if (istSchmal() && !_kalMobilErlaubt()) {
       location.replace(`#liste/${_quartalAusMonat(args && args[0])}`);
@@ -377,6 +396,12 @@ function renderPage() {
     location.replace('#planung');
     return;
   }
+  // Alt-Route: Admin → Trainings ist seit v338 die Sektion „Liste" der
+  // Trainingsplanung – dieselbe Tabelle, nur nicht mehr im Admin-Menü.
+  if (state.tab === 'admin' && args && args[0] === 'trainings') {
+    location.replace('#planung/liste');
+    return;
+  }
   if (state.tab === 'wettkampfplanung') {
     if (!state.user) { location.replace(startHash()); return; }
     WETTKAMPFPLANUNG.render(main);
@@ -384,7 +409,8 @@ function renderPage() {
   }
   if (state.tab === 'planung') {
     if (!state.user) { location.replace(startHash()); return; }
-    PLANUNG.render(main);
+    // #planung/<sektion> – Deep-Link auf Gruppenpläne, Athletenpläne, Liste
+    PLANUNG.render(main, args && args[0]);
     return;
   }
   if (state.tab === 'treffpunkte') {
@@ -462,8 +488,6 @@ function renderAdminPage(main, subTab) {
   const ADMIN_TABS = [
     { id: 'system',        icon: '&#x1F5A5;&#xFE0E;', label: 'System' },
     { id: 'gruppen',       icon: '&#x1F465;',         label: 'Gruppen' },
-    { id: 'trainings',     icon: '&#x1F4CB;',         label: 'Trainings',
-      badge: navBadges.ohne_treffpunkt },
     { id: 'wettkampf',     icon: '&#x1F3C5;',         label: 'Wettkämpfe' },
     { id: 'treffpunkte',   icon: '&#x1F4CD;',         label: 'Treffpunkte' },
     { id: 'strecken',      icon: '&#x1F5FA;&#xFE0F;', label: 'Strecken' },
@@ -487,8 +511,6 @@ function renderAdminPage(main, subTab) {
   const contentEl = document.getElementById('admin-content');
   if (tab === 'system') {
     renderAdminSystem(contentEl);
-  } else if (tab === 'trainings') {
-    ADMIN_TRAININGS.render(contentEl);
   } else if (tab === 'wettkampf') {
     ADMIN_WETTKAMPF.render(contentEl);
   } else if (tab === 'treffpunkte') {
@@ -768,11 +790,11 @@ async function renderKalender(main, monthArg) {
        </div>`
     : '';
 
+  // Hinweise, Heute/Morgen, Aktionen und die Wettkampf-Vorschau stehen auf der
+  // Übersicht (#dashboard). Der Kalender zeigt den Kalender.
   main.innerHTML = `
     <div class="kal-wrap">
       ${shareBanner}
-      <div id="pace-warn-sektion"></div>
-      <div id="heute-sektion"></div>
       <div class="kal-toolbar">
         <div class="kal-nav">
           ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Aktuellen Monat anzeigen">Heute</button>
@@ -788,14 +810,7 @@ async function renderKalender(main, monthArg) {
         </div>` : ''}
       </div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
-      <div id="kal-actions" class="kal-actions"></div>
-      <div id="wettkampf-sektion"></div>
     </div>`;
-
-  ladeGlobalePaceWarnung('pace-warn-sektion');
-  if (angemeldet) ladeHeuteSektionInto('heute-sektion');
-  if (angemeldet) ladeWettkampfSektionInto('wettkampf-sektion');
-  _renderKalActions('kal-actions');
 
   const von = ymd(gridStart);
   const bis = ymd(gridEnd);
@@ -1148,8 +1163,6 @@ async function renderKalender(main, monthArg) {
     KAL_POPOVER.initItems(document.querySelectorAll('#kal-grid .kal-item[data-einheit-id]'));
   }
 
-  // Neu rendern, nachdem _wkPrivatMap befüllt ist → korrekte Aktiv-Zustände der Karten-Buttons
-  ladeWettkampfSektionInto('wettkampf-sektion');
 }
 
 // ── Kalender-Filter: Initialisierung ───────────────────
@@ -1427,7 +1440,7 @@ async function ladeGlobalePaceWarnung(containerId) {
     if (hatKeinePace) {
       html += `<div class="pace-warn-global">
         ⚠ Persönliche Pace noch nicht konfiguriert –
-        <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
+        <button class="btn-link" onclick="PROFIL.open()">jetzt im Konto einrichten</button>
       </div>`;
     }
   } catch (e) { /* ignorieren */ }
@@ -1441,7 +1454,7 @@ async function ladeGlobalePaceWarnung(containerId) {
       if (alleGruppen && alleGruppen.length > 0) {
         html += `<div class="pace-warn-global">
           ⚠ Noch keiner Trainingsgruppe zugeordnet –
-          <button class="btn-link" onclick="PROFIL.open()">jetzt im Profil einrichten</button>
+          <button class="btn-link" onclick="PROFIL.open()">jetzt im Konto einrichten</button>
         </div>`;
       }
     }
@@ -1499,6 +1512,25 @@ async function ladeHeuteSektionInto(containerId) {
     console.error('Heute/Morgen-Sektion konnte nicht geladen werden:', e);
     el.innerHTML = '';
   }
+}
+
+/**
+ * Füllt `_wkPrivatMap` für einen Zeitraum.
+ *
+ * Kalender und Liste bauen die Map als Nebenprodukt ihres Renderings auf.
+ * Die Übersicht rendert keinen Plan, braucht die Map aber genauso – sonst
+ * zeigen die Disziplin-Buttons der Wettkampfkarten den falschen Aktiv-Zustand.
+ */
+async function ladeWkPrivatMap(von, bis) {
+  if (!state.user) return;
+  try {
+    const d = await apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true });
+    _wkPrivatMap = {};
+    (d.privat || []).filter(e => e.typ === 'wettkampf').forEach(e => {
+      (_wkPrivatMap[e.datum] = _wkPrivatMap[e.datum] || []).push(
+        { id: e.id, bemerkung: e.bemerkung || null, titel: e.titel || '' });
+    });
+  } catch (_) { /* Karten zeigen dann nur keinen Aktiv-Zustand */ }
 }
 
 async function ladeWettkampfSektionInto(containerId) {
@@ -2179,8 +2211,6 @@ async function renderListe(main, quarterArg) {
   main.innerHTML = `
     <div class="liste-wrap">
       ${shareBannerL}
-      <div id="pace-warn-sektion"></div>
-      <div id="heute-sektion"></div>
       <div class="liste-toolbar">
         <div class="liste-nav">
           ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateListe()" title="Aktuelles Quartal anzeigen">Heute</button>
@@ -2197,14 +2227,7 @@ async function renderListe(main, quarterArg) {
       </div>
       <div id="liste-legend"></div>
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
-      <div id="liste-actions" class="kal-actions"></div>
-      <div id="wettkampf-sektion"></div>
     </div>`;
-
-  ladeGlobalePaceWarnung('pace-warn-sektion');
-  if (angemeldet) ladeHeuteSektionInto('heute-sektion');
-  if (angemeldet) ladeWettkampfSektionInto('wettkampf-sektion');
-  _renderKalActions('liste-actions');
 
   let plan;
   try {
@@ -2414,8 +2437,6 @@ async function renderListe(main, quarterArg) {
   listeContentEl.outerHTML =
     `<div id="liste-content" class="liste-content">${html}</div>`;
 
-  // Neu rendern, nachdem _wkPrivatMap befüllt ist → korrekte Aktiv-Zustände der Karten-Buttons
-  ladeWettkampfSektionInto('wettkampf-sektion');
 }
 
 async function zeigeEinheit(id) {
@@ -3426,8 +3447,9 @@ async function _wkEintragen(serieId, disziplin) {
       await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '', jahr: Number(datum.slice(0, 4)) });
     } catch (_) { /* optional – kein Fehler wenn Anmeldung nicht möglich */ }
     _wettkampfCache = null;
-    ladeWettkampfSektionInto('wettkampf-sektion');
     _wkNotify('Wettkampfteilnahme eingetragen.', true);
+    // renderPage() zeichnet die aktuelle Seite komplett neu – auf der
+    // Übersicht schließt das die Wettkampfkarten mit ein.
     renderPage();
   } catch (e) {
     _wkNotify('Fehler: ' + (e.message || ''), false);
