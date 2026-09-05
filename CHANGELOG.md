@@ -1,5 +1,9 @@
 # Changelog
 
+## v334
+- **Gemeinsame Basis-Helfer statt Nachbauten.** Das Statistikportal hat seine portal-neutralen Bausteine nach `js/09a_utils_shared.js` ausgelagert; das Trainingsportal liest sie über `shared.php` – derselbe Weg, den die Tabellen-Filterleiste schon geht. Damit stehen `showModal()`, `closeModal()`, `confirmModal()`, `notify()`, `modalH2()`, `buildPagination()`, `buildSelectOptions()`, `debounce()`, `normalizeUmlauts()`, `formatDate()` und die Theme-Funktionen in beiden Portalen aus einer Quelle zur Verfügung.
+- **Hell/Dunkel ist jetzt wählbar.** Das Portal hatte vollständiges Dark-Mode-CSS, aber keinen Schalter – die Anzeige folgte allein dem Betriebssystem. Im Profil steht oben „Erscheinungsbild" mit Automatisch · Hell · Dunkel, identisch zum Statistikportal. Die Wahl gilt je Gerät und wirkt ohne Speichern.
+
 ## v333
 - **Streckenvorschau überall als Karte, Button „Auf Karte" entfällt.** Bisher zeigte das Hover-Popover eine Karte, die Detailansicht dagegen nur den nackten Streckenzug – dazu kam überall ein zusätzlicher Button. Jetzt rendert `STRECKEN.vorschauEinbinden()` immer die Kachelkarte (auf die Containerbreite begrenzt), und ein Klick auf die Vorschau öffnet weiterhin die große Leaflet-Karte. Die redundanten „🗺 Auf Karte"/„🗺 Karte"-Buttons in Kalender-Popover, Heute-Karte, Termin-Detail, Trainingsblock-Karte, Strecken-Seite und Editor-Feld sind entfallen; der GPX-Download bleibt.
 - Wettkampfplanung: Admins/Trainer können fremde Anmeldungen entfernen – Klick auf die 👥-Zahl öffnet ein Popover mit allen Teilnehmern und einem ×-Button je Eintrag (mit Rückfrage). Die Anmeldung wird archiviert gelöscht. `GET /wettkampfplanung` liefert je Teilnehmer nun die Anmeldungs-`id`.

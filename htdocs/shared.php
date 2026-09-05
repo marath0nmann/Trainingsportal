@@ -31,6 +31,10 @@ $erlaubt = [
     '#^uploads/[a-zA-Z0-9_./-]+\.(?:png|jpg|jpeg|svg|webp|gif)$#',
     // Gemeinsame Tabellen-Filterleiste – eine Quelle fuer beide Portale
     '#^js/09b_tabellenfilter\.js$#',
+    // Gemeinsame Basis-Helfer: showModal/closeModal/confirmModal, notify,
+    // modalH2, buildPagination, buildSelectOptions, debounce,
+    // normalizeUmlauts, formatDate, Theme (getThemePref/applyTheme/setTheme)
+    '#^js/09a_utils_shared\.js$#',
 ];
 $ok = false;
 foreach ($erlaubt as $re) {

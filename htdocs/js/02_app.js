@@ -47,6 +47,10 @@ function _wkTogglePref(key, val) {
 }
 
 async function init() {
+  // Gespeicherte Theme-Wahl anwenden, bevor die App sichtbar wird (auto/hell/dunkel).
+  // applyTheme() stammt aus 09a_utils_shared.js – geteilt mit dem Statistikportal.
+  if (typeof applyTheme === 'function') applyTheme();
+
   // Optik aus Statistikportal-Einstellungen ziehen (Farben, Logo, Verein)
   await CONFIG.load();
 
