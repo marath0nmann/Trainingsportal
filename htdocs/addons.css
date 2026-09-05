@@ -2298,6 +2298,29 @@ body.planung-active #app-footer    { display: none; }
   .meinplan-kal-grid .kal-row { grid-template-columns: 48px repeat(7, 1fr); }
 }
 
+/* ── Mein Konto (#konto) ──────────────────────────────────── */
+/* Ein Panel je Thema statt eines scrollenden Modals mit einem Knopf. */
+.konto-wrap { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+.konto-kopf { margin-bottom: 20px; }
+.konto-titel {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 28px; font-weight: 700; color: var(--primary);
+  margin: 0; line-height: 1.1;
+}
+.konto-sub { font-size: 13px; color: var(--text2); margin-top: 3px; }
+.konto-panel-fuss {
+  display: flex; justify-content: flex-end;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+/* Der Hinweistext sitzt im Panel jetzt direkt unter dem Kopf. */
+.settings-panel-body > .profil-hint-global { margin-top: 0; }
+
+@media (max-width: 720px) {
+  .konto-wrap { padding: 14px 12px 32px; }
+  .konto-titel { font-size: 24px; }
+  .konto-panel-fuss button { width: 100%; }
+}
+
 /* ── Übersicht (#dashboard) ───────────────────────────────── */
 .dash-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
 

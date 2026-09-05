@@ -1,5 +1,10 @@
 # Changelog
 
+## v337
+- **Aus dem Profil-Modal wird die Seite „Mein Konto".** Fünf inhaltlich unabhängige Themen – Erscheinungsbild, Pace-Referenzen, Weg zum Training, Workout-Format, Trainingsgruppen und Planfreigaben – lagen in einem scrollenden Overlay mit *einem* Speichern-Knopf am Ende. Wer nur seine Gruppe wechseln wollte, scrollte an vier fremden Abschnitten vorbei und speicherte am Schluss alles zugleich. Jetzt hat jedes Thema sein eigenes Panel unter `#konto` und speichert für sich; eine halb ausgefüllte Wegstrecke bleibt ohne Folgen für die Pace-Einstellung. Aufbau wie die Konto-Seite des Statistikportals.
+- Erreichbar über das Namensfeld im Kopf, den Menüpunkt „Mein Konto" im mobilen Menü und alle bisherigen Verweise – `PROFIL.open()` leitet auf die Seite weiter, statt ein Modal zu öffnen.
+- Das Profil nutzt jetzt das gemeinsame `notify()` statt einer eigenen Kopie; die Speichern-Knöpfe sperren sich während des Schreibens.
+
 ## v336
 - **Neu: „Übersicht" als Startseite.** Wer sich anmeldete, landete bisher direkt im Monatsraster bzw. Quartalsplan – dem dichtesten Bildschirm der Anwendung – mit vier nachgeladenen Blöcken darüber, die den Plan nach unten schoben. Die Übersicht beantwortet stattdessen in einem Blick, was als Nächstes dran ist: Wochenbilanz (gelaufene und noch geplante Kilometer, Einheitenzahl, Fortschritt zum Wochenziel), offene Wettkampf-Entscheidungen mit Datum und Frist, Heute/Morgen, die nächsten Wettkämpfe und die Hinweise zu fehlender Pace oder Trainingsgruppe.
 - **Kalender und Quartalsplan zeigen nur noch den Plan.** Hinweise, Heute/Morgen, „Abonnieren/Teilen" und die Wettkampf-Vorschau standen auf beiden Seiten doppelt und wohnen jetzt auf der Übersicht. Die Wettkampfkarten dort holen sich `_wkPrivatMap` über `ladeWkPrivatMap()` selbst – bisher entstand die Map als Nebenprodukt des Kalender-Renderings.

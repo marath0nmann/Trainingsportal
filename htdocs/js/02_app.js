@@ -146,6 +146,7 @@ function fillUserBadge() {
 // Seiten, die keinen eigenen Nav-Eintrag haben, aber im Mobil-Header
 // einen Titel brauchen (Unterseiten und Alt-Routen).
 const NAV_ALIAS_LABEL = {
+  konto:         'Mein Konto',
   liste:         'Kalender',
   treffpunkte:   'Treffpunkte',
   einstellungen: 'Einstellungen',
@@ -209,7 +210,7 @@ function _renderNavTabs(tabs) {
         `${t.icon} ${t.label}${_navBadgeHtml(t.badge)}</button>`
     ).join('');
     if (u) {
-      html += `<button class="mobile-nav-item mobile-nav-profil" onclick="PROFIL.open();closeBurgerMenu()">Profil</button>`;
+      html += `<button class="mobile-nav-item mobile-nav-profil${akt('konto') ? ' active' : ''}" onclick="navigate('konto');closeBurgerMenu()">Mein Konto</button>`;
       html += `<button class="mobile-nav-item mobile-nav-logout" onclick="logout()">Abmelden</button>`;
     } else {
       html += `<button class="mobile-nav-item" onclick="goToLoginPortal()">Anmelden</button>`;
@@ -369,6 +370,11 @@ function renderPage() {
   if (state.tab === 'dashboard') {
     if (!state.user) { location.replace(startHash()); return; }
     DASHBOARD.render(main).catch(e => _showRenderError(main, e));
+    return;
+  }
+  if (state.tab === 'konto') {
+    if (!state.user) { location.replace(startHash()); return; }
+    PROFIL.render(main).catch(e => _showRenderError(main, e));
     return;
   }
   if (state.tab === 'kalender') {
@@ -1428,7 +1434,7 @@ async function ladeGlobalePaceWarnung(containerId) {
     if (hatKeinePace) {
       html += `<div class="pace-warn-global">
         ⚠ Persönliche Pace noch nicht konfiguriert –
-        <button class="btn-link" onclick="PROFIL.open()">jetzt im Athletenprofil einrichten</button>
+        <button class="btn-link" onclick="PROFIL.open()">jetzt im Konto einrichten</button>
       </div>`;
     }
   } catch (e) { /* ignorieren */ }
@@ -1442,7 +1448,7 @@ async function ladeGlobalePaceWarnung(containerId) {
       if (alleGruppen && alleGruppen.length > 0) {
         html += `<div class="pace-warn-global">
           ⚠ Noch keiner Trainingsgruppe zugeordnet –
-          <button class="btn-link" onclick="PROFIL.open()">jetzt im Profil einrichten</button>
+          <button class="btn-link" onclick="PROFIL.open()">jetzt im Konto einrichten</button>
         </div>`;
       }
     }

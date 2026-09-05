@@ -65,9 +65,9 @@ const ICS = (() => {
     const label = { garmin: 'Garmin (.fit)', apple: 'Apple Watch (.workout)' }[format];
     el.innerHTML = label
       ? `Zu Einheiten mit Segmenten wird die Workout-Datei <strong>${label}</strong> angehängt. `
-        + `<button class="btn-link" onclick="schliesseModal();PROFIL.open()">Format ändern</button>`
+        + `<button class="btn-link" onclick="schliesseModal();PROFIL.open()">Format im Konto ändern</button>`
       : `Workout-Dateien für die Uhr werden nicht angehängt. `
-        + `<button class="btn-link" onclick="schliesseModal();PROFIL.open()">Im Profil aktivieren</button>`;
+        + `<button class="btn-link" onclick="schliesseModal();PROFIL.open()">Im Konto aktivieren</button>`;
   }
 
   async function open() {

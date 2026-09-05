@@ -25,17 +25,24 @@ const PROFIL = (() => {
       .map(x => ({ value: x.slug, label: x.bezeichnung }));
   }
 
-  async function open() {
+  /**
+   * Einstiegspunkt aus Header-Badge, Drawer und den Hinweisen der Übersicht.
+   * Das Profil ist seit v337 eine Seite, kein Modal – die Funktion bleibt
+   * erhalten, damit die vorhandenen Aufrufer unverändert weiterarbeiten.
+   */
+  function open() {
     if (!state.user) return;
-    const cont = document.getElementById('modal-container');
-    cont.innerHTML =
-      '<div class="modal-overlay">' +
-        '<div class="modal-card">' +
-          '<div class="modal-body" style="padding:32px;text-align:center">' +
-            '<div style="color:var(--text2);font-size:14px">Lade…</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
+    if (typeof schliesseModal === 'function') schliesseModal();
+    location.hash = '#konto';
+  }
+
+  /** Seitenaufbau: Daten laden, dann Panels rendern. Aufgerufen aus renderPage(). */
+  async function render(main) {
+    if (!main) return;
+    if (!state.user) { location.replace(startHash()); return; }
+
+    main.innerHTML = '<div class="konto-wrap"><div class="loading">' +
+      '<div class="spinner"></div>Lade Konto&hellip;</div></div>';
 
     try {
       [_prefsData, _wegData, _alleGruppen, _meineGruppen, _freigabeData, _workoutData] = await Promise.all([
@@ -47,14 +54,13 @@ const PROFIL = (() => {
         apiGet('profil/workout',   { silent: true }).catch(() => ({ format: 'keine' })),
       ]);
     } catch (e) {
-      cont.innerHTML =
-        '<div class="modal-overlay">' +
-          '<div class="modal-card"><div class="modal-body">Fehler: ' + escapeHtml(e.message || '') + '</div></div>' +
-        '</div>';
+      main.innerHTML = '<div class="konto-wrap"><div class="panel"><div class="settings-panel-body">' +
+        '<div style="color:var(--primary)">Konto konnte nicht geladen werden: ' +
+        escapeHtml(e.message || '') + '</div></div></div></div>';
       return;
     }
     _localWeg = JSON.parse(JSON.stringify((_wegData && _wegData.prefs) || []));
-    renderModal(cont);
+    renderSeite(main);
   }
 
   function fmtDatum(d) {
@@ -323,78 +329,77 @@ const PROFIL = (() => {
 
   // ── Modal aufbauen ────────────────────────────────────────
 
-  function renderModal(cont) {
+  // ── Seitenaufbau ──────────────────────────────────────────
+  // Ein Panel je Thema, jedes mit eigenem Speichern-Knopf. Vorher lagen
+  // alle fünf Themen in einem scrollenden Modal mit *einem* Knopf am Ende:
+  // wer nur seine Gruppe wechseln wollte, scrollte an vier fremden
+  // Abschnitten vorbei und speicherte am Schluss alles zugleich.
+  // Aufbau wie die Konto-Seite des Statistikportals.
+
+  /** Panel-Gerüst: Kopf mit Titel, Hinweistext, Inhalt, optionaler Knopf. */
+  function _panel(icon, titel, hinweis, inhalt, speichernFn, knopfId) {
+    const fuss = speichernFn
+      ? `<div class="konto-panel-fuss">
+           <button class="btn btn-primary btn-sm" id="${knopfId}"
+             onclick="PROFIL.${speichernFn}()">&#x1F4BE; Speichern</button>
+         </div>`
+      : '';
+    return `
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">${icon} ${escapeHtml(titel)}</div></div>
+        <div class="settings-panel-body">
+          ${hinweis ? `<p class="profil-hint-global">${hinweis}</p>` : ''}
+          ${inhalt}
+          ${fuss}
+        </div>
+      </div>`;
+  }
+
+  function renderSeite(main) {
     const u = state.user;
     const displayName  = u.vorname || u.name || u.benutzername || '';
     const displayRolle = (typeof ROLLE_LABEL !== 'undefined' && ROLLE_LABEL[u.rolle])
       || u.rolle || '';
 
-    cont.innerHTML = `
-      <div class="modal-overlay">
-        <div class="modal-card" onclick="event.stopPropagation()">
-          <div class="modal-head">
-            <div>
-              <div class="modal-eyebrow">Mein Profil</div>
-              <div class="modal-title">${escapeHtml(displayName)}</div>
-              <div class="modal-sub">${escapeHtml(displayRolle)}</div>
-            </div>
-            <button class="modal-close" onclick="schliesseModal()" aria-label="Schließen">×</button>
-          </div>
-          <div class="modal-body">
-
-            <div class="profil-section-title">Erscheinungsbild</div>
-            <p class="profil-hint-global">
-              „Automatisch“ folgt der Einstellung deines Geräts. Die Wahl gilt für dieses Gerät
-              und wirkt sofort – ohne Speichern.
-            </p>
-            ${_buildThemeSection()}
-
-            <div class="profil-section-title" style="margin-top:28px">Pace-Referenzen</div>
-            <p class="profil-hint-global">
-              Wähle pro Distanz, welche Zeit als Referenz für die Pace-Berechnung im Trainingsplan verwendet wird.
-              Bestzeiten werden automatisch aus dem Statistikportal übernommen.
-            </p>
-            ${_buildPaceSection()}
-
-            <div class="profil-section-title" style="margin-top:28px">Weg zum Training</div>
-            <p class="profil-hint-global">
-              Trage ein, wie viele Kilometer du zum Startpunkt läufst (einfache Strecke).
-              Hin- und Rückweg werden automatisch zu den Trainingskilometern addiert.
-              Die Wegzeit in Minuten erzeugt im Kalender-Abo eine Erinnerung „Aufbruch zum Training“
-              – so lange vor dem Start, wie du für den Weg brauchst.
-            </p>
-            ${_buildWegSection()}
-
-            <div class="profil-section-title" style="margin-top:28px">Workout-Datei im Kalender</div>
-            <p class="profil-hint-global">
-              Dein persönlicher Kalender-Feed („Mein Plan“ als ICS-Abo) kann zu jedem Training mit
-              Segmenten die passende Workout-Datei mitliefern – als Link im Termin und als Anhang.
-              Wähle, welches Format du nutzt; angehängt wird immer nur dieses eine.
-            </p>
-            ${_buildWorkoutSection()}
-
-            ${_alleGruppen.length ? `
-            <div class="profil-section-title" style="margin-top:28px">Trainingsgruppen</div>
-            <p class="profil-hint-global">
-              Wähle die Trainingsgruppen, denen du angehörst. Ein fehlender Eintrag erzeugt
-              einen Hinweis auf der Startseite.
-            </p>
-            ${_buildGruppenSection()}
-            ` : ''}
-
-            <div class="profil-section-title" style="margin-top:28px">Trainingsplan freigeben</div>
-            <p class="profil-hint-global">
-              Lege fest, welche Trainer oder Admins deinen persönlichen Trainingsplan sehen
-              (<em>Lesend</em>) oder bearbeiten (<em>Vollzugriff</em>) dürfen. Ohne Freigabe hat niemand Zugriff.
-            </p>
-            ${_buildFreigabeSection()}
-
-            <div class="modal-actions">
-              <button class="btn btn-ghost" onclick="schliesseModal()">Abbrechen</button>
-              <button class="btn btn-primary" onclick="PROFIL.speichern()">Speichern</button>
-            </div>
-          </div>
+    main.innerHTML = `
+      <div class="konto-wrap">
+        <div class="konto-kopf">
+          <h1 class="konto-titel">&#x1F464; Mein Konto</h1>
+          <div class="konto-sub">${escapeHtml(displayName)}${displayRolle ? ' · ' + escapeHtml(displayRolle) : ''}</div>
         </div>
+
+        ${_panel('&#x1F319;', 'Erscheinungsbild',
+          '„Automatisch“ folgt der Einstellung deines Geräts. Die Wahl gilt für dieses Gerät ' +
+          'und wirkt sofort – ohne Speichern.',
+          _buildThemeSection())}
+
+        ${_panel('&#x1F3C3;', 'Pace-Referenzen',
+          'Wähle pro Distanz, welche Zeit als Referenz für die Pace-Berechnung im Trainingsplan ' +
+          'verwendet wird. Bestzeiten werden automatisch aus dem Statistikportal übernommen.',
+          _buildPaceSection(), 'speicherePace', 'konto-btn-pace')}
+
+        ${_panel('&#x1F6B6;', 'Weg zum Training',
+          'Trage ein, wie viele Kilometer du zum Startpunkt läufst (einfache Strecke). ' +
+          'Hin- und Rückweg werden automatisch zu den Trainingskilometern addiert. ' +
+          'Die Wegzeit in Minuten erzeugt im Kalender-Abo eine Erinnerung „Aufbruch zum Training“ ' +
+          '– so lange vor dem Start, wie du für den Weg brauchst.',
+          _buildWegSection(), 'speichereWeg', 'konto-btn-weg')}
+
+        ${_panel('&#x1F4C5;', 'Workout-Datei im Kalender',
+          'Dein persönlicher Kalender-Feed („Mein Plan“ als ICS-Abo) kann zu jedem Training mit ' +
+          'Segmenten die passende Workout-Datei mitliefern – als Link im Termin und als Anhang. ' +
+          'Wähle, welches Format du nutzt; angehängt wird immer nur dieses eine.',
+          _buildWorkoutSection(), 'speichereWorkout', 'konto-btn-workout')}
+
+        ${_alleGruppen.length ? _panel('&#x1F465;', 'Trainingsgruppen',
+          'Wähle die Trainingsgruppen, denen du angehörst. Ein fehlender Eintrag erzeugt ' +
+          'einen Hinweis auf der Übersicht.',
+          _buildGruppenSection(), 'speichereGruppen', 'konto-btn-gruppen') : ''}
+
+        ${_panel('&#x1F510;', 'Trainingsplan freigeben',
+          'Lege fest, welche Trainer oder Admins deinen persönlichen Trainingsplan sehen ' +
+          '(<em>Lesend</em>) oder bearbeiten (<em>Vollzugriff</em>) dürfen. Ohne Freigabe hat niemand Zugriff.',
+          _buildFreigabeSection(), 'speichereFreigaben', 'konto-btn-freigaben')}
       </div>`;
   }
 
@@ -441,23 +446,46 @@ const PROFIL = (() => {
     return null;
   }
 
-  async function speichern() {
-    // Pace prefs
-    const refs = _prefsData.dist_admin || Object.keys(_prefsData.prefs || {});
-    const newPrefs = {};
-    for (const ref of refs) {
-      const sel = document.querySelector(`.profil-modus-sel[data-ref="${ref}"]`);
-      if (!sel) continue;
-      const modus = sel.value;
-      let manualSek = null;
-      if (modus === 'manual') {
-        const inp = document.getElementById('profil-manual-input-' + ref);
-        manualSek = inp ? _parseZeit(inp.value) : null;
-      }
-      newPrefs[ref] = { modus, manual_sek: manualSek };
-    }
+  // ── Speichern: ein Abschnitt nach dem anderen ─────────────
+  // Jedes Panel schreibt nur seinen eigenen Endpunkt. So bleibt eine
+  // halb ausgefüllte Wegstrecke ohne Folgen für die Pace-Einstellung.
 
-    // Weg config: Formulardaten auslesen
+  /** Knopf während des Speicherns sperren, danach wieder freigeben. */
+  async function _mitKnopf(knopfId, fn, erfolgstext) {
+    const btn = document.getElementById(knopfId);
+    if (btn) { btn.disabled = true; btn.innerHTML = '&#x23F3; Speichere…'; }
+    try {
+      await fn();
+      notify(erfolgstext, 'ok');
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '&#x1F4BE; Speichern'; }
+    }
+  }
+
+  function speicherePace() {
+    return _mitKnopf('konto-btn-pace', async () => {
+      const refs = _prefsData.dist_admin || Object.keys(_prefsData.prefs || {});
+      const newPrefs = {};
+      for (const ref of refs) {
+        const sel = document.querySelector(`.profil-modus-sel[data-ref="${ref}"]`);
+        if (!sel) continue;
+        const modus = sel.value;
+        let manualSek = null;
+        if (modus === 'manual') {
+          const inp = document.getElementById('profil-manual-input-' + ref);
+          manualSek = inp ? _parseZeit(inp.value) : null;
+        }
+        newPrefs[ref] = { modus, manual_sek: manualSek };
+      }
+      await apiPut('pace/prefs', { prefs: newPrefs });
+      PACE.invalidate();
+    }, 'Pace-Referenzen gespeichert.');
+  }
+
+  /** Weg-Formular einlesen; wirft bei doppelter Typ+Treffpunkt-Kombination. */
+  function _wegAusFormular() {
     const newWeg = [];
     _localWeg.forEach((_, i) => {
       const typEl = document.querySelector(`.weg-typ-sel[data-i="${i}"]`);
@@ -473,56 +501,52 @@ const PROFIL = (() => {
       newWeg.push({ typ, treffpunkt_id: tpId, km, minuten: (!isNaN(min) && min > 0) ? min : null });
     });
 
-    // Doppelte Typ+Treffpunkt-Kombinationen prüfen
-    const wegKeys = newWeg.map(e => `${e.typ}|${e.treffpunkt_id ?? ''}`);
-    const doppelt = wegKeys.find((k, i) => wegKeys.indexOf(k) !== i);
-    if (doppelt) {
-      _notify('Doppelte Kombination aus Trainingstyp und Treffpunkt – bitte korrigieren.', 'err');
-      return;
+    const keys = newWeg.map(e => `${e.typ}|${e.treffpunkt_id ?? ''}`);
+    if (keys.some((k, i) => keys.indexOf(k) !== i)) {
+      throw new Error('Doppelte Kombination aus Trainingstyp und Treffpunkt – bitte korrigieren.');
     }
+    return newWeg;
+  }
 
-    // Gruppen-Auswahl einlesen
-    const gruppenIds = [...document.querySelectorAll('.profil-gruppe-cb:checked')]
-      .map(cb => parseInt(cb.value, 10))
-      .filter(id => id > 0);
-
-    // Plan-Freigaben einlesen (nur lesend/voll werden gespeichert, 'nicht' = keine Zeile)
-    const freigaben = {};
-    document.querySelectorAll('.profil-freigabe-sel').forEach(sel => {
-      const tid = parseInt(sel.dataset.trainer, 10);
-      if (tid > 0 && (sel.value === 'lesend' || sel.value === 'voll')) {
-        freigaben[tid] = sel.value;
-      }
-    });
-
-    try {
-      await Promise.all([
-        apiPut('pace/prefs',     { prefs: newPrefs }),
-        apiPut('weg/prefs',      { config: newWeg }),
-        apiPut('profil/gruppen', { gruppen_ids: gruppenIds }),
-        apiPut('profil/freigaben', { freigaben }),
-        apiPut('profil/workout', { format: (document.querySelector('input[name="profil-workout"]:checked') || {}).value || 'keine' }),
-      ]);
-      PACE.invalidate();
+  function speichereWeg() {
+    return _mitKnopf('konto-btn-weg', async () => {
+      await apiPut('weg/prefs', { config: _wegAusFormular() });
       WEG.invalidate();
+    }, 'Weg zum Training gespeichert.');
+  }
+
+  function speichereWorkout() {
+    return _mitKnopf('konto-btn-workout', async () => {
+      const gewaehlt = document.querySelector('input[name="profil-workout"]:checked');
+      await apiPut('profil/workout', { format: (gewaehlt && gewaehlt.value) || 'keine' });
+    }, 'Workout-Format gespeichert.');
+  }
+
+  function speichereGruppen() {
+    return _mitKnopf('konto-btn-gruppen', async () => {
+      const gruppenIds = [...document.querySelectorAll('.profil-gruppe-cb:checked')]
+        .map(cb => parseInt(cb.value, 10))
+        .filter(id => id > 0);
+      await apiPut('profil/gruppen', { gruppen_ids: gruppenIds });
       GRUPPEN.invalidate();
-      schliesseModal();
-      _notify('Profil gespeichert.', 'ok');
-    } catch (e) {
-      _notify('Fehler: ' + (e.message || ''), 'err');
-    }
+    }, 'Trainingsgruppen gespeichert.');
   }
 
-  function _notify(text, art) {
-    const cont = document.getElementById('notification-container');
-    if (!cont) return;
-    const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
-    const div = document.createElement('div');
-    div.className = 'notif ' + cls;
-    div.textContent = text;
-    cont.appendChild(div);
-    setTimeout(() => div.remove(), 3500);
+  function speichereFreigaben() {
+    return _mitKnopf('konto-btn-freigaben', async () => {
+      // Nur lesend/voll werden gespeichert; 'nicht' = keine Zeile.
+      const freigaben = {};
+      document.querySelectorAll('.profil-freigabe-sel').forEach(sel => {
+        const tid = parseInt(sel.dataset.trainer, 10);
+        if (tid > 0 && (sel.value === 'lesend' || sel.value === 'voll')) {
+          freigaben[tid] = sel.value;
+        }
+      });
+      await apiPut('profil/freigaben', { freigaben });
+    }, 'Freigaben gespeichert.');
   }
 
-  return { open, speichern, _onModusChange, _onManualInput, _onWorkoutChange, _wegHinzufuegen, _wegEntfernen };
+  return { open, render,
+           speicherePace, speichereWeg, speichereWorkout, speichereGruppen, speichereFreigaben,
+           _onModusChange, _onManualInput, _onWorkoutChange, _wegHinzufuegen, _wegEntfernen };
 })();
