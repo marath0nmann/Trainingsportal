@@ -2298,6 +2298,19 @@ body.planung-active #app-footer    { display: none; }
   .meinplan-kal-grid .kal-row { grid-template-columns: 48px repeat(7, 1fr); }
 }
 
+/* ── Nav-Badge: Zahl am Menuepunkt (offene Wettkaempfe, Admin-Aufgaben) ──
+   Gleiche Optik wie im Statistikportal. Die Nav-Buttons sind flex-column,
+   deshalb steht der Text im Markup in einem nowrap-Wrapper – die Zahl sitzt
+   dadurch neben der Beschriftung statt darunter. */
+.nav-badge {
+  display: inline-block;
+  background: var(--accent); color: #fff;
+  border-radius: 10px; padding: 1px 5px;
+  font-size: 10px; font-weight: 700; line-height: 1.4;
+  vertical-align: middle;
+}
+.mobile-nav-item .nav-badge { margin-left: 6px; font-size: 11px; }
+
 /* ── Mobile Nav Drawer Items ─────────────────────────────── */
 .mobile-nav-item {
   display: block; width: 100%; text-align: left;

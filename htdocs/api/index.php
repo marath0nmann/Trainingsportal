@@ -1615,6 +1615,10 @@ try {
         handlePlanung($method, $tail);
         exit;
     }
+    if ($head === 'badges') {
+        handleBadges($method);
+        exit;
+    }
     if ($head === 'kal') {
         handleKalPrefs($method, $tail ?? '');
         exit;
@@ -2346,6 +2350,12 @@ function handleAdmin(string $method, string $sub): void {
     if (($user['rolle'] ?? '') !== 'admin') {
         http_response_code(403);
         echo json_encode(['ok' => false, 'fehler' => 'Nur Admins']);
+        return;
+    }
+
+    // Papierkorb: archivierte Datensaetze auflisten und wiederherstellen
+    if ($sub === 'papierkorb' || str_starts_with($sub, 'papierkorb/')) {
+        handlePapierkorb($method, $sub === 'papierkorb' ? '' : substr($sub, 11));
         return;
     }
 
@@ -6823,6 +6833,240 @@ function handlePlanung(string $method, string $tail): void
 // ============================================================
 // Kalender-Filter-Präferenzen: GET/PUT /kal/prefs
 // ============================================================
+/**
+ * Lesbarer Name eines archivierten Datensatzes fuer die Papierkorb-Liste.
+ * Faellt auf die Datensatz-ID zurueck, wenn kein sprechendes Feld existiert.
+ */
+function _papierkorbTitel(string $tabelle, array $daten): string
+{
+    foreach (['titel', 'name', 'bezeichnung', 'disziplin', 'inhalt'] as $f) {
+        if (!empty($daten[$f])) return mb_substr((string)$daten[$f], 0, 120);
+    }
+    if (!empty($daten['datum'])) return 'vom ' . (string)$daten['datum'];
+    return '#' . (string)($daten['id'] ?? '?');
+}
+
+/** Anzeigename der Tabelle im Papierkorb. */
+function _papierkorbTabelleLabel(string $t): string
+{
+    $map = [
+        'training_einheiten'             => 'Trainingseinheit',
+        'training_segmente'              => 'Segment',
+        'training_bloecke'               => 'Trainingsblock',
+        'training_block_segmente'        => 'Blocksegment',
+        'training_block_gruppen'         => 'Blockgruppe',
+        'training_serien'                => 'Trainingsserie',
+        'training_treffpunkte'           => 'Treffpunkt',
+        'training_strecken'              => 'Strecke',
+        'training_typen'                 => 'Trainingstyp',
+        'training_privat_einheiten'      => 'Private Einheit',
+        'training_tagesnotizen'          => 'Tagesnotiz',
+        'training_wettkampf_anmeldungen' => 'Wettkampf-Anmeldung',
+        'training_wettkampf_ergebnis'    => 'Wettkampf-Ergebnis',
+    ];
+    return $map[$t] ?? $t;
+}
+
+/**
+ * GET  /admin/papierkorb           – archivierte Datensaetze, neueste zuerst
+ * POST /admin/papierkorb/{id}      – diesen Datensatz wiederherstellen
+ *
+ * Grundlage ist training_geloescht: archiviereUndLoesche() legt dort jede
+ * fachlich geloeschte Zeile vollstaendig als JSON ab. Wiederherstellen heisst
+ * deshalb: JSON zurueck in die Ursprungstabelle schreiben und den
+ * Archiveintrag entfernen. Kindzeilen (Segmente zu einer Einheit, Segmente und
+ * Gruppen zu einem Block) werden mitgenommen – sie wurden im selben Vorgang
+ * archiviert und waeren sonst verloren.
+ */
+function handlePapierkorb(string $method, string $sub): void
+{
+    $user = Auth::check();
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'fehler' => 'Nicht angemeldet']);
+        return;
+    }
+    if (($user['rolle'] ?? '') !== 'admin') {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'fehler' => 'Nur Admins']);
+        return;
+    }
+    $tg = DB::tbl('training_geloescht');
+
+    // ── Liste ────────────────────────────────────────────────
+    if ($method === 'GET' && $sub === '') {
+        $tage  = max(1, min(365, (int)($_GET['tage'] ?? 30)));
+        $limit = max(1, min(500, (int)($_GET['limit'] ?? 200)));
+        // Reine Kindtabellen bleiben aussen vor: sie kommen mit ihrem
+        // Elterndatensatz zurueck und liessen sich allein ohnehin nicht
+        // wiederherstellen (Fremdschluessel).
+        $kinder = ['training_segmente', 'training_block_segmente', 'training_block_gruppen'];
+        $kph    = implode(',', array_fill(0, count($kinder), '?'));
+        $rows   = DB::fetchAll(
+            "SELECT id, tabelle, datensatz_id, daten, grund, benutzername, geloescht_am
+             FROM `{$tg}`
+             WHERE geloescht_am >= DATE_SUB(NOW(), INTERVAL {$tage} DAY)
+               AND tabelle NOT IN ({$kph})
+             ORDER BY id DESC
+             LIMIT {$limit}",
+            $kinder
+        );
+        $eintraege = [];
+        foreach ($rows as $r) {
+            $daten = json_decode((string)$r['daten'], true);
+            if (!is_array($daten)) $daten = [];
+            $eintraege[] = [
+                'id'            => (int)$r['id'],
+                'tabelle'       => $r['tabelle'],
+                'tabelle_label' => _papierkorbTabelleLabel((string)$r['tabelle']),
+                'datensatz_id'  => $r['datensatz_id'] !== null ? (int)$r['datensatz_id'] : null,
+                'titel'         => _papierkorbTitel((string)$r['tabelle'], $daten),
+                'datum'         => $daten['datum'] ?? null,
+                'grund'         => $r['grund'],
+                'benutzername'  => $r['benutzername'],
+                'geloescht_am'  => $r['geloescht_am'],
+            ];
+        }
+        echo json_encode(['ok' => true, 'eintraege' => $eintraege, 'tage' => $tage]);
+        return;
+    }
+
+    // ── Wiederherstellen ─────────────────────────────────────
+    if ($method === 'POST' && ctype_digit($sub)) {
+        $archivId = (int)$sub;
+        $row = DB::fetchOne("SELECT * FROM `{$tg}` WHERE id = ?", [$archivId]);
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'fehler' => 'Eintrag nicht gefunden']);
+            return;
+        }
+        try {
+            $anz = _papierkorbWiederherstellen($row);
+        } catch (Throwable $e) {
+            http_response_code(409);
+            echo json_encode(['ok' => false, 'fehler' => 'Wiederherstellen fehlgeschlagen: ' . $e->getMessage()]);
+            return;
+        }
+        echo json_encode(['ok' => true, 'wiederhergestellt' => $anz]);
+        return;
+    }
+
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
+}
+
+/**
+ * Schreibt eine archivierte Zeile zurueck und nimmt ihre im selben Vorgang
+ * archivierten Kindzeilen mit. Gibt die Anzahl zurueckgeschriebener Zeilen zurueck.
+ */
+function _papierkorbWiederherstellen(array $archivRow): int
+{
+    $tg      = DB::tbl('training_geloescht');
+    $tabelle = (string)$archivRow['tabelle'];
+    $daten   = json_decode((string)$archivRow['daten'], true);
+    if (!is_array($daten) || !$daten) {
+        throw new RuntimeException('Archivdaten unlesbar');
+    }
+
+    $ziel = DB::tbl($tabelle);
+    $spalten = array_keys($daten);
+    $ph      = implode(',', array_fill(0, count($spalten), '?'));
+    $cols    = '`' . implode('`,`', $spalten) . '`';
+    DB::query("INSERT INTO `{$ziel}` ({$cols}) VALUES ({$ph})", array_values($daten));
+    DB::query("DELETE FROM `{$tg}` WHERE id = ?", [(int)$archivRow['id']]);
+    $anz = 1;
+
+    // Kindzeilen: gleiche Fremdschluessel-ID, im selben Vorgang archiviert.
+    $elternId = isset($daten['id']) ? (int)$daten['id'] : 0;
+    if ($elternId) {
+        foreach (_archivKinder($tabelle) as [$kindTabelle, $kindSpalte]) {
+            $kinder = DB::fetchAll(
+                "SELECT * FROM `{$tg}` WHERE tabelle = ?", [$kindTabelle]
+            );
+            foreach ($kinder as $k) {
+                $kd = json_decode((string)$k['daten'], true);
+                if (!is_array($kd) || (int)($kd[$kindSpalte] ?? 0) !== $elternId) continue;
+                try {
+                    $anz += _papierkorbWiederherstellen($k);
+                } catch (Throwable $e) {
+                    // Ein misslungenes Kind darf die Wiederherstellung des
+                    // Elterndatensatzes nicht zurueckdrehen.
+                    error_log('papierkorb-kind: ' . $e->getMessage());
+                }
+            }
+        }
+    }
+    return $anz;
+}
+
+/**
+ * GET /badges – Zaehler fuer die Navigations-Badges.
+ *
+ * Wird bei jedem Seitenaufbau einmal geladen und muss deshalb billig bleiben:
+ * ausschliesslich COUNT-Abfragen, keine Joins ueber Ergebnisdaten, keine
+ * externen Aufrufe. Fehler einzelner Zaehler duerfen die Navigation nicht
+ * kippen – jeder Block faengt seine Exception selbst ab und liefert 0.
+ */
+function handleBadges(string $method): void
+{
+    if ($method !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['ok' => false, 'fehler' => 'Nur GET']);
+        return;
+    }
+    $user = Auth::check();
+    if (!$user) { echo json_encode(['ok' => true, 'badges' => []]); return; }
+
+    $userId  = (int)$user['id'];
+    $istAdmin = ($user['rolle'] ?? '') === 'admin';
+    $badges  = [];
+
+    // Wettkampfplanung: eigene Veranstaltungen dieses Jahres, die noch eine
+    // Entscheidung brauchen. Ohne Status-Zeile gilt eine Veranstaltung als
+    // "offen" – genau das ist der Fall, den der Zaehler sichtbar machen soll.
+    try {
+        $vs  = DB::tbl('veranstaltung_serien');
+        $twp = DB::tbl('training_wettkampf_planung');
+        $tst = DB::tbl('training_wettkampf_status');
+        $badges['wettkampf_offen'] = (int)(DB::fetchOne("
+            SELECT COUNT(*) c
+            FROM `{$vs}` vs
+            JOIN `{$twp}` wp ON wp.serie_id = vs.id AND COALESCE(wp.aktiv, 1) = 1
+            LEFT JOIN `{$tst}` tst ON tst.serie_id = vs.id
+                                  AND tst.benutzer_id = ?
+                                  AND tst.jahr = ?
+            WHERE wp.naechstes_datum >= CURDATE()
+              AND (tst.status IS NULL
+                   OR tst.status IN ('offen', 'in_klaerung', 'anmeldung_erforderlich'))
+        ", [$userId, (int)date('Y')])['c'] ?? 0);
+    } catch (Throwable $e) { $badges['wettkampf_offen'] = 0; }
+
+    if ($istAdmin) {
+        // Papierkorb: was in den letzten 30 Tagen archiviert wurde und damit
+        // noch im Zugriff der Wiederherstellung liegt.
+        try {
+            $tg = DB::tbl('training_geloescht');
+            $badges['papierkorb'] = (int)(DB::fetchOne(
+                "SELECT COUNT(*) c FROM `{$tg}`
+                 WHERE geloescht_am >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                   AND tabelle NOT IN ('training_segmente', 'training_block_segmente',
+                                       'training_block_gruppen')"
+            )['c'] ?? 0);
+        } catch (Throwable $e) { $badges['papierkorb'] = 0; }
+
+        // Kuenftige Trainings ohne Treffpunkt – die haeufigste Luecke im Plan.
+        try {
+            $te = DB::tbl('training_einheiten');
+            $badges['ohne_treffpunkt'] = (int)(DB::fetchOne(
+                "SELECT COUNT(*) c FROM `{$te}`
+                 WHERE datum >= CURDATE() AND status <> 'abgesagt' AND treffpunkt_id IS NULL"
+            )['c'] ?? 0);
+        } catch (Throwable $e) { $badges['ohne_treffpunkt'] = 0; }
+    }
+
+    echo json_encode(['ok' => true, 'badges' => $badges]);
+}
+
 function handleKalPrefs(string $method, string $sub): void
 {
     $user = Auth::check();

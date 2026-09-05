@@ -78,6 +78,9 @@ function showApp() {
   fillUserBadge();
   buildFooter();
   renderPage();
+  // Nav-Badges nachladen (eigener, billiger Endpunkt) – die Navigation steht
+  // schon, die Zahlen kommen nach.
+  ladeNavBadges();
 }
 
 const ROLLE_LABEL = {
@@ -103,7 +106,7 @@ function fillUserBadge() {
           `<button class="btn btn-ghost btn-sm anon-reg-btn" onclick="goToRegisterPortal()">Registrieren</button>` +
         `</div>`;
     }
-    _fillMobileNav(false, false);
+    buildNav();
     return;
   }
 
@@ -132,52 +135,113 @@ function fillUserBadge() {
     avatarEl.innerHTML = avatarInner + '<span class="user-online-dot" title="Online"></span>';
   }
 
-  const isAdmin   = u.rolle === 'admin';
-  const isTrainer = isAdmin || u.rolle === 'trainer';
-
-  // Hauptnavigation abhängig von der Rolle
-  const nav = document.getElementById('main-nav');
-  if (nav) {
-    nav.innerHTML = `
-      <button onclick="navigate('kalender')"${state.tab === 'kalender' ? ' class="active"' : ''}>Kalender</button>
-      <button onclick="navigate('wettkampfplanung')"${state.tab === 'wettkampfplanung' ? ' class="active"' : ''}>Wettkampfplanung</button>
-      ${isTrainer ? `<button onclick="navigate('planung')"${state.tab === 'planung' ? ' class="active"' : ''}>Trainingsplanung</button>` : ''}
-      ${isAdmin ? `<button onclick="navigate('admin')"${state.tab === 'admin' ? ' class="active"' : ''}>Admin</button>` : ''}`;
-  }
-
-  _fillMobileNav(isTrainer, isAdmin);
+  buildNav();
 }
 
-function _fillMobileNav(isTrainer, isAdmin) {
-  const mobileNav = document.getElementById('mobile-nav-items');
-  if (!mobileNav) return;
-  const u = state.user;
-  const act = (tab) => state.tab === tab ? ' active' : '';
-  let html = `<button class="mobile-nav-item${act('kalender')}" onclick="navigate('kalender');closeBurgerMenu()">Kalender</button>`;
-  html += `<button class="mobile-nav-item${act('wettkampfplanung')}" onclick="navigate('wettkampfplanung');closeBurgerMenu()">Wettkampfplanung</button>`;
-  if (isTrainer) html += `<button class="mobile-nav-item${act('planung')}" onclick="navigate('planung');closeBurgerMenu()">Trainingsplanung</button>`;
-  if (isAdmin)   html += `<button class="mobile-nav-item${act('admin')}" onclick="navigate('admin');closeBurgerMenu()">Admin</button>`;
-  if (u) {
-    html += `<button class="mobile-nav-item mobile-nav-profil" onclick="PROFIL.open();closeBurgerMenu()">Profil</button>`;
-    html += `<button class="mobile-nav-item mobile-nav-logout" onclick="logout()">Abmelden</button>`;
-  } else {
-    html += `<button class="mobile-nav-item" onclick="goToLoginPortal()">Anmelden</button>`;
-    html += `<button class="mobile-nav-item" onclick="goToRegisterPortal()">Registrieren</button>`;
-  }
-  mobileNav.innerHTML = html;
+// ── Navigation ──────────────────────────────────────────────
+// Eine Tab-Liste, aus der Desktop-Nav, Mobil-Drawer und der mobile
+// Seitentitel entstehen – wie buildNav()/_renderNavTabs() im
+// Statistikportal. Vorher stand dieselbe Liste an drei Stellen.
 
-  const TAB_LABEL = {
-    kalender:        'Kalender',
-    liste:           'Kalender',
-    wettkampfplanung:'Wettkampfplanung',
-    planung:         'Trainingsplanung',
-    admin:           'Admin',
-    treffpunkte:     'Treffpunkte',
-    einstellungen:   'Einstellungen',
-    bloecke:         'Trainingsblöcke',
-  };
+// Seiten, die keinen eigenen Nav-Eintrag haben, aber im Mobil-Header
+// einen Titel brauchen (Unterseiten und Alt-Routen).
+const NAV_ALIAS_LABEL = {
+  liste:         'Kalender',
+  treffpunkte:   'Treffpunkte',
+  einstellungen: 'Einstellungen',
+  bloecke:       'Trainingsblöcke',
+  datenschutz:   'Datenschutz',
+  nutzung:       'Nutzungsbedingungen',
+  impressum:     'Impressum',
+};
+
+// Zaehler fuer die Nav-Badges, gefuellt von ladeNavBadges().
+var navBadges = {};
+
+function navTabs() {
+  const u         = state.user;
+  const isAdmin   = !!u && u.rolle === 'admin';
+  const isTrainer = isAdmin || (!!u && u.rolle === 'trainer');
+
+  const tabs = [
+    { id: 'kalender',         icon: '&#x1F4C5;', label: 'Kalender' },
+    { id: 'wettkampfplanung', icon: '&#x1F3C5;', label: 'Wettkampfplanung',
+      badge: navBadges.wettkampf_offen },
+  ];
+  if (isTrainer) {
+    tabs.push({ id: 'planung', icon: '&#x1F4CB;', label: 'Trainingsplanung' });
+  }
+  if (isAdmin) {
+    tabs.push({ id: 'admin', icon: '&#x2699;&#xFE0F;', label: 'Admin',
+      badge: (navBadges.papierkorb || 0) + (navBadges.ohne_treffpunkt || 0) });
+  }
+  return tabs;
+}
+
+function _navBadgeHtml(n) {
+  if (!n || n <= 0) return '';
+  return ' <span class="nav-badge">' + n + '</span>';
+}
+
+function buildNav() { _renderNavTabs(navTabs()); }
+
+function _renderNavTabs(tabs) {
+  const u   = state.user;
+  const akt = (id) => state.tab === id;
+
+  // Desktop
+  const nav = document.getElementById('main-nav');
+  if (nav) {
+    nav.innerHTML = tabs.map(t =>
+      `<button onclick="navigate('${t.id}')"${akt(t.id) ? ' class="active"' : ''}>` +
+        `<span style="white-space:nowrap">${t.label}${_navBadgeHtml(t.badge)}</span>` +
+      `</button>`
+    ).join('');
+  }
+
+  // Mobiler Drawer – dieselben Tabs, dazu die Konto-Aktionen
+  const mobileNav = document.getElementById('mobile-nav-items');
+  if (mobileNav) {
+    let html = tabs.map(t =>
+      `<button class="mobile-nav-item${akt(t.id) ? ' active' : ''}" ` +
+        `onclick="navigate('${t.id}');closeBurgerMenu()">` +
+        `${t.icon} ${t.label}${_navBadgeHtml(t.badge)}</button>`
+    ).join('');
+    if (u) {
+      html += `<button class="mobile-nav-item mobile-nav-profil" onclick="PROFIL.open();closeBurgerMenu()">Profil</button>`;
+      html += `<button class="mobile-nav-item mobile-nav-logout" onclick="logout()">Abmelden</button>`;
+    } else {
+      html += `<button class="mobile-nav-item" onclick="goToLoginPortal()">Anmelden</button>`;
+      html += `<button class="mobile-nav-item" onclick="goToRegisterPortal()">Registrieren</button>`;
+    }
+    mobileNav.innerHTML = html;
+  }
+
+  // Mobiler Seitentitel
   const titleEl = document.getElementById('mobile-page-title');
-  if (titleEl) titleEl.textContent = TAB_LABEL[state.tab] || '';
+  if (titleEl) {
+    const treffer = tabs.find(t => t.id === state.tab);
+    titleEl.textContent = treffer ? treffer.label
+                                  : (NAV_ALIAS_LABEL[state.tab] || '');
+  }
+}
+
+/**
+ * Badge-Zaehler laden und die Navigation neu zeichnen.
+ * Laeuft einmal nach dem Anmelden; `force` erzwingt ein Neuladen, etwa
+ * nachdem im Papierkorb etwas wiederhergestellt wurde.
+ */
+async function ladeNavBadges(force) {
+  if (!state.user) { navBadges = {}; return; }
+  if (!force && state._navBadgesGeladen) { buildNav(); return; }
+  state._navBadgesGeladen = true;
+  try {
+    const r = await apiGet('badges', { silent: true });
+    navBadges = (r && r.badges) || {};
+  } catch (_) {
+    navBadges = {};
+  }
+  buildNav();
 }
 
 // ── Routing ─────────────────────────────────────────────────
@@ -393,23 +457,29 @@ function closeBurgerMenu() {
 function renderAdminPage(main, subTab) {
   const tab = subTab || 'system';
 
+  // Reihenfolge wie im Statistikportal: System, dann Stammdaten,
+  // dann Einstellungen, Werkzeuge zuletzt (Wartung, Papierkorb).
+  const ADMIN_TABS = [
+    { id: 'system',        icon: '&#x1F5A5;&#xFE0E;', label: 'System' },
+    { id: 'gruppen',       icon: '&#x1F465;',         label: 'Gruppen' },
+    { id: 'trainings',     icon: '&#x1F4CB;',         label: 'Trainings',
+      badge: navBadges.ohne_treffpunkt },
+    { id: 'wettkampf',     icon: '&#x1F3C5;',         label: 'Wettkämpfe' },
+    { id: 'treffpunkte',   icon: '&#x1F4CD;',         label: 'Treffpunkte' },
+    { id: 'strecken',      icon: '&#x1F5FA;&#xFE0F;', label: 'Strecken' },
+    { id: 'einstellungen', icon: '&#x2699;&#xFE0F;',  label: 'Einstellungen' },
+    { id: 'wartung',       icon: '&#x1F527;',         label: 'Wartung' },
+    { id: 'papierkorb',    icon: '&#x1F5D1;&#xFE0F;', label: 'Papierkorb',
+      badge: navBadges.papierkorb },
+  ];
+
   main.innerHTML = `
     <div style="max-width:1400px;margin:0 auto;padding:16px">
       <div class="subtabs">
-        <button class="subtab${tab === 'system' ? ' active' : ''}"
-          onclick="navigateAdmin('system')">&#x1F5A5;&#xFE0E; System</button>
-        <button class="subtab${tab === 'einstellungen' ? ' active' : ''}"
-          onclick="navigateAdmin('einstellungen')">Einstellungen</button>
-        <button class="subtab${tab === 'trainings' ? ' active' : ''}"
-          onclick="navigateAdmin('trainings')">Trainings</button>
-        <button class="subtab${tab === 'wettkampf' ? ' active' : ''}"
-          onclick="navigateAdmin('wettkampf')">Wettkämpfe</button>
-        <button class="subtab${tab === 'treffpunkte' ? ' active' : ''}"
-          onclick="navigateAdmin('treffpunkte')">Treffpunkte</button>
-        <button class="subtab${tab === 'strecken' ? ' active' : ''}"
-          onclick="navigateAdmin('strecken')">Strecken</button>
-        <button class="subtab${tab === 'gruppen' ? ' active' : ''}"
-          onclick="navigateAdmin('gruppen')">Gruppen</button>
+        ${ADMIN_TABS.map(t =>
+          `<button class="subtab${tab === t.id ? ' active' : ''}"
+            onclick="navigateAdmin('${t.id}')">${t.icon} ${t.label}${_navBadgeHtml(t.badge)}</button>`
+        ).join('')}
       </div>
       <div id="admin-content"></div>
     </div>`;
@@ -427,6 +497,10 @@ function renderAdminPage(main, subTab) {
     STRECKEN.renderSeite(contentEl);
   } else if (tab === 'gruppen') {
     ADMIN_GRUPPEN.render(contentEl);
+  } else if (tab === 'wartung') {
+    SETTINGS.renderWartung(contentEl);
+  } else if (tab === 'papierkorb') {
+    PAPIERKORB.render(contentEl);
   } else {
     SETTINGS.render(contentEl);
   }
