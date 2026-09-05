@@ -1,5 +1,11 @@
 # Changelog
 
+## v338
+- **Trainingsgruppen werden nur noch an einer Stelle verwaltet.** Anlegen und Umbenennen lagen unter *Admin → Gruppen*, Mitglieder und Reiter-Auswahl unter *Trainingsplanung → Trainingsgruppen*. Beide zeigten dieselbe Gruppenliste, keine konnte, was die andere konnte. Jetzt gehört die gesamte Verwaltung inklusive Mitgliedern zu **Admin → Gruppen** (aufklappbar über das 👥-Symbol je Zeile). In der Trainingsplanung bleibt ein Popover „⚙ Gruppen wählen", das nur noch bestimmt, welche Gruppen als Reiter erscheinen – eine Ansichtseinstellung, kein Verwaltungsschritt. Admins kommen von dort mit einem Klick zur Verwaltung.
+- **Admin → Trainings wird zur Sektion „Liste" der Trainingsplanung.** Die Tabelle aller Einheiten war ein eigener Hauptmenü-Punkt, obwohl sie nur eine andere Ansicht derselben Daten ist – jetzt steht sie neben Gruppenplänen und Athletenplänen. Der alte Link `#admin/trainings` leitet auf `#planung/liste` um, und `#planung/<sektion>` funktioniert als Deep-Link.
+- Der Zähler „Trainings ohne Treffpunkt" sitzt jetzt am Menüpunkt Trainingsplanung statt an Admin; das Admin-Badge zählt nur noch den Papierkorb.
+- Entfallene Regeln der alten Gruppen-Vollseite aus `addons.css` entfernt; `18_admin_gruppen.js` nutzt das gemeinsame `notify()` statt einer eigenen Kopie.
+
 ## v337
 - **Aus dem Profil-Modal wird die Seite „Mein Konto".** Fünf inhaltlich unabhängige Themen – Erscheinungsbild, Pace-Referenzen, Weg zum Training, Workout-Format, Trainingsgruppen und Planfreigaben – lagen in einem scrollenden Overlay mit *einem* Speichern-Knopf am Ende. Wer nur seine Gruppe wechseln wollte, scrollte an vier fremden Abschnitten vorbei und speicherte am Schluss alles zugleich. Jetzt hat jedes Thema sein eigenes Panel unter `#konto` und speichert für sich; eine halb ausgefüllte Wegstrecke bleibt ohne Folgen für die Pace-Einstellung. Aufbau wie die Konto-Seite des Statistikportals.
 - Erreichbar über das Namensfeld im Kopf, den Menüpunkt „Mein Konto" im mobilen Menü und alle bisherigen Verweise – `PROFIL.open()` leitet auf die Seite weiter, statt ein Modal zu öffnen.

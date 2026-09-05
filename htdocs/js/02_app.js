@@ -171,11 +171,14 @@ function navTabs() {
       badge: navBadges.wettkampf_offen },
   ];
   if (isTrainer) {
-    tabs.push({ id: 'planung', icon: '&#x1F4CB;', label: 'Trainingsplanung' });
+    // Trainings ohne Treffpunkt sind eine Planungslücke – der Zähler gehört
+    // seit v338 zur Trainingsplanung, wo die Liste jetzt zu Hause ist.
+    tabs.push({ id: 'planung', icon: '&#x1F4CB;', label: 'Trainingsplanung',
+      badge: navBadges.ohne_treffpunkt });
   }
   if (isAdmin) {
     tabs.push({ id: 'admin', icon: '&#x2699;&#xFE0F;', label: 'Admin',
-      badge: (navBadges.papierkorb || 0) + (navBadges.ohne_treffpunkt || 0) });
+      badge: navBadges.papierkorb });
   }
   return tabs;
 }
@@ -393,6 +396,12 @@ function renderPage() {
     location.replace('#planung');
     return;
   }
+  // Alt-Route: Admin → Trainings ist seit v338 die Sektion „Liste" der
+  // Trainingsplanung – dieselbe Tabelle, nur nicht mehr im Admin-Menü.
+  if (state.tab === 'admin' && args && args[0] === 'trainings') {
+    location.replace('#planung/liste');
+    return;
+  }
   if (state.tab === 'wettkampfplanung') {
     if (!state.user) { location.replace(startHash()); return; }
     WETTKAMPFPLANUNG.render(main);
@@ -400,7 +409,8 @@ function renderPage() {
   }
   if (state.tab === 'planung') {
     if (!state.user) { location.replace(startHash()); return; }
-    PLANUNG.render(main);
+    // #planung/<sektion> – Deep-Link auf Gruppenpläne, Athletenpläne, Liste
+    PLANUNG.render(main, args && args[0]);
     return;
   }
   if (state.tab === 'treffpunkte') {
@@ -478,8 +488,6 @@ function renderAdminPage(main, subTab) {
   const ADMIN_TABS = [
     { id: 'system',        icon: '&#x1F5A5;&#xFE0E;', label: 'System' },
     { id: 'gruppen',       icon: '&#x1F465;',         label: 'Gruppen' },
-    { id: 'trainings',     icon: '&#x1F4CB;',         label: 'Trainings',
-      badge: navBadges.ohne_treffpunkt },
     { id: 'wettkampf',     icon: '&#x1F3C5;',         label: 'Wettkämpfe' },
     { id: 'treffpunkte',   icon: '&#x1F4CD;',         label: 'Treffpunkte' },
     { id: 'strecken',      icon: '&#x1F5FA;&#xFE0F;', label: 'Strecken' },
@@ -503,8 +511,6 @@ function renderAdminPage(main, subTab) {
   const contentEl = document.getElementById('admin-content');
   if (tab === 'system') {
     renderAdminSystem(contentEl);
-  } else if (tab === 'trainings') {
-    ADMIN_TRAININGS.render(contentEl);
   } else if (tab === 'wettkampf') {
     ADMIN_WETTKAMPF.render(contentEl);
   } else if (tab === 'treffpunkte') {
