@@ -237,6 +237,23 @@ const PROFIL = (() => {
     return '';
   }
 
+  // Theme-Umschalter (auto/hell/dunkel) – identisch zum Statistikportal.
+  // setTheme() aus 09a_utils_shared.js schreibt localStorage, setzt data-theme
+  // und faerbt anschliessend alle Buttons in #theme-btns neu ein. Deshalb darf
+  // an den Buttons nur `btn btn-sm btn-primary|btn-ghost` stehen.
+  function _buildThemeSection() {
+    if (typeof getThemePref !== 'function') return '';
+    const pref = getThemePref();
+    const opt = (key, label) =>
+      `<button class="btn btn-sm ${pref === key ? 'btn-primary' : 'btn-ghost'}"
+        onclick="setTheme('${key}')">${label}</button>`;
+    return `<div id="theme-btns" style="display:flex;gap:8px;flex-wrap:wrap">
+      ${opt('auto',  '&#x1F4BB; Automatisch')}
+      ${opt('light', '&#x2600;&#xFE0F; Hell')}
+      ${opt('dark',  '&#x1F319; Dunkel')}
+    </div>`;
+  }
+
   // Uhren-Format für den persönlichen Kalender-Feed
   function _buildWorkoutSection() {
     const aktuell = (_workoutData && _workoutData.format) || 'keine';
@@ -325,7 +342,14 @@ const PROFIL = (() => {
           </div>
           <div class="modal-body">
 
-            <div class="profil-section-title">Pace-Referenzen</div>
+            <div class="profil-section-title">Erscheinungsbild</div>
+            <p class="profil-hint-global">
+              „Automatisch“ folgt der Einstellung deines Geräts. Die Wahl gilt für dieses Gerät
+              und wirkt sofort – ohne Speichern.
+            </p>
+            ${_buildThemeSection()}
+
+            <div class="profil-section-title" style="margin-top:28px">Pace-Referenzen</div>
             <p class="profil-hint-global">
               Wähle pro Distanz, welche Zeit als Referenz für die Pace-Berechnung im Trainingsplan verwendet wird.
               Bestzeiten werden automatisch aus dem Statistikportal übernommen.

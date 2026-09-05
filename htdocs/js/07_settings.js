@@ -92,6 +92,61 @@ const SETTINGS = (() => {
     } catch (e) { return []; }
   }
 
+  // ── Wartung (Admin → Wartung) ──────────────────────────────
+  // Einmalige Werkzeuge, die frueher zwischen den taeglichen Einstellungen
+  // standen. Sie brauchen keine geladenen Settings – nur die beiden Aktionen.
+  function renderWartung(main) {
+    if (!state.user || state.user.rolle !== 'admin') {
+      main.innerHTML = '<div class="panel"><div class="settings-panel-body">' +
+        '<div class="empty">Diese Seite ist nur für Admins zugänglich.</div></div></div>';
+      return;
+    }
+    main.innerHTML =
+      '<div style="margin:0 auto;display:flex;flex-direction:column;gap:20px">' +
+
+      '<div class="panel">' +
+        '<div class="panel-header"><div class="panel-title">🔄 Migration: Einheiten → Trainingsblöcke</div></div>' +
+        '<div class="settings-panel-body">' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Bestehende Kalendereinträge migrieren</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
+                'Liest alle vorhandenen Trainingseinheiten und legt pro eindeutigem Titel einen globalen Trainingsblock an (inklusive Segmente). Bereits vorhandene Blöcke werden übersprungen. Idempotent – kann mehrfach ausgeführt werden.' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<button class="btn btn-primary btn-sm" onclick="SETTINGS.migrieren()">▶ Jetzt migrieren</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-label">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">Segmente aus Titeln parsen</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
+                'Analysiert alle Blöcke ohne Segmente, erkennt Kurzschrift im Titel (z. B. „12 x 400 m (100GP)") und speichert die Segmente automatisch. Blöcke mit vorhandenen Segmenten werden nicht verändert.' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-row-input">' +
+              '<button class="btn btn-ghost btn-sm" onclick="SETTINGS.reparseSegmente()">🔍 Segmente parsen</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="migr-result"></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="panel">' +
+        '<div class="panel-header"><div class="panel-title">ℹ️ Wozu diese Seite</div></div>' +
+        '<div class="settings-panel-body">' +
+          '<div style="font-size:13px;color:var(--text2);line-height:1.5">' +
+            'Hier stehen einmalige Werkzeuge, die den Datenbestand umbauen – nicht die täglichen Einstellungen. ' +
+            'Alles, was regelmäßig gepflegt wird (Uhrzeiten, Trainingstypen, Pace-Distanzen, Feiertags-Feeds), ' +
+            'liegt unter <strong>Admin → Einstellungen</strong>.' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '</div>';
+  }
+
   function rendereForm(main) {
     main.innerHTML =
       '<div style="margin:0 auto;display:flex;flex-direction:column;gap:20px">' +
@@ -214,36 +269,6 @@ const SETTINGS = (() => {
             'Trainingsblöcke und Kalendereinträge werden einem Typ zugeordnet. Typen mit Blöcken können nicht gelöscht werden.' +
           '</div>' +
           '<div id="typen-liste"></div>' +
-        '</div>' +
-      '</div>' +
-
-      // ── Migration: Einheiten → Blöcke ──
-      '<div class="panel">' +
-        '<div class="panel-header"><div class="panel-title">🔄 Migration: Einheiten → Trainingsblöcke</div></div>' +
-        '<div class="settings-panel-body">' +
-          '<div class="settings-row">' +
-            '<div class="settings-row-label">' +
-              '<div style="font-size:13px;font-weight:600;color:var(--text)">Bestehende Kalendereinträge migrieren</div>' +
-              '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
-                'Liest alle vorhandenen Trainingseinheiten und legt pro eindeutigem Titel einen globalen Trainingsblock an (inklusive Segmente). Bereits vorhandene Blöcke werden übersprungen. Idempotent – kann mehrfach ausgeführt werden.' +
-              '</div>' +
-            '</div>' +
-            '<div class="settings-row-input">' +
-              '<button class="btn btn-primary btn-sm" onclick="SETTINGS.migrieren()">▶ Jetzt migrieren</button>' +
-            '</div>' +
-          '</div>' +
-          '<div class="settings-row">' +
-            '<div class="settings-row-label">' +
-              '<div style="font-size:13px;font-weight:600;color:var(--text)">Segmente aus Titeln parsen</div>' +
-              '<div style="font-size:12px;color:var(--text2);margin-top:2px">' +
-                'Analysiert alle Blöcke ohne Segmente, erkennt Kurzschrift im Titel (z. B. „12 x 400 m (100GP)") und speichert die Segmente automatisch. Blöcke mit vorhandenen Segmenten werden nicht verändert.' +
-              '</div>' +
-            '</div>' +
-            '<div class="settings-row-input">' +
-              '<button class="btn btn-ghost btn-sm" onclick="SETTINGS.reparseSegmente()">🔍 Segmente parsen</button>' +
-            '</div>' +
-          '</div>' +
-          '<div id="migr-result"></div>' +
         '</div>' +
       '</div>' +
 
@@ -702,7 +727,7 @@ const SETTINGS = (() => {
     }
   }
 
-  return { render, hinzufuegen, entfernen, beispiel, speichern, diagnose, migrieren,
+  return { render, renderWartung, hinzufuegen, entfernen, beispiel, speichern, diagnose, migrieren,
            paceDistanzHinzufuegen, paceDistanzEntfernen, reparseSegmente,
            typBearbeiten, typAbbrechen, typSpeichern, typHinzufuegen, typLoeschen };
 })();
