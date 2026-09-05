@@ -164,6 +164,7 @@ function navTabs() {
   const isTrainer = isAdmin || (!!u && u.rolle === 'trainer');
 
   const tabs = [
+    { id: 'dashboard',        icon: '&#x1F3E0;', label: 'Übersicht' },
     { id: 'kalender',         icon: '&#x1F4C5;', label: 'Kalender' },
     { id: 'wettkampfplanung', icon: '&#x1F3C5;', label: 'Wettkampfplanung',
       badge: navBadges.wettkampf_offen },
@@ -278,9 +279,13 @@ function _quartalAusMonat(ym) {
   return `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
 }
 
-// Startseite: auf dem Smartphone konsequent Listenansicht (aktuelles Quartal),
-// auf größeren Bildschirmen der Monatskalender.
+// Startseite: angemeldete Nutzer beginnen auf der Übersicht – sie beantwortet
+// „was ist als Nächstes dran" in einem Blick, statt sofort in den dichtesten
+// Bildschirm der Anwendung zu führen. Gäste (Share-Link) haben keine
+// persönlichen Daten und gehen weiter direkt in die freigegebene Ansicht:
+// auf dem Smartphone die Liste, sonst der Monatskalender.
 function startHash() {
+  if (state.user) return '#dashboard';
   if (istSchmal()) {
     const now = new Date();
     const q = Math.floor(now.getMonth() / 3) + 1;
@@ -361,6 +366,11 @@ function renderPage() {
     return;
   }
 
+  if (state.tab === 'dashboard') {
+    if (!state.user) { location.replace(startHash()); return; }
+    DASHBOARD.render(main).catch(e => _showRenderError(main, e));
+    return;
+  }
   if (state.tab === 'kalender') {
     if (istSchmal() && !_kalMobilErlaubt()) {
       location.replace(`#liste/${_quartalAusMonat(args && args[0])}`);
@@ -768,11 +778,11 @@ async function renderKalender(main, monthArg) {
        </div>`
     : '';
 
+  // Hinweise, Heute/Morgen, Aktionen und die Wettkampf-Vorschau stehen auf der
+  // Übersicht (#dashboard). Der Kalender zeigt den Kalender.
   main.innerHTML = `
     <div class="kal-wrap">
       ${shareBanner}
-      <div id="pace-warn-sektion"></div>
-      <div id="heute-sektion"></div>
       <div class="kal-toolbar">
         <div class="kal-nav">
           ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Aktuellen Monat anzeigen">Heute</button>
@@ -788,14 +798,7 @@ async function renderKalender(main, monthArg) {
         </div>` : ''}
       </div>
       <div id="kal-grid" class="kal-loading">Lade Trainingsplan…</div>
-      <div id="kal-actions" class="kal-actions"></div>
-      <div id="wettkampf-sektion"></div>
     </div>`;
-
-  ladeGlobalePaceWarnung('pace-warn-sektion');
-  if (angemeldet) ladeHeuteSektionInto('heute-sektion');
-  if (angemeldet) ladeWettkampfSektionInto('wettkampf-sektion');
-  _renderKalActions('kal-actions');
 
   const von = ymd(gridStart);
   const bis = ymd(gridEnd);
@@ -1148,8 +1151,6 @@ async function renderKalender(main, monthArg) {
     KAL_POPOVER.initItems(document.querySelectorAll('#kal-grid .kal-item[data-einheit-id]'));
   }
 
-  // Neu rendern, nachdem _wkPrivatMap befüllt ist → korrekte Aktiv-Zustände der Karten-Buttons
-  ladeWettkampfSektionInto('wettkampf-sektion');
 }
 
 // ── Kalender-Filter: Initialisierung ───────────────────
@@ -1499,6 +1500,25 @@ async function ladeHeuteSektionInto(containerId) {
     console.error('Heute/Morgen-Sektion konnte nicht geladen werden:', e);
     el.innerHTML = '';
   }
+}
+
+/**
+ * Füllt `_wkPrivatMap` für einen Zeitraum.
+ *
+ * Kalender und Liste bauen die Map als Nebenprodukt ihres Renderings auf.
+ * Die Übersicht rendert keinen Plan, braucht die Map aber genauso – sonst
+ * zeigen die Disziplin-Buttons der Wettkampfkarten den falschen Aktiv-Zustand.
+ */
+async function ladeWkPrivatMap(von, bis) {
+  if (!state.user) return;
+  try {
+    const d = await apiGet(`mein-plan/einheiten?von=${von}&bis=${bis}`, { silent: true });
+    _wkPrivatMap = {};
+    (d.privat || []).filter(e => e.typ === 'wettkampf').forEach(e => {
+      (_wkPrivatMap[e.datum] = _wkPrivatMap[e.datum] || []).push(
+        { id: e.id, bemerkung: e.bemerkung || null, titel: e.titel || '' });
+    });
+  } catch (_) { /* Karten zeigen dann nur keinen Aktiv-Zustand */ }
 }
 
 async function ladeWettkampfSektionInto(containerId) {
@@ -2179,8 +2199,6 @@ async function renderListe(main, quarterArg) {
   main.innerHTML = `
     <div class="liste-wrap">
       ${shareBannerL}
-      <div id="pace-warn-sektion"></div>
-      <div id="heute-sektion"></div>
       <div class="liste-toolbar">
         <div class="liste-nav">
           ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateListe()" title="Aktuelles Quartal anzeigen">Heute</button>
@@ -2197,14 +2215,7 @@ async function renderListe(main, quarterArg) {
       </div>
       <div id="liste-legend"></div>
       <div id="liste-content" class="liste-loading">Lade Trainingsplan…</div>
-      <div id="liste-actions" class="kal-actions"></div>
-      <div id="wettkampf-sektion"></div>
     </div>`;
-
-  ladeGlobalePaceWarnung('pace-warn-sektion');
-  if (angemeldet) ladeHeuteSektionInto('heute-sektion');
-  if (angemeldet) ladeWettkampfSektionInto('wettkampf-sektion');
-  _renderKalActions('liste-actions');
 
   let plan;
   try {
@@ -2414,8 +2425,6 @@ async function renderListe(main, quarterArg) {
   listeContentEl.outerHTML =
     `<div id="liste-content" class="liste-content">${html}</div>`;
 
-  // Neu rendern, nachdem _wkPrivatMap befüllt ist → korrekte Aktiv-Zustände der Karten-Buttons
-  ladeWettkampfSektionInto('wettkampf-sektion');
 }
 
 async function zeigeEinheit(id) {
@@ -3426,8 +3435,9 @@ async function _wkEintragen(serieId, disziplin) {
       await apiPost(`wettkampf/${serieId}/anmeldungen`, { disziplin: disziplin || '', jahr: Number(datum.slice(0, 4)) });
     } catch (_) { /* optional – kein Fehler wenn Anmeldung nicht möglich */ }
     _wettkampfCache = null;
-    ladeWettkampfSektionInto('wettkampf-sektion');
     _wkNotify('Wettkampfteilnahme eingetragen.', true);
+    // renderPage() zeichnet die aktuelle Seite komplett neu – auf der
+    // Übersicht schließt das die Wettkampfkarten mit ein.
     renderPage();
   } catch (e) {
     _wkNotify('Fehler: ' + (e.message || ''), false);

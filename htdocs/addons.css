@@ -2298,6 +2298,81 @@ body.planung-active #app-footer    { display: none; }
   .meinplan-kal-grid .kal-row { grid-template-columns: 48px repeat(7, 1fr); }
 }
 
+/* ── Übersicht (#dashboard) ───────────────────────────────── */
+.dash-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+
+.dash-kopf { margin-bottom: 20px; }
+.dash-titel {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 30px; font-weight: 700; color: var(--primary);
+  margin: 0; line-height: 1.1;
+}
+.dash-datum { font-size: 13px; color: var(--text2); margin-top: 3px; }
+
+.dash-kacheln {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px; align-items: start; margin-bottom: 4px;
+}
+/* .panel bringt margin-bottom mit – im Grid übernimmt gap den Abstand. */
+.dash-kachel { margin-bottom: 0; }
+.dash-kachel-lade { padding: 24px; color: var(--text2); font-size: 13px; text-align: center; }
+
+/* Wochenbilanz */
+.dash-woche-zahlen { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 14px; }
+.dash-zahl { display: flex; flex-direction: column; gap: 2px; }
+.dash-zahl-wert {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 27px; font-weight: 700; color: var(--primary); line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.dash-zahl-wert.dash-zahl-schwach { color: var(--text2); }
+.dash-zahl-label {
+  font-size: 11px; color: var(--text2);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.dash-balken {
+  height: 8px; border-radius: 4px; background: var(--surf2);
+  overflow: hidden; border: 1px solid var(--border);
+}
+.dash-balken-fuellung {
+  height: 100%; background: var(--primary);
+  transition: width .35s ease;
+}
+.dash-balken-fuellung.is-erfuellt { background: var(--green, #1a8a3a); }
+.dash-balken-text { font-size: 12px; color: var(--text2); margin-top: 6px; }
+.dash-kein-ziel { font-size: 13px; color: var(--text2); }
+
+/* Wettkampf-Entscheidungen */
+.dash-entscheidungen { list-style: none; margin: 0; padding: 0; }
+.dash-entscheidung {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 7px 0; border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.dash-entscheidung:last-child { border-bottom: none; }
+.dash-ent-datum {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+  color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.dash-ent-name { flex: 1; min-width: 0; font-weight: 600; }
+.dash-ent-status {
+  font-size: 11px; color: var(--text2);
+  text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
+}
+.dash-frist {
+  font-size: 11px; font-weight: 700; color: var(--primary);
+  white-space: nowrap;
+}
+.dash-ent-rest { font-size: 12px; color: var(--text2); margin-top: 8px; }
+.dash-alles-klar { font-size: 13.5px; color: var(--green, #1a8a3a); }
+
+@media (max-width: 720px) {
+  .dash-wrap { padding: 14px 12px 32px; }
+  .dash-titel { font-size: 25px; }
+  .dash-kacheln { grid-template-columns: 1fr; gap: 12px; }
+  .dash-woche-zahlen { gap: 16px; }
+}
+
 /* ── Nav-Badge: Zahl am Menuepunkt (offene Wettkaempfe, Admin-Aufgaben) ──
    Gleiche Optik wie im Statistikportal. Die Nav-Buttons sind flex-column,
    deshalb steht der Text im Markup in einem nowrap-Wrapper – die Zahl sitzt

@@ -1,5 +1,10 @@
 # Changelog
 
+## v336
+- **Neu: „Übersicht" als Startseite.** Wer sich anmeldete, landete bisher direkt im Monatsraster bzw. Quartalsplan – dem dichtesten Bildschirm der Anwendung – mit vier nachgeladenen Blöcken darüber, die den Plan nach unten schoben. Die Übersicht beantwortet stattdessen in einem Blick, was als Nächstes dran ist: Wochenbilanz (gelaufene und noch geplante Kilometer, Einheitenzahl, Fortschritt zum Wochenziel), offene Wettkampf-Entscheidungen mit Datum und Frist, Heute/Morgen, die nächsten Wettkämpfe und die Hinweise zu fehlender Pace oder Trainingsgruppe.
+- **Kalender und Quartalsplan zeigen nur noch den Plan.** Hinweise, Heute/Morgen, „Abonnieren/Teilen" und die Wettkampf-Vorschau standen auf beiden Seiten doppelt und wohnen jetzt auf der Übersicht. Die Wettkampfkarten dort holen sich `_wkPrivatMap` über `ladeWkPrivatMap()` selbst – bisher entstand die Map als Nebenprodukt des Kalender-Renderings.
+- Gäste mit Share-Link gehen unverändert direkt in die freigegebene Ansicht: auf dem Smartphone die Liste, sonst der Monatskalender.
+
 ## v335
 - **Eine Tab-Liste statt drei.** Die Hauptnavigation stand bisher an drei Stellen getrennt: als HTML für den Desktop, als HTML für den Mobil-Drawer und ein drittes Mal als `TAB_LABEL`-Map für den mobilen Seitentitel. Jetzt liefert `navTabs()` eine Liste, aus der `_renderNavTabs()` alle drei erzeugt – dasselbe Muster wie `buildNav()` im Statistikportal. Für Seiten ohne eigenen Menüpunkt (Liste, Rechtstexte, Alt-Routen) gibt es `NAV_ALIAS_LABEL`.
 - **Zähler-Badges an den Menüpunkten.** Man sah dem Menü nie an, ob etwas wartet. „Wettkampfplanung" trägt jetzt die Zahl der eigenen Veranstaltungen dieses Jahres, die noch offen, in Klärung oder anmeldepflichtig sind; „Admin" die Summe aus Papierkorb und künftigen Trainings ohne Treffpunkt. Gespeist wird das aus dem neuen, bewusst billigen Endpunkt `GET /badges` (nur COUNT-Abfragen, jeder Zähler fängt seine Fehler selbst ab).

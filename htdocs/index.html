@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon.php?size=32">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon.php?size=16">
 <link rel="apple-touch-icon" sizes="180x180" href="favicon.php?size=180">
-<link rel="manifest" href="manifest.php?v=335">
+<link rel="manifest" href="manifest.php?v=336">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -18,7 +18,7 @@
 <!-- Identische Optik wie Statistikportal: dessen app.css wird über shared.php aus dem Schwester-htdocs gelesen. -->
 <link rel="stylesheet" href="shared.php?file=app.css&v=14">
 <!-- Trainingsportal-spezifische Erweiterungen (Kalender, Editor, Settings): -->
-<link rel="stylesheet" href="addons.css?v=335"></head>
+<link rel="stylesheet" href="addons.css?v=336"></head>
 <body>
 <!-- Login-Screen (Standalone-Fallback; bei aktivem Login-Portal wird redirected) -->
 <div id="login-screen" class="login-wrap" style="display:none">
@@ -38,8 +38,8 @@
       <div class="logo-wrap" onclick="navigateStart()" style="cursor:pointer" title="Startseite">
         <img src="" class="logo-img" alt="Vereinslogo" onerror="this.style.display='none'">
         <div class="logo-text">
-          <div class="logo-main"><span>Trainingsportal</span> <span id="mobile-header-ver" style="opacity:.55;font-size:.72em;font-weight:400;letter-spacing:0">v335</span></div>
-          <div class="logo-sub"><span>Leichtathletik</span> <span id="header-version" style="opacity:.55;font-size:.85em">v335</span></div>        </div>
+          <div class="logo-main"><span>Trainingsportal</span> <span id="mobile-header-ver" style="opacity:.55;font-size:.72em;font-weight:400;letter-spacing:0">v336</span></div>
+          <div class="logo-sub"><span>Leichtathletik</span> <span id="header-version" style="opacity:.55;font-size:.85em">v336</span></div>        </div>
       </div>      <nav id="main-nav"></nav>
       <div id="mobile-page-title"></div>
       <div class="header-right">
@@ -77,37 +77,38 @@
 <!-- Gemeinsame Bausteine: liegen im Statistikportal und werden über shared.php gelesen. -->
 <script src="shared.php?file=js/09a_utils_shared.js&amp;v=1"></script>
 <script src="shared.php?file=js/09b_tabellenfilter.js&amp;v=2"></script>
-<script src="js/01_api.js?v=335"></script>
-<script src="js/00_config.js?v=335"></script>
-<script src="js/03_parser.js?v=335"></script>
-<script src="js/04_editor.js?v=335"></script>
-<script src="js/05_pace.js?v=335"></script>
-<script src="js/06_ics.js?v=335"></script>
-<script src="js/07_settings.js?v=335"></script>
-<script src="js/08_bloecke.js?v=335"></script>
-<script src="js/09_profil.js?v=335"></script>
-<script src="js/10_planung.js?v=335"></script>
-<script src="js/10_weg.js?v=335"></script>
-<script src="js/11_treffpunkte.js?v=335"></script>
-<script src="js/12_admin_trainings.js?v=335"></script>
-<script src="js/13_meinplan.js?v=335"></script>
-<script src="js/14_admin_system.js?v=335"></script>
-<script src="js/15_trainingsgruppen.js?v=335"></script>
-<script src="js/16_admin_wettkampf.js?v=335"></script>
-<script src="js/17_wettkampfplanung.js?v=335"></script>
-<script src="js/18_admin_gruppen.js?v=335"></script>
-<script src="js/19_strecken.js?v=335"></script>
-<script src="js/20_segmente.js?v=335"></script>
-<script src="js/21_workout.js?v=335"></script>
-<script src="js/22_papierkorb.js?v=335"></script>
-<script src="js/02_app.js?v=335"></script>
+<script src="js/01_api.js?v=336"></script>
+<script src="js/00_config.js?v=336"></script>
+<script src="js/03_parser.js?v=336"></script>
+<script src="js/04_editor.js?v=336"></script>
+<script src="js/05_pace.js?v=336"></script>
+<script src="js/06_ics.js?v=336"></script>
+<script src="js/07_settings.js?v=336"></script>
+<script src="js/08_bloecke.js?v=336"></script>
+<script src="js/09_profil.js?v=336"></script>
+<script src="js/10_planung.js?v=336"></script>
+<script src="js/10_weg.js?v=336"></script>
+<script src="js/11_treffpunkte.js?v=336"></script>
+<script src="js/12_admin_trainings.js?v=336"></script>
+<script src="js/13_meinplan.js?v=336"></script>
+<script src="js/14_admin_system.js?v=336"></script>
+<script src="js/15_trainingsgruppen.js?v=336"></script>
+<script src="js/16_admin_wettkampf.js?v=336"></script>
+<script src="js/17_wettkampfplanung.js?v=336"></script>
+<script src="js/18_admin_gruppen.js?v=336"></script>
+<script src="js/19_strecken.js?v=336"></script>
+<script src="js/20_segmente.js?v=336"></script>
+<script src="js/21_workout.js?v=336"></script>
+<script src="js/22_papierkorb.js?v=336"></script>
+<script src="js/23_dashboard.js?v=336"></script>
+<script src="js/02_app.js?v=336"></script>
 <script>
 // Service Worker: App-Shell offline verfügbar, API-Daten mit Cache-Fallback.
 // Die Version in der URL sorgt dafür, dass jeder Deploy einen neuen SW
 // installiert und die alten Shell-Caches entsorgt werden.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js?v=335').catch(function () { /* z.B. ohne HTTPS */ });
+    navigator.serviceWorker.register('sw.js?v=336').catch(function () { /* z.B. ohne HTTPS */ });
   });
 }
 </script></body>
