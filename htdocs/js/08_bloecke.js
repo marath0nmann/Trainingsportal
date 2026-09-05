@@ -144,7 +144,6 @@ const BLOECKE = (() => {
         <div class="block-card-actions">
           <button class="btn btn-primary btn-sm" onclick="BLOECKE.anwenden(${b.id})">Im Kalender planen</button>
           ${kannBearbeiten ? `<button class="btn btn-ghost btn-sm" onclick="BLOECKE.bearbeiten(${b.id})">Bearbeiten</button>` : ''}
-          ${b.strecke_id ? `<button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${b.strecke_id})">🗺 Karte</button>` : ''}
           ${b.strecke_id ? `<a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${b.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>` : ''}
         </div>
       </div>`;

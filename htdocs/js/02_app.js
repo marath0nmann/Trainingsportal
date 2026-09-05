@@ -1625,7 +1625,6 @@ async function ladHeuteDetails(items) {
         if (appleBtn) actions.push(appleBtn);
       }
       if (einheit.strecke_id) {
-        actions.push(`<button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${einheit.strecke_id})">🗺 Auf Karte</button>`);
         actions.push(`<a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${einheit.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>`);
       }
       if (einheit.komoot_url) {
@@ -2430,7 +2429,6 @@ async function zeigeEinheit(id) {
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ Garmin</a>` : ''}
               ${seg.length ? APPLEWORKOUT.buttonHtml(e.id, e.titel) : ''}
-              ${e.strecke_id ? `<button class="btn btn-ghost" onclick="STRECKEN.karteOeffnen(${e.strecke_id})">🗺 Auf Karte</button>` : ''}
               ${e.strecke_id ? `<a class="btn btn-ghost" href="api/index.php?p=strecken/${e.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>` : ''}
               ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
               ${state.user ? `<button class="btn btn-ghost" onclick="oeffneTerminModal(state._lastEinheit)">Bearbeiten</button>` : ''}

@@ -219,17 +219,22 @@ const STRECKEN = (() => {
     </div>`;
   }
 
-  /** Lädt die Geometrie nach und rendert die Vorschau in ein Element. */
+  /** Lädt die Geometrie nach und rendert die Vorschau in ein Element.
+      Immer mit Kartenhintergrund – ein Klick öffnet die große Karte. */
   async function vorschauEinbinden(el, streckeId, opts) {
     if (!el) return;
     const s = await get(streckeId);
     if (!s) { el.innerHTML = ''; return; }
-    const o = opts || {};
+    const o = Object.assign({}, opts || {});
+    // Wunschbreite auf den tatsächlich vorhandenen Platz begrenzen, sonst
+    // laufen die Kacheln in schmalen Spalten (Heute-Karte, Modal) über.
+    const platz = el.clientWidth - 14;
+    if (platz > 120) o.breite = Math.min(o.breite || 320, platz);
     el.innerHTML = `
       <div class="strecke-vorschau">
         <div class="strecke-vorschau-bild" role="button" tabindex="0"
              title="Auf Karte anzeigen" onclick="STRECKEN.karteOeffnen(${s.id})"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();STRECKEN.karteOeffnen(${s.id})}">${svgHtml(s, o)}</div>
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();STRECKEN.karteOeffnen(${s.id})}">${kartenVorschauHtml(s, o)}</div>
         ${o.ohneText ? '' : `<div class="strecke-vorschau-meta">
           <span class="strecke-vorschau-name">${escapeHtml(s.name)}</span>
           <span class="strecke-vorschau-zahlen">${escapeHtml(metaText(s))}</span>
@@ -356,7 +361,6 @@ const STRECKEN = (() => {
       if (vor && vor.firstElementChild) {
         vor.insertAdjacentHTML('beforeend', `
           <div class="strecke-feld-aktionen">
-            <button type="button" class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${st.strecke_id})">🗺 Auf Karte</button>
             <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${st.strecke_id}/gpx" download>GPX</a>
             <button type="button" class="btn btn-ghost btn-sm" onclick="STRECKEN.feldUmbenennen('${feldId}')">Umbenennen</button>
             <button type="button" class="btn btn-ghost btn-sm" onclick="STRECKEN.feldLoeschen('${feldId}')">Löschen</button>
@@ -546,7 +550,6 @@ const STRECKEN = (() => {
                   · ${s.punkte} Punkte${s.herkunft ? ' · ' + escapeHtml(s.herkunft) : ''}
                 </div>
                 <div class="strecke-karte-actions">
-                  <button class="btn btn-ghost btn-sm" onclick="STRECKEN.karteOeffnen(${s.id})">🗺 Karte</button>
                   <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${s.id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>
                   <button class="btn btn-ghost btn-sm" onclick="STRECKEN.seiteUmbenennen(${s.id})">Umbenennen</button>
                   <button class="btn btn-ghost btn-sm" onclick="STRECKEN.seiteLoeschen(${s.id})">Löschen</button>

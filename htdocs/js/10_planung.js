@@ -107,8 +107,8 @@ const KAL_POPOVER = (() => {
       const aboAktiv = zeigeAktionen && MEINPLAN.istAboAktivFuerTyp(e.typ);
       const typEsc   = escapeHtml(e.typ);
 
-      // Streckenverlauf (falls hinterlegt): Vorschau + direkter Weg zu
-      // Kartenansicht und GPX. Das Popover wird dafür etwas breiter.
+      // Streckenverlauf (falls hinterlegt): Kartenvorschau (Klick → große
+      // Karte) + GPX-Download. Das Popover wird dafür etwas breiter.
       let streckeHtml = '';
       if (e.strecke_id) {
         const s = await STRECKEN.get(e.strecke_id);
@@ -121,7 +121,6 @@ const KAL_POPOVER = (() => {
             </div>
             <div class="kal-pop-strecke-meta">${escapeHtml(s.name)} · ${escapeHtml(STRECKEN.metaText(s))}</div>
             <div class="kal-pop-strecke-actions">
-              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();STRECKEN.karteOeffnen(${s.id})">🗺 Auf Karte</button>
               <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${s.id}/gpx" download
                  onclick="event.stopPropagation()">GPX</a>
             </div>
