@@ -32,8 +32,15 @@ const TREFFPUNKTE = (() => {
     _leafletLoaded = true;
   }
 
+  // Container merken: die Seite haengt unter Admin → Treffpunkte in
+  // #admin-content, nicht in #main-content. Ein Neuzeichnen nach dem
+  // Speichern hat bisher #main-content ersetzt und damit die Admin-Reiter
+  // mitgeloescht.
+  let _container = null;
+
   // ── Haupt-Render ──────────────────────────────────────────
   async function render(main) {
+    _container = main;
     main.innerHTML = `<div class="tp-wrap"><div class="tp-loading">Lade Treffpunkte…</div></div>`;
     try {
       const data = await apiGet('treffpunkte', { silent: true });
@@ -45,23 +52,63 @@ const TREFFPUNKTE = (() => {
     renderListe(main);
   }
 
+  // ── Gemeinsame Filterleiste (Statistikportal-Modul, via shared.php) ──
+  const TF = 'tp-treffpunkte';
+
+  function _filterInit() {
+    tfInit(TF, {
+      platzhalter: 'Name oder Adresse…',
+      rows:  () => _liste,
+      suche: t => [t.name, t.adresse],
+      spalten: [
+        { key: 'koords', label: 'Koordinaten',
+          wert: t => (t.lat != null && t.lng != null) ? 'hinterlegt' : 'fehlen' },
+        { key: 'karte',  label: 'Kartenlink',
+          wert: t => {
+            const l = [];
+            if (t.maps_google) l.push('Google Maps');
+            if (t.maps_apple)  l.push('Apple Maps');
+            if (t.maps_komoot) l.push('Komoot');
+            return l.length ? l : '— keiner —';
+          } },
+      ],
+      onChange: () => _rendereKarten(),
+    });
+  }
+
   function renderListe(main) {
     const istTrainer = state.user &&
       (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
 
+    _filterInit();
     main.innerHTML = `
       <div class="tp-wrap">
         <div class="tp-header">
           <h2>Treffpunkte</h2>
           ${istTrainer ? `<button class="btn btn-primary" onclick="TREFFPUNKTE.neu()">+ Neuer Treffpunkt</button>` : ''}
         </div>
-        ${_liste.length === 0
-          ? `<div class="tp-leer">Noch keine Treffpunkte angelegt.</div>`
-          : `<div class="tp-grid">
-              ${_liste.map(renderKarte).join('')}
-            </div>`
-        }
+        ${_liste.length ? tfBarHtml(TF) : ''}
+        <div id="tp-karten"></div>
       </div>`;
+    _rendereKarten();
+  }
+
+  /** Zeichnet nur das Kartenraster – die Filterleiste bleibt stehen. */
+  function _rendereKarten() {
+    const el = document.getElementById('tp-karten');
+    if (!el) return;
+    _filterInit();
+
+    if (!_liste.length) {
+      el.innerHTML = `<div class="tp-leer">Noch keine Treffpunkte angelegt.</div>`;
+      return;
+    }
+    const sichtbar = tfFilter(TF, _liste);
+    el.innerHTML = sichtbar.length
+      ? `<div class="tp-grid">${sichtbar.map(renderKarte).join('')}</div>`
+      : `<div class="tp-leer">Kein Treffpunkt passt zum Filter.
+           <button class="btn btn-ghost btn-sm" onclick="tfReset('${TF}')">Filter zurücksetzen</button></div>`;
+    tfRefresh(TF);
   }
 
   function staticMapHtml(lat, lng) {
@@ -293,7 +340,7 @@ const TREFFPUNKTE = (() => {
       // Liste neu laden
       const data = await apiGet('treffpunkte', { silent: true });
       _liste = data.treffpunkte || [];
-      renderListe(document.getElementById('main-content'));
+      if (_container) renderListe(_container);
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
     }
@@ -307,7 +354,7 @@ const TREFFPUNKTE = (() => {
       await apiDel(`treffpunkte/${id}`);
       notify('Treffpunkt gelöscht.', 'ok');
       _liste = _liste.filter(x => x.id !== id);
-      renderListe(document.getElementById('main-content'));
+      if (_container) renderListe(_container);
     } catch (e) {
       notify('Fehler: ' + (e.message || ''), 'err');
     }

@@ -1,5 +1,5 @@
 # Trainingsportal – Leichtathletik
-## Version v339 | Stand: September 2026 
+## Version v340 | Stand: September 2026 
 
 Webbasiertes Trainingsportal für den Leichtathletik-Bereich.  
 PHP/MariaDB · Shared Hosting (all-inkl.com) · Vanilla JS/CSS · keine externen Frameworks

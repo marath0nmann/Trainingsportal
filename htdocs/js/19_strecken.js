@@ -524,6 +524,7 @@ const STRECKEN = (() => {
     const liste = listeCache || [];
     const gesamt = liste.reduce((n, s) => n + s.distanz_m, 0);
 
+    _filterInit();
     container.innerHTML = `
       <div class="panel">
         <div class="panel-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
@@ -536,35 +537,85 @@ const STRECKEN = (() => {
         </p>
         <div class="strecke-seite-import">${_importHtml(SEITE)}</div>
         <div id="strecke-zuordnung"></div>
-        <div class="strecke-seite-grid">
-          ${liste.length
-            ? liste.map(s => `
-              <div class="strecke-karte">
-                <div class="strecke-karte-bild" data-strecke-id="${s.id}"></div>
-                <div class="strecke-karte-titel">${escapeHtml(s.name)}</div>
-                <div class="strecke-karte-meta">${escapeHtml(metaText(s))}</div>
-                <div class="strecke-karte-info">
-                  ${s.verwendet > 0
-                    ? `${s.verwendet}× verplant`
-                    : '<span class="strecke-karte-unbenutzt">nicht verwendet</span>'}
-                  · ${s.punkte} Punkte${s.herkunft ? ' · ' + escapeHtml(s.herkunft) : ''}
-                </div>
-                <div class="strecke-karte-actions">
-                  <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${s.id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>
-                  <button class="btn btn-ghost btn-sm" onclick="STRECKEN.seiteUmbenennen(${s.id})">Umbenennen</button>
-                  <button class="btn btn-ghost btn-sm" onclick="STRECKEN.seiteLoeschen(${s.id})">Löschen</button>
-                </div>
-              </div>`).join('')
-            : '<div class="bloecke-leer">Noch keine Strecken importiert.</div>'}
-        </div>
+        ${liste.length ? `<div style="padding:0 16px">${tfBarHtml(TF)}</div>` : ''}
+        <div id="strecke-seite-liste"></div>
       </div>`;
 
-    container.querySelectorAll('.strecke-karte-bild[data-strecke-id]').forEach(el => {
-      vorschauEinbinden(el, el.dataset.streckeId, { breite: 300, hoehe: 160, ohneText: true });
-    });
-    _dropzoneBinden(SEITE);
     _seitenContainer = container;
+    _rendereKarten();
+    _dropzoneBinden(SEITE);
     _renderZuordnung();
+  }
+
+  // ── Gemeinsame Filterleiste (Statistikportal-Modul, via shared.php) ──
+  const TF = 'tp-strecken';
+
+  function _filterInit() {
+    tfInit(TF, {
+      platzhalter: 'Streckenname…',
+      rows:  () => listeCache || [],
+      suche: s => [s.name, s.herkunft],
+      spalten: [
+        { key: 'verwendung', label: 'Verwendung',
+          wert: s => s.verwendet > 0 ? 'verplant' : 'nicht verwendet' },
+        { key: 'herkunft',   label: 'Herkunft',
+          wert: s => s.herkunft || '— ohne Angabe —' },
+        // Laengenklassen statt roher Meterwerte: eine Filterliste mit 40
+        // Einzelwerten hilft niemandem.
+        { key: 'laenge',     label: 'Länge',
+          wert: s => {
+            const km = (s.distanz_m || 0) / 1000;
+            if (km < 5)  return 'unter 5 km';
+            if (km < 10) return '5 bis 10 km';
+            if (km < 21) return '10 bis 21 km';
+            return 'über 21 km';
+          } },
+      ],
+      onChange: () => _rendereKarten(),
+    });
+  }
+
+  /** Zeichnet nur das Kartenraster – die Filterleiste bleibt stehen. */
+  function _rendereKarten() {
+    const el = document.getElementById('strecke-seite-liste');
+    if (!el) return;
+    _filterInit();
+    const alle = listeCache || [];
+
+    if (!alle.length) {
+      el.innerHTML = '<div class="bloecke-leer">Noch keine Strecken importiert.</div>';
+      return;
+    }
+    const liste = tfFilter(TF, alle);
+    if (!liste.length) {
+      el.innerHTML = `<div class="bloecke-leer">Keine Strecke passt zum Filter.
+        <button class="btn btn-ghost btn-sm" onclick="tfReset('${TF}')">Filter zurücksetzen</button></div>`;
+      tfRefresh(TF);
+      return;
+    }
+
+    el.innerHTML = `<div class="strecke-seite-grid">${liste.map(s => `
+      <div class="strecke-karte">
+        <div class="strecke-karte-bild" data-strecke-id="${s.id}"></div>
+        <div class="strecke-karte-titel">${escapeHtml(s.name)}</div>
+        <div class="strecke-karte-meta">${escapeHtml(metaText(s))}</div>
+        <div class="strecke-karte-info">
+          ${s.verwendet > 0
+            ? `${s.verwendet}× verplant`
+            : '<span class="strecke-karte-unbenutzt">nicht verwendet</span>'}
+          · ${s.punkte} Punkte${s.herkunft ? ' · ' + escapeHtml(s.herkunft) : ''}
+        </div>
+        <div class="strecke-karte-actions">
+          <a class="btn btn-ghost btn-sm" href="api/index.php?p=strecken/${s.id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>
+          <button class="btn btn-ghost btn-sm" onclick="STRECKEN.seiteUmbenennen(${s.id})">Umbenennen</button>
+          <button class="btn btn-ghost btn-sm" onclick="STRECKEN.seiteLoeschen(${s.id})">Löschen</button>
+        </div>
+      </div>`).join('')}</div>`;
+
+    el.querySelectorAll('.strecke-karte-bild[data-strecke-id]').forEach(bild => {
+      vorschauEinbinden(bild, bild.dataset.streckeId, { breite: 300, hoehe: 160, ohneText: true });
+    });
+    tfRefresh(TF);
   }
 
   let _seitenContainer = null;

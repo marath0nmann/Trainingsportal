@@ -40,11 +40,88 @@ const ADMIN_GRUPPEN = (() => {
     }
   }
 
+  // ── Gemeinsame Filterleiste (Statistikportal-Modul, via shared.php) ──
+  const TF = 'tp-gruppen';
+
+  function _filterInit() {
+    tfInit(TF, {
+      platzhalter: 'Gruppenname…',
+      rows:  () => _gruppen,
+      suche: g => [g.name],
+      spalten: [
+        { key: 'mitglieder', label: 'Mitglieder',
+          // Erst geladene Gruppen kennen ihre Mitgliederzahl – die uebrigen
+          // erscheinen unter "noch nicht geladen", statt still zu fehlen.
+          wert: g => {
+            const m = _mitglieder[g.id];
+            if (!m) return '— noch nicht geladen —';
+            return m.length ? 'mit Mitgliedern' : 'leer';
+          } },
+      ],
+      onChange: () => _rendereTabelle(),
+    });
+  }
+
   // ── Haupt-Render ────────────────────────────────────────────
+  // Rahmen und Tabelle sind getrennt: die Filterleiste darf beim Tippen nicht
+  // ersetzt werden, sonst verliert das Suchfeld nach jedem Zeichen den Fokus.
   function _render() {
     if (!_container || !_container.isConnected) return;
+    _filterInit();
 
-    const rows = _gruppen.map(g => {
+    _container.innerHTML = `
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Trainingsgruppen</span>
+          <span class="panel-count" id="gruppen-anzahl"></span>
+        </div>
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+          <p style="margin:0 0 12px;font-size:14px;color:var(--text2)">
+            Trainingsgruppen werden gemeinsam mit dem Statistikportal genutzt.
+            Hier werden sie angelegt, umbenannt und mit Mitgliedern besetzt –
+            über das 👥-Symbol je Zeile. Welche Gruppen in der Trainingsplanung
+            als Reiter erscheinen, wird dort ausgewählt.
+          </p>
+          <div id="gruppen-neu-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="gruppen-neu-name" class="settings-input" type="text"
+              placeholder="Neuer Gruppenname…" maxlength="120"
+              style="height:36px;font-size:14px;flex:1;min-width:200px;max-width:360px"
+              onkeydown="ADMIN_GRUPPEN.neuKeyDown(event)">
+            <button class="btn btn-primary btn-sm" onclick="ADMIN_GRUPPEN.anlegen()" style="height:36px;padding:0 18px">
+              + Gruppe anlegen
+            </button>
+          </div>
+        </div>
+        <div id="gruppen-filter" style="padding:0 20px"></div>
+        <div id="gruppen-tabelle"></div>
+      </div>`;
+
+    _rendereTabelle();
+  }
+
+  /** Zeichnet nur den Tabellenteil – die Filterleiste bleibt stehen. */
+  function _rendereTabelle() {
+    const el = document.getElementById('gruppen-tabelle');
+    if (!el) return;
+    _filterInit();
+
+    // Leiste einmalig einsetzen – erst wenn es ueberhaupt Gruppen gibt, und
+    // danach nie wieder ersetzen (sonst verliert das Suchfeld den Fokus).
+    const leiste = document.getElementById('gruppen-filter');
+    if (leiste && _gruppen.length && !leiste.firstElementChild) {
+      leiste.innerHTML = tfBarHtml(TF) + '<div style="height:14px"></div>';
+    }
+
+    const sichtbar = tfFilter(TF, _gruppen);
+
+    const zaehler = document.getElementById('gruppen-anzahl');
+    if (zaehler) {
+      zaehler.textContent = sichtbar.length === _gruppen.length
+        ? String(_gruppen.length)
+        : sichtbar.length + ' von ' + _gruppen.length;
+    }
+
+    const rows = sichtbar.map(g => {
       if (_editId === g.id) {
         return `<tr id="gruppen-row-${g.id}">
           <td colspan="2">
@@ -78,48 +155,22 @@ const ADMIN_GRUPPEN = (() => {
       </td></tr>`;
     }).join('');
 
-    _container.innerHTML = `
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">Trainingsgruppen (${_gruppen.length})</span>
-        </div>
-        <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
-          <p style="margin:0 0 12px;font-size:14px;color:var(--text2)">
-            Trainingsgruppen werden gemeinsam mit dem Statistikportal genutzt.
-            Hier werden sie angelegt, umbenannt und mit Mitgliedern besetzt –
-            über das 👥-Symbol je Zeile. Welche Gruppen in der Trainingsplanung
-            als Reiter erscheinen, wird dort ausgewählt.
-          </p>
-          <div id="gruppen-neu-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input id="gruppen-neu-name" class="settings-input" type="text"
-              placeholder="Neuer Gruppenname…" maxlength="120"
-              style="height:36px;font-size:14px;flex:1;min-width:200px;max-width:360px"
-              onkeydown="ADMIN_GRUPPEN.neuKeyDown(event)">
-            <button class="btn btn-primary btn-sm" onclick="ADMIN_GRUPPEN.anlegen()" style="height:36px;padding:0 18px">
-              + Gruppe anlegen
-            </button>
-          </div>
-        </div>
-        ${_gruppen.length > 0 ? `
-        <div class="table-scroll">
-          <table style="table-layout:fixed;width:100%">
-            <colgroup>
-              <col>
-              <col style="width:130px">
-            </colgroup>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>` : `
-        <div style="padding:32px;text-align:center;color:var(--text2);font-size:14px">
-          Noch keine Trainingsgruppen vorhanden.
-        </div>`}
+    el.innerHTML = sichtbar.length ? `
+      <div class="table-scroll">
+        <table class="data-table" style="table-layout:fixed;width:100%">
+          <colgroup><col><col style="width:150px"></colgroup>
+          <thead><tr><th>Name</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>` : `
+      <div style="padding:32px;text-align:center;color:var(--text2);font-size:14px">
+        ${_gruppen.length
+          ? `Keine Gruppe passt zum Filter.
+             <button class="btn btn-ghost btn-sm" onclick="tfReset('${TF}')">Filter zurücksetzen</button>`
+          : 'Noch keine Trainingsgruppen vorhanden.'}
       </div>`;
+
+    tfRefresh(TF);
 
     // Fokus auf Edit-Input setzen, wenn offen
     if (_editId !== null) {
@@ -164,11 +215,11 @@ const ADMIN_GRUPPEN = (() => {
   async function toggleMitglieder(gruppeId) {
     if (_offen.has(gruppeId)) {
       _offen.delete(gruppeId);
-      _render();
+      _rendereTabelle();
       return;
     }
     _offen.add(gruppeId);
-    _render();                       // sofort aufklappen, „Lade…" zeigen
+    _rendereTabelle();                       // sofort aufklappen, „Lade…" zeigen
     if (_mitglieder[gruppeId]) return;
     try {
       const d = await apiGet(`trainingsgruppen/${gruppeId}/mitglieder`, { silent: true });
@@ -179,7 +230,7 @@ const ADMIN_GRUPPEN = (() => {
       _verfuegbar[gruppeId] = [];
       notify('Mitglieder konnten nicht geladen werden.', 'err');
     }
-    _render();
+    _rendereTabelle();
   }
 
   // Beide Richtungen aendern die Anzeige sofort und nehmen sie bei einem
@@ -196,13 +247,13 @@ const ADMIN_GRUPPEN = (() => {
 
     _mitglieder[gruppeId] = [...m, v[idx]].sort((a, b) => a.name.localeCompare(b.name, 'de'));
     _verfuegbar[gruppeId] = v.filter((_, i) => i !== idx);
-    _render();
+    _rendereTabelle();
     try {
       await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, { add: [athId] });
     } catch (e) {
       _mitglieder[gruppeId] = m;
       _verfuegbar[gruppeId] = v;
-      _render();
+      _rendereTabelle();
       notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
@@ -215,13 +266,13 @@ const ADMIN_GRUPPEN = (() => {
 
     _mitglieder[gruppeId] = m.filter((_, i) => i !== idx);
     _verfuegbar[gruppeId] = [...v, m[idx]].sort((a, b) => a.name.localeCompare(b.name, 'de'));
-    _render();
+    _rendereTabelle();
     try {
       await apiPut(`trainingsgruppen/${gruppeId}/mitglieder`, { remove: [athId] });
     } catch (e) {
       _mitglieder[gruppeId] = m;
       _verfuegbar[gruppeId] = v;
-      _render();
+      _rendereTabelle();
       notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
@@ -244,7 +295,10 @@ const ADMIN_GRUPPEN = (() => {
         GRUPPEN.invalidate();
         notify('Gruppe „' + r.gruppe.name + '" angelegt.', 'ok');
         inp.value = '';
-        _render();
+        // Nur die Tabelle – sonst wird das Eingabefeld ersetzt, in dem der
+        // Cursor gerade steht, und die naechste Gruppe laesst sich nicht
+        // direkt hinterhertippen.
+        _rendereTabelle();
       } else {
         notify('Fehler: ' + escapeHtml(r.fehler || 'Unbekannt'), 'err');
       }
@@ -263,12 +317,12 @@ const ADMIN_GRUPPEN = (() => {
   // ── Umbenennen ──────────────────────────────────────────────
   function startEdit(id) {
     _editId = id;
-    _render();
+    _rendereTabelle();
   }
 
   function abbrechenEdit() {
     _editId = null;
-    _render();
+    _rendereTabelle();
   }
 
   function editKeyDown(e, id) {
@@ -296,7 +350,7 @@ const ADMIN_GRUPPEN = (() => {
         GRUPPEN.invalidate();
         _editId = null;
         notify('Gruppe umbenannt in „' + r.gruppe.name + '".', 'ok');
-        _render();
+        _rendereTabelle();
       } else {
         notify('Fehler: ' + escapeHtml(r.fehler || 'Unbekannt'), 'err');
       }

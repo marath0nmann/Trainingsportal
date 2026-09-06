@@ -2872,8 +2872,10 @@ body.planung-active #app-footer    { display: none; }
 }
 .athleten-error { color: var(--primary); }
 
-/* .athleten-table: Box-Stile kommen vom .panel-Wrapper; th/td von globaler app.css */
-.athleten-table { font-size: 14px; }
+/* Die Athletenliste nutzt seit v340 .data-table aus app.css – damit greifen
+   dort auch die mobilen Regeln des Statistikportals. Nur die Schriftgröße
+   und die Zellenrollen bleiben portalspezifisch. */
+#planung-athleten .data-table { font-size: 14px; }
 .athlet-row-disabled { opacity: .6; }
 .athlet-name { font-weight: 600; color: var(--text); }
 .athlet-ich { font-size: 11px; color: var(--text2); font-weight: 400; }

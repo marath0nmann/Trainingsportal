@@ -17,6 +17,40 @@ const BLOECKE = (() => {
     return state.user && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
   }
 
+  // ── Gemeinsame Filterleiste (Statistikportal-Modul, via shared.php) ──
+  const TF = 'tp-bloecke';
+  let _alleBloecke = [];   // Grunddaten, ungefiltert – Quelle der Filterleiste
+
+  // Gruppennamen für den Gruppen-Filter (aus GRUPPEN, beim Laden gefüllt)
+  let _gruppenNamen = {};   // id → name
+
+  function _filterInit() {
+    tfInit(TF, {
+      platzhalter: 'Titel oder Bemerkung…',
+      rows:  () => _alleBloecke,
+      suche: b => [b.titel, b.bemerkung],
+      spalten: [
+        { key: 'typ',   label: 'Trainingstyp',
+          wert: b => getTypLabel(b.typ || 'frei') },
+        { key: 'sicht', label: 'Sichtbarkeit',
+          wert: b => b.sichtbarkeit === 'privat' ? 'Nur ich' : 'Alle' },
+        // Mehrfachzuordnung: ein Block kann zu mehreren Gruppen gehören,
+        // jede zählt einzeln (wie die Disziplinen in der Wettkampfplanung).
+        { key: 'gruppe', label: 'Trainingsgruppe',
+          wert: b => {
+            const ids = b.gruppen_ids || [];
+            if (!ids.length) return '— alle Gruppen —';
+            return ids.map(id => _gruppenNamen[id] || ('Gruppe ' + id));
+          } },
+        { key: 'strecke', label: 'Strecke',
+          wert: b => b.strecke_id ? 'hinterlegt' : 'ohne' },
+        { key: 'segmente', label: 'Segmente',
+          wert: b => (b.seg_count ?? 0) > 0 ? 'vorhanden' : 'keine' },
+      ],
+      onChange: () => _rendereListe(),
+    });
+  }
+
   // ── Hauptseite ────────────────────────────────────────────
   async function render(main) {
     main.innerHTML = `
@@ -30,6 +64,7 @@ const BLOECKE = (() => {
         <p class="bloecke-intro">
           Trainingsblöcke sind datumsunabhängige Vorlagen. Per „Im Kalender planen" werden sie als konkrete Trainingseinheit auf ein Datum gelegt.
         </p>
+        <div id="bloecke-filter"></div>
         <div id="bloecke-list" class="bloecke-loading">Lade Blöcke…</div>
       </div>`;
     await ladeListe();
@@ -39,12 +74,46 @@ const BLOECKE = (() => {
     const container = document.getElementById('bloecke-list');
     if (!container) return;
     try {
-      const [data] = await Promise.all([apiGet('bloecke', { silent: true }), STRECKEN.load()]);
-      const bloecke = data.bloecke || [];
-      if (!bloecke.length) {
+      const [data, gruppen] = await Promise.all([
+        apiGet('bloecke', { silent: true }),
+        GRUPPEN.laden().catch(() => []),
+        STRECKEN.load(),
+      ]);
+      _alleBloecke = data.bloecke || [];
+      _gruppenNamen = {};
+      gruppen.forEach(g => { _gruppenNamen[g.id] = g.name; });
+      if (!_alleBloecke.length) {
+        const leiste = document.getElementById('bloecke-filter');
+        if (leiste) leiste.innerHTML = '';
         container.innerHTML = `<div class="bloecke-leer">Noch keine Trainingsblöcke vorhanden.${istTrainer() ? ' Erstelle den ersten Block mit „+ Neuer Block".' : ''}</div>`;
         return;
       }
+      // Leiste einmalig setzen – sonst verliert das Suchfeld bei jedem
+      // Tastendruck den Fokus (siehe Kopf von 09b_tabellenfilter.js).
+      _filterInit();
+      const leiste = document.getElementById('bloecke-filter');
+      if (leiste && !leiste.firstChild) leiste.innerHTML = tfBarHtml(TF);
+      _rendereListe();
+    } catch (e) {
+      container.innerHTML = `<div class="bloecke-leer bloecke-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
+    }
+  }
+
+  /** Zeichnet nur den Listenteil – die Filterleiste bleibt stehen. */
+  function _rendereListe() {
+    const container = document.getElementById('bloecke-list');
+    if (!container) return;
+    _filterInit();
+    const bloecke = tfFilter(TF, _alleBloecke);
+
+    if (!bloecke.length) {
+      container.innerHTML = `<div class="bloecke-leer">Kein Block passt zum Filter.
+        <button class="btn btn-ghost btn-sm" onclick="tfReset('${TF}')">Filter zurücksetzen</button></div>`;
+      tfRefresh(TF);
+      return;
+    }
+
+    {
 
       // Nach Typ gruppieren (Reihenfolge der Typen aus Config)
       const typen = getTypen();
@@ -96,9 +165,8 @@ const BLOECKE = (() => {
       container.querySelectorAll('.block-strecke-thumb[data-strecke-id]').forEach(el => {
         STRECKEN.vorschauEinbinden(el, el.dataset.streckeId, { breite: 260, hoehe: 120, ohneText: true });
       });
-    } catch (e) {
-      container.innerHTML = `<div class="bloecke-leer bloecke-error">Fehler: ${escapeHtml(e.message || '')}</div>`;
     }
+    tfRefresh(TF);
   }
 
   // Extrahiert Tour-ID aus Komoot-URL → Embed-URL (lokale Kopie des globalen Helpers)
