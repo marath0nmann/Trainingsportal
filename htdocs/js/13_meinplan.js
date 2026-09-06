@@ -142,7 +142,6 @@ const MEINPLAN = (() => {
   }
 
   function _openModal(einheit, datum, prefill, fuer) {
-    const typenCfg = getTypen();
     const fuerArg  = (fuer != null && fuer !== '' && Number(fuer) > 0) ? parseInt(fuer, 10) : null;
 
     const isNew    = !einheit;
@@ -154,10 +153,6 @@ const MEINPLAN = (() => {
     const d_km     = e.distanz_km != null ? e.distanz_km : '';
     const d_bem    = e.bemerkung   || '';
     const d_ref    = prefill?.ref_einheit_id || e.ref_einheit_id || '';
-
-    const typOptionen = typenCfg.map(t =>
-      `<option value="${escapeHtml(t.slug)}"${t.slug === d_typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`
-    ).join('');
 
     const cont = document.getElementById('modal-container');
     cont.innerHTML = `
@@ -173,30 +168,15 @@ const MEINPLAN = (() => {
           <div class="modal-body">
             ${d_ref ? `<div class="meinplan-ref-hint">Aus dem Teamplan übernommen</div>` : ''}
             <div class="ed-grid">
-              <div class="ed-fg">
-                <label>Datum *</label>
-                <input type="date" id="mp-datum" value="${escapeHtml(d_datum)}">
-              </div>
-              <div class="ed-fg">
-                <label>Uhrzeit</label>
-                <input type="time" id="mp-uhrzeit" value="${escapeHtml(d_uhr)}">
-              </div>
-              <div class="ed-fg">
-                <label>Typ</label>
-                <select id="mp-typ">${typOptionen}</select>
-              </div>
-              <div class="ed-fg ed-fg-wide">
-                <label>Bezeichnung *</label>
-                <input type="text" id="mp-titel" value="${escapeHtml(d_titel)}" placeholder="z.B. Dauerlauf 10 km">
-              </div>
-              <div class="ed-fg">
-                <label>Distanz (km)</label>
-                <input type="number" id="mp-km" value="${escapeHtml(String(d_km))}" min="0" max="999.9" step="0.1" placeholder="z.B. 10.5">
-              </div>
-              <div class="ed-fg ed-fg-wide">
-                <label>Bemerkung</label>
-                <textarea id="mp-bemerkung" rows="2">${escapeHtml(d_bem)}</textarea>
-              </div>
+              ${/* Kein Treffpunkt und keine Sichtbarkeit: eine private Einheit
+                    steht nur im eigenen Plan. Bewusst auch keine Standard-
+                    Uhrzeit des Vereins – die gilt fuer Gruppentrainings. */ ''}
+              ${FELDER.datum('mp-datum', d_datum)}
+              ${FELDER.uhrzeit('mp-uhrzeit', d_uhr)}
+              ${FELDER.typ('mp-typ', d_typ)}
+              ${FELDER.titel('mp-titel', d_titel)}
+              ${FELDER.distanz('mp-km', d_km)}
+              ${FELDER.bemerkung('mp-bemerkung', d_bem)}
             </div>
             <input type="hidden" id="mp-ref" value="${escapeHtml(String(d_ref))}">
             <div class="ed-footer">

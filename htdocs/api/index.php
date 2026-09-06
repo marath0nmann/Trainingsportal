@@ -2693,7 +2693,8 @@ function handleConfig(): void {
     try {
         ensureTypenTabelle();
         $typenRows = DB::fetchAll(
-            'SELECT slug, bezeichnung, farbe, reihenfolge, fallback_km, ist_kein_training, hat_strecke
+            'SELECT slug, bezeichnung, farbe, reihenfolge, fallback_km, ist_kein_training,
+                    hat_strecke, default_treffpunkt_id
                FROM ' . DB::tbl('training_typen') . '
               WHERE aktiv = 1
               ORDER BY reihenfolge, slug'
@@ -2707,6 +2708,11 @@ function handleConfig(): void {
                 'fallback_km'       => $r['fallback_km'] !== null ? (float)$r['fallback_km'] : null,
                 'ist_kein_training' => !empty($r['ist_kein_training']),
                 'hat_strecke'       => !empty($r['hat_strecke']),
+                // Vorbelegter Treffpunkt neuer Einheiten dieses Typs. Der
+                // Editor las das Feld schon immer aus appConfig.typen – nur
+                // ausgeliefert wurde es bis v343 nicht.
+                'default_treffpunkt_id' => $r['default_treffpunkt_id'] !== null
+                    ? (int)$r['default_treffpunkt_id'] : null,
             ];
         }, $typenRows);
     } catch (Throwable $_) {
