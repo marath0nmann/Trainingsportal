@@ -487,19 +487,48 @@ async function logout() {
   window.location.reload();
 }
 
-function toggleBurgerMenu() {
-  const drawer = document.getElementById('mobile-nav-drawer');
+// Der Drawer steht in der geteilten app.css auf `top: 0` – also hinter dem
+// Header. Das Statistikportal setzt die tatsaechliche Header-Hoehe beim
+// Oeffnen; das Trainingsportal tat das nie, weshalb der erste Menuepunkt
+// (zuletzt „Kalender") verdeckt war. Hoehe wird beim Oeffnen gemessen, nicht
+// fest verdrahtet: der Header ist auf schmalen Geraeten niedriger.
+function _burgerPositionieren(drawer, overlay) {
+  const kopf = document.querySelector('header');
+  const h = (kopf && kopf.offsetHeight) || 0;
+  if (drawer)  drawer.style.top  = h + 'px';
+  if (overlay) overlay.style.top = h + 'px';
+}
+
+function oeffneBurgerMenu() {
+  const drawer  = document.getElementById('mobile-nav-drawer');
   const overlay = document.getElementById('mobile-nav-overlay');
   if (!drawer || !overlay) return;
-  const open = drawer.classList.toggle('open');
-  overlay.classList.toggle('open', open);
-  drawer.style.visibility = open ? 'visible' : 'hidden';
+  _burgerPositionieren(drawer, overlay);
+  drawer.style.visibility = 'visible';
+  drawer.classList.add('open');
+  overlay.classList.add('open');
+  // app.css verwandelt die drei Striche per .open in ein X – bisher ungenutzt.
+  const btn = document.getElementById('burger-btn');
+  if (btn) { btn.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+  // Hintergrund nicht mitscrollen lassen, solange das Menü offen ist.
+  document.body.style.overflow = 'hidden';
 }
+
 function closeBurgerMenu() {
-  const drawer = document.getElementById('mobile-nav-drawer');
+  const drawer  = document.getElementById('mobile-nav-drawer');
   const overlay = document.getElementById('mobile-nav-overlay');
   if (drawer)  { drawer.classList.remove('open'); drawer.style.visibility = 'hidden'; }
   if (overlay) overlay.classList.remove('open');
+  const btn = document.getElementById('burger-btn');
+  if (btn) { btn.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
+  document.body.style.overflow = '';
+}
+
+function toggleBurgerMenu() {
+  const drawer = document.getElementById('mobile-nav-drawer');
+  if (!drawer) return;
+  if (drawer.classList.contains('open')) closeBurgerMenu();
+  else                                   oeffneBurgerMenu();
 }
 
 // ── Admin-Seite mit Sub-Navigation ──────────────────────────
