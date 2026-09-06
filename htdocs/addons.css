@@ -874,6 +874,54 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
 
 /* ── Wettkampfplanung-Tabelle ── */
 /* Globale th/td-Regeln aus der shared app.css greifen; hier nur Spezifisches */
+/* ── Wettkampfplanung: Segmente über der Liste ───────────────
+   Die drei Status-Gruppen (Zu entscheiden · In Bearbeitung · Abgeschlossen)
+   liegen sichtbar oben statt in einem Popover. Athleten landen dadurch
+   standardmäßig bei dem, was auf sie wartet. */
+.wkp-segmente {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.wkp-segment {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; min-height: 40px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text2);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.wkp-segment:hover { border-color: var(--primary); color: var(--text); }
+.wkp-segment.is-aktiv {
+  background: var(--primary); border-color: var(--primary); color: #fff;
+}
+.wkp-segment-zahl {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 10px; background: var(--surf2); color: var(--text2);
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.wkp-segment.is-aktiv .wkp-segment-zahl {
+  background: rgba(255,255,255,.24); color: #fff;
+}
+
+/* Karte: zugeklappt bis jemand sie braucht – 380px und ein Leaflet-Ladevorgang
+   bei jedem Seitenaufruf sind für die meisten Besuche zu viel. */
+.wkp-karte-schalter {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 11px 14px; min-height: 44px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; text-align: left;
+}
+.wkp-karte-schalter:hover { border-color: var(--primary); }
+.wkp-karte-pfeil { color: var(--text2); font-size: 11px; }
+
+@media (max-width: 560px) {
+  .wkp-segment { flex: 1 1 calc(50% - 3px); justify-content: center; }
+}
+
 .wkp-table { min-width: 560px; }
 .wkp-th-cb, .wkp-td-cb { width: 36px; text-align: center !important; }
 .wkp-url-link { font-size: 11px; color: var(--primary); text-decoration: none; }
@@ -2414,6 +2462,19 @@ body.planung-active #app-footer    { display: none; }
 .dash-balken-text { font-size: 12px; color: var(--text2); margin-top: 6px; }
 .dash-kein-ziel { font-size: 13px; color: var(--text2); }
 
+/* Planungsstand (Trainer): was in den nächsten vier Wochen fehlt */
+.dash-pruefungen { list-style: none; margin: 0; padding: 0; }
+.dash-pruefung {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.dash-pruefung:last-child { border-bottom: none; }
+.dash-pruefung-icon { color: var(--primary); font-size: 14px; flex-shrink: 0; }
+.dash-pruefung.is-ok .dash-pruefung-icon { color: var(--green, #1a8a3a); }
+.dash-pruefung-text { flex: 1; min-width: 0; }
+.dash-pruefung.is-ok .dash-pruefung-text { color: var(--text2); }
+
 /* Wettkampf-Entscheidungen */
 .dash-entscheidungen { list-style: none; margin: 0; padding: 0; }
 .dash-entscheidung {
@@ -2683,14 +2744,27 @@ body.planung-active #app-footer    { display: none; }
 .planung-tab-config:hover { color: var(--text); }
 /* Tab mit Gruppenfarb-Dot */
 .planung-tab-wrap { display: inline-flex; align-items: center; gap: 5px; }
-.planung-tab-color {
-  width: 10px; height: 10px; padding: 0; flex-shrink: 0;
-  border: none; border-radius: 50%;
+/* Der Reiter zeigt die Gruppenfarbe nur noch an; gesetzt wird sie unter
+   Admin → Gruppen (bis v340 steckte hier ein <input type="color">). */
+.planung-tab-punkt {
+  width: 10px; height: 10px; flex-shrink: 0; border-radius: 50%;
+}
+
+/* Farbwähler in den Gruppen-Stammdaten */
+.gruppen-farbe-wrap { display: inline-flex; vertical-align: middle; margin-right: 8px; }
+.gruppen-farbe {
+  width: 20px; height: 20px; padding: 0; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 50%;
   background: none; cursor: pointer; -webkit-appearance: none; appearance: none;
 }
-.planung-tab-color::-webkit-color-swatch-wrapper { padding: 0; }
-.planung-tab-color::-webkit-color-swatch { border: none; border-radius: 50%; }
-.planung-tab-color::-moz-color-swatch { border: none; border-radius: 50%; }
+.gruppen-farbe::-webkit-color-swatch-wrapper { padding: 0; }
+.gruppen-farbe::-webkit-color-swatch { border: none; border-radius: 50%; }
+.gruppen-farbe::-moz-color-swatch { border: none; border-radius: 50%; }
+.gruppen-farbe-reset {
+  margin-left: 6px; font-size: 13px; line-height: 1;
+  color: var(--text2); background: none; border: none; cursor: pointer;
+}
+.gruppen-farbe-reset:hover { color: var(--primary); }
 .planung-gruppen-hint {
   font-size: 12px; color: var(--text2);
 }

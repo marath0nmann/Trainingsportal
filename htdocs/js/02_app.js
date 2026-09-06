@@ -259,20 +259,35 @@ function navigate(tab) {
   }
 }
 
-// ── Schmale Bildschirme: Listenansicht statt Monatsraster ──────────────
+// ── Kalender oder Liste: eine gemerkte Entscheidung ────────────────────
 // Bei sieben Spalten bleiben unter 720px ~45px pro Tag – Titel sind dort nur
-// noch Ellipsen. #kalender landet deshalb auf der Liste. Ausnahme: der Nutzer
-// hat den Kalender in dieser Sitzung bewusst über den Umschalter gewählt.
+// noch Ellipsen. Deshalb ist die Liste auf schmalen Geräten die Voreinstellung.
+//
+// Bis v340 leitete #kalender dort *jedes Mal still* auf #liste um, es sei denn,
+// eine sessionStorage-Marke sagte etwas anderes – eine Regel, die niemand sah,
+// und eine Entscheidung, die beim nächsten Tab-Wechsel wieder verfiel. Jetzt
+// gilt: der sichtbare Umschalter entscheidet, die Wahl hält dauerhaft, und die
+// Breite bestimmt nur die Voreinstellung beim allerersten Besuch.
 function istSchmal() { return window.innerWidth < 720; }
 
-function _kalMobilErlaubt() {
-  try { return sessionStorage.getItem('training_kal_mobil') === '1'; } catch (_) { return false; }
-}
-function _kalMobilSetzen(an) {
+const KAL_ANSICHT_KEY = 'training_kal_ansicht';   // 'kalender' | 'liste'
+
+/** Gemerkte Ansichtswahl oder null, wenn noch nie eine getroffen wurde. */
+function kalAnsichtWahl() {
   try {
-    if (an) sessionStorage.setItem('training_kal_mobil', '1');
-    else    sessionStorage.removeItem('training_kal_mobil');
-  } catch (_) {}
+    const v = localStorage.getItem(KAL_ANSICHT_KEY);
+    return (v === 'kalender' || v === 'liste') ? v : null;
+  } catch (_) { return null; }
+}
+
+/** Merkt die Wahl dauerhaft – aufgerufen aus dem sichtbaren Umschalter. */
+function kalAnsichtMerken(ansicht) {
+  try { localStorage.setItem(KAL_ANSICHT_KEY, ansicht); } catch (_) {}
+}
+
+/** Welche Ansicht gilt? Gemerkte Wahl, sonst nach Bildschirmbreite. */
+function kalAnsicht() {
+  return kalAnsichtWahl() || (istSchmal() ? 'liste' : 'kalender');
 }
 
 /** 'YYYY-MM' → 'YYYY-Qn'; ohne/ungültiges Argument das laufende Quartal. */
@@ -290,7 +305,7 @@ function _quartalAusMonat(ym) {
 // auf dem Smartphone die Liste, sonst der Monatskalender.
 function startHash() {
   if (state.user) return '#dashboard';
-  if (istSchmal()) {
+  if (kalAnsicht() === 'liste') {
     const now = new Date();
     const q = Math.floor(now.getMonth() / 3) + 1;
     return `#liste/${now.getFullYear()}-Q${q}`;
@@ -298,7 +313,6 @@ function startHash() {
   return '#kalender';
 }
 function navigateStart() {
-  _kalMobilSetzen(false);
   location.hash = startHash();
 }
 
@@ -381,7 +395,10 @@ function renderPage() {
     return;
   }
   if (state.tab === 'kalender') {
-    if (istSchmal() && !_kalMobilErlaubt()) {
+    // Umleiten nur, solange keine eigene Wahl getroffen wurde und der
+    // Bildschirm schmal ist. Wer den Umschalter benutzt hat, bekommt, was
+    // er gewählt hat – auch auf dem Handy.
+    if (!kalAnsichtWahl() && istSchmal()) {
       location.replace(`#liste/${_quartalAusMonat(args && args[0])}`);
       return;
     }
@@ -1997,9 +2014,8 @@ function renderSegmentBlocksHtml(seg, paceData, typ) {
 }
 
 function navigateKalender(monthYM) {
-  // Bewusster Griff zum Kalender – auf schmalen Screens die Umleitung zur
-  // Liste für diese Sitzung aussetzen.
-  _kalMobilSetzen(true);
+  // Bewusster Griff zum Kalender – die Wahl gilt ab jetzt dauerhaft.
+  kalAnsichtMerken('kalender');
   location.hash = `#kalender/${monthYM}`;
 }
 
@@ -2043,7 +2059,7 @@ function navigateListeFromKal(monthYM) {
 }
 
 function navigateListe(quarterKey) {
-  _kalMobilSetzen(false);
+  kalAnsichtMerken('liste');
   if (!quarterKey) {
     const now = new Date();
     quarterKey = `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
