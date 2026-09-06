@@ -1,10 +1,19 @@
 // ============================================================
-// Trainingsportal – Profil-Modal
+// Trainingsportal – Seite „Mein Konto" (#konto)
 // ============================================================
-// Öffnet sich per Klick auf den Avatar (oben rechts).
-// Zwei Sektionen:
-//   1. Pace-Referenzen – Bestzeit/manuell pro Distanz (Admin gibt Distanzen vor)
-//   2. Weg zum Training – Typ+Treffpunkt-Kombis mit An-/Abreise-km
+// Erreichbar über das Namensfeld im Kopf und den Menuepunkt im mobilen
+// Drawer. Ein Panel je Thema, jedes speichert fuer sich:
+//   1. Profilbild        – nur Anzeige, gepflegt im Statistikportal
+//   2. Erscheinungsbild  – Automatisch / Hell / Dunkel (ohne Speichern)
+//   3. Pace-Referenzen   – Bestzeit oder manuell je Distanz
+//   4. Weg zum Training  – Typ+Treffpunkt-Kombis mit An-/Abreise-km
+//   5. Workout-Datei     – Format fuer den persoenlichen Kalender-Feed
+//   6. Trainingsgruppen  – eigene Mitgliedschaften
+//   7. Plan freigeben    – welcher Trainer den eigenen Plan sehen darf
+//
+// Bis v336 war das ein einziges Modal mit einem gemeinsamen
+// Speichern-Knopf am Ende. Aufbau jetzt wie die Konto-Seite des
+// Statistikportals.
 // ============================================================
 
 const PROFIL = (() => {
@@ -243,6 +252,31 @@ const PROFIL = (() => {
     return '';
   }
 
+  // Profilbild: im Trainingsportal nur lesend. Ohne diesen Abschnitt wirkte
+  // der Avatar im Kopf wie ein Knopf, der nichts tut.
+  function _buildAvatarSection() {
+    const u = state.user || {};
+    const name = u.vorname || u.name || u.benutzername || '';
+    const url  = (window.appConfig && appConfig.statistikportal_url) || '';
+    const bild = u.avatar_pfad
+      ? `<img src="${assetUrl(u.avatar_pfad)}" alt="${escapeHtml(name)}"
+           style="width:100%;height:100%;object-fit:cover;border-radius:50%"
+           onerror="this.style.display='none'">`
+      : `<span style="font-size:24px;font-weight:700;font-family:'Barlow Condensed',sans-serif">${
+          escapeHtml((name.trim()[0] || '?').toUpperCase())}</span>`;
+
+    return `<div class="konto-avatar-zeile">
+      <div class="konto-avatar">${bild}</div>
+      <div>
+        ${u.avatar_pfad ? '' : '<div class="konto-avatar-leer">Noch kein Profilbild hinterlegt.</div>'}
+        ${url
+          ? `<a class="btn btn-ghost btn-sm" href="${escapeHtml(url.replace(/\/+$/, ''))}/#konto"
+               target="_blank" rel="noopener">Im Statistikportal ändern ↗</a>`
+          : `<span style="font-size:13px;color:var(--text2)">Zu ändern im Statistikportal unter „Konto".</span>`}
+      </div>
+    </div>`;
+  }
+
   // Theme-Umschalter (auto/hell/dunkel) – identisch zum Statistikportal.
   // setTheme() aus 09a_utils_shared.js schreibt localStorage, setzt data-theme
   // und faerbt anschliessend alle Buttons in #theme-btns neu ein. Deshalb darf
@@ -367,6 +401,11 @@ const PROFIL = (() => {
           <h1 class="konto-titel">&#x1F464; Mein Konto</h1>
           <div class="konto-sub">${escapeHtml(displayName)}${displayRolle ? ' · ' + escapeHtml(displayRolle) : ''}</div>
         </div>
+
+        ${_panel('&#x1F464;', 'Profilbild',
+          'Das Profilbild wird gemeinsam mit dem Statistikportal genutzt und dort gepflegt – ' +
+          'so gibt es in beiden Portalen dasselbe Bild.',
+          _buildAvatarSection())}
 
         ${_panel('&#x1F319;', 'Erscheinungsbild',
           '„Automatisch“ folgt der Einstellung deines Geräts. Die Wahl gilt für dieses Gerät ' +

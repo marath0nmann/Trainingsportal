@@ -2723,6 +2723,10 @@ function handleConfig(): void {
     }
     $cfg['kalender_farben'] = $kalFarben;
 
+    // Adresse des Statistikportals – u. a. fuer den Verweis auf das dortige
+    // Profil, wo Avatare gepflegt werden.
+    $cfg['statistikportal_url'] = Settings::get('statistikportal_url', '');
+
     echo json_encode(['ok' => true, 'config' => $cfg]);
 }
 

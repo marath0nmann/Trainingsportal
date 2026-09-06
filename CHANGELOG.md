@@ -1,5 +1,12 @@
 # Changelog
 
+## v342
+- **Ein Bedienmodell für Kalenderkacheln statt zwei.** Am Desktop zeigte ein Hover-Popover die reiche Vorschau *samt Aktionen* – „In meinen Plan", „Absagen", der Abo-Schalter. Auf Touch-Geräten steigt dieses Popover bewusst aus (`mouseleave` feuert dort nicht zuverlässig), womit genau diese Aktionen auf dem Handy unerreichbar waren. Jetzt liegen alle Aktionen in der Detailkarte, die Klick und Tap gleichermaßen öffnen; das Popover ist eine reine Vorschau mit dem Hinweis „Klick für Details und Aktionen".
+- **In der Trainingsplanung öffnet ein Tap jetzt überhaupt etwas.** Die Kacheln dort hatten gar keinen `onclick` – auf dem Handy war eine Einheit nur über die drei kleinen Icons erreichbar, ihre Details überhaupt nicht. Die Detailkarte bringt dort Bearbeiten, Absagen und Wiederherstellen mit.
+- **Alt-Routen an einer Stelle.** `#bloecke`, `#treffpunkte`, `#einstellungen` und `#admin/trainings` lagen als einzelne `location.replace()`-Blöcke zwischen den echten Seiten und ließen die Router-Kette länger aussehen, als sie ist. Sie stehen jetzt in `NAV_ALT_ROUTEN` bzw. `ADMIN_ALT_ROUTEN`.
+- **Neu im Konto: „Profilbild".** Der Avatar im Kopf wirkte wie ein Knopf, der nichts tut – ändern lässt er sich nur im Statistikportal. Das Konto zeigt das Bild jetzt mit einem Direktlink dorthin. Der Endpunkt `config` liefert dafür `statistikportal_url` mit.
+- **Admin → Wettkämpfe heißt jetzt „Wettkampf-Stammdaten".** Der Reiter pflegt Serien, Disziplinen und Orte; die Hauptseite „Wettkampfplanung" ist die persönliche Sicht darauf. Die Trennung ist richtig, nur sagten die Namen das nicht.
+
 ## v341
 - **Wettkampfplanung: die Status-Gruppen liegen jetzt sichtbar oben.** Acht Status, versteckt in einem Popover, dazu zwei Ausblend-Schalter, sechs Sortierschlüssel, Mehrfachauswahl und eine Karte – für einen Athleten, der einmal im Monat „ich bin dabei" anklickt, war das die schwerste Seite des Portals. Über der Liste stehen jetzt vier Segmente: **Zu entscheiden · In Bearbeitung · Abgeschlossen · Alle**, jeweils mit Anzahl. Die Seite öffnet mit „Zu entscheiden" – dem, was tatsächlich auf einen wartet. Die Wahl wird je Gerät gemerkt.
 - Das Status-Popover ist damit entfallen, ebenso der Schalter „passt nicht ausblenden" (der Status liegt in „Abgeschlossen"). Wer einen einzelnen Status braucht, findet ihn als Spalte **Status** in der Filterleiste. Die Kopfzeile sagt jetzt in einem Satz, worum es geht: „7 warten auf deine Entscheidung" statt einer Aufzählung aller Statuszahlen.
