@@ -2378,6 +2378,12 @@ body.planung-active #app-footer    { display: none; }
   .pgw-zeile { padding: 13px 16px; }
 }
 
+/* Papierkorb: endgueltig loeschen – der einzige Knopf im Portal, hinter dem
+   Daten wirklich verschwinden. Entsprechend zurueckhaltend, bis man darauf
+   zeigt. */
+.pk-endgueltig { color: var(--text2); }
+.pk-endgueltig:hover { color: var(--primary); border-color: var(--primary); }
+
 /* ── Admin → Gruppen: Mitgliederzeile ─────────────────────── */
 .gruppen-mitglieder-zeile td { background: var(--surf2); padding: 0 !important; }
 .gruppen-mitgl-lade { padding: 14px 16px; color: var(--text2); font-size: 13px; }

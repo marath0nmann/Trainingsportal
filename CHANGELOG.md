@@ -1,5 +1,10 @@
 # Changelog
 
+## v345
+- **Der Papierkorb lässt sich jetzt leeren.** Bisher konnte er nur wiederherstellen – archivierte Datensätze blieben für immer liegen. Neu ist ein 🗑️ je Zeile für einen einzelnen Eintrag und „Papierkorb leeren…" für alles ab einem wählbaren Alter (eine 0 leert vollständig). Beides fragt in zwei Stufen nach und nennt hinterher die Zahl der gelöschten Datensätze. Zusammengehörige Kindzeilen verschwinden mit – sonst blieben Segmente ohne Einheit als Karteileichen zurück. Das ist der einzige Ort im Portal, an dem Daten wirklich verschwinden; überall sonst archiviert `archiviereUndLoesche()`.
+- **Kein Zähler mehr an „Wettkampfplanung".** Die Zahl der offenen Entscheidungen steht seit v341 zweimal daneben: als Segment „Zu entscheiden" auf der Seite selbst und als Kachel auf der Übersicht. Die zugehörige Abfrage lief bei jedem Seitenaufbau mit und ist ebenfalls entfallen.
+- **„Übersicht" ist kein eigener Menüpunkt mehr.** Ein Klick auf das Vereinslogo führt dorthin – das gilt auch auf dem Smartphone, wo das Logo im Kopf sichtbar bleibt. Die Hauptnavigation hat damit wieder zwei bzw. vier Punkte statt drei bzw. fünf.
+
 ## v344
 - **Kartenlisten und Badges bauen die geteilten Bausteine nicht mehr nach.** Trainingsblöcke, Strecken- und Treffpunktkarten definierten je eine eigene Kartenfläche – dreimal fast dasselbe, aber mit unterschiedlicher Rahmenstärke (1px vs 1.5px) und unterschiedlichem Radius (10px vs `var(--radius)`). Sie nutzen jetzt `.panel` aus der geteilten `app.css` und behalten nur, was sie unterscheidet: die Typ-Akzentfarbe des Blocks, das Kartenbild des Treffpunkts, die Innenaufteilung der Strecke.
 - Dasselbe bei den Badges: Trainingstyp, Sichtbarkeit, Zugriffsstufe und Listen-Typ hatten vier fast gleiche Grundformen. Basis ist jetzt `.badge` aus `app.css` plus die eine Abweichung `.badge-kompakt` – das Trainingsportal setzt Badges in enge Kalenderzellen, wo die Pillenform des Statistikportals zu breit ist. Die vier Klassen tragen nur noch ihre Farbe.

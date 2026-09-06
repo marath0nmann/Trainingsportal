@@ -160,6 +160,7 @@ const ADMIN_ALT_ROUTEN = {
 // Seiten, die keinen eigenen Nav-Eintrag haben, aber im Mobil-Header
 // einen Titel brauchen (Unterseiten und Alt-Routen).
 const NAV_ALIAS_LABEL = {
+  dashboard:     'Übersicht',
   konto:         'Mein Konto',
   liste:         'Kalender',
   treffpunkte:   'Treffpunkte',
@@ -178,11 +179,12 @@ function navTabs() {
   const isAdmin   = !!u && u.rolle === 'admin';
   const isTrainer = isAdmin || (!!u && u.rolle === 'trainer');
 
+  // Die Übersicht hat bewusst keinen eigenen Menüpunkt: das Vereinslogo im
+  // Kopf führt dorthin (navigateStart), und ein Eintrag mehr in einer Leiste
+  // mit vier Punkten kostet mehr, als er bringt.
   const tabs = [
-    { id: 'dashboard',        icon: '&#x1F3E0;', label: 'Übersicht' },
     { id: 'kalender',         icon: '&#x1F4C5;', label: 'Kalender' },
-    { id: 'wettkampfplanung', icon: '&#x1F3C5;', label: 'Wettkampfplanung',
-      badge: navBadges.wettkampf_offen },
+    { id: 'wettkampfplanung', icon: '&#x1F3C5;', label: 'Wettkampfplanung' },
   ];
   if (isTrainer) {
     // Trainings ohne Treffpunkt sind eine Planungslücke – der Zähler gehört

@@ -6961,6 +6961,61 @@ function handlePapierkorb(string $method, string $sub): void
         return;
     }
 
+    // ── Endgueltig loeschen ──────────────────────────────────
+    // Der einzige Ort im Portal, an dem Daten wirklich verschwinden. Deshalb
+    // ausschliesslich hier, nur fuer Admins und nur auf ausdrueckliche
+    // Anforderung – alles andere loescht ueber archiviereUndLoesche(), also
+    // gar nicht.
+    //
+    // DELETE /admin/papierkorb/{id}         – ein Eintrag samt seiner Kinder
+    // DELETE /admin/papierkorb?vor_tagen=N  – alles, was aelter als N Tage ist
+    if ($method === 'DELETE') {
+        if (ctype_digit($sub)) {
+            $archivId = (int)$sub;
+            $row = DB::fetchOne("SELECT * FROM `{$tg}` WHERE id = ?", [$archivId]);
+            if (!$row) {
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'fehler' => 'Eintrag nicht gefunden']);
+                return;
+            }
+            // Die im selben Vorgang archivierten Kindzeilen mitnehmen – sonst
+            // blieben Segmente ohne Einheit als Karteileichen zurueck.
+            $anz = 1;
+            $daten = json_decode((string)$row['daten'], true);
+            $elternId = (is_array($daten) && isset($daten['id'])) ? (int)$daten['id'] : 0;
+            if ($elternId) {
+                foreach (_archivKinder((string)$row['tabelle']) as [$kindTabelle, $kindSpalte]) {
+                    foreach (DB::fetchAll("SELECT id, daten FROM `{$tg}` WHERE tabelle = ?", [$kindTabelle]) as $k) {
+                        $kd = json_decode((string)$k['daten'], true);
+                        if (is_array($kd) && (int)($kd[$kindSpalte] ?? 0) === $elternId) {
+                            DB::query("DELETE FROM `{$tg}` WHERE id = ?", [(int)$k['id']]);
+                            $anz++;
+                        }
+                    }
+                }
+            }
+            DB::query("DELETE FROM `{$tg}` WHERE id = ?", [$archivId]);
+            echo json_encode(['ok' => true, 'geloescht' => $anz]);
+            return;
+        }
+
+        if ($sub === '') {
+            // 0 = restlos leeren; sonst nur, was aelter als N Tage ist.
+            $vorTagen = isset($_GET['vor_tagen']) ? max(0, min(3650, (int)$_GET['vor_tagen'])) : 0;
+            if ($vorTagen > 0) {
+                $anz = DB::fetchOne(
+                    "SELECT COUNT(*) c FROM `{$tg}` WHERE geloescht_am < DATE_SUB(NOW(), INTERVAL {$vorTagen} DAY)"
+                )['c'] ?? 0;
+                DB::query("DELETE FROM `{$tg}` WHERE geloescht_am < DATE_SUB(NOW(), INTERVAL {$vorTagen} DAY)");
+            } else {
+                $anz = DB::fetchOne("SELECT COUNT(*) c FROM `{$tg}`")['c'] ?? 0;
+                DB::query("DELETE FROM `{$tg}`");
+            }
+            echo json_encode(['ok' => true, 'geloescht' => (int)$anz]);
+            return;
+        }
+    }
+
     http_response_code(404);
     echo json_encode(['ok' => false, 'fehler' => 'Endpoint nicht gefunden']);
 }
@@ -7027,29 +7082,13 @@ function handleBadges(string $method): void
     $user = Auth::check();
     if (!$user) { echo json_encode(['ok' => true, 'badges' => []]); return; }
 
-    $userId  = (int)$user['id'];
     $istAdmin = ($user['rolle'] ?? '') === 'admin';
-    $badges  = [];
+    $badges   = [];
 
-    // Wettkampfplanung: eigene Veranstaltungen dieses Jahres, die noch eine
-    // Entscheidung brauchen. Ohne Status-Zeile gilt eine Veranstaltung als
-    // "offen" – genau das ist der Fall, den der Zaehler sichtbar machen soll.
-    try {
-        $vs  = DB::tbl('veranstaltung_serien');
-        $twp = DB::tbl('training_wettkampf_planung');
-        $tst = DB::tbl('training_wettkampf_status');
-        $badges['wettkampf_offen'] = (int)(DB::fetchOne("
-            SELECT COUNT(*) c
-            FROM `{$vs}` vs
-            JOIN `{$twp}` wp ON wp.serie_id = vs.id AND COALESCE(wp.aktiv, 1) = 1
-            LEFT JOIN `{$tst}` tst ON tst.serie_id = vs.id
-                                  AND tst.benutzer_id = ?
-                                  AND tst.jahr = ?
-            WHERE wp.naechstes_datum >= CURDATE()
-              AND (tst.status IS NULL
-                   OR tst.status IN ('offen', 'in_klaerung', 'anmeldung_erforderlich'))
-        ", [$userId, (int)date('Y')])['c'] ?? 0);
-    } catch (Throwable $e) { $badges['wettkampf_offen'] = 0; }
+    // Kein Zaehler mehr an "Wettkampfplanung": die offenen Entscheidungen
+    // stehen seit v341 als Segment "Zu entscheiden" auf der Seite selbst und
+    // als Kachel auf der Uebersicht. Die Abfrage lief bei jedem Seitenaufbau
+    // fuer eine Zahl, die zweimal daneben schon steht.
 
     if ($istAdmin) {
         // Papierkorb: was in den letzten 30 Tagen archiviert wurde und damit
