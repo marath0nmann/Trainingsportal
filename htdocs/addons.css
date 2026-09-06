@@ -874,6 +874,18 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
 
 /* ── Wettkampfplanung-Tabelle ── */
 /* Globale th/td-Regeln aus der shared app.css greifen; hier nur Spezifisches */
+/* Popover-Fußzeile: es ist seit v342 eine reine Vorschau, alle Aktionen
+   liegen in der Detailkarte. */
+.kal-pop-hinweis {
+  margin-top: 8px; padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text2); text-align: center;
+}
+/* Plan-Aktionen in der Detailkarte */
+.modal-plan-aktionen {
+  display: flex; flex-direction: column; gap: 9px; align-items: flex-start;
+}
+
 /* ── Wettkampfplanung: Segmente über der Liste ───────────────
    Die drei Status-Gruppen (Zu entscheiden · In Bearbeitung · Abgeschlossen)
    liegen sichtbar oben statt in einem Popover. Athleten landen dadurch
@@ -2405,6 +2417,13 @@ body.planung-active #app-footer    { display: none; }
   margin: 0; line-height: 1.1;
 }
 .konto-sub { font-size: 13px; color: var(--text2); margin-top: 3px; }
+.konto-avatar-zeile { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.konto-avatar {
+  width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  background: var(--primary); color: #fff;
+}
+.konto-avatar-leer { font-size: 13px; color: var(--text2); margin-bottom: 8px; }
 .konto-panel-fuss {
   display: flex; justify-content: flex-end;
   margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);

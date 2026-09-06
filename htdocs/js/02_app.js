@@ -143,6 +143,20 @@ function fillUserBadge() {
 // Seitentitel entstehen – wie buildNav()/_renderNavTabs() im
 // Statistikportal. Vorher stand dieselbe Liste an drei Stellen.
 
+// Alt-Routen aus früheren Versionen → heutige Adresse. Der Wert ist eine
+// Funktion, damit Unterpfade mitgenommen werden können.
+const NAV_ALT_ROUTEN = {
+  bloecke:       ()     => '#planung',
+  treffpunkte:   ()     => '#admin/treffpunkte',
+  einstellungen: ()     => '#admin/einstellungen',
+};
+
+// Alt-Routen innerhalb des Admin-Bereichs (#admin/<sub>).
+const ADMIN_ALT_ROUTEN = {
+  // Seit v338 die Sektion „Liste" der Trainingsplanung – dieselbe Tabelle.
+  trainings: '#planung/liste',
+};
+
 // Seiten, die keinen eigenen Nav-Eintrag haben, aber im Mobil-Header
 // einen Titel brauchen (Unterseiten und Alt-Routen).
 const NAV_ALIAS_LABEL = {
@@ -378,6 +392,12 @@ function renderPage() {
     return;
   }
 
+  // Alt-Routen: einmalige Weiterleitung auf die heutige Adresse. Früher lagen
+  // diese Fälle als einzelne if-Blöcke zwischen den echten Seiten und ließen
+  // die Router-Kette länger aussehen, als sie ist.
+  const altZiel = NAV_ALT_ROUTEN[state.tab];
+  if (altZiel) { location.replace(altZiel(args)); return; }
+
   // Gäste ohne Share-Token sehen nichts – Login-Hinweis zeigen
   if (!state.user && !state.shareToken) {
     renderGastSeite(main);
@@ -409,16 +429,6 @@ function renderPage() {
     renderListe(main, args && args[0]).catch(e => _showRenderError(main, e));
     return;
   }
-  if (state.tab === 'bloecke') {
-    location.replace('#planung');
-    return;
-  }
-  // Alt-Route: Admin → Trainings ist seit v338 die Sektion „Liste" der
-  // Trainingsplanung – dieselbe Tabelle, nur nicht mehr im Admin-Menü.
-  if (state.tab === 'admin' && args && args[0] === 'trainings') {
-    location.replace('#planung/liste');
-    return;
-  }
   if (state.tab === 'wettkampfplanung') {
     if (!state.user) { location.replace(startHash()); return; }
     WETTKAMPFPLANUNG.render(main);
@@ -430,16 +440,10 @@ function renderPage() {
     PLANUNG.render(main, args && args[0]);
     return;
   }
-  if (state.tab === 'treffpunkte') {
-    location.replace('#admin/treffpunkte');
-    return;
-  }
-  if (state.tab === 'einstellungen') {
-    location.replace('#admin/einstellungen');
-    return;
-  }
   if (state.tab === 'admin') {
     if (!state.user || state.user.rolle !== 'admin') { location.replace(startHash()); return; }
+    const altUnter = ADMIN_ALT_ROUTEN[(args && args[0]) || ''];
+    if (altUnter) { location.replace(altUnter); return; }
     renderAdminPage(main, args && args[0]);
     return;
   }
@@ -505,7 +509,7 @@ function renderAdminPage(main, subTab) {
   const ADMIN_TABS = [
     { id: 'system',        icon: '&#x1F5A5;&#xFE0E;', label: 'System' },
     { id: 'gruppen',       icon: '&#x1F465;',         label: 'Gruppen' },
-    { id: 'wettkampf',     icon: '&#x1F3C5;',         label: 'Wettkämpfe' },
+    { id: 'wettkampf',     icon: '&#x1F3C5;',         label: 'Wettkampf-Stammdaten' },
     { id: 'treffpunkte',   icon: '&#x1F4CD;',         label: 'Treffpunkte' },
     { id: 'strecken',      icon: '&#x1F5FA;&#xFE0F;', label: 'Strecken' },
     { id: 'einstellungen', icon: '&#x2699;&#xFE0F;',  label: 'Einstellungen' },
@@ -2455,6 +2459,70 @@ async function renderListe(main, quarterArg) {
 
 }
 
+/**
+ * Aktionen rund um den eigenen Plan – übernehmen, entfernen, Typ abonnieren.
+ *
+ * Bis v341 lagen sie ausschließlich im Hover-Popover. Das steigt auf
+ * Touch-Geräten bewusst aus (`mouseleave` feuert dort nicht zuverlässig), womit
+ * genau diese Aktionen auf dem Handy unerreichbar waren: Desktop und Handy
+ * hatten zwei verschiedene Bedienmodelle für dieselbe Kachel. Jetzt stehen sie
+ * in der Detailkarte, die beide Geräte per Klick bzw. Tap öffnen.
+ */
+function _einheitPlanAktionen(e, seg) {
+  if (!state.user) return '';
+  const hash = location.hash || '';
+  // Nur dort, wo es einen "eigenen Plan" gibt – nicht in der Trainerplanung.
+  const imPlanKontext = hash === '' || hash === '#' ||
+    hash.startsWith('#kalender') || hash.startsWith('#liste') || hash.startsWith('#dashboard');
+  if (!imPlanKontext) return '';
+
+  // Adoptionsstatus steht am Kalender-Element; ohne Element (z. B. Aufruf aus
+  // der Heute-Karte) gilt "noch nicht übernommen".
+  const el = document.querySelector(`.kal-item[data-einheit-id="${e.id}"]`);
+  const istUebernommen = !!(el && el.dataset.isAdopted);
+  const privatId = el && el.dataset.privatId ? parseInt(el.dataset.privatId, 10) : null;
+
+  const typEsc   = escapeHtml(e.typ || '');
+  const typLabel = getTypLabel(e.typ);
+  const aboAktiv = (typeof MEINPLAN !== 'undefined') && MEINPLAN.istAboAktivFuerTyp(e.typ);
+
+  const knopf = istUebernommen
+    ? (privatId
+        ? `<button class="btn btn-ghost btn-sm"
+             onclick="schliesseModal();MEINPLAN.loeschePrivat(${privatId})">Aus meinem Plan entfernen</button>`
+        : '')
+    : `<button class="btn btn-primary btn-sm"
+         onclick="schliesseModal();MEINPLAN.uebernehmenVonOeffentlich(${e.id}, state._lastEinheit.einheit, state._lastEinheit.segmente)">In meinen Plan</button>`;
+
+  return `<div class="modal-row modal-row-block">
+    <span class="modal-label">Mein Plan</span>
+    <div class="modal-plan-aktionen">
+      ${knopf}
+      <label class="kal-pop-abo-label">
+        <input type="checkbox" class="kal-pop-abo-cb" ${aboAktiv ? 'checked' : ''}
+          onchange="MEINPLAN.aboToggle('${typEsc}', this.checked, this)">
+        <span>${escapeHtml(typLabel)} automatisch übernehmen</span>
+      </label>
+    </div>
+  </div>`;
+}
+
+/** Bearbeiten / Absagen – in der Trainerplanung der volle Editor. */
+function _einheitTrainerAktionen(e) {
+  if (!state.user) return '';
+  const hash      = location.hash || '';
+  const istPlanung = hash.startsWith('#planung');
+  const istTrainer = state.user.rolle === 'admin' || state.user.rolle === 'trainer';
+
+  if (istPlanung && istTrainer) {
+    return `<button class="btn btn-ghost" onclick="schliesseModal();PLANUNG.einheitBearbeiten(${e.id})">Bearbeiten</button>` +
+      (e.status === 'abgesagt'
+        ? `<button class="btn btn-ghost" onclick="schliesseModal();PLANUNG.wiederherstellenEinheit(${e.id})">↩ Wiederherstellen</button>`
+        : `<button class="btn btn-warning" onclick="schliesseModal();PLANUNG.absagenEinheit(${e.id})">⚠ Absagen</button>`);
+  }
+  return `<button class="btn btn-ghost" onclick="oeffneTerminModal(state._lastEinheit)">Bearbeiten</button>`;
+}
+
 async function zeigeEinheit(id) {
   const cont = document.getElementById('modal-container');
   cont.innerHTML = `<div class="modal-overlay"><div class="modal-card"><div class="loading">Lade…</div></div></div>`;
@@ -2541,12 +2609,13 @@ async function zeigeEinheit(id) {
             ${e.status === 'abgesagt' ? `<div class="modal-row"><span class="modal-label">Status</span><span style="color:var(--primary);font-weight:600">Abgesagt</span></div>` : ''}
             ${kmHtml}
             ${segHtml}
+            ${_einheitPlanAktionen(e, seg)}
             <div class="modal-actions">
               ${seg.length ? `<a class="btn btn-ghost" href="api/index.php?p=fit/einheit/${e.id}.fit" download title="Garmin Workout-Datei">⌚ Garmin</a>` : ''}
               ${seg.length ? APPLEWORKOUT.buttonHtml(e.id, e.titel) : ''}
               ${e.strecke_id ? `<a class="btn btn-ghost" href="api/index.php?p=strecken/${e.strecke_id}/gpx" download title="Strecke als GPX für Uhr/Navi">GPX</a>` : ''}
               ${e.komoot_url ? `<a class="btn btn-ghost" href="${escapeHtml(e.komoot_url)}" target="_blank" rel="noopener">Auf Komoot ↗</a>` : ''}
-              ${state.user ? `<button class="btn btn-ghost" onclick="oeffneTerminModal(state._lastEinheit)">Bearbeiten</button>` : ''}
+              ${_einheitTrainerAktionen(e)}
             </div>
           </div>
         </div>

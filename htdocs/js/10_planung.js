@@ -81,31 +81,12 @@ const KAL_POPOVER = (() => {
               }).join('')}</div>`)
         : '';
 
-      // Kontext-Buttons
-      const hash           = location.hash || '';
-      const onPlanung      = hash.startsWith('#planung');
-      const onKalender     = hash === '' || hash === '#' || hash.startsWith('#kalender');
-      const kannEdit       = onPlanung && state.user
-        && (state.user.rolle === 'admin' || state.user.rolle === 'trainer');
-
-      const isAdopted       = !!anchorEl.dataset.isAdopted;
-      const privatId        = anchorEl.dataset.privatId ? parseInt(anchorEl.dataset.privatId, 10) : null;
-      // kannUebernehmen: noch nicht übernommen → „In meinen Plan"-Button
-      const kannUebernehmen = onKalender && !!state.user && !isAdopted;
-      // kannEntfernen: bereits übernommen → „Aus meinem Plan entfernen"-Button
-      const kannEntfernen   = onKalender && !!state.user && isAdopted && !!privatId;
-      const zeigeAktionen   = kannUebernehmen || kannEntfernen;
-
-      // Daten für direktes Übernehmen serialisieren (kein zweiter API-Call nötig)
-      const eJson = kannUebernehmen
-        ? escapeHtml(JSON.stringify({ id: e.id, datum: e.datum, uhrzeit: e.uhrzeit || null, typ: e.typ, titel: e.titel }))
-        : '';
-      const segsJson = kannUebernehmen
-        ? escapeHtml(JSON.stringify(segs))
-        : '';
-
-      const aboAktiv = zeigeAktionen && MEINPLAN.istAboAktivFuerTyp(e.typ);
-      const typEsc   = escapeHtml(e.typ);
+      // Das Popover ist seit v342 eine reine Vorschau: alle Aktionen liegen in
+      // der Detailkarte, die Klick und Tap gleichermaessen oeffnen. Vorher
+      // hingen "In meinen Plan", "Absagen" und der Abo-Schalter hier – und
+      // waren damit auf Touch-Geraeten unerreichbar, weil das Popover dort
+      // bewusst gar nicht erst aufgeht.
+      const typEsc = escapeHtml(e.typ);
 
       // Streckenverlauf (falls hinterlegt): Kartenvorschau (Klick → große
       // Karte) + GPX-Download. Das Popover wird dafür etwas breiter.
@@ -136,24 +117,7 @@ const KAL_POPOVER = (() => {
         ${e.bemerkung ? `<div class="kal-pop-bemerkung">${escapeHtml(e.bemerkung)}</div>` : ''}
         ${segsHtml}
         ${streckeHtml}
-        ${zeigeAktionen ? `<div class="kal-pop-actions kal-pop-actions-col">
-          ${kannUebernehmen ? `<button class="btn btn-primary btn-sm"
-            onclick="MEINPLAN.uebernehmenVonOeffentlich(${einheitId}, JSON.parse(this.dataset.e), JSON.parse(this.dataset.s))"
-            data-e="${eJson}" data-s="${segsJson}">In meinen Plan</button>` : ''}
-          ${kannEntfernen ? `<button class="btn btn-ghost btn-sm"
-            onclick="KAL_POPOVER.hide(); MEINPLAN.loeschePrivat(${privatId})">Aus meinem Plan entfernen</button>` : ''}
-          <label class="kal-pop-abo-label">
-            <input type="checkbox" class="kal-pop-abo-cb" ${aboAktiv ? 'checked' : ''}
-              onchange="MEINPLAN.aboToggle('${typEsc}', this.checked, this)">
-            <span>${escapeHtml(typLabel)} abonnieren</span>
-          </label>
-        </div>` : ''}
-        ${kannEdit ? `<div class="kal-pop-actions">
-          <button class="btn btn-primary btn-sm" onclick="PLANUNG.einheitBearbeiten(${einheitId})">Bearbeiten</button>
-          ${e.status === 'abgesagt'
-            ? `<button class="btn btn-ghost btn-sm" onclick="KAL_POPOVER.hide();PLANUNG.wiederherstellenEinheit(${einheitId})">↩ Wiederherstellen</button>`
-            : `<button class="btn btn-warning btn-sm" onclick="KAL_POPOVER.hide();PLANUNG.absagenEinheit(${einheitId})">⚠ Absagen</button>`}
-        </div>` : ''}`;
+        <div class="kal-pop-hinweis">Klick für Details und Aktionen</div>`;
 
       _position(pop, anchorEl.getBoundingClientRect());
     } catch (_) {
@@ -763,7 +727,11 @@ const PLANUNG = (() => {
           const absageNotizHtml = abgesagt && e.absage_notiz
             ? `<span class="kal-item-absage-notiz" title="${escapeHtml(e.absage_notiz)}">⚠ ${escapeHtml(e.absage_notiz)}</span>`
             : '';
-          return `<div class="${cls}" data-einheit-id="${e.id}" draggable="${kannEdit && !abgesagt}" title="${escapeHtml(e.titel)}">
+          // Klick/Tap öffnet die Detailkarte – auf Touch-Geräten war die
+          // Kachel hier bis v341 gar nicht ansprechbar, weil das Hover-Popover
+          // dort nicht aufgeht und es keinen onclick gab.
+          return `<div class="${cls}" data-einheit-id="${e.id}" draggable="${kannEdit && !abgesagt}"
+            onclick="zeigeEinheit(${e.id})" title="${escapeHtml(e.titel)}">
             <div class="kal-item-top">
               ${e.uhrzeit ? `<span class="kal-item-time">${escapeHtml(e.uhrzeit)}</span>` : ''}
               <span class="kal-item-title">${escapeHtml(e.titel)}</span>
