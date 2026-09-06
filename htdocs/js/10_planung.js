@@ -588,7 +588,7 @@ const PLANUNG = (() => {
       applyKalenderFarben(_gruppen.map(g => 'g' + g.id));
       _aktualisiereTabs();
     } catch (e) {
-      if (typeof benachrichtigen === 'function') benachrichtigen('Farbe konnte nicht gespeichert werden.', 'err');
+      notify('Farbe konnte nicht gespeichert werden.', 'err');
     }
   }
   async function resetDefaultFarbe(ev, key) {
@@ -1322,7 +1322,7 @@ const PLANUNG = (() => {
 
   // ── Einheit löschen ───────────────────────────────────────
   async function loescheEinheit(einheitId) {
-    if (!confirm('Diesen Kalendereintrag löschen?\nDer Trainingsblock bleibt erhalten.')) return;
+    if (!await confirmModal('Diesen Kalendereintrag löschen?\nDer Trainingsblock bleibt erhalten.')) return;
     const el = document.querySelector(`.kal-item[data-einheit-id="${einheitId}"]`);
     if (el) el.remove();
     try {
@@ -1499,7 +1499,7 @@ const PLANUNG = (() => {
       }
       return;
     }
-    if (!e.serie_id && !confirm('Diesen Kalendereintrag löschen?')) return;
+    if (!e.serie_id && !await confirmModal('Diesen Kalendereintrag löschen?')) return;
 
     try {
       if (scope === 'alle') {
@@ -1525,16 +1525,6 @@ const PLANUNG = (() => {
     if (document.getElementById('planung-bloecke-list')) ladeBlocke();
   }
 
-  function notify(text, art) {
-    const cont = document.getElementById('notification-container');
-    if (!cont) { console.log(text); return; }
-    const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
-    const div = document.createElement('div');
-    div.className = `notif ${cls}`;
-    div.textContent = text;
-    cont.appendChild(div);
-    setTimeout(() => div.remove(), 4000);
-  }
 
   function getAktivGruppe() { return aktivGruppe; }
 
@@ -1627,7 +1617,7 @@ const PLANUNG = (() => {
     if (serieFeld) {
       _wiederherstellenDialog(einheitId);
     } else {
-      if (!confirm('Absage aufheben und Training wieder als geplant markieren?')) return;
+      if (!await confirmModal('Absage aufheben und Training wieder als geplant markieren?')) return;
       try {
         await apiPost(`einheiten/${einheitId}/wiederherstellen`, { scope: 'einzel' });
         notify('Absage aufgehoben.', 'ok');
@@ -1750,7 +1740,7 @@ const PLANUNG = (() => {
   }
 
   async function notizLoeschen(id) {
-    if (!confirm('Notiz wirklich löschen?')) return;
+    if (!await confirmModal('Notiz wirklich löschen?')) return;
     try {
       await apiDel(`tagesnotizen/${id}`);
       notify('Notiz gelöscht.', 'ok');

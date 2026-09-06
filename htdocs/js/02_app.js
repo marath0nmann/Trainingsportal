@@ -655,10 +655,10 @@ async function saveLegalPage(type) {
     await apiPut('admin/settings', payload);
     window.appConfig[meta.textKey] = ta.value;
     schliesseModal();
-    benachrichtigen('Gespeichert.', 'ok');
+    notify('Gespeichert.', 'ok');
     renderLegalPage(type);
   } catch (e) {
-    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    notify('Fehler: ' + (e.message || ''), 'err');
   }
 }
 
@@ -1691,7 +1691,7 @@ async function _wkKarteAb(serieId, privatId, anmId) {
     _wettkampfCache = null;
     renderPage();
   } catch (e) {
-    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    notify('Fehler: ' + (e.message || ''), 'err');
   }
 }
 
@@ -1787,7 +1787,7 @@ async function toggleHeuteDabei(einheitId, privatId, einheitData, segmente) {
       }
       renderPage(); // Kalender aktualisieren
     } catch (err) {
-      benachrichtigen('Fehler: ' + (err.message || ''), 'err');
+      notify('Fehler: ' + (err.message || ''), 'err');
     }
   } else {
     // In persönlichen Plan übernehmen
@@ -1817,7 +1817,7 @@ async function toggleHeuteDabei(einheitId, privatId, einheitData, segmente) {
       }
       renderPage(); // Kalender aktualisieren
     } catch (err) {
-      benachrichtigen('Fehler: ' + (err.message || ''), 'err');
+      notify('Fehler: ' + (err.message || ''), 'err');
     }
   }
 }
@@ -1892,7 +1892,7 @@ async function speichereTermin(id) {
   // Serien-Einheit: erst Geltungsbereich abfragen
   if (ctx.serieId) {
     function valD(elId) { const el = document.getElementById(elId); return el ? (el.value || '').trim() : ''; }
-    if (!valD('hte-datum')) { benachrichtigen('Datum fehlt.', 'err'); return; }
+    if (!valD('hte-datum')) { notify('Datum fehlt.', 'err'); return; }
     zeigeTerminSerienScope();
     return;
   }
@@ -1907,7 +1907,7 @@ async function terminSpeichernMitScope(scope) {
   const ctx = state._terminEdit || {};
   const tpIdStr = val('hte-treffpunkt-id');
   const datum = val('hte-datum');
-  if (!datum) { benachrichtigen('Datum fehlt.', 'err'); return; }
+  if (!datum) { notify('Datum fehlt.', 'err'); return; }
   // Für Serien-Scopes wird das Datum nicht übernommen (je Termin individuell)
   const basis = {
     treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
@@ -1923,10 +1923,10 @@ async function terminSpeichernMitScope(scope) {
       await apiPut('einheiten/' + ctx.id, { ...basis, datum: datum });
     }
     schliesseModal();
-    benachrichtigen('Gespeichert.', 'ok');
+    notify('Gespeichert.', 'ok');
     renderPage();
   } catch (e) {
-    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    notify('Fehler: ' + (e.message || ''), 'err');
   }
 }
 
@@ -1972,7 +1972,7 @@ async function loescheTermin(id, scope) {
     }
     return;
   }
-  if (!ctx.serieId && !confirm('Diesen Kalendereintrag löschen?')) return;
+  if (!ctx.serieId && !await confirmModal('Diesen Kalendereintrag löschen?')) return;
   try {
     if (scope === 'alle') {
       await apiDel('serien/' + ctx.serieId);
@@ -1982,10 +1982,10 @@ async function loescheTermin(id, scope) {
       await apiDel('einheiten/' + ctx.id);
     }
     schliesseModal();
-    benachrichtigen('Gelöscht.', 'ok');
+    notify('Gelöscht.', 'ok');
     renderPage();
   } catch (e) {
-    benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+    notify('Fehler: ' + (e.message || ''), 'err');
   }
 }
 
@@ -2578,7 +2578,7 @@ function datumWaehlenDialog(titel, aktuellesDatum, onOk, okLabel) {
   const inp = document.getElementById('dwd-datum');
   document.getElementById('dwd-ok').addEventListener('click', () => {
     const val = inp.value;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) { benachrichtigen('Bitte ein Datum wählen.', 'err'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) { notify('Bitte ein Datum wählen.', 'err'); return; }
     schliesseModal();
     onOk(val);
   });
@@ -2601,9 +2601,9 @@ async function verschiebePrivatEinheitDialog(id, aktuellesDatum) {
         bemerkung:      e.bemerkung || null,
         ref_einheit_id: e.ref_einheit_id || null,
       });
-      benachrichtigen('Verschoben.', 'ok');
+      notify('Verschoben.', 'ok');
     } catch (err) {
-      benachrichtigen('Verschieben fehlgeschlagen.', 'err');
+      notify('Verschieben fehlgeschlagen.', 'err');
     }
     renderPage();
   });
@@ -2679,22 +2679,12 @@ async function _kalDrop(evt) {
     });
     renderPage(); // Vollständiges Re-Render (KW-Summen, Filter etc.)
   } catch (err) {
-    benachrichtigen('Verschieben fehlgeschlagen.', 'err');
+    notify('Verschieben fehlgeschlagen.', 'err');
     renderPage(); // Originalzustand wiederherstellen
   }
 }
 
 // Globale Toast-Benachrichtigung (in 02_app.js verfügbar; Module nutzen eigene IIFE-Variante)
-function benachrichtigen(text, art) {
-  const cont = document.getElementById('notification-container');
-  if (!cont) { console.log(text); return; }
-  const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
-  const div = document.createElement('div');
-  div.className = `notif ${cls}`;
-  div.textContent = text;
-  cont.appendChild(div);
-  setTimeout(() => div.remove(), 4000);
-}
 
 // Extrahiert die Tour-ID aus einer Komoot-URL und gibt die Embed-URL zurück.
 // Distanz-Marker für Einträge mit hinterlegtem Streckenverlauf.
@@ -3003,7 +2993,7 @@ const SHARE = (() => {
       await _loadData();
       _renderDialogBody();
     } catch (e) {
-      alert('Fehler: ' + (e.message || ''));
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -3027,18 +3017,18 @@ const SHARE = (() => {
       _renderDialogBody();
       _wkNotify('Gespeichert', true);
     } catch (e) {
-      alert('Fehler: ' + (e.message || ''));
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
   async function _revoke(token) {
-    if (!confirm('Gast-Link widerrufen? Bestehende Links mit diesem Token funktionieren danach nicht mehr.')) return;
+    if (!await confirmModal('Gast-Link widerrufen? Bestehende Links mit diesem Token funktionieren danach nicht mehr.')) return;
     try {
       await apiDel(`share/tokens/${token}`);
       await _loadData();
       _renderDialogBody();
     } catch (e) {
-      alert('Fehler: ' + (e.message || ''));
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -3046,7 +3036,9 @@ const SHARE = (() => {
     navigator.clipboard?.writeText(url).then(() => {
       _wkNotify('Link kopiert!', true);
     }).catch(() => {
-      prompt('Link zum Kopieren:', url);
+      // Kein Zugriff auf die Zwischenablage (kein HTTPS, Berechtigung verweigert):
+      // Link zum Markieren und Kopieren anzeigen.
+      promptModal('Link zum Kopieren:', url, { readonly: true });
     });
   }
 
@@ -3089,7 +3081,7 @@ async function exportPlanPDF() {
 
   let plan;
   try { plan = await _buildPlanData(von, bis); }
-  catch (e) { alert('PDF konnte nicht erstellt werden: ' + (e.message || '')); return; }
+  catch (e) { notify('PDF konnte nicht erstellt werden: ' + (e.message || ''), 'err'); return; }
   const { byDate, wettkampfBeiDatum, histByDate } = plan;
 
   const fmtD = (d) => {
@@ -3186,7 +3178,7 @@ async function exportPlanPDF() {
     </body></html>`;
 
   const win = window.open('', '_blank');
-  if (!win) { alert('Bitte Popups für diese Seite erlauben, um das PDF zu erstellen.'); return; }
+  if (!win) { notify('Bitte Popups für diese Seite erlauben, um das PDF zu erstellen.', 'warn'); return; }
   win.document.write(html);
   win.document.close();
   win.focus();

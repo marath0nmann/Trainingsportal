@@ -232,7 +232,7 @@ const ADMIN_GRUPPEN = (() => {
     const inp = document.getElementById('gruppen-neu-name');
     if (!inp) return;
     const name = inp.value.trim();
-    if (!name) { _notify('Bitte einen Namen eingeben.', 'warn'); inp.focus(); return; }
+    if (!name) { notify('Bitte einen Namen eingeben.', 'warn'); inp.focus(); return; }
 
     _saving = true;
     _setInputDisabled(true);
@@ -242,14 +242,14 @@ const ADMIN_GRUPPEN = (() => {
         _gruppen.push(r.gruppe);
         _gruppen.sort((a, b) => a.name.localeCompare(b.name, 'de'));
         GRUPPEN.invalidate();
-        _notify('Gruppe „' + r.gruppe.name + '" angelegt.', 'ok');
+        notify('Gruppe „' + r.gruppe.name + '" angelegt.', 'ok');
         inp.value = '';
         _render();
       } else {
-        _notify('Fehler: ' + escapeHtml(r.fehler || 'Unbekannt'), 'err');
+        notify('Fehler: ' + escapeHtml(r.fehler || 'Unbekannt'), 'err');
       }
     } catch (e) {
-      _notify('Fehler: ' + escapeHtml(e.message || String(e)), 'err');
+      notify('Fehler: ' + escapeHtml(e.message || String(e)), 'err');
     } finally {
       _saving = false;
       _setInputDisabled(false);
@@ -281,7 +281,7 @@ const ADMIN_GRUPPEN = (() => {
     const inp = document.getElementById('gruppen-edit-input');
     if (!inp) return;
     const name = inp.value.trim();
-    if (!name) { _notify('Name darf nicht leer sein.', 'warn'); inp.focus(); return; }
+    if (!name) { notify('Name darf nicht leer sein.', 'warn'); inp.focus(); return; }
 
     const alte = _gruppen.find(g => g.id === id);
     if (alte && alte.name === name) { abbrechenEdit(); return; }
@@ -295,13 +295,13 @@ const ADMIN_GRUPPEN = (() => {
         _gruppen.sort((a, b) => a.name.localeCompare(b.name, 'de'));
         GRUPPEN.invalidate();
         _editId = null;
-        _notify('Gruppe umbenannt in „' + r.gruppe.name + '".', 'ok');
+        notify('Gruppe umbenannt in „' + r.gruppe.name + '".', 'ok');
         _render();
       } else {
-        _notify('Fehler: ' + escapeHtml(r.fehler || 'Unbekannt'), 'err');
+        notify('Fehler: ' + escapeHtml(r.fehler || 'Unbekannt'), 'err');
       }
     } catch (e) {
-      _notify('Fehler: ' + escapeHtml(e.message || String(e)), 'err');
+      notify('Fehler: ' + escapeHtml(e.message || String(e)), 'err');
     } finally {
       _saving = false;
     }
@@ -314,7 +314,6 @@ const ADMIN_GRUPPEN = (() => {
   }
 
   // notify() kommt aus 09a_utils_shared.js (geteilt mit dem Statistikportal).
-  function _notify(text, art) { notify(text, art); }
 
   return { render, anlegen, neuKeyDown, startEdit, abbrechenEdit, editKeyDown, speichernUmbenennen,
            toggleMitglieder, mitgliedHinzufuegen, mitgliedEntfernen };

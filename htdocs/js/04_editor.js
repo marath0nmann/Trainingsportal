@@ -151,7 +151,7 @@ const EDITOR = (() => {
     const titel = (document.getElementById('ed-titel') || {}).value || '';
     const baum = PARSER.parseBaum(titel);
     if (!baum.length) {
-      benachrichtigen('Konnte aus dem Titel keine Segmente erkennen.', 'warn');
+      notify('Konnte aus dem Titel keine Segmente erkennen.', 'warn');
       return;
     }
     currentBaum = baum;
@@ -199,8 +199,8 @@ const EDITOR = (() => {
     // Serien-Einheit: erst Geltungsbereich abfragen
     if (currentId && currentSerieId) {
       const p = _sammlePayload();
-      if (!p.datum) { benachrichtigen('Datum fehlt.', 'err'); return; }
-      if (!p.titel) { benachrichtigen('Titel fehlt.', 'err'); return; }
+      if (!p.datum) { notify('Datum fehlt.', 'err'); return; }
+      if (!p.titel) { notify('Titel fehlt.', 'err'); return; }
       _zeigeSerienSpeichernOptionen();
       return;
     }
@@ -209,8 +209,8 @@ const EDITOR = (() => {
 
   async function _speichernMitScope(scope) {
     const payload = _sammlePayload();
-    if (!payload.datum)  { benachrichtigen('Datum fehlt.', 'err'); return; }
-    if (!payload.titel)  { benachrichtigen('Titel fehlt.', 'err'); return; }
+    if (!payload.datum)  { notify('Datum fehlt.', 'err'); return; }
+    if (!payload.titel)  { notify('Titel fehlt.', 'err'); return; }
 
     try {
       if (!currentId) {
@@ -223,10 +223,10 @@ const EDITOR = (() => {
         await apiPut(`einheiten/${currentId}`, payload);
       }
       schliesseModal();
-      benachrichtigen('Gespeichert.', 'ok');
+      notify('Gespeichert.', 'ok');
       renderPage();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -253,14 +253,14 @@ const EDITOR = (() => {
       _zeigeSerienLoeschenOptionen();
       return;
     }
-    if (!confirm('Diese Einheit wirklich löschen?')) return;
+    if (!await confirmModal('Diese Einheit wirklich löschen?')) return;
     try {
       await apiDel(`einheiten/${currentId}`);
       schliesseModal();
-      benachrichtigen('Gelöscht.', 'ok');
+      notify('Gelöscht.', 'ok');
       renderPage();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -281,34 +281,34 @@ const EDITOR = (() => {
     try {
       await apiDel(`einheiten/${currentId}`);
       schliesseModal();
-      benachrichtigen('Termin gelöscht.', 'ok');
+      notify('Termin gelöscht.', 'ok');
       renderPage();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
   async function loeschenAbJetzt() {
-    if (!confirm(`Diesen und alle folgenden Termine der Serie (ab ${currentDatum}) löschen?`)) return;
+    if (!await confirmModal(`Diesen und alle folgenden Termine der Serie (ab ${currentDatum}) löschen?`)) return;
     try {
       await apiDel(`serien/${currentSerieId}/ab/${currentDatum}`);
       schliesseModal();
-      benachrichtigen('Termine gelöscht.', 'ok');
+      notify('Termine gelöscht.', 'ok');
       renderPage();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
   async function loeschenAlleSerie() {
-    if (!confirm('Alle Termine dieser Serie löschen?')) return;
+    if (!await confirmModal('Alle Termine dieser Serie löschen?')) return;
     try {
       await apiDel(`serien/${currentSerieId}`);
       schliesseModal();
-      benachrichtigen('Serie gelöscht.', 'ok');
+      notify('Serie gelöscht.', 'ok');
       renderPage();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -328,16 +328,6 @@ const EDITOR = (() => {
     return el ? (el.value || '').trim() : '';
   }
 
-  function benachrichtigen(text, art) {
-    const cont = document.getElementById('notification-container');
-    if (!cont) { console.log(text); return; }
-    const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
-    const div = document.createElement('div');
-    div.className = `notif ${cls}`;
-    div.textContent = text;
-    cont.appendChild(div);
-    setTimeout(() => div.remove(), 4000);
-  }
 
   return {
     open, parsenAusTitel,

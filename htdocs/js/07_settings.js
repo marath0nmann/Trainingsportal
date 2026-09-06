@@ -383,8 +383,8 @@ const SETTINGS = (() => {
   function paceDistanzHinzufuegen() {
     const inp = document.getElementById('pace-dist-neu');
     const v = parseInt(inp ? inp.value : '', 10);
-    if (!v || v < 100 || v > 200000) { benachrichtigen('Ungültige Distanz (100–200.000 m)', 'err'); return; }
-    if (paceDistanzen.includes(v)) { benachrichtigen('Distanz bereits vorhanden.', 'warn'); return; }
+    if (!v || v < 100 || v > 200000) { notify('Ungültige Distanz (100–200.000 m)', 'err'); return; }
+    if (paceDistanzen.includes(v)) { notify('Distanz bereits vorhanden.', 'warn'); return; }
     paceDistanzen.push(v);
     paceDistanzen.sort((a, b) => a - b);
     if (inp) inp.value = '';
@@ -427,12 +427,12 @@ const SETTINGS = (() => {
     };
     try {
       await apiPut('admin/settings', payload);
-      benachrichtigen('Gespeichert.', 'ok');
+      notify('Gespeichert.', 'ok');
       CONFIG.clear();
       await CONFIG.load();
       applyVersionVisibility(state.user);
     } catch (e) {
-      benachrichtigen('Fehler: ' + e.message, 'err');
+      notify('Fehler: ' + e.message, 'err');
     }
   }
 
@@ -474,16 +474,6 @@ const SETTINGS = (() => {
     }
   }
 
-  function benachrichtigen(text, art) {
-    const cont = document.getElementById('notification-container');
-    if (!cont) { console.log(text); return; }
-    const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
-    const div = document.createElement('div');
-    div.className = 'notif ' + cls;
-    div.textContent = text;
-    cont.appendChild(div);
-    setTimeout(() => div.remove(), 3500);
-  }
 
   async function reparseSegmente() {
     const out = document.getElementById('migr-result');
@@ -665,7 +655,7 @@ const SETTINGS = (() => {
 
   async function typSpeichern(slug, idx, opts) {
     const bez = (document.getElementById(`typ-bez-${idx}`)?.value || '').trim();
-    if (!bez) { benachrichtigen('Bezeichnung darf nicht leer sein.', 'err'); return false; }
+    if (!bez) { notify('Bezeichnung darf nicht leer sein.', 'err'); return false; }
     const reihenfolge = parseInt(document.getElementById(`typ-reihenfolge-${idx}`)?.value || '0', 10);
     const aktiv       = document.getElementById(`typ-aktiv-${idx}`)?.checked ? true : false;
     const fkRaw         = (document.getElementById(`typ-fallback-km-${idx}`)?.value || '').trim();
@@ -678,7 +668,7 @@ const SETTINGS = (() => {
     const hat_strecke       = document.getElementById(`typ-hat-strecke-${idx}`)?.checked ? true : false;
     try {
       await apiPut(`admin/typen/${slug}`, { bezeichnung: bez, reihenfolge, aktiv, fallback_km, default_dauer_min, default_treffpunkt_id, ist_kein_training, hat_strecke });
-      if (!opts || !opts.silent) benachrichtigen('Typ gespeichert.', 'ok');
+      if (!opts || !opts.silent) notify('Typ gespeichert.', 'ok');
       typenBearbeitet = null;
       const r = await apiGet('admin/typen', { silent: true });
       typen = r.typen || [];
@@ -687,43 +677,43 @@ const SETTINGS = (() => {
       await CONFIG.load();
       return true;
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
       return false;
     }
   }
 
   async function typHinzufuegen() {
-    const slug = prompt('Slug für neuen Typ (a–z, 0–9, _):');
+    const slug = await promptModal('Slug für neuen Typ (a–z, 0–9, _):');
     if (!slug) return;
     const slugClean = slug.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    const bez = prompt('Bezeichnung:');
+    const bez = await promptModal('Bezeichnung:');
     if (!bez || !bez.trim()) return;
     try {
       await apiPost('admin/typen', { slug: slugClean, bezeichnung: bez.trim(), reihenfolge: 99 });
-      benachrichtigen('Typ angelegt.', 'ok');
+      notify('Typ angelegt.', 'ok');
       const r = await apiGet('admin/typen', { silent: true });
       typen = r.typen || [];
       rendereTypen();
       CONFIG.clear();
       await CONFIG.load();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
   async function typLoeschen(slug) {
     const t = typen.find(x => x.slug === slug);
-    if (!confirm(`Typ „${t ? t.bezeichnung : slug}" wirklich löschen?`)) return;
+    if (!await confirmModal(`Typ „${t ? t.bezeichnung : slug}" wirklich löschen?`)) return;
     try {
       await apiDel(`admin/typen/${slug}`);
-      benachrichtigen('Typ gelöscht.', 'ok');
+      notify('Typ gelöscht.', 'ok');
       const r = await apiGet('admin/typen', { silent: true });
       typen = r.typen || [];
       rendereTypen();
       CONFIG.clear();
       await CONFIG.load();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 

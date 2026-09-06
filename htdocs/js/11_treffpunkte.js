@@ -302,7 +302,7 @@ const TREFFPUNKTE = (() => {
   // ── Löschen ───────────────────────────────────────────────
   async function loeschen(id) {
     const t = _liste.find(x => x.id === id);
-    if (!confirm(`Treffpunkt „${t ? t.name : id}" wirklich löschen?\nAlle Trainingseinheiten verlieren diesen Treffpunkt.`)) return;
+    if (!await confirmModal(`Treffpunkt „${t ? t.name : id}" wirklich löschen?\nAlle Trainingseinheiten verlieren diesen Treffpunkt.`)) return;
     try {
       await apiDel(`treffpunkte/${id}`);
       notify('Treffpunkt gelöscht.', 'ok');
