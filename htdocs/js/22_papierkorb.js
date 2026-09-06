@@ -21,6 +21,7 @@ const PAPIERKORB = (() => {
 
   let _container = null;
   let _eintraege = [];
+  let _gesamt    = 0;     // Eintraege im ganzen Archiv, nicht nur im Zeitraum
   let _tage      = 30;
 
   const TF = 'tp-papierkorb';
@@ -37,6 +38,7 @@ const PAPIERKORB = (() => {
     try {
       const r = await apiGet('admin/papierkorb?tage=' + _tage, { silent: true });
       _eintraege = r.eintraege || [];
+      _gesamt    = r.gesamt != null ? r.gesamt : _eintraege.length;
     } catch (e) {
       _eintraege = [];
       if (_container) {
@@ -102,6 +104,9 @@ const PAPIERKORB = (() => {
     const leer = !_eintraege.length
       ? `<div class="empty" style="padding:28px;text-align:center;color:var(--text2)">
            In diesem Zeitraum wurde nichts gelöscht.
+           ${_gesamt ? `<div style="margin-top:6px;font-size:13px">
+             Im Archiv liegen insgesamt ${_gesamt} ${_gesamt === 1 ? 'Eintrag' : 'Einträge'} –
+             über einen größeren Zeitraum sichtbar.</div>` : ''}
          </div>`
       : !sichtbar.length
       ? `<div class="empty" style="padding:28px;text-align:center;color:var(--text2)">
@@ -121,12 +126,14 @@ const PAPIERKORB = (() => {
               Gelöschte Trainings, Blöcke, Treffpunkte, Strecken und Anmeldungen werden vollständig
               archiviert, nicht entfernt. Beim Wiederherstellen kommen zusammengehörige Teile mit –
               die Segmente einer Einheit ebenso wie die Segmente und Gruppen eines Blocks.
+              Der Zeitraum unten filtert nur die Anzeige; „Papierkorb leeren“ betrifft immer das
+              ganze Archiv.
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
               ${_zeitraumWahl()}
-              ${_eintraege.length ? `<button class="btn btn-danger btn-sm" style="margin-left:auto"
+              ${_gesamt ? `<button class="btn btn-danger btn-sm" style="margin-left:auto"
                 onclick="PAPIERKORB.leeren()"
-                title="Alle archivierten Datensätze endgültig löschen">Papierkorb leeren…</button>` : ''}
+                title="Alle ${_gesamt} archivierten Datensätze endgültig löschen – unabhängig vom Zeitraum">Papierkorb leeren (${_gesamt})…</button>` : ''}
             </div>
             ${tfBarHtml(TF)}
             ${leer || `
@@ -168,6 +175,7 @@ const PAPIERKORB = (() => {
       const n = (r && r.wiederhergestellt) || 1;
       notify(n > 1 ? `Wiederhergestellt (${n} Datensätze).` : 'Wiederhergestellt.', 'ok');
       _eintraege = _eintraege.filter(x => x.id !== id);
+      _gesamt = Math.max(0, _gesamt - 1);
       _render();
       // Nav-Badge nachziehen – der Papierkorb ist einer seiner Summanden
       if (typeof ladeNavBadges === 'function') ladeNavBadges(true);
@@ -189,6 +197,7 @@ const PAPIERKORB = (() => {
       const n = (r && r.geloescht) || 1;
       notify(n > 1 ? `Endgültig gelöscht (${n} Datensätze).` : 'Endgültig gelöscht.', 'ok');
       _eintraege = _eintraege.filter(x => x.id !== id);
+      _gesamt = Math.max(0, _gesamt - 1);
       _render();
       if (typeof ladeNavBadges === 'function') ladeNavBadges(true);
     } catch (err) {
@@ -197,32 +206,35 @@ const PAPIERKORB = (() => {
   }
 
   /**
-   * Papierkorb leeren. Zwei Stufen, damit niemand versehentlich alles
-   * verliert: erst die Frage nach dem Umfang, dann die Bestaetigung mit der
-   * konkreten Anzahl.
+   * Papierkorb vollstaendig leeren.
+   *
+   * "Leeren" heisst leeren – das ganze Archiv, nicht nur der angezeigte
+   * Zeitraum. Die erste Fassung loeschte alles *aelter als* N Tage, waehrend
+   * die Zeitraum-Knoepfe die *letzten* N Tage zeigen: genau die Gegenmenge,
+   * weshalb bei der Voreinstellung nie etwas passierte. Der Zeitraum filtert
+   * jetzt ausschliesslich die Anzeige.
+   *
+   * Weil die Liste weniger zeigen kann, als geloescht wird, nennt die
+   * Rueckfrage immer die Gesamtzahl aus dem Archiv.
    */
   async function leeren() {
-    const wahl = await promptModal(
-      'Papierkorb leeren – was soll endgültig gelöscht werden?\n\n' +
-      'Trage ein Alter in Tagen ein: gelöscht wird alles, was älter ist.\n' +
-      'Eine 0 leert den Papierkorb vollständig.',
-      '30');
-    if (wahl === null) return;
+    if (!_gesamt) { notify('Der Papierkorb ist bereits leer.', 'ok'); return; }
 
-    const tage = parseInt((wahl || '').trim(), 10);
-    if (isNaN(tage) || tage < 0) { notify('Bitte eine Zahl ab 0 eintragen.', 'err'); return; }
-
-    const text = tage > 0
-      ? `Alle Einträge, die älter als ${tage} Tage sind, endgültig löschen?`
-      : 'Den Papierkorb vollständig leeren?';
-    const ok = await confirmModal(text +
-      '\n\nDanach sind diese Datensätze weg – es gibt keine zweite Sicherung.');
+    const sichtbar = _eintraege.length;
+    const hinweis = _gesamt > sichtbar
+      ? `\n\nDie Liste zeigt gerade ${sichtbar} davon (Zeitraum: ${_tage === 365 ? '1 Jahr' : _tage + ' Tage'}).`
+      : '';
+    const ok = await confirmModal(
+      `Papierkorb vollständig leeren?\n\n` +
+      `${_gesamt} ${_gesamt === 1 ? 'Eintrag wird' : 'Einträge werden'} endgültig gelöscht.` +
+      hinweis +
+      '\n\nDanach sind sie weg – es gibt keine zweite Sicherung.');
     if (!ok) return;
 
     try {
-      const r = await apiDel('admin/papierkorb?vor_tagen=' + tage);
+      const r = await apiDel('admin/papierkorb?vor_tagen=0');
       const n = (r && r.geloescht) || 0;
-      notify(n ? `${n} Datensätze endgültig gelöscht.` : 'Nichts zu löschen.', 'ok');
+      notify(`${n} ${n === 1 ? 'Datensatz' : 'Datensätze'} endgültig gelöscht.`, 'ok');
       await _laden();
       _render();
       if (typeof ladeNavBadges === 'function') ladeNavBadges(true);

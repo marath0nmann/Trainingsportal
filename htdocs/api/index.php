@@ -6937,7 +6937,14 @@ function handlePapierkorb(string $method, string $sub): void
                 'geloescht_am'  => $r['geloescht_am'],
             ];
         }
-        echo json_encode(['ok' => true, 'eintraege' => $eintraege, 'tage' => $tage]);
+        // Gesamtzahl ueber alle Zeitraeume – der Zeitraum-Umschalter filtert
+        // nur die Anzeige, "Papierkorb leeren" betrifft dagegen das ganze
+        // Archiv. Ohne diese Zahl koennte die Rueckfrage nicht sagen, wie
+        // viel wirklich geloescht wird.
+        $gesamt = (int)(DB::fetchOne(
+            "SELECT COUNT(*) c FROM `{$tg}` WHERE tabelle NOT IN ({$kph})", $kinder
+        )['c'] ?? 0);
+        echo json_encode(['ok' => true, 'eintraege' => $eintraege, 'tage' => $tage, 'gesamt' => $gesamt]);
         return;
     }
 
