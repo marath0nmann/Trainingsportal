@@ -140,8 +140,22 @@ const ADMIN_GRUPPEN = (() => {
       const mitgl  = _mitglieder[g.id] || null;
       const anzahl = mitgl !== null ? mitgl.length : null;
 
+      const key   = 'g' + g.id;
+      const farbe = (typeof kalFarbeDefault === 'function') ? kalFarbeDefault(key) : '#888888';
+      const eigen = !!(window.kalFarbenDefaults && kalFarbenDefaults[key]);
+
       const kopf = `<tr>
-        <td style="font-size:14px">${escapeHtml(g.name)}</td>
+        <td style="font-size:14px">
+          <span class="gruppen-farbe-wrap">
+            <input type="color" class="gruppen-farbe" value="${farbe}"
+              title="Kalenderfarbe dieser Gruppe – gilt für alle Athleten"
+              onchange="ADMIN_GRUPPEN.farbeSetzen(${g.id}, this.value)">
+          </span>
+          ${escapeHtml(g.name)}
+          ${eigen ? `<button class="btn-link gruppen-farbe-reset"
+            onclick="ADMIN_GRUPPEN.farbeZuruecksetzen(${g.id})"
+            title="Zurück zur automatisch vergebenen Farbe">↺</button>` : ''}
+        </td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-ghost btn-sm" onclick="ADMIN_GRUPPEN.toggleMitglieder(${g.id})"
             title="Mitglieder anzeigen">&#x1F465; ${anzahl !== null ? anzahl : ''} ${offen ? '▲' : '▼'}</button>
@@ -277,6 +291,37 @@ const ADMIN_GRUPPEN = (() => {
     }
   }
 
+  // ── Kalenderfarbe ───────────────────────────────────────────
+  // Bis v340 hing der Farbwähler in der Reiterleiste der Trainingsplanung –
+  // eine global wirkende Einstellung an einer Navigationsleiste, zurückzusetzen
+  // nur per Rechtsklick und auf dem Handy gar nicht erreichbar. Sie gehört zu
+  // den Gruppen-Stammdaten.
+  async function _farbeSchreiben(gruppeId, hex) {
+    try {
+      const r = await apiPut('planung/kalender-farbe', { key: 'g' + gruppeId, farbe: hex });
+      if (r && r.farben && typeof r.farben === 'object') {
+        kalFarbenDefaults = r.farben;
+        window.kalFarbenDefaults = r.farben;
+      }
+      if (typeof applyKalenderFarben === 'function') {
+        applyKalenderFarben(_gruppen.map(g => 'g' + g.id));
+      }
+      _rendereTabelle();
+      notify(hex ? 'Farbe gespeichert.' : 'Farbe zurückgesetzt.', 'ok');
+    } catch (e) {
+      notify('Farbe konnte nicht gespeichert werden.', 'err');
+    }
+  }
+
+  function farbeSetzen(gruppeId, hex) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+    return _farbeSchreiben(gruppeId, hex);
+  }
+
+  function farbeZuruecksetzen(gruppeId) {
+    return _farbeSchreiben(gruppeId, '');
+  }
+
   // ── Neue Gruppe anlegen ─────────────────────────────────────
   async function anlegen() {
     if (_saving) return;
@@ -370,5 +415,6 @@ const ADMIN_GRUPPEN = (() => {
   // notify() kommt aus 09a_utils_shared.js (geteilt mit dem Statistikportal).
 
   return { render, anlegen, neuKeyDown, startEdit, abbrechenEdit, editKeyDown, speichernUmbenennen,
-           toggleMitglieder, mitgliedHinzufuegen, mitgliedEntfernen };
+           toggleMitglieder, mitgliedHinzufuegen, mitgliedEntfernen,
+           farbeSetzen, farbeZuruecksetzen };
 })();

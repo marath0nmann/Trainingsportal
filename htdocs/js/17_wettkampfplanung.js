@@ -10,17 +10,22 @@ const WETTKAMPFPLANUNG = (() => {
   let _jahr         = new Date().getFullYear();
   let _container    = null;
   let _popper       = null;
-  let _filterPopper = null;
   let _bulkPopper   = null;
   let _teilnPopper  = null;
 
   // Filter / Sort / Select state
-  let _filterStatus    = new Set();   // leer = alle Status anzeigen
+  // Das Segment ersetzt die frühere Status-Mehrfachauswahl: die drei Gruppen
+  // aus ST_GRUPPEN liegen sichtbar oben statt in einem Popover. Für einen
+  // einzelnen Status gibt es die Spalte "Status" in der Filterleiste.
+  let _segment         = 'todo';      // 'todo' | 'arbeit' | 'fertig' | 'alle'
   let _sortKey         = 'datum';     // 'name' | 'datum' | 'status'
   let _sortDir         = 'asc';
   let _selected        = new Set();   // ausgewählte Serie-IDs
   let _hideVergangen   = false;       // vergangene Veranstaltungen ausblenden
-  let _hidePasstNicht  = false;       // "passt nicht"-Einträge ausblenden
+  // Wird auf dieser Seite nicht mehr gefiltert – "passt nicht" liegt im Segment
+  // "Abgeschlossen". Der Wert wird nur gelesen und unveraendert
+  // zurueckgeschrieben, weil die Kalenderlegende denselben Schluessel nutzt.
+  let _hidePasstNicht  = false;
 
   // Kategorien (Statistikportal: disziplin_kategorien) für Filter + Spalte
   let _kategorien = [];               // [{tbl_key, name}]
@@ -43,12 +48,15 @@ const WETTKAMPFPLANUNG = (() => {
     try {
       _hideVergangen  = localStorage.getItem('wkp_hide_vergangen')   === '1';
       _hidePasstNicht = localStorage.getItem('wkp_hide_passt_nicht') === '1';
+      const seg = localStorage.getItem('wkp_segment');
+      if (seg && (seg === 'alle' || SEG_STATUS[seg])) _segment = seg;
     } catch (e) { /* kein localStorage */ }
   }
   function _savePrefs() {
     try {
       localStorage.setItem('wkp_hide_vergangen',   _hideVergangen   ? '1' : '0');
       localStorage.setItem('wkp_hide_passt_nicht', _hidePasstNicht  ? '1' : '0');
+      localStorage.setItem('wkp_segment', _segment);
     } catch (e) { /* kein localStorage */ }
   }
 
@@ -64,12 +72,26 @@ const WETTKAMPFPLANUNG = (() => {
     nicht_angetreten:       { label: 'nicht angetreten',       bg: '#7f8c8d', text: '#fff', kat: 3 },
   };
 
-  // Status-Gruppen für Dropdown
+  // Status-Gruppen – zugleich die Segmente über der Liste.
+  // Ohne eigenen Status-Eintrag gilt eine Veranstaltung als "offen"; sie
+  // gehört damit in "Zu entscheiden", wo sie auch hingehört.
   const ST_GRUPPEN = [
-    { titel: 'To-Do',          keys: ['offen','in_klaerung'] },
-    { titel: 'In Bearbeitung', keys: ['anmeldung_erforderlich'] },
-    { titel: 'Abgeschlossen',  keys: ['angemeldet','absolviert','findet_nicht_statt','passt_nicht','nicht_angetreten'] },
+    { key: 'todo',   titel: 'Zu entscheiden', keys: ['offen','in_klaerung'] },
+    { key: 'arbeit', titel: 'In Bearbeitung', keys: ['anmeldung_erforderlich'] },
+    { key: 'fertig', titel: 'Abgeschlossen',  keys: ['angemeldet','absolviert','findet_nicht_statt','passt_nicht','nicht_angetreten'] },
   ];
+  const SEG_STATUS = {};
+  ST_GRUPPEN.forEach(g => { SEG_STATUS[g.key] = new Set(g.keys); });
+
+  /** Status einer Serie – ohne Eintrag gilt "offen". */
+  function _statusVon(s) { return s.status || 'offen'; }
+
+  /** Segment, in das eine Serie fällt. */
+  function _segmentVon(s) {
+    const st = _statusVon(s);
+    for (const g of ST_GRUPPEN) if (SEG_STATUS[g.key].has(st)) return g.key;
+    return 'todo';
+  }
 
   // ── Haupteinstieg ────────────────────────────────────────────
   async function render(el) {
@@ -143,6 +165,10 @@ const WETTKAMPFPLANUNG = (() => {
           anzeige: w => WKP_MONATE[parseInt(w, 10) - 1] || w },
         { key: 'teilnehmer', label: 'Teilnehmende',
           wert: s => (s.teilnehmer || []).length > 0 ? 'vorhanden' : 'keine' },
+        // Einzelner Status – die grobe Einteilung machen die Segmente oben,
+        // hier lässt sich bei Bedarf genau ein Status herausgreifen.
+        { key: 'status', label: 'Status',
+          wert: s => (ST[_statusVon(s)] || {}).label || _statusVon(s) },
       ],
       onChange: () => { _selected.clear(); _renderListe(); },
     });
@@ -153,12 +179,8 @@ const WETTKAMPFPLANUNG = (() => {
     _filterInit();
     let arr = tfFilter(TF, _serien.filter(s => s.aktiv !== 0));
 
-    if (_filterStatus.size > 0) {
-      arr = arr.filter(s => _filterStatus.has(s.status));
-    }
-
-    if (_hidePasstNicht) {
-      arr = arr.filter(s => s.status !== 'passt_nicht');
+    if (_segment !== 'alle') {
+      arr = arr.filter(s => _segmentVon(s) === _segment);
     }
 
     if (_hideVergangen) {
@@ -212,21 +234,15 @@ const WETTKAMPFPLANUNG = (() => {
     const sichtbar = _gefilterteSerien();
     _updateMap(sichtbar);
 
-    // Statistiken über alle Serien (nicht nur gefilterte)
-    const stati = {};
-    _serien.forEach(s => { stati[s.status] = (stati[s.status] || 0) + 1; });
-    const angemeldet  = (stati['angemeldet']  || 0);
-    const offen       = (stati['offen']       || 0) + (stati['in_klaerung'] || 0) + (stati['anmeldung_erforderlich'] || 0);
-    const absolviert  = (stati['absolviert']  || 0);
+    // Segment-Zaehler ueber alle aktiven Serien (nicht nur die gefilterten) –
+    // sonst zeigt ein Segment 0 an, obwohl dort etwas liegt.
+    const aktive = _serien.filter(s => s.aktiv !== 0);
+    const segZahl = { todo: 0, arbeit: 0, fertig: 0, alle: aktive.length };
+    aktive.forEach(s => { segZahl[_segmentVon(s)]++; });
 
     const sichtbareIds = sichtbar.map(s => s.id);
     const alleSelected = sichtbareIds.length > 0 && sichtbareIds.every(id => _selected.has(id));
     const someSelected = sichtbareIds.some(id => _selected.has(id));
-
-    // Filter-Button-Label
-    let filterLabel = 'Alle Status';
-    if (_filterStatus.size === 1) filterLabel = ST[[..._filterStatus][0]]?.label || 'Filter';
-    else if (_filterStatus.size > 1) filterLabel = `${_filterStatus.size} Status`;
 
     // Sort-Icon helper
     const si = key => {
@@ -240,10 +256,9 @@ const WETTKAMPFPLANUNG = (() => {
         <div>
           <h2 style="margin:0 0 2px;font-size:1.2rem;font-weight:700">Wettkampfplanung</h2>
           <div style="font-size:12px;color:var(--text2)">
-            ${_serien.length} Veranstaltungen
-            ${angemeldet  ? ` &bull; <strong style="color:#27ae60">${angemeldet} angemeldet</strong>` : ''}
-            ${absolviert  ? ` &bull; ${absolviert} absolviert` : ''}
-            ${offen       ? ` &bull; ${offen} offen` : ''}
+            ${segZahl.todo
+              ? `<strong style="color:var(--primary)">${segZahl.todo} warten auf deine Entscheidung</strong>`
+              : 'Alles entschieden'}
           </div>
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -265,17 +280,24 @@ const WETTKAMPFPLANUNG = (() => {
         </div>
       </div>
 
-      <!-- Toolbar: gemeinsame Filterleiste + Status/Sichtbarkeits-Schalter -->
-      ${tfBarHtml(TF, { suchbreite: '0 1 220px', extra: `
-        <button id="wkp-filter-btn"
-          onclick="WETTKAMPFPLANUNG._openFilterPopper(this)"
-          style="padding:6px 12px;border:1px solid ${_filterStatus.size ? 'var(--primary)' : 'var(--border)'};
-                 border-radius:8px;background:${_filterStatus.size ? 'color-mix(in srgb,var(--primary) 15%,transparent)' : 'var(--bg2)'};
-                 color:${_filterStatus.size ? 'var(--primary)' : 'var(--text)'};
-                 font-size:12px;cursor:pointer;white-space:nowrap;align-self:flex-end">
-          ${escapeHtml(filterLabel)} ▾
+      <!-- Segmente: die drei Status-Gruppen sichtbar statt im Popover -->
+      <div class="wkp-segmente" role="tablist" aria-label="Nach Status filtern">
+        ${ST_GRUPPEN.map(g => `
+          <button class="wkp-segment${_segment === g.key ? ' is-aktiv' : ''}"
+            role="tab" aria-selected="${_segment === g.key}"
+            onclick="WETTKAMPFPLANUNG.setSegment('${g.key}')">
+            ${escapeHtml(g.titel)}<span class="wkp-segment-zahl">${segZahl[g.key]}</span>
+          </button>`).join('')}
+        <button class="wkp-segment${_segment === 'alle' ? ' is-aktiv' : ''}"
+          role="tab" aria-selected="${_segment === 'alle'}"
+          onclick="WETTKAMPFPLANUNG.setSegment('alle')">
+          Alle<span class="wkp-segment-zahl">${segZahl.alle}</span>
         </button>
-        ${(tfAktiv(TF) || _filterStatus.size) ? `
+      </div>
+
+      <!-- Suche und Feinfilter (Disziplin, Ort, Monat, einzelner Status …) -->
+      ${tfBarHtml(TF, { suchbreite: '0 1 220px', extra: `
+        ${tfAktiv(TF) ? `
           <button onclick="WETTKAMPFPLANUNG._resetFilter()"
             style="padding:4px 8px;border:none;background:none;color:var(--text2);
                    font-size:12px;cursor:pointer;align-self:flex-end">✕ zurücksetzen</button>` : ''}
@@ -286,18 +308,10 @@ const WETTKAMPFPLANUNG = (() => {
             onchange="WETTKAMPFPLANUNG._toggleHideVergangen(this.checked)"
             style="accent-color:var(--primary);width:13px;height:13px;cursor:pointer">
           Vergangene ausblenden
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;
-                       color:${_hidePasstNicht ? 'var(--primary)' : 'var(--text2)'};
-                       cursor:pointer;white-space:nowrap;user-select:none;align-self:flex-end;padding-bottom:8px">
-          <input type="checkbox" ${_hidePasstNicht ? 'checked' : ''}
-            onchange="WETTKAMPFPLANUNG._toggleHidePasstNicht(this.checked)"
-            style="accent-color:var(--primary);width:13px;height:13px;cursor:pointer">
-          „passt nicht" ausblenden
         </label>` })}
       <div style="margin:-8px 0 12px">
-        ${sichtbar.length !== _serien.length
-          ? `<span style="font-size:12px;color:var(--text2)">${sichtbar.length} von ${_serien.length}</span>`
+        ${sichtbar.length !== segZahl.alle
+          ? `<span style="font-size:12px;color:var(--text2)">${sichtbar.length} von ${segZahl.alle}</span>`
           : ''}
       </div>`;
 
@@ -566,84 +580,21 @@ const WETTKAMPFPLANUNG = (() => {
   // ── Filter ───────────────────────────────────────────────────
   function _resetFilter() {
     tfLeeren(TF);
-    _filterStatus.clear();
     _selected.clear();
     _renderListe();
   }
 
-  function _openFilterPopper(btn) {
-    if (!_filterPopper || !_filterPopper.isConnected) {
-      _filterPopper = document.createElement('div');
-      _filterPopper.style.cssText =
-        'position:fixed;z-index:9900;background:var(--bg);border:1px solid var(--border);' +
-        'border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:6px;' +
-        'min-width:220px;display:none;';
-      document.body.appendChild(_filterPopper);
-      document.addEventListener('mousedown', e => {
-        const b = document.getElementById('wkp-filter-btn');
-        if (_filterPopper.style.display !== 'none' &&
-            !_filterPopper.contains(e.target) && !b?.contains(e.target)) {
-          _filterPopper.style.display = 'none';
-        }
-      });
-    }
-
-    let html = `<div style="padding:4px 10px 6px;font-size:10px;font-weight:700;
-      text-transform:uppercase;letter-spacing:.4px;color:var(--text2)">Status filtern</div>`;
-    ST_GRUPPEN.forEach(g => {
-      html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;
-        letter-spacing:.4px;color:var(--text2);padding:4px 10px 2px;margin-top:4px">${escapeHtml(g.titel)}</div>`;
-      g.keys.forEach(key => {
-        const cfg   = ST[key];
-        const aktiv = _filterStatus.has(key);
-        html += `<div onclick="WETTKAMPFPLANUNG._toggleFilterStatus('${key}')"
-          style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;
-                 background:${aktiv ? 'var(--border)' : 'transparent'}"
-          onmouseover="this.style.background='var(--border)'"
-          onmouseout="this.style.background='${aktiv ? 'var(--border)' : 'transparent'}'">
-          <span style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:${escapeHtml(cfg.bg)}"></span>
-          <span style="font-size:13px;flex:1">${escapeHtml(cfg.label)}</span>
-          ${aktiv ? '<span style="font-size:11px;color:var(--text2)">✓</span>' : ''}
-        </div>`;
-      });
-    });
-    html += `<div style="padding:6px 10px;border-top:1px solid var(--border);margin-top:4px">
-      <button onclick="WETTKAMPFPLANUNG._resetStatusFilter()"
-        style="font-size:12px;color:var(--text2);background:none;border:none;cursor:pointer;padding:0">
-        Alle anzeigen
-      </button>
-    </div>`;
-
-    _filterPopper.innerHTML = html;
-    _filterPopper.style.display = 'block';
-    _positionPopper(_filterPopper, btn, 220);
-  }
-
-  function _toggleFilterStatus(key) {
-    if (_filterStatus.has(key)) _filterStatus.delete(key);
-    else _filterStatus.add(key);
-    _selected.clear();
-    _renderListe();
-    const btn = document.getElementById('wkp-filter-btn');
-    if (btn) _openFilterPopper(btn);
-  }
-
-  function _resetStatusFilter() {
-    _filterStatus.clear();
-    if (_filterPopper) _filterPopper.style.display = 'none';
+  /** Segment wechseln – die Auswahl gilt immer nur innerhalb eines Segments. */
+  function setSegment(key) {
+    if (key !== 'alle' && !SEG_STATUS[key]) return;
+    _segment = key;
+    _savePrefs();
     _selected.clear();
     _renderListe();
   }
 
   function _toggleHideVergangen(val) {
     _hideVergangen = !!val;
-    _savePrefs();
-    _selected.clear();
-    _renderListe();
-  }
-
-  function _toggleHidePasstNicht(val) {
-    _hidePasstNicht = !!val;
     _savePrefs();
     _selected.clear();
     _renderListe();
@@ -1178,22 +1129,43 @@ const WETTKAMPFPLANUNG = (() => {
     });
   }
 
+  /** Ist die Karte aufgeklappt? Merkt sich die Wahl je Gerät. */
+  function _karteOffen() {
+    try { return localStorage.getItem('wkp_karte_offen') === '1'; } catch (_) { return false; }
+  }
+
+  function toggleKarte() {
+    try { localStorage.setItem('wkp_karte_offen', _karteOffen() ? '0' : '1'); } catch (_) {}
+    // Gerüst neu aufbauen, damit der aufgeklappte Zustand greift
+    if (_mapSectionEl) _mapSectionEl.innerHTML = '';
+    _map = null; _markerLayer = null;
+    _updateMap(_gefilterteSerien());
+  }
+
   async function _updateMap(serien) {
     const sec = _mapSectionEl;
     if (!sec) return;
 
-    const geo = (serien || []).filter(s => s.lat != null && s.lon != null);
+    const geo   = (serien || []).filter(s => s.lat != null && s.lon != null);
+    const offen = _karteOffen();
 
     // Grundgerüst der Karten-Sektion nur einmal aufbauen (bleibt bei Filter/Sort erhalten)
-    if (!sec.querySelector('#wkp-map')) {
+    if (!sec.querySelector('#wkp-map-kopf')) {
       sec.innerHTML = `
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
-                    color:var(--text2);margin:0 0 8px">Karte der Wettkämpfe</div>
-        <div id="wkp-map" style="width:100%;height:380px;border-radius:10px;
-             border:1px solid var(--border);background:var(--bg2)"></div>
-        <div id="wkp-map-hint" style="font-size:12px;color:var(--text2);margin-top:6px"></div>`;
+        <button id="wkp-map-kopf" class="wkp-karte-schalter"
+          onclick="WETTKAMPFPLANUNG.toggleKarte()" aria-expanded="${offen}">
+          <span>&#x1F5FA;&#xFE0F; Karte der Wettkämpfe</span>
+          <span class="wkp-karte-pfeil">${offen ? '▲' : '▼'}</span>
+        </button>
+        ${offen ? `
+          <div id="wkp-map" style="width:100%;height:380px;border-radius:10px;
+               border:1px solid var(--border);background:var(--bg2);margin-top:8px"></div>
+          <div id="wkp-map-hint" style="font-size:12px;color:var(--text2);margin-top:6px"></div>` : ''}`;
       _map = null; _markerLayer = null;
     }
+
+    // Zugeklappt: Leaflet wird gar nicht erst geladen.
+    if (!offen) return;
 
     const hint = sec.querySelector('#wkp-map-hint');
     if (hint) {
@@ -1383,8 +1355,8 @@ const WETTKAMPFPLANUNG = (() => {
     render, setJahr,
     _openPopper, _waehleStatus,
     _toggleSort,
-    _resetFilter, _openFilterPopper, _toggleFilterStatus, _resetStatusFilter,
-    _toggleHideVergangen, _toggleHidePasstNicht,
+    _resetFilter, setSegment, toggleKarte,
+    _toggleHideVergangen,
     _toggleSelect, _toggleAll, _clearSelection,
     _openBulkPopper, _bulkSetStatus,
     _anDisziplin, _abDisziplin,

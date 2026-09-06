@@ -31,6 +31,8 @@ const DASHBOARD = (() => {
     // direkt in die freigegebene Ansicht, nicht auf ein leeres Dashboard.
     if (!state.user) { location.replace(_gastZiel()); return; }
 
+    const istTrainer = state.user.rolle === 'admin' || state.user.rolle === 'trainer';
+
     const jetzt = new Date();
     const gruss = jetzt.getHours() < 11 ? 'Guten Morgen'
                 : jetzt.getHours() < 18 ? 'Guten Tag'
@@ -47,6 +49,10 @@ const DASHBOARD = (() => {
         <div id="dash-hinweise"></div>
 
         <div class="dash-kacheln">
+          ${istTrainer ? `
+            <div id="dash-planung" class="panel dash-kachel">
+              <div class="dash-kachel-lade">Lade Planungsstand…</div>
+            </div>` : ''}
           <div id="dash-woche" class="panel dash-kachel">
             <div class="dash-kachel-lade">Lade Wochenbilanz…</div>
           </div>
@@ -67,6 +73,7 @@ const DASHBOARD = (() => {
     _renderKalActions('dash-actions');
     _renderWoche();
     _renderEntscheidungen();
+    if (istTrainer) _renderPlanungsstand();
 
     // Die Wettkampfkarten lesen _wkPrivatMap für den Aktiv-Zustand ihrer
     // Disziplin-Buttons. Kalender und Liste füllen die Map beim Rendern –
@@ -239,6 +246,64 @@ const DASHBOARD = (() => {
         ${rest}
         <button class="btn btn-primary btn-sm" style="margin-top:12px"
           onclick="navigate('wettkampfplanung')">Zur Wettkampfplanung</button>
+      </div>`;
+  }
+
+  // ── Kachel: Planungsstand (nur Trainer und Admins) ─────────
+  // Beantwortet die Trainerfrage "was fehlt in der Planung": kommende Wochen
+  // ohne Training und Termine ohne Treffpunkt.
+  async function _renderPlanungsstand() {
+    const el = document.getElementById('dash-planung');
+    if (!el) return;
+
+    const heute = new Date();
+    const bis   = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate() + 28);
+    let einheiten = [];
+    try {
+      const d = await apiGet(`einheiten?von=${ymd(heute)}&bis=${ymd(bis)}`, { silent: true });
+      einheiten = (d.einheiten || []).filter(e => e.status !== 'abgesagt');
+    } catch (e) {
+      el.innerHTML = `<div class="settings-panel-body" style="color:var(--text2);font-size:13px">
+        Planungsstand konnte nicht geladen werden.</div>`;
+      return;
+    }
+
+    // Kommende vier Wochen: welche haben ueberhaupt ein Training?
+    const wochenMitTraining = new Set(einheiten.map(e => _isoMonday(new Date(e.datum + 'T00:00:00'))));
+    const wochen = [];
+    for (let i = 0; i < 4; i++) {
+      const d = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate() + i * 7);
+      const mo = _isoMonday(d);
+      if (!wochen.includes(mo)) wochen.push(mo);
+    }
+    const leereWochen  = wochen.filter(mo => !wochenMitTraining.has(mo));
+    const ohneTreffpkt = einheiten.filter(e => !e.treffpunkt || !e.treffpunkt.id).length;
+
+    const zeile = (ok, text, aktion) => `
+      <li class="dash-pruefung${ok ? ' is-ok' : ''}">
+        <span class="dash-pruefung-icon">${ok ? '&#x2713;' : '&#x26A0;&#xFE0E;'}</span>
+        <span class="dash-pruefung-text">${text}</span>
+        ${!ok && aktion ? aktion : ''}
+      </li>`;
+
+    el.innerHTML = `
+      <div class="panel-header">
+        <div class="panel-title">&#x1F4CB; Planungsstand</div>
+        <span class="panel-count">4 Wochen</span>
+      </div>
+      <div class="settings-panel-body">
+        <ul class="dash-pruefungen">
+          ${zeile(!leereWochen.length,
+            leereWochen.length
+              ? `<strong>${leereWochen.length}</strong> der nächsten vier Wochen ohne Training`
+              : 'Alle vier kommenden Wochen sind geplant',
+            `<button class="btn btn-ghost btn-sm" onclick="navigate('planung')">Planen</button>`)}
+          ${zeile(!ohneTreffpkt,
+            ohneTreffpkt
+              ? `<strong>${ohneTreffpkt}</strong> ${ohneTreffpkt === 1 ? 'Termin' : 'Termine'} ohne Treffpunkt`
+              : 'Alle Termine dieser Wochen haben einen Treffpunkt',
+            `<button class="btn btn-ghost btn-sm" onclick="navigate('planung/liste')">Liste öffnen</button>`)}
+        </ul>
       </div>`;
   }
 

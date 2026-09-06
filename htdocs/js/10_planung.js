@@ -459,7 +459,10 @@ const PLANUNG = (() => {
   }
 
   // ── Gruppen-Tabs ──────────────────────────────────────────
-  // Jeder Tab trägt die Kalenderfarbe (Standard, vom Trainer setzbar).
+  // Jeder Reiter zeigt die Kalenderfarbe seiner Gruppe. Gesetzt wird sie seit
+  // v341 unter Admin → Gruppen: ein global wirkender Farbwähler, der sich per
+  // Rechtsklick zurücksetzen ließ, war an einer Navigationsleiste nicht zu
+  // finden – und auf dem Handy gar nicht bedienbar.
   function _tab(key, label, aktiv, onclick, title) {
     const farbe = (typeof kalFarbeDefault === 'function') ? kalFarbeDefault(key) : '#888888';
     // Im Dark-Mode rohe Hex-Farben aufhellen, damit sie auf dunklem Grund lesbar sind
@@ -472,11 +475,7 @@ const PLANUNG = (() => {
       ? `border-bottom:3px solid ${farbeVis};color:${farbeVis}`
       : `border-bottom:3px solid transparent`;
     return `<span class="planung-tab-wrap">
-      <input type="color" class="planung-tab-color" value="${farbe}"
-        title="Standard-Kalenderfarbe festlegen · Rechtsklick: zurücksetzen"
-        onclick="event.stopPropagation()"
-        onchange="PLANUNG.setDefaultFarbe('${key}', this.value)"
-        oncontextmenu="return PLANUNG.resetDefaultFarbe(event, '${key}')">
+      <span class="planung-tab-punkt" style="background:${farbeVis}" aria-hidden="true"></span>
       <button class="planung-tab${aktiv ? ' planung-tab-aktiv' : ''}" style="${btnStyle}"
         ${onclick}${title ? ` title="${title}"` : ''}>${escapeHtml(label)}</button>
     </span>`;
@@ -581,27 +580,6 @@ const PLANUNG = (() => {
   }
 
   // Standard-Kalenderfarbe (global, für alle Athleten) setzen/zurücksetzen.
-  async function setDefaultFarbe(key, hex) {
-    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
-    try {
-      const r = await apiPut('planung/kalender-farbe', { key, farbe: hex });
-      if (r && r.farben && typeof r.farben === 'object') kalFarbenDefaults = r.farben;
-      applyKalenderFarben(_gruppen.map(g => 'g' + g.id));
-      _aktualisiereTabs();
-    } catch (e) {
-      notify('Farbe konnte nicht gespeichert werden.', 'err');
-    }
-  }
-  async function resetDefaultFarbe(ev, key) {
-    ev.preventDefault();
-    try {
-      const r = await apiPut('planung/kalender-farbe', { key, farbe: '' });
-      if (r && r.farben && typeof r.farben === 'object') kalFarbenDefaults = r.farben;
-      applyKalenderFarben(_gruppen.map(g => 'g' + g.id));
-      _aktualisiereTabs();
-    } catch (_) {}
-    return false;
-  }
   function _aktualisiereTabs() {
     const bar = document.querySelector('.planung-gruppen-bar');
     if (bar) bar.outerHTML = _renderGruppenTabs();
@@ -1810,7 +1788,6 @@ const PLANUNG = (() => {
     gruppenAuswahlOeffnen, gruppenAuswahlSchliessen,
     getAktivGruppe,
     wechsleSection,
-    setDefaultFarbe, resetDefaultFarbe,
     oeffneAthletPlan, athletZurueck,
     notizHinzufuegen, notizBearbeiten, notizSpeichern,
     notizLoeschen, notizDialogSchliessen,
