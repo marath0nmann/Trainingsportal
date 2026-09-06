@@ -8,8 +8,13 @@
 // Statistikportal.
 //
 // API:
-//   GET  admin/papierkorb?tage=30   → [{id, tabelle_label, titel, …}]
-//   POST admin/papierkorb/{id}      → Datensatz (inkl. Kindzeilen) zurueck
+//   GET    admin/papierkorb?tage=30          → [{id, tabelle_label, titel, …}]
+//   POST   admin/papierkorb/{id}             → Datensatz (inkl. Kindzeilen) zurueck
+//   DELETE admin/papierkorb/{id}             → Eintrag endgueltig loeschen
+//   DELETE admin/papierkorb?vor_tagen=N      → alles aelter als N Tage; 0 = alles
+//
+// Das endgueltige Loeschen ist der einzige Ort im Portal, an dem Daten
+// wirklich verschwinden – ueberall sonst archiviert archiviereUndLoesche().
 // ============================================================
 
 const PAPIERKORB = (() => {
@@ -89,6 +94,8 @@ const PAPIERKORB = (() => {
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-ghost btn-sm" onclick="PAPIERKORB.wiederherstellen(${e.id})"
             title="Datensatz zurück in den Bestand holen">&#x21BA; Wiederherstellen</button>
+          <button class="btn btn-ghost btn-sm pk-endgueltig" onclick="PAPIERKORB.endgueltigLoeschen(${e.id})"
+            title="Endgültig löschen – danach ist der Datensatz weg">&#x1F5D1;&#xFE0F;</button>
         </td>
       </tr>`).join('');
 
@@ -115,7 +122,12 @@ const PAPIERKORB = (() => {
               archiviert, nicht entfernt. Beim Wiederherstellen kommen zusammengehörige Teile mit –
               die Segmente einer Einheit ebenso wie die Segmente und Gruppen eines Blocks.
             </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${_zeitraumWahl()}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+              ${_zeitraumWahl()}
+              ${_eintraege.length ? `<button class="btn btn-danger btn-sm" style="margin-left:auto"
+                onclick="PAPIERKORB.leeren()"
+                title="Alle archivierten Datensätze endgültig löschen">Papierkorb leeren…</button>` : ''}
+            </div>
             ${tfBarHtml(TF)}
             ${leer || `
             <div class="table-scroll" style="margin-top:12px">
@@ -164,5 +176,60 @@ const PAPIERKORB = (() => {
     }
   }
 
-  return { render, zeitraum, wiederherstellen };
+  /** Einen Eintrag endgueltig loeschen – mit seinen Kindzeilen. */
+  async function endgueltigLoeschen(id) {
+    const e = _eintraege.find(x => x.id === id);
+    const was = e ? `${e.tabelle_label} „${e.titel}“` : 'diesen Eintrag';
+    const ok = await confirmModal(
+      `${was} endgültig löschen?\n\n` +
+      'Danach ist der Datensatz weg – es gibt keine zweite Sicherung.');
+    if (!ok) return;
+    try {
+      const r = await apiDel('admin/papierkorb/' + id);
+      const n = (r && r.geloescht) || 1;
+      notify(n > 1 ? `Endgültig gelöscht (${n} Datensätze).` : 'Endgültig gelöscht.', 'ok');
+      _eintraege = _eintraege.filter(x => x.id !== id);
+      _render();
+      if (typeof ladeNavBadges === 'function') ladeNavBadges(true);
+    } catch (err) {
+      notify('Fehler: ' + (err.message || ''), 'err');
+    }
+  }
+
+  /**
+   * Papierkorb leeren. Zwei Stufen, damit niemand versehentlich alles
+   * verliert: erst die Frage nach dem Umfang, dann die Bestaetigung mit der
+   * konkreten Anzahl.
+   */
+  async function leeren() {
+    const wahl = await promptModal(
+      'Papierkorb leeren – was soll endgültig gelöscht werden?\n\n' +
+      'Trage ein Alter in Tagen ein: gelöscht wird alles, was älter ist.\n' +
+      'Eine 0 leert den Papierkorb vollständig.',
+      '30');
+    if (wahl === null) return;
+
+    const tage = parseInt((wahl || '').trim(), 10);
+    if (isNaN(tage) || tage < 0) { notify('Bitte eine Zahl ab 0 eintragen.', 'err'); return; }
+
+    const text = tage > 0
+      ? `Alle Einträge, die älter als ${tage} Tage sind, endgültig löschen?`
+      : 'Den Papierkorb vollständig leeren?';
+    const ok = await confirmModal(text +
+      '\n\nDanach sind diese Datensätze weg – es gibt keine zweite Sicherung.');
+    if (!ok) return;
+
+    try {
+      const r = await apiDel('admin/papierkorb?vor_tagen=' + tage);
+      const n = (r && r.geloescht) || 0;
+      notify(n ? `${n} Datensätze endgültig gelöscht.` : 'Nichts zu löschen.', 'ok');
+      await _laden();
+      _render();
+      if (typeof ladeNavBadges === 'function') ladeNavBadges(true);
+    } catch (err) {
+      notify('Fehler: ' + (err.message || ''), 'err');
+    }
+  }
+
+  return { render, zeitraum, wiederherstellen, endgueltigLoeschen, leeren };
 })();
