@@ -1,5 +1,9 @@
 # Changelog
 
+## v347
+- **Fix: Im mobilen Menü fehlte der erste Eintrag.** Der Drawer steht in der geteilten `app.css` auf `top: 0` und lag damit hinter dem Header – der oberste Menüpunkt war schlicht verdeckt. Das Statistikportal korrigiert das beim Öffnen auf die gemessene Header-Höhe, das Trainingsportal tat es nie. Zuletzt traf es „Kalender", vorher „Übersicht": der jeweils erste Punkt war unerreichbar, seit es das Menü gibt. Die Höhe wird jetzt beim Öffnen gemessen statt fest verdrahtet – der Header ist auf schmalen Geräten niedriger.
+- Bei der Gelegenheit zwei Kleinigkeiten aus der geteilten `app.css` übernommen, die bisher ungenutzt blieben: der Burger verwandelt sich beim Öffnen in ein ×, und der Hintergrund scrollt nicht mehr mit, solange das Menü offen ist.
+
 ## v346
 - **Fix: „Papierkorb leeren" meldete „Nichts zu löschen", obwohl Einträge dastanden.** Die Zeitraum-Knöpfe zeigen die Einträge der *letzten* 30 Tage, das Leeren löschte aber alles, was *älter als* 30 Tage ist – genau die Gegenmenge, weshalb bei der Voreinstellung nie etwas passierte. Jetzt heißt Leeren auch leeren: das ganze Archiv, unabhängig vom eingestellten Zeitraum. Der Knopf trägt die Gesamtzahl (`Papierkorb leeren (12)…`), und die Rückfrage nennt sie ebenfalls – samt Hinweis, wenn die Liste gerade weniger zeigt, als gelöscht wird. Die Abfrage nach einem Alter in Tagen entfällt; wer einzelne Einträge behalten will, löscht die übrigen über das 🗑️ je Zeile.
 - Zeigt der gewählte Zeitraum nichts, verweist die leere Liste jetzt auf die Gesamtzahl im Archiv, statt den Eindruck zu erwecken, der Papierkorb sei leer.
