@@ -986,7 +986,7 @@ const PLANUNG = (() => {
         <td class="athlet-name">${escapeHtml(a.name)}${a.ich ? ' <span class="athlet-ich">(ich)</span>' : ''}</td>
         <td class="athlet-anzahl">${a.anzahl}</td>
         <td class="athlet-letztes">${escapeHtml(_fmtDatumKurz(a.letztes))}</td>
-        <td><span class="athlet-stufe-badge ${_stufeCls(a.meine_stufe)}">${_stufeLabel(a.meine_stufe)}</span></td>
+        <td><span class="badge badge-kompakt athlet-stufe-badge ${_stufeCls(a.meine_stufe)}">${_stufeLabel(a.meine_stufe)}</span></td>
         <td class="athlet-aktion">${aktion}</td>
       </tr>`;
     }).join('');
@@ -1019,7 +1019,7 @@ const PLANUNG = (() => {
         <div class="athlet-plan-head">
           <button class="btn btn-ghost btn-sm" onclick="PLANUNG.athletZurueck()">← Übersicht</button>
           <span class="athlet-plan-name">${escapeHtml(sel.name)}</span>
-          <span class="athlet-stufe-badge ${_stufeCls(sel.stufe)}">${_stufeLabel(sel.stufe)}</span>
+          <span class="badge badge-kompakt athlet-stufe-badge ${_stufeCls(sel.stufe)}">${_stufeLabel(sel.stufe)}</span>
         </div>
         <div class="panel">
           <div class="athlet-plan-kal-head">
@@ -1235,7 +1235,7 @@ const PLANUNG = (() => {
 
   function renderPBlockCard(b) {
     const privBadge = b.sichtbarkeit === 'privat'
-      ? `<span class="block-sicht-badge block-sicht-privat">Privat</span>` : '';
+      ? `<span class="badge badge-kompakt block-sicht-badge block-sicht-privat">Privat</span>` : '';
     const editBtn = kannBearbeiten(b)
       ? `<button class="btn btn-ghost btn-sm pblock-edit-btn" onclick="event.stopPropagation();BLOECKE.bearbeiten(${b.id})" title="Block bearbeiten">✎</button>`
       : '';

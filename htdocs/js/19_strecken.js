@@ -595,7 +595,7 @@ const STRECKEN = (() => {
     }
 
     el.innerHTML = `<div class="strecke-seite-grid">${liste.map(s => `
-      <div class="strecke-karte">
+      <div class="panel strecke-karte">
         <div class="strecke-karte-bild" data-strecke-id="${s.id}"></div>
         <div class="strecke-karte-titel">${escapeHtml(s.name)}</div>
         <div class="strecke-karte-meta">${escapeHtml(metaText(s))}</div>

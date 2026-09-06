@@ -151,7 +151,7 @@ const ADMIN_TRAININGS = (() => {
         <td data-label="Datum" style="${tdClip}">${escapeHtml(datStr)}</td>
         <td data-label="Zeit" style="${tdClip}">${escapeHtml(zeitStr)}</td>
         <td data-label="Typ" style="overflow:hidden;max-width:0">
-          <span class="liste-typ-badge liste-typ-${escapeHtml(e.typ)}"
+          <span class="badge badge-kompakt liste-typ-badge liste-typ-${escapeHtml(e.typ)}"
             style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;white-space:nowrap"
           >${escapeHtml(typLbl)}</span>
         </td>

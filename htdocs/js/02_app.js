@@ -2337,7 +2337,7 @@ async function renderListe(main, quarterArg) {
     return `<div class="${rowCls}"${clickAttr}>
       ${dateCell(datum)}
       <span class="liste-time">${e.uhrzeit ? escapeHtml(e.uhrzeit) : '–'}</span>
-      <span class="liste-typ-badge liste-typ-${e.typ}">${escapeHtml(typLabel)}</span>
+      <span class="badge badge-kompakt liste-typ-badge liste-typ-${e.typ}">${escapeHtml(typLabel)}</span>
       <span class="liste-title-text">${meinDot}${escapeHtml(e.titel)}${streckeMarker(e)}</span>
       <span class="liste-ort">${lastCell}</span>
     </div>`;
@@ -2354,7 +2354,7 @@ async function renderListe(main, quarterArg) {
     return `<${tag} class="liste-row liste-row-wettkampf wk-hist-item${datum === todayKey ? ' is-today' : ''}"${rowAttrs}>
       ${dateCell(datum)}
       <span class="liste-time">–</span>
-      <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
+      <span class="badge badge-kompakt liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
       <span class="liste-title-text">🏆 ${escapeHtml(name)}${href ? ' <span class="wk-hist-arrow">↗</span>' : ''}</span>
       <span class="liste-ort">${t.ort ? escapeHtml(t.ort) : ''}</span>
     </${tag}>`;
@@ -2386,7 +2386,7 @@ async function renderListe(main, quarterArg) {
     return `<div class="liste-row liste-row-wettkampf kal-cal-wettkampf${datum === todayKey ? ' is-today' : ''}"${clickAttr} data-serie-id="${s.id}">
       ${dateCell(datum)}
       <span class="liste-time">–</span>
-      <span class="liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
+      <span class="badge badge-kompakt liste-typ-badge liste-typ-wettkampf">Wettkampf</span>
       <span class="liste-title-text"${titleSty}>${emoji} ${escapeHtml(name)}${prognose}${extLink}</span>
       <span class="liste-ort liste-wk-extra">${extra}</span>
     </div>`;
