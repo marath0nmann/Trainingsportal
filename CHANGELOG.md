@@ -1,5 +1,11 @@
 # Changelog
 
+## v344
+- **Kartenlisten und Badges bauen die geteilten Bausteine nicht mehr nach.** Trainingsblöcke, Strecken- und Treffpunktkarten definierten je eine eigene Kartenfläche – dreimal fast dasselbe, aber mit unterschiedlicher Rahmenstärke (1px vs 1.5px) und unterschiedlichem Radius (10px vs `var(--radius)`). Sie nutzen jetzt `.panel` aus der geteilten `app.css` und behalten nur, was sie unterscheidet: die Typ-Akzentfarbe des Blocks, das Kartenbild des Treffpunkts, die Innenaufteilung der Strecke.
+- Dasselbe bei den Badges: Trainingstyp, Sichtbarkeit, Zugriffsstufe und Listen-Typ hatten vier fast gleiche Grundformen. Basis ist jetzt `.badge` aus `app.css` plus die eine Abweichung `.badge-kompakt` – das Trainingsportal setzt Badges in enge Kalenderzellen, wo die Pillenform des Statistikportals zu breit ist. Die vier Klassen tragen nur noch ihre Farbe.
+- Lade- und Leerzustände von Kalender, Quartalsplan und Blöcken waren dreimal derselbe Block – jetzt eine Regel.
+- Toter Code entfernt: die Regeln des alten Block-Editors (`.ed-block*`), die seit dem Umbau auf Segmentbäume niemand mehr referenziert.
+
 ## v343
 - **Ein Baustein für alle Formularfelder einer Trainingseinheit.** Ein Training entsteht auf vier Wegen – Editor, Block auf ein Datum legen, Termin-Modal, Mein-Plan-Modal –, und jeder brachte sein eigenes Formular mit: eigenes Datumsfeld, eigene Treffpunkt-Auswahl, eigene Typ-Liste, eigene Sichtbarkeits-Optionen. Neu ist `24_felder.js`: die Felder stehen einmal da, jeder Weg setzt seine eigene Auswahl daraus zusammen. Die Feldmengen bleiben absichtlich verschieden – eine private Einheit hat keinen Treffpunkt, ein Block bringt Titel und Typ schon mit. Gleich sind jetzt Beschriftung, Platzhalter, Optionslisten und Escaping.
 - **Fix: Der vorbelegte Treffpunkt eines Trainingstyps kam nie an.** Der Editor las `default_treffpunkt_id` aus `appConfig.typen` – der `config`-Endpunkt lieferte dieses Feld aber nicht mit, sodass die Vorbelegung still ins Leere lief. Jetzt wird es ausgeliefert, und die Regel gilt einheitlich: bei einem neuen Eintrag zuerst der Treffpunkt des Trainingstyps, sonst der vereinsweite Standard. Vorher kannte der Editor nur den ersten, das Block-Formular nur den zweiten und das Termin-Modal gar keinen.

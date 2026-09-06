@@ -199,10 +199,10 @@ const BLOECKE = (() => {
               : `<span class="block-seg-badge block-seg-leer" title="Titel wird beim Öffnen automatisch geparst">∅ Segmente</span>`)
           : '');
     return `
-      <div class="block-card block-typ-${escapeHtml(b.typ)}">
+      <div class="panel block-card block-typ-${escapeHtml(b.typ)}">
         <div class="block-card-head">
           ${!istGlobal
-            ? '<span class="block-sicht-badge block-sicht-privat">Privat</span>'
+            ? '<span class="badge badge-kompakt block-sicht-badge block-sicht-privat">Privat</span>'
             : ''}
           ${infoBadge}
         </div>

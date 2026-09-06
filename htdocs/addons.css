@@ -78,11 +78,16 @@
   color: var(--text); margin: 0; min-width: 220px; text-align: center;
 }
 
-.kal-loading, .kal-error {
+/* Lade- und Leerzustaende: eine Box, dreimal gebraucht (Kalender, Quartalsplan,
+   Bloecke). app.css hat dafuer .empty, aber ohne Flaeche und Rahmen – die
+   braucht das Trainingsportal, weil die Box dort allein auf der Seite steht. */
+.kal-loading, .kal-error,
+.liste-loading, .liste-error, .liste-empty,
+.bloecke-loading {
   padding: 48px; text-align: center; color: var(--text2);
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
 }
-.kal-error { color: var(--primary); }
+.kal-error, .liste-error { color: var(--primary); }
 
 .kal-grid {
   background: var(--surface);
@@ -566,10 +571,18 @@
   border-radius: 4px; padding: 1px 6px;
 }
 .liste-time { color: var(--text2); font-size: 13px; white-space: nowrap; }
-.liste-typ-badge {
+/* ── Kompakte Badges ─────────────────────────────────────────────────────
+   Basis ist .badge aus app.css. Das Trainingsportal setzt Badges in enge
+   Kalenderzellen und Tabellenspalten; dort ist die Pillenform des
+   Statistikportals zu breit. Diese eine Regel beschreibt die Abweichung –
+   vorher stand sie in vier fast gleichen Kopien. */
+.badge-kompakt {
   font-size: 10px; font-weight: 700; letter-spacing: .5px;
   text-transform: uppercase; border-radius: 4px; padding: 2px 7px;
-  background: var(--surf2); color: var(--text2); white-space: nowrap;
+  white-space: nowrap;
+}
+.liste-typ-badge {
+  background: var(--surf2); color: var(--text2);
   justify-self: start;
 }
 .liste-typ-intervall   { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); color: var(--primary); }
@@ -583,12 +596,7 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .liste-ort { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.liste-loading, .liste-error, .liste-empty {
-  padding: 48px; text-align: center; color: var(--text2);
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.liste-error { color: var(--primary); }
+
 
 /* ── Listenansicht: angereicherte Elemente (Parität mit Kalender) ── */
 /* Filter-Legende über der Liste */
@@ -1343,10 +1351,6 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 .bloecke-intro {
   font-size: 13px; color: var(--text2); margin: 0 0 20px;
 }
-.bloecke-loading {
-  padding: 48px; text-align: center; color: var(--text2);
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-}
 .bloecke-leer {
   padding: 40px; text-align: center; color: var(--text2);
   background: var(--surf2); border: 1px dashed var(--border); border-radius: var(--radius);
@@ -1381,10 +1385,11 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
 }
 
 /* Block-Karte */
+/* Grundform (Flaeche, Rahmen, Radius, Schatten) kommt aus .panel in app.css;
+   hier steht nur, was einen Trainingsblock davon unterscheidet. */
 .block-card {
-  background: var(--surface); border: 1.5px solid var(--border);
-  border-radius: var(--radius); padding: 14px 16px;
-  box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
   border-top: 4px solid var(--accent);
   transition: box-shadow .15s, transform .1s;
 }
@@ -1402,14 +1407,8 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 .block-typ-badge {
-  font-size: 10px; font-weight: 700; letter-spacing: .8px;
-  text-transform: uppercase; color: var(--accent);
+  letter-spacing: .8px; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border-radius: 4px; padding: 2px 7px;
-}
-.block-sicht-badge {
-  font-size: 10px; font-weight: 700; letter-spacing: .5px;
-  text-transform: uppercase; border-radius: 4px; padding: 2px 7px;
 }
 .block-sicht-global {
   color: var(--green, #1a8a3a);
@@ -2020,10 +2019,8 @@ body.planung-active #app-footer    { display: none; }
 .tp-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;
 }
-.tp-karte {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 10px; overflow: hidden; display: flex; flex-direction: column;
-}
+/* Grundform aus .panel; die Karte bringt nur ihr Kartenbild mit. */
+.tp-karte { display: flex; flex-direction: column; }
 .tp-karte-map { width: 100%; height: 160px; overflow: hidden; flex-shrink: 0; }
 .tp-karte-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .tp-karte-name {
@@ -2083,28 +2080,6 @@ body.planung-active #app-footer    { display: none; }
 }
 
 
-/* ── Block-Editor ──────────────────────────────────────────────────── */
-.ed-block {
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 10px;
-  background: var(--surf2);
-}
-.ed-block-head {
-  display: flex; gap: 12px; align-items: flex-start;
-}
-.ed-block-wdh {
-  display: flex; flex-direction: column; gap: 4px;
-  flex-shrink: 0; min-width: 72px;
-}
-.ed-block-wdh label {
-  font-size: 10px; font-weight: 700; letter-spacing: .5px;
-  text-transform: uppercase; color: var(--text2);
-}
-.ed-block-abschnitte { flex: 1; min-width: 0; overflow-x: auto; }
-.ed-block-del { margin-left: 4px; flex-shrink: 0; }
-.ed-block-actions { display: flex; gap: 6px; margin-top: 6px; }
 
 /* Pace/Pause-Spalte in der Abschnitte-Tabelle */
 .ed-seg-table td:nth-child(3) select,
@@ -2436,6 +2411,12 @@ body.planung-active #app-footer    { display: none; }
   .konto-titel { font-size: 24px; }
   .konto-panel-fuss button { width: 100%; }
 }
+
+/* .panel bringt margin-bottom: 20px mit – in einem Raster mit `gap` waere das
+   doppelter Abstand. Karten in Rastern heben ihn auf. */
+.bloecke-grid > .panel,
+.strecke-seite-grid > .panel,
+.tp-grid > .panel { margin-bottom: 0; }
 
 /* ── Übersicht (#dashboard) ───────────────────────────────── */
 .dash-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
@@ -2976,11 +2957,7 @@ body.planung-active #app-footer    { display: none; }
 .athlet-aktion { text-align: right; white-space: nowrap; }
 .athlet-kein-zugriff { color: var(--text2); }
 
-.athlet-stufe-badge {
-  display: inline-block; font-size: 10px; font-weight: 700;
-  letter-spacing: .5px; text-transform: uppercase;
-  border-radius: 4px; padding: 2px 8px; white-space: nowrap;
-}
+
 .athlet-stufe-voll {
   color: var(--green, #1a8a3a);
   background: color-mix(in srgb, var(--green, #1a8a3a) 14%, transparent);
@@ -3194,10 +3171,10 @@ body.planung-active #app-footer    { display: none; }
   display: grid; gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
+/* Grundform aus .panel; hier nur die Innenaufteilung. */
 .strecke-karte {
   display: flex; flex-direction: column; gap: 4px;
-  border: 1px solid var(--border); border-radius: 10px;
-  padding: 10px; background: var(--surface);
+  padding: 10px;
 }
 .strecke-karte-bild .strecke-vorschau { border: none; background: none; }
 .strecke-karte-titel { font-weight: 600; }

@@ -172,7 +172,7 @@ const TREFFPUNKTE = (() => {
       ? `<div class="tp-coords">📍 ${t.lat.toFixed(5)}, ${t.lng.toFixed(5)}</div>`
       : `<div class="tp-coords tp-coords-leer">Keine Koordinaten</div>`;
     return `
-      <div class="tp-karte" id="tpk-${t.id}">
+      <div class="panel tp-karte" id="tpk-${t.id}">
         ${mapPreview}
         <div class="tp-karte-body">
           <div class="tp-karte-name">${escapeHtml(t.name)}</div>
