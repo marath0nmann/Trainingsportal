@@ -234,21 +234,9 @@ const BLOECKE = (() => {
     const b = blockData.block;
     _anwendenGruppeId = gruppeId || null;
     const heute = datum || ymd(new Date());
-    const stdTpId = String(appConfig && appConfig.training_standard_treffpunkt_id || '');
-    const tpOptionen = `<option value=""${stdTpId === '' ? ' selected' : ''}>— kein Treffpunkt —</option>` +
-      tpListe.map(t => `<option value="${t.id}"${String(t.id) === stdTpId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
-
-    // Default-Uhrzeit aus Admin-Einstellungen per Wochentag (1=Mo … 7=So)
-    let defaultUhrzeit = '';
-    try {
-      const raw = appConfig && appConfig.training_default_uhrzeiten;
-      if (raw) {
-        const datObj = new Date(heute + 'T00:00:00');
-        const dow = String(((datObj.getDay() + 6) % 7) + 1);
-        const uMap = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        defaultUhrzeit = (uMap[dow] || '').trim();
-      }
-    } catch (_) {}
+    // Standard-Uhrzeit und Standard-Treffpunkt kommen aus FELDER – dieselbe
+    // Vorbelegung wie im Editor.
+    const defaultUhrzeit = FELDER.standardUhrzeit(heute);
     const cont = document.getElementById('modal-container');
 
     // Standard-Wochentag des Startdatums (für Serienvorbelegung)
@@ -275,25 +263,12 @@ const BLOECKE = (() => {
           </div>
           <div class="modal-body">
             <div class="ed-grid">
-              <div class="ed-fg">
-                <label>Datum *</label>
-                <input type="date" id="apply-datum" value="${heute}" onchange="BLOECKE.onApplyDatumChange()">
-              </div>
-              <div class="ed-fg">
-                <label>Uhrzeit</label>
-                <input type="time" id="apply-uhrzeit" value="${escapeHtml(defaultUhrzeit)}">
-              </div>
-              <div class="ed-fg">
-                <label>Treffpunkt</label>
-                <select id="apply-treffpunkt-id">${tpOptionen}</select>
-              </div>
-              <div class="ed-fg">
-                <label>Sichtbarkeit</label>
-                <select id="apply-sichtbarkeit">
-                  <option value="oeffentlich"${b.sichtbarkeit === 'global' ? ' selected' : ''}>Öffentlich</option>
-                  <option value="intern"${b.sichtbarkeit === 'privat' ? ' selected' : ''}>Intern</option>
-                </select>
-              </div>
+              ${FELDER.datum('apply-datum', heute, { uhrzeitId: 'apply-uhrzeit', onchange: 'BLOECKE.onApplyDatumChange()' })}
+              ${FELDER.uhrzeit('apply-uhrzeit', defaultUhrzeit)}
+              ${FELDER.treffpunkt('apply-treffpunkt-id', tpListe, null,
+                  { neuMitStandard: true, typ: b.typ })}
+              ${FELDER.sichtbarkeit('apply-sichtbarkeit',
+                  b.sichtbarkeit === 'privat' ? 'intern' : 'oeffentlich')}
               <div class="ed-fg ed-fg-wide serie-toggle-row">
                 <label class="serie-toggle-label">
                   <input type="checkbox" id="apply-wiederkehrend" onchange="BLOECKE.onWiederkehrendChange()">
@@ -356,20 +331,20 @@ const BLOECKE = (() => {
   }
 
   async function anwendenSpeichern(blockId) {
-    const datum = val('apply-datum');
+    const datum = FELDER.wert('apply-datum');
     if (!datum) { notify('Datum fehlt.', 'err'); return; }
-    const tpIdStr = val('apply-treffpunkt-id');
+    const tpIdStr = FELDER.wert('apply-treffpunkt-id');
     const istWiederkehrend = document.getElementById('apply-wiederkehrend')?.checked;
 
     if (istWiederkehrend) {
       // ── Serientermin anlegen ────────────────────────────────
-      const freqVal  = val('apply-freq'); // z.B. "weekly:2"
+      const freqVal  = FELDER.wert('apply-freq'); // z.B. "weekly:2"
       const [freq, intervalStr] = freqVal.split(':');
       const interval = parseInt(intervalStr || '1', 10);
       const byday    = [...document.querySelectorAll('.apply-byday:checked')].map(cb => cb.value);
-      const endTyp   = val('apply-ende-typ');
-      const until    = endTyp === 'datum' ? (val('apply-until') || null) : null;
-      const countRaw = endTyp === 'count' ? parseInt(val('apply-count') || '0', 10) : null;
+      const endTyp   = FELDER.wert('apply-ende-typ');
+      const until    = endTyp === 'datum' ? (FELDER.wert('apply-until') || null) : null;
+      const countRaw = endTyp === 'count' ? parseInt(FELDER.wert('apply-count') || '0', 10) : null;
       const count    = countRaw && countRaw > 0 ? countRaw : null;
 
       if (freq === 'weekly' && !byday.length) {
@@ -388,9 +363,9 @@ const BLOECKE = (() => {
       const payload = {
         block_id:      blockId,
         startdatum:    datum,
-        uhrzeit:       val('apply-uhrzeit') || null,
+        uhrzeit:       FELDER.wert('apply-uhrzeit') || null,
         treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
-        sichtbarkeit:  val('apply-sichtbarkeit'),
+        sichtbarkeit:  FELDER.wert('apply-sichtbarkeit'),
         gruppe_id:     _anwendenGruppeId || null,
         regel: { freq, interval, byday: freq === 'weekly' ? byday : [], until, count },
       };
@@ -411,9 +386,9 @@ const BLOECKE = (() => {
       // ── Einzelner Termin ────────────────────────────────────
       const payload = {
         datum,
-        uhrzeit:       val('apply-uhrzeit') || null,
+        uhrzeit:       FELDER.wert('apply-uhrzeit') || null,
         treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
-        sichtbarkeit:  val('apply-sichtbarkeit'),
+        sichtbarkeit:  FELDER.wert('apply-sichtbarkeit'),
         gruppe_id:     _anwendenGruppeId || null,
       };
       try {
@@ -444,7 +419,7 @@ const BLOECKE = (() => {
 
   function onApplyDatumChange() {
     // Standard-Wochentag bei Datumsänderung neu setzen (nur wenn kein Tag manuell gewählt)
-    const datum = val('apply-datum');
+    const datum = FELDER.wert('apply-datum');
     if (!datum) return;
     const checked = document.getElementById('apply-wiederkehrend')?.checked;
     if (!checked) return;
@@ -460,14 +435,14 @@ const BLOECKE = (() => {
   }
 
   function onApplyFreqChange() {
-    const freq = val('apply-freq').split(':')[0];
+    const freq = FELDER.wert('apply-freq').split(':')[0];
     const bdayGroup = document.getElementById('apply-byday-group');
     if (bdayGroup) bdayGroup.style.display = freq === 'weekly' ? '' : 'none';
     aktualisiereSerieVorschau();
   }
 
   function onApplyEndeTypChange() {
-    const typ = val('apply-ende-typ');
+    const typ = FELDER.wert('apply-ende-typ');
     const untilWrap = document.getElementById('apply-until-wrap');
     const countWrap = document.getElementById('apply-count-wrap');
     if (untilWrap) untilWrap.style.display = typ === 'datum' ? '' : 'none';
@@ -478,14 +453,14 @@ const BLOECKE = (() => {
   function aktualisiereSerieVorschau() {
     const vEl = document.getElementById('apply-vorschau');
     if (!vEl) return;
-    const datum    = val('apply-datum');
-    const freqVal  = val('apply-freq');
+    const datum    = FELDER.wert('apply-datum');
+    const freqVal  = FELDER.wert('apply-freq');
     const [freq, intervalStr] = freqVal.split(':');
     const interval = parseInt(intervalStr || '1', 10);
     const byday    = [...document.querySelectorAll('.apply-byday:checked')].map(cb => cb.value);
-    const endTyp   = val('apply-ende-typ');
-    const until    = endTyp === 'datum' ? val('apply-until') : null;
-    const countRaw = endTyp === 'count' ? parseInt(val('apply-count') || '0', 10) : null;
+    const endTyp   = FELDER.wert('apply-ende-typ');
+    const until    = endTyp === 'datum' ? FELDER.wert('apply-until') : null;
+    const countRaw = endTyp === 'count' ? parseInt(FELDER.wert('apply-count') || '0', 10) : null;
     if (!datum) { vEl.innerHTML = ''; return; }
 
     const daten = _generiereVorschauDaten(datum, freq, interval, byday, until, countRaw);
@@ -624,10 +599,6 @@ const BLOECKE = (() => {
     // Gruppen-Checkboxen aufbauen
     const alleGruppen = await GRUPPEN.laden();
     const beGrSet = new Set(b.gruppen_ids || []);
-    const typenOptionen = getTypen()
-      .map(t => `<option value="${escapeHtml(t.slug)}"${t.slug === b.typ ? ' selected' : ''}>${escapeHtml(t.bezeichnung)}</option>`)
-      .join('');
-
     const istRunde = hatStrecke(b.typ);
 
     const cont = document.getElementById('modal-container');
@@ -667,11 +638,10 @@ const BLOECKE = (() => {
             </div>
 
             <div class="ed-grid">
+              ${FELDER.typ('be-typ', b.typ, { onchange: 'BLOECKE.onTypChange()' })}
               <div class="ed-fg">
-                <label>Typ</label>
-                <select id="be-typ" onchange="BLOECKE.onTypChange()">${typenOptionen}</select>
-              </div>
-              <div class="ed-fg">
+                ${/* Eigene Werte: ein Block ist global oder privat, nicht
+                      oeffentlich/intern wie ein Kalendereintrag. */ ''}
                 <label>Sichtbarkeit</label>
                 <select id="be-sichtbarkeit">
                   <option value="global"${b.sichtbarkeit === 'global' ? ' selected' : ''}>Global (für alle Trainer sichtbar)</option>
@@ -689,10 +659,7 @@ const BLOECKE = (() => {
                     </label>`).join('')}
                 </div>
               </div>` : ''}
-              <div class="ed-fg ed-fg-wide">
-                <label>Bemerkung</label>
-                <textarea id="be-bemerkung" rows="2">${escapeHtml(b.bemerkung || '')}</textarea>
-              </div>
+              ${FELDER.bemerkung('be-bemerkung', b.bemerkung || '')}
             </div>
 
             <div id="be-komoot-wrap" class="ed-komoot-wrap"${istRunde ? '' : ' style="display:none"'}>
@@ -754,7 +721,7 @@ const BLOECKE = (() => {
   }
 
   function onTypChange() {
-    const typ = val('be-typ');
+    const typ = FELDER.wert('be-typ');
     const istRunde = hatStrecke(typ);
     const komootWrap = document.getElementById('be-komoot-wrap');
     const segWrap    = document.getElementById('be-seg-wrap');
@@ -799,7 +766,7 @@ const BLOECKE = (() => {
 
   // Kurzschrift aus dem Titelfeld in Segmente umwandeln
   function parsenAusTitel() {
-    const titel = val('be-titel');
+    const titel = FELDER.wert('be-titel');
     if (!titel) { notify('Bitte zuerst eine Kurzschrift in das Titelfeld eintragen.', 'warn'); return; }
     const baum = PARSER.parseBaum(titel);
     if (!baum.length) {
@@ -822,17 +789,17 @@ const BLOECKE = (() => {
   }
 
   async function speichern(blockId) {
-    const typ      = val('be-typ');
+    const typ      = FELDER.wert('be-typ');
     const istRunde = hatStrecke(typ);
     const gruppenIds = [...document.querySelectorAll('.be-gruppe-cb:checked')]
       .map(cb => parseInt(cb.value, 10)).filter(id => id > 0);
     const payload = {
-      titel:        val('be-titel'),
+      titel:        FELDER.wert('be-titel'),
       typ,
-      komoot_url:   istRunde ? (val('be-komoot-url') || null) : null,
+      komoot_url:   istRunde ? (FELDER.wert('be-komoot-url') || null) : null,
       strecke_id:   istRunde ? STRECKEN.feldWert('be-strecke') : null,
-      bemerkung:    val('be-bemerkung') || null,
-      sichtbarkeit: val('be-sichtbarkeit'),
+      bemerkung:    FELDER.wert('be-bemerkung') || null,
+      sichtbarkeit: FELDER.wert('be-sichtbarkeit'),
       segmente:     istRunde ? [] : SEG.rowsAusBaum(editorBaum),
       gruppen_ids:  gruppenIds,
     };
@@ -866,10 +833,6 @@ const BLOECKE = (() => {
   }
 
   // ── Hilfsfunktionen ───────────────────────────────────────
-  function val(id) {
-    const el = document.getElementById(id);
-    return el ? (el.value || '').trim() : '';
-  }
 
 
   return {

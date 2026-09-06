@@ -17,10 +17,6 @@ const EDITOR = (() => {
   let currentDatum    = null;
   let currentBaum     = [];
 
-  // Typen aus globalem getTypen() (02_app.js), konfiguriert via Admin → Einstellungen
-  function getTypOptions() {
-    return getTypen().map(x => ({ value: x.slug, label: x.bezeichnung }));
-  }
   async function open(opts) {
     // opts: { datum?, einheit?, segmente? }
     const ist_neu = !opts.einheit;
@@ -39,10 +35,7 @@ const EDITOR = (() => {
     // Treffpunkte + Pace-Referenzen für die Dropdowns laden
     let tpListe = [];
     try { [tpListe] = await Promise.all([TREFFPUNKTE.laden(), PACE.load()]); } catch (_) {}
-    const curTpId = e.treffpunkt ? e.treffpunkt.id
-      : (ist_neu ? ((appConfig.typen || []).find(t => t.slug === e.typ)?.default_treffpunkt_id ?? null) : null);
-    const tpOptionen = `<option value="">— kein Treffpunkt —</option>` +
-      tpListe.map(t => `<option value="${t.id}"${t.id === curTpId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
+    const curTpId = e.treffpunkt ? e.treffpunkt.id : null;
 
     const istRunde = hatStrecke(e.typ);
 
@@ -59,44 +52,18 @@ const EDITOR = (() => {
           </div>
           <div class="modal-body">
             <div class="ed-grid">
-              <div class="ed-fg">
-                <label>Datum</label>
-                <input type="date" id="ed-datum" value="${escapeHtml(e.datum || '')}">
-              </div>
-              <div class="ed-fg">
-                <label>Uhrzeit</label>
-                <input type="time" id="ed-uhrzeit" value="${escapeHtml(e.uhrzeit || '')}">
-              </div>
-              <div class="ed-fg">
-                <label>Typ</label>
-                <select id="ed-typ" onchange="EDITOR.onTypChange()">${getTypOptions().map(o => `<option value="${o.value}"${o.value===e.typ?' selected':''}>${o.label}</option>`).join('')}</select>
-              </div>
-              <div class="ed-fg">
-                <label>Sichtbarkeit</label>
-                <select id="ed-sichtbarkeit">
-                  <option value="oeffentlich"${e.sichtbarkeit==='oeffentlich'?' selected':''}>Öffentlich</option>
-                  <option value="intern"${e.sichtbarkeit==='intern'?' selected':''}>Intern (nur eingeloggt)</option>
-                </select>
-              </div>
-              <div class="ed-fg ed-fg-wide">
-                <label>Titel / Kurzschrift <span class="ed-hint">(z. B. „12 x 400 m (100GP)")</span></label>
-                <input type="text" id="ed-titel" value="${escapeHtml(e.titel || '')}" placeholder="z. B. 8 x 600 m (100TP)">
-              </div>
-              <div class="ed-fg">
-                <label>Treffpunkt</label>
-                <select id="ed-treffpunkt-id">${tpOptionen}</select>
-              </div>
-              <div class="ed-fg">
-                <label>Status</label>
-                <select id="ed-status">
-                  <option value="geplant"${e.status==='geplant'?' selected':''}>Geplant</option>
-                  <option value="abgesagt"${e.status==='abgesagt'?' selected':''}>Abgesagt</option>
-                </select>
-              </div>
-              <div class="ed-fg ed-fg-wide">
-                <label>Bemerkung</label>
-                <textarea id="ed-bemerkung" rows="2">${escapeHtml(e.bemerkung || '')}</textarea>
-              </div>
+              ${FELDER.datum('ed-datum', e.datum || '', { pflicht: false, uhrzeitId: ist_neu ? 'ed-uhrzeit' : null })}
+              ${FELDER.uhrzeit('ed-uhrzeit', e.uhrzeit || (ist_neu ? FELDER.standardUhrzeit(e.datum) : ''))}
+              ${FELDER.typ('ed-typ', e.typ, { onchange: 'EDITOR.onTypChange()' })}
+              ${FELDER.sichtbarkeit('ed-sichtbarkeit', e.sichtbarkeit)}
+              ${FELDER.titel('ed-titel', e.titel || '', {
+                  label: 'Titel / Kurzschrift',
+                  hinweis: '(z. B. „12 x 400 m (100GP)")',
+                  platzhalter: 'z. B. 8 x 600 m (100TP)' })}
+              ${FELDER.treffpunkt('ed-treffpunkt-id', tpListe, curTpId,
+                  { neuMitStandard: ist_neu, typ: e.typ })}
+              ${FELDER.status('ed-status', e.status)}
+              ${FELDER.bemerkung('ed-bemerkung', e.bemerkung || '')}
             </div>
 
             <div id="ed-komoot-wrap" class="ed-komoot-wrap"${istRunde ? '' : ' style="display:none"'}>
@@ -177,20 +144,20 @@ const EDITOR = (() => {
   }
 
   function _sammlePayload() {
-    const tpIdStr  = val('ed-treffpunkt-id');
-    const typ      = val('ed-typ');
+    const tpIdStr  = FELDER.wert('ed-treffpunkt-id');
+    const typ      = FELDER.wert('ed-typ');
     const istRunde = hatStrecke(typ);
     return {
-      datum:          val('ed-datum'),
-      uhrzeit:        val('ed-uhrzeit') || null,
+      datum:          FELDER.wert('ed-datum'),
+      uhrzeit:        FELDER.wert('ed-uhrzeit') || null,
       typ,
-      titel:          val('ed-titel'),
+      titel:          FELDER.wert('ed-titel'),
       treffpunkt_id:  tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
-      komoot_url:     istRunde ? (val('ed-komoot-url') || null) : null,
+      komoot_url:     istRunde ? (FELDER.wert('ed-komoot-url') || null) : null,
       strecke_id:     istRunde ? STRECKEN.feldWert('ed-strecke') : null,
-      bemerkung:      val('ed-bemerkung') || null,
-      sichtbarkeit:   val('ed-sichtbarkeit'),
-      status:         val('ed-status'),
+      bemerkung:      FELDER.wert('ed-bemerkung') || null,
+      sichtbarkeit:   FELDER.wert('ed-sichtbarkeit'),
+      status:         FELDER.wert('ed-status'),
       segmente:       istRunde ? [] : SEG.rowsAusBaum(currentBaum),
     };
   }
@@ -323,10 +290,6 @@ const EDITOR = (() => {
       </div>`;
   }
 
-  function val(id) {
-    const el = document.getElementById(id);
-    return el ? (el.value || '').trim() : '';
-  }
 
 
   return {

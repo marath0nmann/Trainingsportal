@@ -1856,8 +1856,6 @@ async function oeffneTerminModal(einheit) {
   let tpListe = [];
   try { tpListe = await TREFFPUNKTE.laden(); } catch (_) {}
   const curTpId = einheit.treffpunkt ? einheit.treffpunkt.id : null;
-  const tpOptionen = '<option value="">— kein Treffpunkt —</option>' +
-    tpListe.map(t => '<option value="' + t.id + '"' + (t.id === curTpId ? ' selected' : '') + '>' + escapeHtml(t.name) + '</option>').join('');
 
   const cont = document.getElementById('modal-container');
   cont.innerHTML = '<div class="modal-overlay">' +
@@ -1871,25 +1869,13 @@ async function oeffneTerminModal(einheit) {
       '</div>' +
       '<div class="modal-body">' +
         '<div class="ed-grid">' +
-          '<div class="ed-fg">' +
-            '<label>Datum</label>' +
-            '<input type="date" id="hte-datum" value="' + escapeHtml(einheit.datum || '') + '">' +
-          '</div>' +
-          '<div class="ed-fg">' +
-            '<label>Uhrzeit</label>' +
-            '<input type="time" id="hte-uhrzeit" value="' + escapeHtml(einheit.uhrzeit || '') + '">' +
-          '</div>' +
-          '<div class="ed-fg">' +
-            '<label>Treffpunkt</label>' +
-            '<select id="hte-treffpunkt-id">' + tpOptionen + '</select>' +
-          '</div>' +
-          '<div class="ed-fg">' +
-            '<label>Sichtbarkeit</label>' +
-            '<select id="hte-sichtbarkeit">' +
-              '<option value="oeffentlich"' + (einheit.sichtbarkeit === 'oeffentlich' ? ' selected' : '') + '>Öffentlich</option>' +
-              '<option value="intern"' + (einheit.sichtbarkeit === 'intern' ? ' selected' : '') + '>Intern (nur eingeloggt)</option>' +
-            '</select>' +
-          '</div>' +
+          // Dieselben Felder wie im Editor – nur die Termin-Teilmenge.
+          // Kein Uhrzeit-Nachziehen: hier wird eine bestehende Einheit
+          // bearbeitet, die gespeicherte Zeit darf nicht ueberschrieben werden.
+          FELDER.datum('hte-datum', einheit.datum || '') +
+          FELDER.uhrzeit('hte-uhrzeit', einheit.uhrzeit || '') +
+          FELDER.treffpunkt('hte-treffpunkt-id', tpListe, curTpId) +
+          FELDER.sichtbarkeit('hte-sichtbarkeit', einheit.sichtbarkeit) +
         '</div>' +
         '<div class="ed-footer">' +
           '<button class="btn btn-danger" onclick="loescheTermin(' + id + ')">Löschen</button>' +
@@ -1912,8 +1898,7 @@ async function speichereTermin(id) {
   const ctx = state._terminEdit || { id: id, serieId: null, datum: null };
   // Serien-Einheit: erst Geltungsbereich abfragen
   if (ctx.serieId) {
-    function valD(elId) { const el = document.getElementById(elId); return el ? (el.value || '').trim() : ''; }
-    if (!valD('hte-datum')) { notify('Datum fehlt.', 'err'); return; }
+    if (!FELDER.wert('hte-datum')) { notify('Datum fehlt.', 'err'); return; }
     zeigeTerminSerienScope();
     return;
   }
@@ -1921,19 +1906,15 @@ async function speichereTermin(id) {
 }
 
 async function terminSpeichernMitScope(scope) {
-  function val(elId) {
-    const el = document.getElementById(elId);
-    return el ? (el.value || '').trim() : '';
-  }
   const ctx = state._terminEdit || {};
-  const tpIdStr = val('hte-treffpunkt-id');
-  const datum = val('hte-datum');
+  const tpIdStr = FELDER.wert('hte-treffpunkt-id');
+  const datum = FELDER.wert('hte-datum');
   if (!datum) { notify('Datum fehlt.', 'err'); return; }
   // Für Serien-Scopes wird das Datum nicht übernommen (je Termin individuell)
   const basis = {
     treffpunkt_id: tpIdStr !== '' ? parseInt(tpIdStr, 10) : null,
-    uhrzeit:       val('hte-uhrzeit') || null,
-    sichtbarkeit:  val('hte-sichtbarkeit'),
+    uhrzeit:       FELDER.wert('hte-uhrzeit') || null,
+    sichtbarkeit:  FELDER.wert('hte-sichtbarkeit'),
   };
   try {
     if (scope === 'alle') {
