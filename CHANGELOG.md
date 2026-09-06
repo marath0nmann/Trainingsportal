@@ -1,5 +1,9 @@
 # Changelog
 
+## v346
+- **Fix: „Papierkorb leeren" meldete „Nichts zu löschen", obwohl Einträge dastanden.** Die Zeitraum-Knöpfe zeigen die Einträge der *letzten* 30 Tage, das Leeren löschte aber alles, was *älter als* 30 Tage ist – genau die Gegenmenge, weshalb bei der Voreinstellung nie etwas passierte. Jetzt heißt Leeren auch leeren: das ganze Archiv, unabhängig vom eingestellten Zeitraum. Der Knopf trägt die Gesamtzahl (`Papierkorb leeren (12)…`), und die Rückfrage nennt sie ebenfalls – samt Hinweis, wenn die Liste gerade weniger zeigt, als gelöscht wird. Die Abfrage nach einem Alter in Tagen entfällt; wer einzelne Einträge behalten will, löscht die übrigen über das 🗑️ je Zeile.
+- Zeigt der gewählte Zeitraum nichts, verweist die leere Liste jetzt auf die Gesamtzahl im Archiv, statt den Eindruck zu erwecken, der Papierkorb sei leer.
+
 ## v345
 - **Der Papierkorb lässt sich jetzt leeren.** Bisher konnte er nur wiederherstellen – archivierte Datensätze blieben für immer liegen. Neu ist ein 🗑️ je Zeile für einen einzelnen Eintrag und „Papierkorb leeren…" für alles ab einem wählbaren Alter (eine 0 leert vollständig). Beides fragt in zwei Stufen nach und nennt hinterher die Zahl der gelöschten Datensätze. Zusammengehörige Kindzeilen verschwinden mit – sonst blieben Segmente ohne Einheit als Karteileichen zurück. Das ist der einzige Ort im Portal, an dem Daten wirklich verschwinden; überall sonst archiviert `archiviereUndLoesche()`.
 - **Kein Zähler mehr an „Wettkampfplanung".** Die Zahl der offenen Entscheidungen steht seit v341 zweimal daneben: als Segment „Zu entscheiden" auf der Seite selbst und als Kachel auf der Übersicht. Die zugehörige Abfrage lief bei jedem Seitenaufbau mit und ist ebenfalls entfallen.
