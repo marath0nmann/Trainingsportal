@@ -9,6 +9,8 @@ const ADMIN_TRAININGS = (() => {
   let sortDir     = 1;      //  1 = ASC (aufsteigend = älteste zuerst)
   let selected    = new Set();
   let container   = null;
+  let seite       = 1;            // aktuelle Seite der Tabelle
+  const PRO_SEITE = 50;
 
   const WOCHENTAG = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 
@@ -27,11 +29,14 @@ const ADMIN_TRAININGS = (() => {
     if (!container) return;
     container.innerHTML = '<div class="loading"><div class="spinner"></div>Lade Trainings…</div>';
     try {
+      // Weiterhin die volle Menge: die Filterleiste zaehlt clientseitig ueber
+      // alle Zeilen (Trefferzahlen je Wert). Paginiert wird die Darstellung.
       const resp = await apiGet('admin/einheiten?limit=2000', { silent: true });
       einheiten   = resp.einheiten || [];
       treffpunkte = await TREFFPUNKTE.laden().catch(() => []);
       selected.clear();
       tfLeeren(TF);
+      seite = 1;
       rendereTabelle();
     } catch (e) {
       if (container) {
@@ -47,6 +52,7 @@ const ADMIN_TRAININGS = (() => {
       sortKey = key;
       sortDir = 1; // beim Wechsel immer aufsteigend
     }
+    seite = 1;
     rendereTabelle();
   }
 
@@ -75,7 +81,7 @@ const ADMIN_TRAININGS = (() => {
         { key: 'treffpunkt', label: 'Treffpunkt',     wert: e => e.treffpunkt || '— ohne Treffpunkt —' },
         { key: 'status',     label: 'Status',         wert: e => e.status === 'abgesagt' ? 'Abgesagt' : 'Geplant' },
       ],
-      onChange: () => { selected.clear(); rendereTabelle(); },
+      onChange: () => { selected.clear(); seite = 1; rendereTabelle(); },
     });
   }
 
@@ -110,7 +116,12 @@ const ADMIN_TRAININGS = (() => {
   }
 
   function tabellenHtml() {
-    const data = getSortiert();
+    const alle    = getSortiert();
+    const seiten  = Math.max(1, Math.ceil(alle.length / PRO_SEITE));
+    if (seite > seiten) seite = seiten;
+    // Nur die sichtbare Seite wird gezeichnet – bei 2000 Einheiten sind das
+    // 50 statt 2000 Tabellenzeilen im DOM.
+    const data    = alle.slice((seite - 1) * PRO_SEITE, seite * PRO_SEITE);
     const allChecked = data.length > 0 && data.every(e => selected.has(e.id));
     const selCount   = selected.size;
 
@@ -213,7 +224,17 @@ const ADMIN_TRAININGS = (() => {
             <tbody>${rows || `<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text2)">${tfAktiv(TF) ? 'Keine Trainingseinheiten für diesen Filter.' : 'Keine Trainingseinheiten vorhanden.'}</td></tr>`}</tbody>
           </table>
         </div>
+        ${buildPagination(seite, seiten, alle.length, 'ADMIN_TRAININGS.goPage')}
       </div>`;
+  }
+
+  /** Seitenwechsel – die Auswahl bleibt ueber Seiten hinweg bestehen. */
+  function goPage(p) {
+    seite = p;
+    rendereTabelle();
+    if (container && container.scrollIntoView) {
+      container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   function toggle(id) {
@@ -222,9 +243,13 @@ const ADMIN_TRAININGS = (() => {
     rendereTabelle();
   }
 
+  // Das Kopf-Kaestchen waehlt die *sichtbare Seite* – alles andere waere
+  // ueberraschend, wenn 50 Zeilen zu sehen sind und 693 markiert werden.
   function toggleAll(checked) {
-    if (checked) getSortiert().forEach(e => selected.add(e.id));
-    else selected.clear();
+    const alle = getSortiert();
+    const auf  = alle.slice((seite - 1) * PRO_SEITE, seite * PRO_SEITE);
+    if (checked) auf.forEach(e => selected.add(e.id));
+    else         auf.forEach(e => selected.delete(e.id));
     rendereTabelle();
   }
 
@@ -308,5 +333,5 @@ const ADMIN_TRAININGS = (() => {
   }
 
 
-  return { render, sort, toggle, toggleAll, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
+  return { render, sort, toggle, toggleAll, goPage, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
 })();

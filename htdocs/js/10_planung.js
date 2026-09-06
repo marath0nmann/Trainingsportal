@@ -245,6 +245,7 @@ const PLANUNG = (() => {
   let _activeTab     = 'training'; // 'training' | 'athleten' | 'liste'
   let _athletSel     = null;       // beim Athleten-Tab gewählter Plan: { benutzer_id, name, stufe } | null
   let _athletenCache = {};         // benutzer_id → { name, stufe } (aus der Übersicht)
+  let _athletenListe = [];         // ungefilterte Athletenliste (Quelle der Filterleiste)
 
   // ── Layout-Helpers (kein Seiten-Scroll) ─────────────────
   function _applyPlanungLayout() {
@@ -961,6 +962,7 @@ const PLANUNG = (() => {
       return;
     }
     const list = data.athleten || [];
+    _athletenListe = list;      // ungefilterte Grunddaten fuer die Filterleiste
     _athletenCache = {};
     list.forEach(a => { _athletenCache[a.benutzer_id] = { name: a.name, stufe: a.meine_stufe }; });
 
@@ -975,6 +977,60 @@ const PLANUNG = (() => {
       </div>`;
       return;
     }
+    _athletenFilterInit();
+    cont.innerHTML = `
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Persönliche Trainingspläne</span>
+          <span class="panel-count" id="athleten-anzahl">${list.length} Athlet${list.length !== 1 ? 'en' : ''}</span>
+        </div>
+        <p class="athleten-intro" style="padding:10px 20px 0;margin:0">Athleten geben ihren Plan in ihrem Konto frei. Mit <em>Lesezugriff</em> kannst du ihn ansehen, mit <em>Vollzugriff</em> auch bearbeiten.</p>
+        <div style="padding:10px 20px 0">${tfBarHtml(TF_ATHLETEN)}</div>
+        <div id="athleten-tabelle"></div>
+      </div>`;
+    _rendereAthletenTabelle();
+  }
+
+  // ── Gemeinsame Filterleiste für die Athletenliste ─────────
+  const TF_ATHLETEN = 'tp-athleten';
+
+  function _athletenFilterInit() {
+    tfInit(TF_ATHLETEN, {
+      platzhalter: 'Athletenname…',
+      rows:  () => _athletenListe,
+      suche: a => [a.name],
+      spalten: [
+        { key: 'zugriff', label: 'Zugriff', wert: a => _stufeLabel(a.meine_stufe) },
+        { key: 'aktiv',   label: 'Plan',
+          wert: a => (a.anzahl || 0) > 0 ? 'mit Einheiten' : 'leer' },
+      ],
+      onChange: () => _rendereAthletenTabelle(),
+    });
+  }
+
+  /** Zeichnet nur die Tabelle – die Filterleiste bleibt stehen. */
+  function _rendereAthletenTabelle() {
+    const el = document.getElementById('athleten-tabelle');
+    if (!el) return;
+    _athletenFilterInit();
+    const list = tfFilter(TF_ATHLETEN, _athletenListe);
+
+    const zaehler = document.getElementById('athleten-anzahl');
+    if (zaehler) {
+      zaehler.textContent = list.length === _athletenListe.length
+        ? `${list.length} Athlet${list.length !== 1 ? 'en' : ''}`
+        : `${list.length} von ${_athletenListe.length}`;
+    }
+
+    if (!list.length) {
+      el.innerHTML = `<div style="padding:28px;text-align:center;color:var(--text2)">
+        Kein Athlet passt zum Filter.
+        <button class="btn btn-ghost btn-sm" onclick="tfReset('${TF_ATHLETEN}')">Filter zurücksetzen</button>
+      </div>`;
+      tfRefresh(TF_ATHLETEN);
+      return;
+    }
+
     const rows = list.map(a => {
       const hatZugriff = a.meine_stufe === 'lesend' || a.meine_stufe === 'voll';
       const aktion = hatZugriff
@@ -988,20 +1044,15 @@ const PLANUNG = (() => {
         <td class="athlet-aktion">${aktion}</td>
       </tr>`;
     }).join('');
-    cont.innerHTML = `
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">Persönliche Trainingspläne</span>
-          <span class="panel-count">${list.length} Athlet${list.length !== 1 ? 'en' : ''}</span>
-        </div>
-        <p class="athleten-intro" style="padding:10px 20px 0;margin:0">Athleten geben ihren Plan in ihrem Profil frei. Mit <em>Lesezugriff</em> kannst du ihn ansehen, mit <em>Vollzugriff</em> auch bearbeiten.</p>
-        <div class="table-scroll">
-          <table class="athleten-table">
-            <thead><tr><th>Athlet</th><th>Einheiten</th><th>Letzte</th><th>Zugriff</th><th></th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
+
+    el.innerHTML = `
+      <div class="table-scroll">
+        <table class="data-table" style="width:100%;border-collapse:collapse">
+          <thead><tr><th>Athlet</th><th>Einheiten</th><th>Letzte</th><th>Zugriff</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>`;
+    tfRefresh(TF_ATHLETEN);
   }
 
   async function _renderAthletPlan(cont) {
