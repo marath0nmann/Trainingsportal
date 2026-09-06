@@ -479,7 +479,7 @@ const STRECKEN = (() => {
     const st = felder.get(feldId);
     if (!st || !st.strecke_id) return;
     const alt  = (listeCache || []).find(s => s.id === st.strecke_id);
-    const name = prompt('Neuer Name der Strecke:', alt ? alt.name : '');
+    const name = await promptModal('Neuer Name der Strecke:', alt ? alt.name : '');
     if (name === null || !name.trim()) return;
     try {
       await apiPut(`strecken/${st.strecke_id}`, { name: name.trim() });
@@ -495,7 +495,7 @@ const STRECKEN = (() => {
   async function feldLoeschen(feldId) {
     const st = felder.get(feldId);
     if (!st || !st.strecke_id) return;
-    if (!confirm('Diese Strecke endgültig aus der Datenbank löschen?')) return;
+    if (!await confirmModal('Diese Strecke endgültig aus der Datenbank löschen?')) return;
     try {
       await apiDel(`strecken/${st.strecke_id}`);
       detailCache.delete(st.strecke_id);
@@ -683,7 +683,7 @@ const STRECKEN = (() => {
 
   async function seiteUmbenennen(id) {
     const s = ausListe(id);
-    const name = prompt('Neuer Name der Strecke:', s ? s.name : '');
+    const name = await promptModal('Neuer Name der Strecke:', s ? s.name : '');
     if (name === null || !name.trim()) return;
     try {
       await apiPut(`strecken/${id}`, { name: name.trim() });
@@ -697,7 +697,7 @@ const STRECKEN = (() => {
 
   async function seiteLoeschen(id) {
     const s = ausListe(id);
-    if (!confirm(`Strecke „${s ? s.name : id}" endgültig aus der Datenbank löschen?`)) return;
+    if (!await confirmModal(`Strecke „${s ? s.name : id}" endgültig aus der Datenbank löschen?`)) return;
     try {
       await apiDel(`strecken/${id}`);
       detailCache.delete(parseInt(id, 10));

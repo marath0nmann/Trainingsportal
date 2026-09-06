@@ -236,7 +236,7 @@ const ADMIN_TRAININGS = (() => {
       EDITOR.open({ einheit: data.einheit, segmente: data.segmente || [] });
       watchEditorClose();
     } catch (e) {
-      alert('Fehler: ' + escapeHtml(e.message || ''));
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -264,7 +264,7 @@ const ADMIN_TRAININGS = (() => {
   // ── Bulk-Aktionen ───────────────────────────────────────────
   async function bulkSetStatus() {
     const val = document.getElementById('bulk-status')?.value;
-    if (!val) { benachrichtigen('Bitte Status auswählen.', 'warn'); return; }
+    if (!val) { notify('Bitte Status auswählen.', 'warn'); return; }
     const ids = [...selected];
     try {
       await apiPost('admin/einheiten/bulk_update', { ids, status: val });
@@ -272,14 +272,14 @@ const ADMIN_TRAININGS = (() => {
         const e = einheiten.find(x => x.id === id);
         if (e) e.status = val;
       });
-      benachrichtigen(ids.length + ' Einheit(en) aktualisiert.', 'ok');
+      notify(ids.length + ' Einheit(en) aktualisiert.', 'ok');
       rendereTabelle();
-    } catch (e) { benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err'); }
+    } catch (e) { notify('Fehler: ' + escapeHtml(e.message || ''), 'err'); }
   }
 
   async function bulkSetTreffpunkt() {
     const sel = document.getElementById('bulk-treffpunkt');
-    if (!sel || !sel.value) { benachrichtigen('Bitte Treffpunkt auswählen.', 'warn'); return; }
+    if (!sel || !sel.value) { notify('Bitte Treffpunkt auswählen.', 'warn'); return; }
     const tpId = sel.value === 'null' ? null : parseInt(sel.value, 10);
     const tpName = tpId ? (treffpunkte.find(t => t.id === tpId)?.name || '') : '';
     const ids = [...selected];
@@ -289,33 +289,24 @@ const ADMIN_TRAININGS = (() => {
         const e = einheiten.find(x => x.id === id);
         if (e) e.treffpunkt = tpName;
       });
-      benachrichtigen(ids.length + ' Einheit(en) aktualisiert.', 'ok');
+      notify(ids.length + ' Einheit(en) aktualisiert.', 'ok');
       rendereTabelle();
-    } catch (e) { benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err'); }
+    } catch (e) { notify('Fehler: ' + escapeHtml(e.message || ''), 'err'); }
   }
 
   async function deleteSelected() {
     if (!selected.size) return;
     const ids = [...selected];
-    if (!confirm(`Wirklich ${ids.length} Trainingseinheit(en) unwiderruflich löschen?`)) return;
+    if (!await confirmModal(`Wirklich ${ids.length} Trainingseinheit(en) unwiderruflich löschen?`)) return;
     try {
       await apiPost('admin/einheiten/bulk_delete', { ids });
       einheiten = einheiten.filter(e => !selected.has(e.id));
       selected.clear();
       rendereTabelle();
-      benachrichtigen(ids.length + ' Einheit(en) gelöscht.', 'ok');
-    } catch (e) { benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err'); }
+      notify(ids.length + ' Einheit(en) gelöscht.', 'ok');
+    } catch (e) { notify('Fehler: ' + escapeHtml(e.message || ''), 'err'); }
   }
 
-  function benachrichtigen(text, art) {
-    const cont = document.getElementById('notification-container');
-    if (!cont) return;
-    const d = document.createElement('div');
-    d.className = 'notif ' + (art === 'err' ? 'notif-err' : art === 'warn' ? 'notif-warn' : 'notif-ok');
-    d.textContent = text;
-    cont.appendChild(d);
-    setTimeout(() => d.remove(), 3500);
-  }
 
   return { render, sort, toggle, toggleAll, editRow, reload, bulkSetStatus, bulkSetTreffpunkt, deleteSelected };
 })();

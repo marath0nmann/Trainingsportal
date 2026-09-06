@@ -149,16 +149,16 @@ const ICS = (() => {
       await apiPost('ics/me/token');
       open(); // neu rendern
     } catch (e) {
-      alert('Fehler: ' + e.message);
+      notify('Fehler: ' + e.message, 'err');
     }
   }
   async function tokenWiderrufen() {
-    if (!confirm('Token wirklich widerrufen? Bestehende Kalender-Abos funktionieren danach nicht mehr.')) return;
+    if (!await confirmModal('Token wirklich widerrufen? Bestehende Kalender-Abos funktionieren danach nicht mehr.')) return;
     try {
       await apiDel('ics/me/token');
       open();
     } catch (e) {
-      alert('Fehler: ' + e.message);
+      notify('Fehler: ' + e.message, 'err');
     }
   }
 

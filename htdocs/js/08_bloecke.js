@@ -785,7 +785,7 @@ const BLOECKE = (() => {
   }
 
   async function loeschen(blockId) {
-    if (!confirm('Diesen Block wirklich löschen?')) return;
+    if (!await confirmModal('Diesen Block wirklich löschen?')) return;
     try {
       await apiDel(`bloecke/${blockId}`);
       schliesseModal();
@@ -803,16 +803,6 @@ const BLOECKE = (() => {
     return el ? (el.value || '').trim() : '';
   }
 
-  function notify(text, art) {
-    const cont = document.getElementById('notification-container');
-    if (!cont) { console.log(text); return; }
-    const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
-    const div = document.createElement('div');
-    div.className = `notif ${cls}`;
-    div.textContent = text;
-    cont.appendChild(div);
-    setTimeout(() => div.remove(), 4000);
-  }
 
   return {
     render, neuerBlock, bearbeiten, anwenden, anwendenSpeichern,

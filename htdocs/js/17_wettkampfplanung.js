@@ -869,16 +869,16 @@ const WETTKAMPFPLANUNG = (() => {
     const s  = _serien.find(x => x.id === serieId);
     const t  = s && (s.teilnehmer || []).find(x => x.id === anmId);
     const nm = t ? (t.name || 'diese Anmeldung') : 'diese Anmeldung';
-    if (!confirm(`Anmeldung von „${nm}" wirklich entfernen?`)) return;
+    if (!await confirmModal(`Anmeldung von „${nm}" wirklich entfernen?`)) return;
     if (_teilnPopper) _teilnPopper.style.display = 'none';
     try {
       await apiDel(`wettkampf/anmeldungen/${anmId}`);
-      benachrichtigen('Anmeldung entfernt.', 'ok');
+      notify('Anmeldung entfernt.', 'ok');
       if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
       await _lade();
       _renderListe();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -907,7 +907,7 @@ const WETTKAMPFPLANUNG = (() => {
           `„${serie.name}" fand am ${_fmtKurz(datum)} bereits statt.\n\n` +
           `OK\t\t= für ${naechstesJahr} anmelden (${_fmtKurz(naechstesDatum)})\n` +
           `Abbrechen\t= trotzdem für ${jahr} eintragen`;
-        if (confirm(frage)) { jahr = naechstesJahr; datum = naechstesDatum; }
+        if (await confirmModal(frage)) { jahr = naechstesJahr; datum = naechstesDatum; }
       }
     }
 
@@ -936,7 +936,7 @@ const WETTKAMPFPLANUNG = (() => {
       await _lade();
       _renderListe();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -946,7 +946,7 @@ const WETTKAMPFPLANUNG = (() => {
       await _lade();
       _renderListe();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -1122,22 +1122,22 @@ const WETTKAMPFPLANUNG = (() => {
 
     // Alle Felder sind Pflicht
     if (!name) {
-      benachrichtigen('Bitte einen Namen angeben.', 'err');
+      notify('Bitte einen Namen angeben.', 'err');
       document.getElementById('wkv-name')?.focus();
       return;
     }
     if (!datum) {
-      benachrichtigen('Bitte ein Datum angeben.', 'err');
+      notify('Bitte ein Datum angeben.', 'err');
       document.getElementById('wkv-datum')?.focus();
       return;
     }
     if (!url) {
-      benachrichtigen('Bitte eine Website angeben.', 'err');
+      notify('Bitte eine Website angeben.', 'err');
       document.getElementById('wkv-url')?.focus();
       return;
     }
     if (!_vorschlagDisz.length) {
-      benachrichtigen('Bitte mindestens eine Disziplin auswählen.', 'err');
+      notify('Bitte mindestens eine Disziplin auswählen.', 'err');
       return;
     }
 
@@ -1147,12 +1147,12 @@ const WETTKAMPFPLANUNG = (() => {
     try {
       await apiPost('wettkampf/vorschlag', { name, datum, url, wettbewerbe: _vorschlagDisz });
       schliesseModal();
-      benachrichtigen('Wettkampf vorgeschlagen – danke!', 'ok');
+      notify('Wettkampf vorgeschlagen – danke!', 'ok');
       if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
       await _lade();
       _renderListe();
     } catch (e) {
-      benachrichtigen('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
       if (btn) { btn.disabled = false; btn.textContent = 'Vorschlagen'; }
     }
   }
@@ -1325,7 +1325,7 @@ const WETTKAMPFPLANUNG = (() => {
       </body></html>`;
 
     const win = window.open('', '_blank');
-    if (!win) { benachrichtigen('Bitte Popups für diese Seite erlauben, um das PDF zu erstellen.', 'warn'); return; }
+    if (!win) { notify('Bitte Popups für diese Seite erlauben, um das PDF zu erstellen.', 'warn'); return; }
     win.document.write(html);
     win.document.close();
     win.focus();

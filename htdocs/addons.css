@@ -1149,7 +1149,15 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   position: fixed; bottom: 24px; right: 16px; z-index: 2000;
   display: flex; flex-direction: column; gap: 8px;
 }
-.notif {
+/* Das gemeinsame notify() aus 09a_utils_shared.js vergibt die Klasse
+   `notification`, die in app.css fest unten rechts positioniert ist – im
+   Statistikportal steht immer nur ein Toast. Das Trainingsportal stapelt sie
+   in #notification-container und zieht sie mobil über die volle Breite;
+   deshalb wird die Positionierung hier aufgehoben und beiden Klassen
+   dieselbe Optik gegeben. `.notif` bleibt für den Undo-Toast. */
+#notification-container > .notif,
+#notification-container > .notification {
+  position: static; inset: auto; max-width: none;
   padding: 10px 16px; border-radius: 7px; font-size: 13px; font-weight: 600;
   box-shadow: var(--shadow); min-width: 220px;
 }
@@ -1173,7 +1181,8 @@ input[type=number].ed-seg-input::-webkit-outer-spin-button {
   #notification-container {
     left: 8px; right: 8px; bottom: 12px;
   }
-  .notif { min-width: 0; padding: 13px 16px; font-size: 14px; }
+  #notification-container > .notif,
+  #notification-container > .notification { min-width: 0; padding: 13px 16px; font-size: 14px; }
   .notif-undo-btn { min-height: 40px; padding: 8px 14px; font-size: 13px; }
 }
 

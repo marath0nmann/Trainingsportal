@@ -44,11 +44,11 @@ const MEINPLAN = (() => {
       const data = await apiGet(`mein-plan/einheiten/${id}${_q(fuer)}`, { silent: true });
       _openModal(data.einheit, null, null, fuer);
     } catch (e) {
-      _notify('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
-  // Löschen ohne Rückfrage, dafür mit Undo: Ein confirm()-Dialog ist mobil
+  // Löschen ohne Rückfrage, dafür mit Undo: eine Sicherheitsabfrage ist mobil
   // ein Fehlerquell (Fehltipper aufs × direkt neben dem Titel bestätigt man
   // reflexhaft weg). Private Einheiten sind flach – ein POST stellt sie
   // vollständig wieder her.
@@ -67,7 +67,7 @@ const MEINPLAN = (() => {
     try {
       await apiDel(`mein-plan/einheiten/${id}${_q(fuer)}`);
     } catch (e) {
-      _notify('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
       renderPage();
       return;
     }
@@ -75,7 +75,7 @@ const MEINPLAN = (() => {
     if (sicherung) {
       _undoNotify('Gelöscht.', () => _wiederherstellen(sicherung, fuer));
     } else {
-      _notify('Gelöscht.', 'ok');
+      notify('Gelöscht.', 'ok');
     }
     renderPage();
   }
@@ -91,9 +91,9 @@ const MEINPLAN = (() => {
         bemerkung:      e.bemerkung || null,
         ref_einheit_id: e.ref_einheit_id || null,
       });
-      _notify('Wiederhergestellt.', 'ok');
+      notify('Wiederhergestellt.', 'ok');
     } catch (err) {
-      _notify('Fehler: ' + (err.message || ''), 'err');
+      notify('Fehler: ' + (err.message || ''), 'err');
     }
     renderPage();
   }
@@ -111,10 +111,10 @@ const MEINPLAN = (() => {
         distanz_km:     km,
         ref_einheit_id: einheitData.id,
       });
-      _notify('In deinen Plan übernommen.', 'ok');
+      notify('In deinen Plan übernommen.', 'ok');
       renderPage();
     } catch (err) {
-      _notify('Fehler: ' + (err.message || ''), 'err');
+      notify('Fehler: ' + (err.message || ''), 'err');
     }
   }
 
@@ -125,19 +125,19 @@ const MEINPLAN = (() => {
       if (aktiv) {
         await apiPost('mein-plan/abo', { typ });
         _aboTypen.add(typ);
-        _notify('Abonniert – neu erstellte Einheiten dieses Typs werden automatisch übernommen.', 'ok');
+        notify('Abonniert – neu erstellte Einheiten dieses Typs werden automatisch übernommen.', 'ok');
       } else {
-        if (!confirm('Abo beenden? Neu erstellte Einheiten dieses Typs werden nicht mehr automatisch übernommen. Bereits übernommene Einheiten bleiben erhalten.')) {
+        if (!await confirmModal('Abo beenden? Neu erstellte Einheiten dieses Typs werden nicht mehr automatisch übernommen. Bereits übernommene Einheiten bleiben erhalten.')) {
           if (cb) cb.checked = true; // visuellen Rollback der Checkbox
           return;
         }
         await apiCall('DELETE', 'mein-plan/abo', { typ });
         _aboTypen.delete(typ);
-        _notify('Abo beendet.', 'ok');
+        notify('Abo beendet.', 'ok');
       }
     } catch (err) {
       if (cb) cb.checked = !aktiv; // Rollback bei API-Fehler
-      _notify('Fehler: ' + (err.message || ''), 'err');
+      notify('Fehler: ' + (err.message || ''), 'err');
     }
   }
 
@@ -214,8 +214,8 @@ const MEINPLAN = (() => {
   async function speichern(id, fuer) {
     const datum = document.getElementById('mp-datum')?.value || '';
     const titel = (document.getElementById('mp-titel')?.value || '').trim();
-    if (!datum) { _notify('Bitte Datum angeben.', 'err'); return; }
-    if (!titel) { _notify('Bitte Bezeichnung angeben.', 'err'); return; }
+    if (!datum) { notify('Bitte Datum angeben.', 'err'); return; }
+    if (!titel) { notify('Bitte Bezeichnung angeben.', 'err'); return; }
 
     const kmStr   = (document.getElementById('mp-km')?.value      || '').trim();
     const refStr  = (document.getElementById('mp-ref')?.value     || '').trim();
@@ -232,15 +232,15 @@ const MEINPLAN = (() => {
     try {
       if (id) {
         await apiPut(`mein-plan/einheiten/${id}${_q(fuer)}`, body);
-        _notify('Gespeichert.', 'ok');
+        notify('Gespeichert.', 'ok');
       } else {
         await apiPost(`mein-plan/einheiten${_q(fuer)}`, body);
-        _notify('Einheit hinzugefügt.', 'ok');
+        notify('Einheit hinzugefügt.', 'ok');
       }
       schliesseModal();
       renderPage();
     } catch (e) {
-      _notify('Fehler: ' + (e.message || ''), 'err');
+      notify('Fehler: ' + (e.message || ''), 'err');
     }
   }
 
@@ -263,16 +263,6 @@ const MEINPLAN = (() => {
     setTimeout(() => div.remove(), 8000);
   }
 
-  function _notify(text, art) {
-    const cont = document.getElementById('notification-container');
-    if (!cont) return;
-    const cls = art === 'err' ? 'notif-err' : (art === 'warn' ? 'notif-warn' : 'notif-ok');
-    const div = document.createElement('div');
-    div.className = `notif ${cls}`;
-    div.textContent = text;
-    cont.appendChild(div);
-    setTimeout(() => div.remove(), 4000);
-  }
 
   return {
     setAbo, istAboAktivFuerTyp,

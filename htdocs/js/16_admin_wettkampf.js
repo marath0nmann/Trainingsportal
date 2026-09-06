@@ -212,15 +212,6 @@ const ADMIN_WETTKAMPF = (() => {
     return _sortiereDisziplinen(serie.wettbewerbe || []);
   }
 
-  function benachrichtigen(text, art) {
-    const cont = document.getElementById('notification-container');
-    if (!cont) return;
-    const d = document.createElement('div');
-    d.className = 'notif ' + (art === 'err' ? 'notif-err' : art === 'warn' ? 'notif-warn' : 'notif-ok');
-    d.textContent = text;
-    cont.appendChild(d);
-    setTimeout(() => d.remove(), 3500);
-  }
 
   // ── Sortierung ────────────────────────────────────────────────
   // ── Gemeinsame Filterleiste (Statistikportal-Modul, via shared.php) ──
@@ -1114,7 +1105,7 @@ const ADMIN_WETTKAMPF = (() => {
       _edit.abgesagt_datum = null;
     } else {
       const ziel = serie ? echtesNaechstes(serie) : null;
-      if (!ziel) { benachrichtigen('Kein Termin zum Absagen vorhanden.', 'warn'); return; }
+      if (!ziel) { notify('Kein Termin zum Absagen vorhanden.', 'warn'); return; }
       _edit.abgesagt_datum = ziel;
     }
     if (serie) _renderAbsageSektion(serie);
@@ -1261,7 +1252,7 @@ const ADMIN_WETTKAMPF = (() => {
     const impKat  = (document.getElementById('planung-import-kat')?.value || '').trim() || null;
 
     if (_edit.isManual && !nameVal) {
-      benachrichtigen('Bitte einen Namen eingeben.', 'err');
+      notify('Bitte einen Namen eingeben.', 'err');
       document.getElementById('planung-name')?.focus();
       return;
     }
@@ -1290,7 +1281,7 @@ const ADMIN_WETTKAMPF = (() => {
         });
         schliesseModal();
         _edit = null;
-        benachrichtigen('Wettkampf angelegt.', 'ok');
+        notify('Wettkampf angelegt.', 'ok');
         if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
         await reload();
         return;
@@ -1350,11 +1341,11 @@ const ADMIN_WETTKAMPF = (() => {
 
       schliesseModal();
       _edit = null;
-      benachrichtigen('Planung gespeichert.', 'ok');
+      notify('Planung gespeichert.', 'ok');
       if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
       await reload();
     } catch (e) {
-      benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
+      notify('Fehler: ' + escapeHtml(e.message || ''), 'err');
     }
   }
 
@@ -1372,13 +1363,13 @@ const ADMIN_WETTKAMPF = (() => {
       await apiPut(`wettkampf/${serieId}/planung`, { aktiv: neuAktiv });
       serie.aktiv = neuAktiv;
       renderTabelle();
-      benachrichtigen(
+      notify(
         neuAktiv ? 'Aktiviert – erscheint wieder im Kalender.' : 'Deaktiviert – ausgeblendet im Kalender.',
         'ok'
       );
       if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
     } catch (e) {
-      benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
+      notify('Fehler: ' + escapeHtml(e.message || ''), 'err');
     }
   }
 
@@ -1387,9 +1378,9 @@ const ADMIN_WETTKAMPF = (() => {
     const serie = serien.find(s => s.id === serieId);
     if (!serie) return;
     const next = naechstesDatum(serie);
-    if (!next) { alert('Kein Termin verfügbar.'); return; }
+    if (!next) { notify('Kein Termin verfügbar.', 'warn'); return; }
     const wt = WT_KURZ[new Date(next.datum + 'T00:00:00').getDay()];
-    if (!confirm(`„${decodeHtml(serie.name || serie.kuerzel)}" am ${wt}, ${fmtDate(next.datum)} als Kalender-Event eintragen?`)) return;
+    if (!await confirmModal(`„${decodeHtml(serie.name || serie.kuerzel)}" am ${wt}, ${fmtDate(next.datum)} als Kalender-Event eintragen?`)) return;
     try {
       await apiPost('einheiten', {
         datum:        next.datum,
@@ -1398,9 +1389,9 @@ const ADMIN_WETTKAMPF = (() => {
         sichtbarkeit: 'oeffentlich',
         status:       'geplant',
       });
-      benachrichtigen('Kalender-Eintrag erstellt.', 'ok');
+      notify('Kalender-Eintrag erstellt.', 'ok');
     } catch (e) {
-      benachrichtigen('Fehler: ' + escapeHtml(e.message || ''), 'err');
+      notify('Fehler: ' + escapeHtml(e.message || ''), 'err');
     }
   }
 
