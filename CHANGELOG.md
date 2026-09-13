@@ -1,6 +1,7 @@
 # Changelog
 
-## v347
+## v348
+- **Fix: „Kalender" und „Wettkampfplanung" erschienen als Gast im Menü, waren aber nicht erreichbar.** Beide Menüpunkte tauchten unabhängig vom Login-Status auf – als Gast landete man beim Klick jedoch nirgendwo, weil dort nichts öffentlich zugänglich ist. Sie erscheinen jetzt nur noch für angemeldete Nutzer.
 - **Fix: Im mobilen Menü fehlte der erste Eintrag.** Der Drawer steht in der geteilten `app.css` auf `top: 0` und lag damit hinter dem Header – der oberste Menüpunkt war schlicht verdeckt. Das Statistikportal korrigiert das beim Öffnen auf die gemessene Header-Höhe, das Trainingsportal tat es nie. Zuletzt traf es „Kalender", vorher „Übersicht": der jeweils erste Punkt war unerreichbar, seit es das Menü gibt. Die Höhe wird jetzt beim Öffnen gemessen statt fest verdrahtet – der Header ist auf schmalen Geräten niedriger.
 - Bei der Gelegenheit zwei Kleinigkeiten aus der geteilten `app.css` übernommen, die bisher ungenutzt blieben: der Burger verwandelt sich beim Öffnen in ein ×, und der Hintergrund scrollt nicht mehr mit, solange das Menü offen ist.
 

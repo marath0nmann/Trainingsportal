@@ -182,10 +182,11 @@ function navTabs() {
   // Die Übersicht hat bewusst keinen eigenen Menüpunkt: das Vereinslogo im
   // Kopf führt dorthin (navigateStart), und ein Eintrag mehr in einer Leiste
   // mit vier Punkten kostet mehr, als er bringt.
-  const tabs = [
-    { id: 'kalender',         icon: '&#x1F4C5;', label: 'Kalender' },
-    { id: 'wettkampfplanung', icon: '&#x1F3C5;', label: 'Wettkampfplanung' },
-  ];
+  const tabs = [];
+  if (u) {
+    tabs.push({ id: 'kalender',         icon: '&#x1F4C5;', label: 'Kalender' });
+    tabs.push({ id: 'wettkampfplanung', icon: '&#x1F3C5;', label: 'Wettkampfplanung' });
+  }
   if (isTrainer) {
     // Trainings ohne Treffpunkt sind eine Planungslücke – der Zähler gehört
     // seit v338 zur Trainingsplanung, wo die Liste jetzt zu Hause ist.
