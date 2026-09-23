@@ -86,6 +86,9 @@ const EDITOR = (() => {
               <div class="ed-seghint">
                 Distanz in Metern · Blöcke lassen sich verschachteln (Block im Block) · TP/GP/BP = Trab-/Geh-/Blockpause
               </div>
+              ${e.block_id ? `<div class="ed-seghint">${e.segmente_eigen
+                ? 'Die Segmente weichen vom Trainingsblock ab – Änderungen am Block werden hier nicht mehr übernommen. Wer sie wieder wie im Block setzt, koppelt die Einheit wieder an.'
+                : 'Stammt aus einem Trainingsblock – Änderungen am Block werden hier automatisch übernommen, solange die Segmente nicht einzeln geändert werden.'}</div>` : ''}
             </div>
 
             <div class="ed-footer">

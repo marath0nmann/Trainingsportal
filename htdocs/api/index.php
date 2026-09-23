@@ -1427,6 +1427,46 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig39b: ' . $e->getMessage()); }
         },
 
+        // ── 40: Einheit merkt sich ihren Trainingsblock ─────────────────────
+        //   Bisher wurden die Segmente beim Einplanen einmalig kopiert; eine
+        //   spaetere Korrektur am Block kam nie im Kalender an. block_id
+        //   verbindet die Einheit mit ihrer Vorlage, segmente_eigen markiert
+        //   Einheiten, deren Segmente bewusst einzeln abweichen – die bleiben
+        //   beim Nachziehen unangetastet.
+        //   Bestand: ueber die Serie, sonst ueber einen eindeutigen Blocktitel
+        //   (gleicher Typ, Block mit Segmenten, fuer die Einheit sichtbar).
+        40 => static function (): void {
+            $te  = DB::tbl('training_einheiten');
+            $tb  = DB::tbl('training_bloecke');
+            $tbs = DB::tbl('training_block_segmente');
+            $tse = DB::tbl('training_serien');
+            try {
+                DB::query("ALTER TABLE `{$te}`
+                    ADD COLUMN IF NOT EXISTS block_id INT UNSIGNED NULL AFTER serie_id,
+                    ADD COLUMN IF NOT EXISTS segmente_eigen TINYINT(1) NOT NULL DEFAULT 0 AFTER block_id");
+            } catch (Throwable $e) { error_log('mig40a: ' . $e->getMessage()); }
+            try {
+                DB::query("ALTER TABLE `{$te}` ADD KEY IF NOT EXISTS idx_block (block_id, datum)");
+            } catch (Throwable $e) { error_log('mig40b: ' . $e->getMessage()); }
+            try {
+                DB::query("UPDATE `{$te}` e JOIN `{$tse}` s ON s.id = e.serie_id
+                              SET e.block_id = s.block_id
+                            WHERE e.block_id IS NULL AND s.block_id IS NOT NULL");
+            } catch (Throwable $e) { error_log('mig40c: ' . $e->getMessage()); }
+            try {
+                DB::query("UPDATE `{$te}` e
+                             JOIN (SELECT MIN(id) AS id, LOWER(TRIM(titel)) AS t
+                                     FROM `{$tb}` GROUP BY LOWER(TRIM(titel))
+                                   HAVING COUNT(*) = 1) u ON u.t = LOWER(TRIM(e.titel))
+                             JOIN `{$tb}` b ON b.id = u.id
+                              SET e.block_id = b.id
+                            WHERE e.block_id IS NULL
+                              AND e.typ = b.typ
+                              AND (b.sichtbarkeit = 'global' OR b.erstellt_von = e.erstellt_von)
+                              AND EXISTS (SELECT 1 FROM `{$tbs}` s WHERE s.block_id = b.id)");
+            } catch (Throwable $e) { error_log('mig40d: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -1846,7 +1886,7 @@ function handleEinheiten(string $method, string $sub): void
                 ]
             );
             if (array_key_exists('segmente', $in)) {
-                replaceSegmente($id, $in['segmente'] ?? []);
+                speichereEinheitSegmente($id, $in['segmente'] ?? []);
             }
             $pdo->commit();
         } catch (Throwable $e) {
@@ -4071,8 +4111,8 @@ function handleSerien(string $method, string $sub): void
                 DB::query(
                     'INSERT INTO ' . DB::tbl('training_einheiten') . '
                      (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, strecke_id, bemerkung,
-                      sichtbarkeit, status, serie_id, gruppe_id, erstellt_von)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                      sichtbarkeit, status, serie_id, gruppe_id, block_id, erstellt_von)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     [
                         $datum,
                         $uhrzeit,
@@ -4086,6 +4126,7 @@ function handleSerien(string $method, string $sub): void
                         'geplant',
                         $serieId,
                         $serieGruppeId,
+                        $blockId,
                         (int)$user['id'],
                     ]
                 );
@@ -4233,7 +4274,7 @@ function handleSerien(string $method, string $sub): void
                         array_merge($vals, [$eid])
                     );
                 }
-                if ($hatSeg) replaceSegmente($eid, $in['segmente'] ?? []);
+                if ($hatSeg) speichereEinheitSegmente($eid, $in['segmente'] ?? []);
             }
             // Serien-Metadaten bei Gesamt-Update mitziehen (nicht bei „ab Datum")
             if ($abDatum === null) {
@@ -4750,8 +4791,8 @@ function handleBloecke(string $method, string $sub): void
                 ? (int)$in['gruppe_id'] : null;
             DB::query(
                 'INSERT INTO ' . DB::tbl('training_einheiten') . '
-                 (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, strecke_id, bemerkung, sichtbarkeit, status, gruppe_id, erstellt_von)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                 (datum, uhrzeit, typ, titel, treffpunkt_id, komoot_url, strecke_id, bemerkung, sichtbarkeit, status, gruppe_id, block_id, erstellt_von)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 [
                     $in['datum'],
                     $in['uhrzeit'] ?? null,
@@ -4764,6 +4805,7 @@ function handleBloecke(string $method, string $sub): void
                     $in['sichtbarkeit'] ?? $defaultSicht,
                     'geplant',
                     $gruppeId,
+                    $id,
                     (int)$user['id'],
                 ]
             );
@@ -4883,12 +4925,13 @@ function handleBloecke(string $method, string $sub): void
             if (array_key_exists('gruppen_ids', $in)) {
                 replaceBlockGruppen($id, (array)$in['gruppen_ids']);
             }
+            $nachgezogen = zieheBlockNach($id, $block);
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
             throw $e;
         }
-        echo json_encode(['ok' => true]);
+        echo json_encode(['ok' => true, 'einheiten_aktualisiert' => $nachgezogen]);
         return;
     }
 
@@ -5660,6 +5703,8 @@ function mapEinheit(array $r): array {
         'status'        => $r['status'] ?? 'geplant',
         'serie_id'      => isset($r['serie_id']) && $r['serie_id'] !== null ? (int)$r['serie_id'] : null,
         'gruppe_id'     => isset($r['gruppe_id']) && $r['gruppe_id'] !== null ? (int)$r['gruppe_id'] : null,
+        'block_id'      => isset($r['block_id']) && $r['block_id'] !== null ? (int)$r['block_id'] : null,
+        'segmente_eigen'=> !empty($r['segmente_eigen']),
     ];
 }
 function mapSegment(array $r): array {
@@ -5699,6 +5744,89 @@ function replaceSegmente(int $einheitId, $segmente): void {
             ]
         );
     }
+}
+
+// ── Einheit ↔ Trainingsblock ────────────────────────────────────────────────
+// Eine eingeplante Einheit merkt sich ihren Block (block_id). Ändert sich der
+// Block, ziehen die heutigen und künftigen Einheiten mit – außer ihre Segmente
+// wurden an der Einheit selbst bewusst anders gesetzt (segmente_eigen).
+
+function einheitSegmentSignatur(int $einheitId): string {
+    require_once __DIR__ . '/../../includes/segbaum.php';
+    return Segbaum::signatur(DB::fetchAll(
+        'SELECT * FROM ' . DB::tbl('training_segmente') . ' WHERE einheit_id = ? ORDER BY reihenfolge, id',
+        [$einheitId]
+    ));
+}
+
+function blockSegmentSignatur(int $blockId): string {
+    require_once __DIR__ . '/../../includes/segbaum.php';
+    return Segbaum::signatur(DB::fetchAll(
+        'SELECT * FROM ' . DB::tbl('training_block_segmente') . ' WHERE block_id = ? ORDER BY reihenfolge, id',
+        [$blockId]
+    ));
+}
+
+/**
+ * Segmente einer Einheit aus dem Editor speichern. Hat der Nutzer sie
+ * tatsächlich geändert, entscheidet der Vergleich mit dem Block, ob die
+ * Einheit künftig eigene Segmente hat oder wieder dem Block folgt.
+ */
+function speichereEinheitSegmente(int $einheitId, $segmente): void {
+    $vorher = einheitSegmentSignatur($einheitId);
+    replaceSegmente($einheitId, $segmente);
+    $row = DB::fetchOne('SELECT block_id FROM ' . DB::tbl('training_einheiten') . ' WHERE id = ?', [$einheitId]);
+    if (!$row || $row['block_id'] === null) return;
+    $nachher = einheitSegmentSignatur($einheitId);
+    if ($nachher === $vorher) return;
+    $eigen = $nachher !== blockSegmentSignatur((int)$row['block_id']);
+    DB::query('UPDATE ' . DB::tbl('training_einheiten') . ' SET segmente_eigen = ? WHERE id = ?',
+        [$eigen ? 1 : 0, $einheitId]);
+}
+
+/**
+ * Nach dem Speichern eines Blocks die heutigen und künftigen Einheiten
+ * nachziehen. Segmente nur ohne eigene Abweichung; Titel und Bemerkung nur,
+ * wo sie noch dem alten Blockstand entsprechen. Liefert die Zahl der
+ * geänderten Einheiten.
+ */
+function zieheBlockNach(int $blockId, array $blockAlt): int {
+    $block = DB::fetchOne('SELECT * FROM ' . DB::tbl('training_bloecke') . ' WHERE id = ?', [$blockId]);
+    if (!$block) return 0;
+    $segs = DB::fetchAll(
+        'SELECT * FROM ' . DB::tbl('training_block_segmente') . ' WHERE block_id = ? ORDER BY reihenfolge, id',
+        [$blockId]
+    );
+    require_once __DIR__ . '/../../includes/segbaum.php';
+    $sigBlock = Segbaum::signatur($segs);
+    $segArr   = blockSegmenteFuerEinheit($segs);
+
+    $ziele = DB::fetchAll(
+        'SELECT id, titel, bemerkung, segmente_eigen FROM ' . DB::tbl('training_einheiten') . '
+          WHERE block_id = ? AND datum >= CURDATE()',
+        [$blockId]
+    );
+    $geaendert = 0;
+    foreach ($ziele as $z) {
+        $eid  = (int)$z['id'];
+        $sets = [];
+        $vals = [];
+        if ($z['titel'] === $blockAlt['titel'] && $block['titel'] !== $blockAlt['titel']) {
+            $sets[] = 'titel = ?'; $vals[] = $block['titel'];
+        }
+        if ((string)$z['bemerkung'] === (string)$blockAlt['bemerkung']
+            && (string)$block['bemerkung'] !== (string)$blockAlt['bemerkung']) {
+            $sets[] = 'bemerkung = ?'; $vals[] = $block['bemerkung'];
+        }
+        if ($sets) {
+            DB::query('UPDATE ' . DB::tbl('training_einheiten') . ' SET ' . implode(', ', $sets) . ' WHERE id = ?',
+                array_merge($vals, [$eid]));
+        }
+        $segNeu = empty($z['segmente_eigen']) && einheitSegmentSignatur($eid) !== $sigBlock;
+        if ($segNeu) replaceSegmente($eid, $segArr);
+        if ($sets || $segNeu) $geaendert++;
+    }
+    return $geaendert;
 }
 
 /**

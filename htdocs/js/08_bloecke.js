@@ -805,13 +805,16 @@ const BLOECKE = (() => {
     };
     if (!payload.titel) { notify('Titel fehlt.', 'err'); return; }
     try {
+      let n = 0;
       if (blockId) {
-        await apiPut(`bloecke/${blockId}`, payload);
+        const res = await apiPut(`bloecke/${blockId}`, payload);
+        n = (res && res.einheiten_aktualisiert) || 0;
       } else {
         await apiPost('bloecke', payload);
       }
       schliesseModal();
-      notify('Block gespeichert.', 'ok');
+      notify(n ? `Block gespeichert – ${n} geplante ${n === 1 ? 'Einheit' : 'Einheiten'} im Kalender angepasst.`
+               : 'Block gespeichert.', 'ok');
       await ladeListe();
       if (typeof PLANUNG !== 'undefined') PLANUNG.reloadSidebar();
     } catch (e) {

@@ -109,6 +109,31 @@ class Segbaum {
         return $wurzel;
     }
 
+    /**
+     * Inhaltlicher Fingerabdruck der Segmente – unabhängig von IDs,
+     * Reihenfolge-Nummern und Alt-/Neuformat. Gleiche Signatur heißt:
+     * für Anzeige und Uhr-Export dasselbe Training.
+     */
+    public static function signatur(array $rows): string
+    {
+        $norm = function (array $baum) use (&$norm): array {
+            $out = [];
+            foreach ($baum as $n) {
+                $typ = $n['typ'] ?? 'work';
+                if ($typ === 'gruppe') {
+                    $out[] = ['g', max(1, (int)($n['wiederholungen'] ?? 1)), $norm($n['kinder'] ?? [])];
+                } elseif ($typ === 'pause') {
+                    $out[] = ['p', (int)($n['distanz_m'] ?? 0), (string)($n['pause_typ'] ?? 'TP')];
+                } else {
+                    $out[] = ['w', (int)($n['distanz_m'] ?? 0),
+                              (string)($n['pace_referenz'] ?? ''), (string)($n['notiz'] ?? '')];
+                }
+            }
+            return $out;
+        };
+        return json_encode($norm(self::ausRows($rows)));
+    }
+
     /** Gesamtdistanz in Metern (inkl. Pausen und verschachtelter Wiederholungen) */
     public static function gesamtDistanz(array $baum): int
     {
