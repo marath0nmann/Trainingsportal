@@ -1,5 +1,10 @@
 # Changelog
 
+## v350
+- **Korrekturen an einem Trainingsblock kommen jetzt auch im Kalender an.** Beim Einplanen wurden die Segmente eines Blocks bisher einmalig in die Einheit kopiert – wer den Block danach verbesserte (etwa eine Pause, die versehentlich als Tempo eingetragen war), sah im Kalender und im Uhr-Export weiter den alten Stand. Eine Einheit merkt sich jetzt ihren Block, und beim Speichern des Blocks ziehen alle heutigen und künftigen Einheiten mit; die Meldung nennt, wie viele angepasst wurden. Vergangene Einheiten bleiben unberührt.
+- Wer die Segmente an einer einzelnen Einheit bewusst anders setzt, behält sie: diese Einheit folgt dem Block nicht mehr, bis ihre Segmente wieder mit ihm übereinstimmen. Titel und Bemerkung werden nur übernommen, wo sie noch dem alten Blockstand entsprechen. Der Einheiten-Editor zeigt an, ob eine Einheit ihrem Block folgt.
+- Bestehende Einheiten werden über ihre Serie oder – wo eindeutig – über den gleichen Titel ihrem Block zugeordnet.
+
 ## v349
 - **Fix: Workout-Downloads landeten als „….workout.html" in den Downloads.** Der Service Worker sollte Dateidownloads (Apple Watch, Garmin, GPX, ICS) nie abfangen, prüfte dafür aber nur den Pfad – die Links gehen jedoch über `api/index.php?p=…`, die Dateiendung steckt im `p`-Parameter. Seit v330 lief deshalb jeder Download durch den Service Worker, und Safari hängte der so ausgelieferten Datei ein `.html` an. Die Prüfung schaut jetzt auch in den `p`-Parameter.
 
