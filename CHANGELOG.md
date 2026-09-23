@@ -1,5 +1,8 @@
 # Changelog
 
+## v349
+- **Fix: Workout-Downloads landeten als „….workout.html" in den Downloads.** Der Service Worker sollte Dateidownloads (Apple Watch, Garmin, GPX, ICS) nie abfangen, prüfte dafür aber nur den Pfad – die Links gehen jedoch über `api/index.php?p=…`, die Dateiendung steckt im `p`-Parameter. Seit v330 lief deshalb jeder Download durch den Service Worker, und Safari hängte der so ausgelieferten Datei ein `.html` an. Die Prüfung schaut jetzt auch in den `p`-Parameter.
+
 ## v348
 - **Fix: „Kalender" und „Wettkampfplanung" erschienen als Gast im Menü, waren aber nicht erreichbar.** Beide Menüpunkte tauchten unabhängig vom Login-Status auf – als Gast landete man beim Klick jedoch nirgendwo, weil dort nichts öffentlich zugänglich ist. Sie erscheinen jetzt nur noch für angemeldete Nutzer.
 - **Fix: Im mobilen Menü fehlte der erste Eintrag.** Der Drawer steht in der geteilten `app.css` auf `top: 0` und lag damit hinter dem Header – der oberste Menüpunkt war schlicht verdeckt. Das Statistikportal korrigiert das beim Öffnen auf die gemessene Header-Höhe, das Trainingsportal tat es nie. Zuletzt traf es „Kalender", vorher „Übersicht": der jeweils erste Punkt war unerreichbar, seit es das Menü gibt. Die Höhe wird jetzt beim Öffnen gemessen statt fest verdrahtet – der Header ist auf schmalen Geräten niedriger.

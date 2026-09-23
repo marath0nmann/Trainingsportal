@@ -67,8 +67,12 @@ self.addEventListener('fetch', event => {
 
   if (url.origin !== self.location.origin) return;
 
-  // Downloads (GPX, ICS, Workout-Dateien) nie abfangen
-  if (url.searchParams.has('download') || /\.(gpx|ics|fit|workout)$/i.test(url.pathname)) return;
+  // Downloads (GPX, ICS, Workout-Dateien) nie abfangen. Die Links gehen
+  // über api/index.php?p=…, die Endung steckt also im p-Parameter. Eine
+  // vom SW beantwortete Datei speichert Safari als "….workout.html".
+  const DOWNLOAD = /(\.(gpx|ics|fit|workout)|\/gpx)$/i;
+  if (url.searchParams.has('download') || DOWNLOAD.test(url.pathname)
+      || DOWNLOAD.test(url.searchParams.get('p') || '')) return;
 
   if (istApi(url)) {
     event.respondWith(networkFirst(req, DATA_CACHE));
