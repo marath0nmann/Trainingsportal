@@ -15,6 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Deploy-Jahr eintragen (Copyright im Footer)
+        run: |
+          JAHR=$(TZ=Europe/Berlin date +%Y)
+          sed -i "s|name=\"deploy-jahr\" content=\"[0-9]*\"|name=\"deploy-jahr\" content=\"$JAHR\"|" htdocs/index.html
+          grep -q "name=\"deploy-jahr\" content=\"$JAHR\"" htdocs/index.html
+
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:

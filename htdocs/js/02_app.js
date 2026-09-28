@@ -603,6 +603,17 @@ var FOOTER_LEGAL = {
   impressum:   { titel: 'Impressum',            urlKey: 'footer_impressum_url',    textKey: 'footer_impressum_text',   def: FOOTER_DEFAULT_IMP },
 };
 
+// Copyright-Jahre: Beginn 2026 bis zum Jahr des letzten Deployments. Das
+// Deploy-Jahr trägt der GitHub-Workflow beim Hochladen in
+// <meta name="deploy-jahr"> ein – es folgt also dem Deployment, nicht der
+// Uhr des Besuchers.
+function copyrightJahre() {
+  var start = 2026;
+  var meta = document.querySelector('meta[name="deploy-jahr"]');
+  var jahr = parseInt(meta && meta.content, 10) || start;
+  return jahr > start ? start + '–' + jahr : String(start);
+}
+
 function buildFooter() {
   var el = document.getElementById('app-footer');
   if (!el) return;
@@ -622,7 +633,7 @@ function buildFooter() {
                   footerLink('nutzung',     'Nutzungsbedingungen') + ' &nbsp;&middot;&nbsp; ' +
                   footerLink('impressum',   'Impressum');
   el.innerHTML =
-    '<div>Powered by <a href="' + ghUrl + '" target="_blank" rel="noopener" style="' + linkStyle + '">Trainingsportal</a> &copy; 2026 <a href="' + authorUrl + '" target="_blank" rel="noopener" style="' + linkStyle + '">Daniel Weyers</a></div>' +
+    '<div>Powered by <a href="' + ghUrl + '" target="_blank" rel="noopener" style="' + linkStyle + '">Trainingsportal</a> &copy; ' + copyrightJahre() + ' <a href="' + authorUrl + '" target="_blank" rel="noopener" style="' + linkStyle + '">Daniel Weyers</a></div>' +
     '<div>' + legalLine + '</div>';
 }
 
