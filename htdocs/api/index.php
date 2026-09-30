@@ -1487,7 +1487,10 @@ function _migrationStmts(): array
 function _archivKinder(string $tabelle): array
 {
     $map = [
-        'training_einheiten' => [['training_segmente', 'einheit_id']],
+        // Übernommene Kopien in „Mein Plan" gehen mit der Team-Einheit –
+        // sonst stehen sie verwaist (ohne Ort) weiter in Kalender und iCal-Feed.
+        'training_einheiten' => [['training_segmente', 'einheit_id'],
+                                 ['training_privat_einheiten', 'ref_einheit_id']],
         'training_bloecke'   => [['training_block_segmente', 'block_id'],
                                  ['training_block_gruppen',  'block_id']],
     ];
@@ -3440,6 +3443,8 @@ function buildIcsForUser(int $userId, bool $mitUhrzeit = false): string {
     $workout = $workoutFormat === 'keine'
         ? []
         : ['format' => $workoutFormat, 'token' => ladeIcsToken($userId)];
+
+    syncPrivatKopien($userId);
 
     // Nur Einheiten aus „Mein Plan" des Nutzers (privat_einheiten)
     $privatRows = DB::fetchAll(
@@ -6080,6 +6085,7 @@ function handleMeinPlan(string $method, string $tail): void
                 }
             }
         }
+        syncPrivatKopien($ownerId);
 
         // Gruppen des Benutzers laden (aus Statistikportal + eigene Zuordnung)
         $meineGruppen    = [];
@@ -6368,6 +6374,31 @@ function _aboSync(int $userId, string $von, string $bis, string $typ = ''): void
             [$userId, $e['datum'], $uhrzeitSync, $e['typ'], $e['titel'], $km, (int)$e['id']]
         );
     }
+}
+
+/**
+ * Gleicht die übernommenen Kopien eines Nutzers mit ihren Team-Einheiten ab.
+ * Die Kopie hält Datum/Uhrzeit/Typ/Titel als Schnappschuss; ändert der
+ * Trainer die Einheit, stünde sonst der alte Termin weiter im Plan und im
+ * iCal-Feed. Kopien, deren Einheit es nicht mehr gibt, werden archiviert.
+ */
+function syncPrivatKopien(int $userId): void
+{
+    $te = DB::tbl('training_einheiten');
+    $tp = DB::tbl('training_privat_einheiten');
+    archiviereUndLoesche('training_privat_einheiten',
+        "benutzer_id = ? AND ref_einheit_id IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM `$te` e WHERE e.id = ref_einheit_id)",
+        [$userId], 'Team-Einheit geloescht');
+    DB::query(
+        "UPDATE `$tp` p
+           JOIN `$te` e ON e.id = p.ref_einheit_id
+            SET p.datum = e.datum, p.uhrzeit = e.uhrzeit, p.typ = e.typ, p.titel = e.titel
+          WHERE p.benutzer_id = ?
+            AND (p.datum <> e.datum OR NOT (p.uhrzeit <=> e.uhrzeit)
+                 OR p.typ <> e.typ OR p.titel <> e.titel)",
+        [$userId]
+    );
 }
 
 function mapPrivatEinheit(array $r): array

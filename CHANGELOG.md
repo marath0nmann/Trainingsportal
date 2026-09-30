@@ -1,5 +1,8 @@
 # Changelog
 
+## v352
+- **Fix: Geänderte oder gelöschte Team-Einheiten blieben im iCal-Feed und in „Mein Plan" stehen.** Eine übernommene Einheit ist in „Mein Plan" eine Kopie mit eigenem Datum, Uhrzeit, Typ und Titel – die wurde nie nachgezogen. Verlegte der Trainer eine Einheit, stand der alte Termin weiter im Kalender-Abo; wurde sie gelöscht und neu angelegt, erschien sie doppelt (die alte Kopie ohne Ort). Die Kopien werden jetzt vor jedem Laden von Kalender und iCal-Feed mit ihrer Team-Einheit abgeglichen, Kopien gelöschter Einheiten werden archiviert – beim Löschen einer Einheit sofort, bestehende Altlasten beim nächsten Abruf.
+
 ## v351
 - **Copyright im Footer richtet sich nach dem Deployment:** Der Deploy-Workflow trägt beim Hochladen das aktuelle Jahr (Europe/Berlin) in `<meta name="deploy-jahr">` der `index.html` ein; der Footer zeigt „© 2026" bzw. ab einem Deployment 2027 „© 2026–2027" (`copyrightJahre()`). Einheitlich in Statistik-, Trainings- und Planungsportal.
 
