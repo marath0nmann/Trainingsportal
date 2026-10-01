@@ -854,7 +854,7 @@ async function renderKalender(main, monthArg) {
        </div>`
     : '';
 
-  // Hinweise, Heute/Morgen, Aktionen und die Wettkampf-Vorschau stehen auf der
+  // Hinweise, Heute/Morgen und die Wettkampf-Vorschau stehen auf der
   // Übersicht (#dashboard). Der Kalender zeigt den Kalender.
   main.innerHTML = `
     <div class="kal-wrap">
@@ -867,6 +867,7 @@ async function renderKalender(main, monthArg) {
           ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateKalender('${ymd(next).slice(0,7)}')" aria-label="Nächster Monat">›</button>` : ''}
         </div>
         ${angemeldet ? `<div class="kal-nav-right">
+          ${_kalAktionenHtml()}
           <div class="view-toggle">
             <button class="btn btn-ghost view-active" title="Kalenderansicht">▦ Kalender</button>
             <button class="btn btn-ghost" onclick="navigateListe()" title="Quartalsplan (aktuelles Quartal)">☰ Liste</button>
@@ -2263,6 +2264,7 @@ async function renderListe(main, quarterArg) {
           ${angemeldet ? `<button class="btn btn-ghost" onclick="navigateListe('${nextQ}')" aria-label="Nächstes Quartal">›</button>` : ''}
         </div>
         ${angemeldet ? `<div class="liste-nav-right">
+          ${_kalAktionenHtml()}
           <div class="view-toggle">
             <button class="btn btn-ghost" onclick="navigateKalenderHeute()" title="Kalenderansicht (aktueller Monat)">▦ Kalender</button>
             <button class="btn btn-ghost view-active" title="Quartalsplan">☰ Liste</button>
@@ -2880,29 +2882,29 @@ async function _ladeWettkampfTermine(von, bis) {
   }
 }
 
-// ── Abonnieren + Teilen: Aktionsleiste unter dem Kalender/der Liste ──────
+// ── Abonnieren / Teilen / PDF: Aktionen in der Kalender- und Listen-Toolbar ──
+// Bis v352 standen Abonnieren und Teilen ganz unten auf der Übersicht – weit
+// weg von dem Plan, den sie betreffen. Jetzt sitzen sie neben der
+// Ansichtsumschaltung. Auf schmalen Bildschirmen bleibt nur das Symbol.
 
-function _renderKalActions(containerId) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  if (!state.user) { el.innerHTML = ''; return; }
-  const canShare = true; // Teilen ist für alle eingeloggten Nutzer verfügbar
-  el.innerHTML = `
-    <div class="kal-actions-bar">
-      <button class="btn btn-ghost kal-action-btn" onclick="ICS.open()" title="Im Kalender-Programm abonnieren">
-        📅 Abonnieren
-      </button>
-      ${canShare ? `<button class="btn btn-ghost kal-action-btn" onclick="SHARE.openDialog()" title="Trainingsplan als Gast-Link teilen">
-        🔗 Teilen
-      </button>` : ''}
+function _kalAktionenHtml() {
+  if (!state.user) return '';
+  const btn = (onclick, icon, label, title) =>
+    `<button class="btn btn-ghost kal-action-btn" onclick="${onclick}" title="${title}" aria-label="${title}">
+      ${icon}<span class="kal-action-label"> ${label}</span>
+    </button>`;
+  return `<div class="kal-actions-inline">
+      ${btn('ICS.open()',        '📅', 'Abonnieren', 'Im Kalender-Programm abonnieren')}
+      ${btn('SHARE.openDialog()', '🔗', 'Teilen',     'Trainingsplan als Gast-Link teilen')}
+      ${btn('exportPlanPDF()',    '📄', 'PDF',        'Diese Ansicht als PDF speichern')}
     </div>`;
 }
 
-// ── SHARE-Modul ───────────────────────────────────────────────────────────
 const SHARE = (() => {
   let _gruppen   = [];
   let _tokens    = [];
   let _editToken = null;   // Token, dessen Zeile gerade im Bearbeiten-Modus ist
+  let _vorgabe   = null;   // { gruppeId, zeitraum } – Vorbelegung, z. B. aus der Trainingsplanung
 
   async function _loadData() {
     const [gr, tk] = await Promise.all([
@@ -2963,7 +2965,7 @@ const SHARE = (() => {
   }
   function _gruppenOptsHtml(selId) {
     return _gruppen.map(g =>
-      `<option value="${g.id}"${g.id === selId ? ' selected' : ''}>${escapeHtml(g.name)}</option>`).join('');
+      `<option value="${g.id}"${String(g.id) === String(selId) ? ' selected' : ''}>${escapeHtml(g.name)}</option>`).join('');
   }
   function _shareUrl(t) {
     const path = t.ansicht === 'liste'
@@ -2983,10 +2985,11 @@ const SHARE = (() => {
     wrap.innerHTML = _zeitraumFieldHtml(ansicht, def, `${prefix}-zeitraum`);
   }
 
-  async function openDialog() {
+  async function openDialog(vorgabe) {
     const mod = document.getElementById('modal-container');
     if (!mod) return;
     _editToken = null;
+    _vorgabe   = vorgabe || null;
     mod.innerHTML = `<div class="modal-overlay"><div class="modal-card" style="max-width:600px">
       <div class="modal-head"><div><div class="modal-eyebrow">Trainingsplan teilen</div>
         <div class="modal-title">🔗 Gast-Links verwalten</div>
@@ -3011,7 +3014,9 @@ const SHARE = (() => {
     const body = mod.querySelector('.modal-body');
     if (!body) return;
 
-    const def = _currentViewPeriod();
+    const def = _vorgabe && _vorgabe.zeitraum
+      ? { ansicht: 'kalender', zeitraum: _vorgabe.zeitraum }
+      : _currentViewPeriod();
 
     const tokenRows = _tokens.length
       ? _tokens.map(t => t.token === _editToken ? _editRowHtml(t) : _viewRowHtml(t)).join('')
@@ -3022,7 +3027,7 @@ const SHARE = (() => {
         <div class="share-field-grid">
           <div>
             <label class="share-label">Gruppe</label>
-            <select id="share-gruppe-sel" class="share-select">${_gruppenOptsHtml(null)}</select>
+            <select id="share-gruppe-sel" class="share-select">${_gruppenOptsHtml(_vorgabe && _vorgabe.gruppeId)}</select>
           </div>
           <div>
             <label class="share-label">Ansicht</label>

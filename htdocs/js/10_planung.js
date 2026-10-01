@@ -462,7 +462,20 @@ const PLANUNG = (() => {
         ${item('athleten', 'Athletenpläne', _activeTab === 'athleten', 'Persönliche Trainingspläne der Athleten')}
         ${item('liste',    'Liste',         _activeTab === 'liste',    'Alle Trainings als Tabelle – filtern, sortieren, sammelweise bearbeiten')}
       </div>
+      <button class="btn btn-ghost kal-action-btn planung-teilen-btn" onclick="PLANUNG.teilen()"
+        title="Gruppenplan als Gast-Link teilen" aria-label="Gruppenplan als Gast-Link teilen">
+        🔗<span class="kal-action-label"> Teilen</span>
+      </button>
     </div>`;
+  }
+
+  // Teilen aus der Planung: Dialog mit der gerade geplanten Gruppe und dem
+  // angezeigten Monat vorbelegen.
+  function teilen() {
+    const zr = kalMonth
+      ? `${kalMonth.getFullYear()}-${String(kalMonth.getMonth() + 1).padStart(2, '0')}`
+      : null;
+    SHARE.openDialog({ gruppeId: aktivGruppe ? aktivGruppe.id : null, zeitraum: zr });
   }
 
   // Gruppen-Tabs (nur innerhalb der Sektion „Gruppenpläne") – ein Tab je Gruppe.
@@ -1748,7 +1761,8 @@ const PLANUNG = (() => {
   }
 
   return {
-    render, navigateMonth, reloadSidebar, loescheEinheit,
+    render,
+    teilen, navigateMonth, reloadSidebar, loescheEinheit,
     einheitBearbeiten, einheitBearbeitenSpeichern,
     einheitLoeschenAusEditor, editorFooterRestore: _editorFooterStandard,
     reloadKal: renderKal,

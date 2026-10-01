@@ -35,12 +35,12 @@
 }
 .share-banner-close:hover { opacity: 1; }
 
-/* ── Aktionsleiste (Abonnieren + Teilen) unter Kalender/Liste ── */
-.kal-actions-bar {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 0 4px;
+/* ── Aktionen (Abonnieren / Teilen / PDF) in Kalender- und Listen-Toolbar ── */
+.kal-actions-inline { display: flex; align-items: center; gap: 4px; }
+.kal-action-btn { font-size: 13px !important; white-space: nowrap; }
+@media (max-width: 720px) {
+  .kal-action-label { display: none; }
 }
-.kal-action-btn { font-size: 13px !important; }
 
 /* ── Teilen-Dialog ── */
 .share-create-form  { margin-bottom: 20px; }
@@ -3008,7 +3008,9 @@ body.planung-active #app-footer    { display: none; }
 .planung-section-nav {
   padding: 14px 18px 0;   /* Athleten-Tab: main-Padding bereits aktiv */
   flex-shrink: 0;
+  display: flex; align-items: center; gap: 12px;
 }
+.planung-section-nav .subtabs { flex: 1; min-width: 0; }
 @media (min-width: 901px) {
   .planung-wrap:not(.planung-scroll) .planung-section-nav {
     padding: 38px 46px 0; /* Gruppen-Tab Desktop: main-Padding (24/28) + nav-Padding (14/18) */
