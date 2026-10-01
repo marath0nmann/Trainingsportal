@@ -1,5 +1,8 @@
 # Changelog
 
+## v353
+- **Teilen, Abonnieren und PDF stehen wieder da, wo der Plan ist.** Seit v336 lagen „Abonnieren" und „Teilen" ganz unten auf der Übersicht, und ein PDF gab es für Angemeldete gar nicht – nur über den Umweg Gast-Link. Kalender und Quartalsliste haben jetzt in der Kopfzeile neben der Ansichtsumschaltung die Buttons 📅 Abonnieren, 🔗 Teilen und 📄 PDF (auf dem Handy nur als Symbol). Die Trainingsplanung bekommt rechts neben den Reitern einen Button „🔗 Teilen", der den Dialog schon mit der gerade geplanten Gruppe und dem angezeigten Monat vorbelegt. Auf der Übersicht sind die Buttons entfallen.
+
 ## v352
 - **Fix: Geänderte oder gelöschte Team-Einheiten blieben im iCal-Feed und in „Mein Plan" stehen.** Eine übernommene Einheit ist in „Mein Plan" eine Kopie mit eigenem Datum, Uhrzeit, Typ und Titel – die wurde nie nachgezogen. Verlegte der Trainer eine Einheit, stand der alte Termin weiter im Kalender-Abo; wurde sie gelöscht und neu angelegt, erschien sie doppelt (die alte Kopie ohne Ort). Die Kopien werden jetzt vor jedem Laden von Kalender und iCal-Feed mit ihrer Team-Einheit abgeglichen, Kopien gelöschter Einheiten werden archiviert – beim Löschen einer Einheit sofort, bestehende Altlasten beim nächsten Abruf.
 

@@ -7,11 +7,11 @@
 // als Naechstes dran, wo stehe ich diese Woche, was wartet auf eine
 // Entscheidung.
 //
-// Die vier Zusatzsektionen des Kalenders wohnen jetzt hier:
+// Drei Zusatzsektionen des Kalenders wohnen jetzt hier (Abonnieren/Teilen
+// stehen seit v353 wieder in der Kalender-Toolbar):
 //   ladeGlobalePaceWarnung()   → Hinweise
 //   ladeHeuteSektionInto()     → Heute / Morgen
 //   ladeWettkampfSektionInto() → Naechste Wettkaempfe
-//   _renderKalActions()        → Abonnieren / Teilen
 //
 // Analog `renderDashboard()` im Statistikportal.
 // ============================================================
@@ -63,14 +63,12 @@ const DASHBOARD = (() => {
 
         <div id="dash-heute"></div>
         <div id="dash-wettkampf"></div>
-        <div id="dash-actions" class="kal-actions"></div>
       </div>`;
 
     // Die Bloecke laden unabhaengig voneinander – ein Fehler in einem
     // darf die uebrigen nicht verhindern.
     ladeGlobalePaceWarnung('dash-hinweise');
     ladeHeuteSektionInto('dash-heute');
-    _renderKalActions('dash-actions');
     _renderWoche();
     _renderEntscheidungen();
     if (istTrainer) _renderPlanungsstand();
