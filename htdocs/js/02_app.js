@@ -3547,6 +3547,7 @@ async function _wkEintragen(serieId, disziplin) {
       titel,
       distanz_km: km,
       bemerkung:  disziplin || null,
+      wk_serie_id: serieId,
     });
     // auch formale Anmeldung anlegen → erscheint in Teilnehmerliste der Karte
     try {

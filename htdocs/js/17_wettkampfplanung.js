@@ -877,6 +877,7 @@ const WETTKAMPFPLANUNG = (() => {
             titel,
             distanz_km: null,
             bemerkung:  disziplin || null,
+            wk_serie_id: serieId,
           });
         } catch (_) { /* Plan-Eintrag ist optional */ }
       }
