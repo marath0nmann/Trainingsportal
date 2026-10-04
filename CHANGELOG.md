@@ -1,5 +1,8 @@
 # Changelog
 
+## v354
+- **Fix: Wettkämpfe blieben in „Mein Plan" und im iCal-Feed auf dem prognostizierten Termin stehen.** Wer sich für einen Wettkampf einträgt, bevor der Termin feststeht, bekommt das vorhergesagte Datum in den Plan (etwa Venloop 2027 am 28.3.). Wurde die Ausgabe später fest terminiert (21.3.), zog der Plan-Eintrag nicht mit – er kannte seine Serie nur über den Titel. Plan-Einträge merken sich jetzt Serie und Jahr (Migration 41, Bestand wird über den Titel zugeordnet) und wandern beim Laden von Kalender und iCal-Feed auf den festen Termin aus der Wettkampfplanung bzw. dem Statistikportal.
+
 ## v353
 - **Teilen, Abonnieren und PDF stehen wieder da, wo der Plan ist.** Seit v336 lagen „Abonnieren" und „Teilen" ganz unten auf der Übersicht, und ein PDF gab es für Angemeldete gar nicht – nur über den Umweg Gast-Link. Kalender und Quartalsliste haben jetzt in der Kopfzeile neben der Ansichtsumschaltung die Buttons 📅 Abonnieren, 🔗 Teilen und 📄 PDF (auf dem Handy nur als Symbol). Die Trainingsplanung bekommt rechts neben den Reitern einen Button „🔗 Teilen", der den Dialog schon mit der gerade geplanten Gruppe und dem angezeigten Monat vorbelegt. Auf der Übersicht sind die Buttons entfallen.
 

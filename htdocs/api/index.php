@@ -1467,6 +1467,46 @@ function _migrationStmts(): array
             } catch (Throwable $e) { error_log('mig40d: ' . $e->getMessage()); }
         },
 
+        // ── 41: Wettkampf-Einträge in „Mein Plan" kennen ihre Serie ─────────
+        //   Bisher nur Titel + Datum: wurde ein prognostizierter Termin später
+        //   fest gesetzt, blieb der Eintrag (und der iCal-Termin) auf der
+        //   Prognose stehen. Bestand wird über den Titel „🏆 <Serie>[ – …]"
+        //   zugeordnet, das Jahr ist das des eingetragenen Datums.
+        41 => static function (): void {
+            $tp  = DB::tbl('training_privat_einheiten');
+            $tws = DB::tbl('veranstaltung_serien');
+            try {
+                DB::query("ALTER TABLE `{$tp}`
+                    ADD COLUMN IF NOT EXISTS wk_serie_id INT NULL AFTER ref_einheit_id,
+                    ADD COLUMN IF NOT EXISTS wk_jahr SMALLINT UNSIGNED NULL AFTER wk_serie_id");
+            } catch (Throwable $e) { error_log('mig41a: ' . $e->getMessage()); }
+            try {
+                DB::query("ALTER TABLE `{$tp}` ADD KEY IF NOT EXISTS idx_wk (wk_serie_id, wk_jahr)");
+            } catch (Throwable $e) { error_log('mig41b: ' . $e->getMessage()); }
+            try {
+                $namen = [];
+                foreach (DB::fetchAll("SELECT id, name, kuerzel FROM `{$tws}`") as $sr) {
+                    foreach ([$sr['name'], $sr['kuerzel']] as $n) {
+                        $n = trim(html_entity_decode((string)$n, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                        if ($n !== '') $namen[$n][] = (int)$sr['id'];
+                    }
+                }
+                $rows = DB::fetchAll("SELECT id, datum, titel FROM `{$tp}`
+                                       WHERE typ = 'wettkampf' AND wk_serie_id IS NULL
+                                         AND ref_einheit_id IS NULL");
+                foreach ($rows as $r) {
+                    $t = (string)$r['titel'];
+                    if (!str_starts_with($t, '🏆 ')) continue;
+                    $rest = substr($t, strlen('🏆 '));
+                    $name = explode(' – ', $rest, 2)[0];
+                    $ids  = array_values(array_unique($namen[$name] ?? []));
+                    if (count($ids) !== 1) continue;   // unbekannt oder mehrdeutig
+                    DB::query("UPDATE `{$tp}` SET wk_serie_id = ?, wk_jahr = ? WHERE id = ?",
+                              [$ids[0], (int)substr((string)$r['datum'], 0, 4), (int)$r['id']]);
+                }
+            } catch (Throwable $e) { error_log('mig41c: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -6228,10 +6268,14 @@ function handleMeinPlan(string $method, string $tail): void
         }
         $uhrzeitIn = isset($in['uhrzeit']) && preg_match('/^\d{2}:\d{2}$/', (string)$in['uhrzeit'])
             ? (string)$in['uhrzeit'] : null;
+        // Wettkampf-Eintrag: Serie + Ausgabe merken, damit ein später fest
+        // gesetzter Termin nachgezogen werden kann (syncPrivatKopien).
+        $wkSerieId = (isset($in['wk_serie_id']) && $in['wk_serie_id']) ? (int)$in['wk_serie_id'] : null;
+        $wkJahr    = $wkSerieId ? (int)substr((string)$in['datum'], 0, 4) : null;
         DB::query(
             'INSERT INTO ' . DB::tbl('training_privat_einheiten') . '
-             (benutzer_id, datum, uhrzeit, typ, titel, distanz_km, bemerkung, ref_einheit_id)
-             VALUES (?,?,?,?,?,?,?,?)',
+             (benutzer_id, datum, uhrzeit, typ, titel, distanz_km, bemerkung, ref_einheit_id, wk_serie_id, wk_jahr)
+             VALUES (?,?,?,?,?,?,?,?,?,?)',
             [
                 $ownerId,
                 $in['datum'],
@@ -6241,6 +6285,8 @@ function handleMeinPlan(string $method, string $tail): void
                 $km,
                 (isset($in['bemerkung']) && $in['bemerkung'] !== '') ? (string)$in['bemerkung'] : null,
                 $refId,
+                $wkSerieId,
+                $wkJahr,
             ]
         );
         echo json_encode(['ok' => true, 'id' => (int)DB::lastInsertId()]);
@@ -6399,6 +6445,36 @@ function syncPrivatKopien(int $userId): void
                  OR p.typ <> e.typ OR p.titel <> e.titel)",
         [$userId]
     );
+
+    // Wettkämpfe: eingetragen wird oft auf einen prognostizierten Termin.
+    // Steht die Ausgabe inzwischen fest (Planung oder Statistikportal),
+    // wandert der Eintrag auf den festen Termin.
+    $twp = DB::tbl('training_wettkampf_planung');
+    $tvv = DB::tbl('veranstaltungen');
+    try {
+        $wkRows = DB::fetchAll(
+            "SELECT p.id, p.datum, p.wk_serie_id, p.wk_jahr, wp.naechstes_datum,
+                    (SELECT MIN(v.datum) FROM `$tvv` v
+                      WHERE v.serie_id = p.wk_serie_id AND YEAR(v.datum) = p.wk_jahr
+                        AND v.geloescht_am IS NULL AND v.genehmigt = 1) AS statistik_datum
+               FROM `$tp` p
+               LEFT JOIN `$twp` wp ON wp.serie_id = p.wk_serie_id
+              WHERE p.benutzer_id = ? AND p.wk_serie_id IS NOT NULL AND p.wk_jahr IS NOT NULL",
+            [$userId]
+        );
+    } catch (Throwable $e) { return; /* Migration 41 noch nicht gelaufen */ }
+    foreach ($wkRows as $r) {
+        $jahr = (string)$r['wk_jahr'];
+        $fest = null;
+        if (!empty($r['naechstes_datum']) && str_starts_with((string)$r['naechstes_datum'], $jahr)) {
+            $fest = (string)$r['naechstes_datum'];
+        } elseif (!empty($r['statistik_datum'])) {
+            $fest = (string)$r['statistik_datum'];
+        }
+        if ($fest !== null && $fest !== (string)$r['datum']) {
+            DB::query("UPDATE `$tp` SET datum = ? WHERE id = ?", [$fest, (int)$r['id']]);
+        }
+    }
 }
 
 function mapPrivatEinheit(array $r): array
