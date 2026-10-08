@@ -1483,31 +1483,62 @@ function _migrationStmts(): array
             try {
                 DB::query("ALTER TABLE `{$tp}` ADD KEY IF NOT EXISTS idx_wk (wk_serie_id, wk_jahr)");
             } catch (Throwable $e) { error_log('mig41b: ' . $e->getMessage()); }
+            try { _wkPlanZuordnen(); }
+            catch (Throwable $e) { error_log('mig41c: ' . $e->getMessage()); }
+        },
+
+        // ── 42: HTML-Entities in Wettkampf-Titeln von „Mein Plan" ───────────
+        //   Die Wettkampfplanung übernahm Seriennamen ungedekodiert
+        //   („&quot;Rund um …&quot;"); Kalender und iCal zeigten die Entities.
+        //   Danach erneut zuordnen – die Titel passten bisher nicht zum Namen.
+        42 => static function (): void {
+            $tp = DB::tbl('training_privat_einheiten');
             try {
-                $namen = [];
-                foreach (DB::fetchAll("SELECT id, name, kuerzel FROM `{$tws}`") as $sr) {
-                    foreach ([$sr['name'], $sr['kuerzel']] as $n) {
-                        $n = trim(html_entity_decode((string)$n, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-                        if ($n !== '') $namen[$n][] = (int)$sr['id'];
-                    }
+                foreach (DB::fetchAll("SELECT id, titel, bemerkung FROM `{$tp}`
+                                        WHERE typ = 'wettkampf' AND (titel LIKE '%&%;%' OR bemerkung LIKE '%&%;%')") as $r) {
+                    DB::query("UPDATE `{$tp}` SET titel = ?, bemerkung = ? WHERE id = ?", [
+                        html_entity_decode((string)$r['titel'], ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                        $r['bemerkung'] === null ? null
+                            : html_entity_decode((string)$r['bemerkung'], ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                        (int)$r['id'],
+                    ]);
                 }
-                $rows = DB::fetchAll("SELECT id, datum, titel FROM `{$tp}`
-                                       WHERE typ = 'wettkampf' AND wk_serie_id IS NULL
-                                         AND ref_einheit_id IS NULL");
-                foreach ($rows as $r) {
-                    $t = (string)$r['titel'];
-                    if (!str_starts_with($t, '🏆 ')) continue;
-                    $rest = substr($t, strlen('🏆 '));
-                    $name = explode(' – ', $rest, 2)[0];
-                    $ids  = array_values(array_unique($namen[$name] ?? []));
-                    if (count($ids) !== 1) continue;   // unbekannt oder mehrdeutig
-                    DB::query("UPDATE `{$tp}` SET wk_serie_id = ?, wk_jahr = ? WHERE id = ?",
-                              [$ids[0], (int)substr((string)$r['datum'], 0, 4), (int)$r['id']]);
-                }
-            } catch (Throwable $e) { error_log('mig41c: ' . $e->getMessage()); }
+            } catch (Throwable $e) { error_log('mig42a: ' . $e->getMessage()); }
+            try { _wkPlanZuordnen(); }
+            catch (Throwable $e) { error_log('mig42b: ' . $e->getMessage()); }
         },
 
     ];
+}
+
+/**
+ * Ordnet Wettkampf-Einträge in „Mein Plan" ohne Serienbezug über ihren Titel
+ * „🏆 <Serie>[ – <Disziplin>]" einer Serie zu (nur eindeutige Treffer).
+ */
+function _wkPlanZuordnen(): void
+{
+    $tp  = DB::tbl('training_privat_einheiten');
+    $tws = DB::tbl('veranstaltung_serien');
+    $namen = [];
+    foreach (DB::fetchAll("SELECT id, name, kuerzel FROM `{$tws}`") as $sr) {
+        foreach ([$sr['name'], $sr['kuerzel']] as $n) {
+            $n = trim(html_entity_decode((string)$n, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            if ($n !== '') $namen[$n][] = (int)$sr['id'];
+        }
+    }
+    $rows = DB::fetchAll("SELECT id, datum, titel FROM `{$tp}`
+                           WHERE typ = 'wettkampf' AND wk_serie_id IS NULL
+                             AND ref_einheit_id IS NULL");
+    foreach ($rows as $r) {
+        $t = (string)$r['titel'];
+        if (!str_starts_with($t, '🏆 ')) continue;
+        $rest = substr($t, strlen('🏆 '));
+        $name = explode(' – ', $rest, 2)[0];
+        $ids  = array_values(array_unique($namen[$name] ?? []));
+        if (count($ids) !== 1) continue;   // unbekannt oder mehrdeutig
+        DB::query("UPDATE `{$tp}` SET wk_serie_id = ?, wk_jahr = ? WHERE id = ?",
+                  [$ids[0], (int)substr((string)$r['datum'], 0, 4), (int)$r['id']]);
+    }
 }
 
 // ── Archiv: Loeschen ist im Trainingsportal nie endgueltig ────────────────

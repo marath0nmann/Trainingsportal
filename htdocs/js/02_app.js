@@ -3534,7 +3534,7 @@ async function _wkEintragen(serieId, disziplin) {
   if (!datum) return;
 
   const name  = _decodeHtml(serie.name || serie.kuerzel || '');
-  const titel = ('🏆 ' + name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
+  const titel = ('🏆 ' + name + (disziplin ? ` – ${_decodeHtml(disziplin)}` : '')).slice(0, 200);
   // Distanz: zuerst aus disziplin_distanzen-Map der API (DB-Wert), Fallback: Name-Parsing
   const distMap = serie.disziplin_distanzen || {};
   const distM   = disziplin && distMap[disziplin] != null ? distMap[disziplin] : null;

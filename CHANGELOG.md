@@ -1,5 +1,8 @@
 # Changelog
 
+## v355
+- **Fix: Anführungszeichen erschienen in Wettkampf-Einträgen als „&quot;".** Seriennamen kommen HTML-kodiert aus dem Statistikportal; die Wettkampfplanung übernahm sie beim Eintragen ungedekodiert in den Plan-Titel – sichtbar in „Mein Plan" und im iCal-Feed (etwa „Viersener Herbstwaldlauf &quot;Rund um den Bismarckturm&quot;"). Die Wettkampfplanung dekodiert Namen jetzt beim Laden, Migration 42 bereinigt bestehende Einträge und ordnet sie anschließend ihrer Serie zu, damit auch sie späteren Terminänderungen folgen.
+
 ## v354
 - **Fix: Wettkämpfe blieben in „Mein Plan" und im iCal-Feed auf dem prognostizierten Termin stehen.** Wer sich für einen Wettkampf einträgt, bevor der Termin feststeht, bekommt das vorhergesagte Datum in den Plan (etwa Venloop 2027 am 28.3.). Wurde die Ausgabe später fest terminiert (21.3.), zog der Plan-Eintrag nicht mit – er kannte seine Serie nur über den Titel. Plan-Einträge merken sich jetzt Serie und Jahr (Migration 41, Bestand wird über den Titel zugeordnet) und wandern beim Laden von Kalender und iCal-Feed auf den festen Termin aus der Wettkampfplanung bzw. dem Statistikportal.
 
