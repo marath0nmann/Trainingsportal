@@ -140,7 +140,14 @@ const WETTKAMPFPLANUNG = (() => {
 
   async function _lade() {
     const resp = await apiGet('wettkampfplanung?jahr=' + _jahr, { silent: true });
-    _serien = resp.serien || [];
+    // Namen kommen HTML-kodiert aus dem Statistikportal („&quot;…&quot;") –
+    // dekodiert, sonst landen die Entities in Anzeige und Plan-Titel.
+    _serien = (resp.serien || []).map(s => ({
+      ...s,
+      name:    _decodeHtml(s.name || ''),
+      kuerzel: _decodeHtml(s.kuerzel || ''),
+      ort:     _decodeHtml(s.ort || ''),
+    }));
     _statistikUrl = (resp.statistikportal_url || 'https://statistik.tus-oedt.de').replace(/\/+$/, '');
   }
 
@@ -869,7 +876,7 @@ const WETTKAMPFPLANUNG = (() => {
       // Kalender-Eintrag (Mein Plan)
       if (datum) {
         const name  = serie.name || serie.kuerzel || '';
-        const titel = ('🏆 ' + name + (disziplin ? ` – ${disziplin}` : '')).slice(0, 200);
+        const titel = ('🏆 ' + name + (disziplin ? ` – ${_decodeHtml(disziplin)}` : '')).slice(0, 200);
         try {
           await apiPost('mein-plan/einheiten', {
             datum,
