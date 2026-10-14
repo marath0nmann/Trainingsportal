@@ -1,5 +1,8 @@
 # Changelog
 
+## v356
+- **Wettkampf-Vorschläge mit Badge und Filter.** Offene Vorschläge zur Prüfung zählen jetzt als Badge an „Admin" und am Reiter „Wettkampf-Stammdaten". Ein Klick auf „N Vorschläge zur Prüfung" filtert die Tabelle auf genau diese Einträge, ein weiterer Klick (×) zeigt wieder alle. Nebenbei korrigiert: aus „Vorschlagäge" wird „Vorschläge".
+
 ## v355
 - **Fix: Anführungszeichen erschienen in Wettkampf-Einträgen als „&quot;".** Seriennamen kommen HTML-kodiert aus dem Statistikportal; die Wettkampfplanung übernahm sie beim Eintragen ungedekodiert in den Plan-Titel – sichtbar in „Mein Plan" und im iCal-Feed (etwa „Viersener Herbstwaldlauf &quot;Rund um den Bismarckturm&quot;"). Die Wettkampfplanung dekodiert Namen jetzt beim Laden, Migration 42 bereinigt bestehende Einträge und ordnet sie anschließend ihrer Serie zu, damit auch sie späteren Terminänderungen folgen.
 
