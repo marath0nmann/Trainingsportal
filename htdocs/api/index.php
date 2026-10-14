@@ -1508,6 +1508,25 @@ function _migrationStmts(): array
             catch (Throwable $e) { error_log('mig42b: ' . $e->getMessage()); }
         },
 
+        // ── 43: Unvollständige Web-Adressen ergänzen ───────────────────────
+        //   „www.emdersilvesterlauf.de" ohne https:// öffnete im Browser
+        //   training.tus-oedt.de/www.emdersilvesterlauf.de. Bestand ergänzen.
+        43 => static function (): void {
+            foreach ([
+                [DB::tbl('veranstaltung_serien'),        ['url']],
+                [DB::tbl('training_wettkampf_ergebnis'), ['ergebnis_url', 'anmelde_url']],
+            ] as [$tbl, $spalten]) {
+                foreach ($spalten as $sp) {
+                    try {
+                        DB::query("UPDATE `{$tbl}`
+                                      SET `{$sp}` = CONCAT('https://', TRIM(LEADING '/' FROM TRIM(`{$sp}`)))
+                                    WHERE `{$sp}` IS NOT NULL AND TRIM(`{$sp}`) <> ''
+                                      AND TRIM(`{$sp}`) NOT REGEXP '^[A-Za-z][A-Za-z0-9+.-]*:[^0-9]'");
+                    } catch (Throwable $e) { error_log("mig43 {$tbl}.{$sp}: " . $e->getMessage()); }
+                }
+            }
+        },
+
     ];
 }
 
@@ -5947,6 +5966,34 @@ function normalisiereSegmentZeile($s): ?array {
     ];
 }
 
+/**
+ * Web-Adresse vervollständigen: „www.lauf.de" → „https://www.lauf.de".
+ * Ohne Schema behandeln Browser den Link als relativen Pfad. Leer → null.
+ */
+function vollstaendigeUrl($s): ?string
+{
+    $u = trim((string)($s ?? ''));
+    if ($u === '') return null;
+    if (str_starts_with($u, '//')) return 'https:' . $u;
+    if (preg_match('~^https?://~i', $u)) return $u;
+    if (preg_match('~^[a-z][a-z0-9+.-]*:~i', $u) && !preg_match('~^[^:/]+:\d~', $u)) return $u;
+    return 'https://' . ltrim($u, '/');
+}
+
+/** Vervollständigt die URL; bei unbrauchbarer Eingabe 400 und Abbruch. */
+function urlAusEingabe($s, string $feld = 'Website'): ?string
+{
+    $u = vollstaendigeUrl($s);
+    if ($u === null) return null;
+    $host = parse_url($u, PHP_URL_HOST);
+    if (!preg_match('~^https?://~i', $u) || !$host || !str_contains($host, '.')) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'fehler' => $feld . ': bitte eine vollständige Web-Adresse angeben (z. B. https://www.lauf.de).']);
+        exit;
+    }
+    return $u;
+}
+
 function readJsonBody(): array {
     $raw = file_get_contents('php://input');
     $j = json_decode($raw ?: '[]', true);
@@ -7529,7 +7576,7 @@ function handleWettkampf(string $method, string $tail): void
         }
         $datum = trim((string)($in['datum'] ?? ''));
         $datum = ($datum !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum)) ? $datum : null;
-        $url   = trim((string)($in['url'] ?? '')) ?: null;
+        $url   = urlAusEingabe($in['url'] ?? '');
 
         $wb = is_array($in['wettbewerbe'] ?? null) ? $in['wettbewerbe'] : [];
         $wb = array_values(array_filter(array_map(fn($x) => trim((string)$x), $wb)));
@@ -7591,7 +7638,7 @@ function handleWettkampf(string $method, string $tail): void
         $si = $rd ? ((int)substr($rd, 5, 2) * 100 + (int)substr($rd, 8, 2)) : null;
         $nd = trim((string)($in['naechstes_datum'] ?? ''));
         $nd = ($nd !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $nd)) ? $nd : null;
-        $url = trim((string)($in['url'] ?? '')) ?: null;
+        $url = urlAusEingabe($in['url'] ?? '');
 
         $wb = is_array($in['wettbewerbe'] ?? null) ? $in['wettbewerbe'] : [];
         $wb = array_values(array_filter(array_map(fn($x) => trim((string)$x), $wb)));
@@ -7605,7 +7652,7 @@ function handleWettkampf(string $method, string $tail): void
         // Import-Kategorie (serienweit) + Wettkampf-URL (pro Ausgabe-Jahr) –
         // gleiche Felder wie beim Bearbeiten, damit Anlage und Edit deckungsgleich sind.
         $importKat = trim((string)($in['import_kategorie'] ?? '')) ?: null;
-        $ergUrl    = trim((string)($in['ergebnis_url'] ?? '')) ?: null;
+        $ergUrl    = urlAusEingabe($in['ergebnis_url'] ?? '', 'Wettkampf-URL');
         $ausgJahr  = (isset($in['ausgabe_jahr']) && (int)$in['ausgabe_jahr'] >= 2020 && (int)$in['ausgabe_jahr'] <= 2035)
                      ? (int)$in['ausgabe_jahr']
                      : (int)substr((string)($nd ?: $rd ?: date('Y-m-d')), 0, 4);
@@ -7728,6 +7775,9 @@ function handleWettkampf(string $method, string $tail): void
         }
         $serieId = (int)$m[1];
         $in      = readJsonBody();
+        // URLs vorab prüfen – ein Abbruch mitten im Speichern hinterließe Teiländerungen
+        if (array_key_exists('url', $in))          $in['url']          = urlAusEingabe($in['url']);
+        if (array_key_exists('ergebnis_url', $in)) $in['ergebnis_url'] = urlAusEingabe($in['ergebnis_url'], 'Wettkampf-URL');
 
         $sets   = [];
         $params = [];
@@ -7766,7 +7816,7 @@ function handleWettkampf(string $method, string $tail): void
                 [count($arr) ? json_encode($arr) : null, $serieId]);
         }
         if (array_key_exists('url', $in)) {
-            $url = trim((string)($in['url'] ?? '')) ?: null;
+            $url = $in['url'];
             DB::query("UPDATE `{$tws}` SET url=? WHERE id=?", [$url, $serieId]);
         }
         if (array_key_exists('ort_id', $in)) {
@@ -7803,7 +7853,7 @@ function handleWettkampf(string $method, string $tail): void
             $twe  = DB::tbl('training_wettkampf_ergebnis');
             $jahr = (isset($in['ausgabe_jahr']) && (int)$in['ausgabe_jahr'] >= 2020 && (int)$in['ausgabe_jahr'] <= 2035)
                     ? (int)$in['ausgabe_jahr'] : (int)date('Y');
-            $eUrl = trim((string)($in['ergebnis_url'] ?? '')) ?: null;
+            $eUrl = $in['ergebnis_url'];
             try {
                 if ($eUrl === null) {
                     // Leer → Ausgabe-Zeile entfernen (Tabelle sauber halten)
