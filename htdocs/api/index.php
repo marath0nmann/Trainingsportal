@@ -1527,6 +1527,18 @@ function _migrationStmts(): array
             }
         },
 
+        // ── 44: Neue Disziplinen/Orte in Wettkampf-Vorschlägen ─────────────
+        //   Nutzer dürfen Disziplinen und einen Ort angeben, die es im
+        //   Statistikportal noch nicht gibt. Die Freitexte landen hier, damit
+        //   die Admin-Prüfung sie gesondert anzeigen kann.
+        44 => static function (): void {
+            $tws = DB::tbl('veranstaltung_serien');
+            try {
+                DB::query("ALTER TABLE `{$tws}` ADD COLUMN IF NOT EXISTS vorschlag_neu TEXT NULL DEFAULT NULL
+                           COMMENT 'JSON {disziplinen:[…], ort:\"…\"} – im Vorschlag frei eingegeben, noch nicht im Statistikportal'");
+            } catch (Throwable $e) { error_log('mig44: ' . $e->getMessage()); }
+        },
+
     ];
 }
 
@@ -7580,7 +7592,32 @@ function handleWettkampf(string $method, string $tail): void
 
         $wb = is_array($in['wettbewerbe'] ?? null) ? $in['wettbewerbe'] : [];
         $wb = array_values(array_filter(array_map(fn($x) => trim((string)$x), $wb)));
-        $wbJson = count($wb) ? json_encode($wb) : null;
+
+        // Frei eingegebene Disziplinen, die es im Statistikportal noch nicht
+        // gibt: gehören zu den Wettbewerben (damit man sich gleich dafür
+        // eintragen kann) und werden für die Admin-Prüfung gesondert gemerkt.
+        $diszNeu = is_array($in['disziplinen_neu'] ?? null) ? $in['disziplinen_neu'] : [];
+        $diszNeu = array_values(array_unique(array_filter(array_map(
+            fn($x) => mb_substr(trim((string)$x), 0, 80), $diszNeu))));
+        foreach ($diszNeu as $d) if (!in_array($d, $wb, true)) $wb[] = $d;
+        $wbJson = count($wb) ? json_encode($wb, JSON_UNESCAPED_UNICODE) : null;
+
+        // Ort: vorhandener Ort aus dem Statistikportal oder neuer Freitext
+        $ortId = null; $lat = null; $lon = null;
+        if (!empty($in['ort_id'])) {
+            $ort = DB::fetchOne("SELECT id, lat, lon FROM `{$tor}` WHERE id = ?", [(int)$in['ort_id']]);
+            if ($ort) {
+                $ortId = (int)$ort['id'];
+                $lat   = $ort['lat'] !== null ? (float)$ort['lat'] : null;
+                $lon   = $ort['lon'] !== null ? (float)$ort['lon'] : null;
+            }
+        }
+        $ortNeu = $ortId ? '' : mb_substr(trim((string)($in['ort_neu'] ?? '')), 0, 120);
+
+        $neu = [];
+        if ($diszNeu)       $neu['disziplinen'] = $diszNeu;
+        if ($ortNeu !== '') $neu['ort']         = $ortNeu;
+        $neuJson = $neu ? json_encode($neu, JSON_UNESCAPED_UNICODE) : null;
 
         // Eindeutiges kuerzel aus dem Namen ableiten (Spalte ist NOT NULL UNIQUE)
         $base = strtolower($name);
@@ -7600,9 +7637,10 @@ function handleWettkampf(string $method, string $tail): void
 
         try {
             DB::query(
-                "INSERT INTO `{$tws}` (name, kuerzel, referenz_datum, url, wettbewerbe, vorschlag_von, vorschlag_am)
-                 VALUES (?,?,?,?,?,?,NOW())",
-                [$name, $kuerzel, $datum, $url, $wbJson, $userId]
+                "INSERT INTO `{$tws}` (name, kuerzel, referenz_datum, url, wettbewerbe, ort_id, lat, lon,
+                                       vorschlag_von, vorschlag_am, vorschlag_neu)
+                 VALUES (?,?,?,?,?,?,?,?,?,NOW(),?)",
+                [$name, $kuerzel, $datum, $url, $wbJson, $ortId, $lat, $lon, $userId, $neuJson]
             );
             $serieId = (int)DB::lastInsertId();
             // Planung anlegen (aktiv) – damit der Vorschlag im Kalender/der Planung erscheint
@@ -7834,7 +7872,7 @@ function handleWettkampf(string $method, string $tail): void
         }
         // Vorschlag als geprüft markieren (Flag löschen)
         if (!empty($in['vorschlag_bestaetigt'])) {
-            DB::query("UPDATE `{$tws}` SET vorschlag_von=NULL WHERE id=?", [$serieId]);
+            DB::query("UPDATE `{$tws}` SET vorschlag_von=NULL, vorschlag_neu=NULL WHERE id=?", [$serieId]);
         }
 
         // Import-Kategorie gilt für die GESAMTE Serie (jede Ausgabe) → in die
@@ -7932,6 +7970,7 @@ function handleWettkampf(string $method, string $tail): void
                         tst.status,
                         vs.vorschlag_von,
                         vs.vorschlag_am,
+                        vs.vorschlag_neu,
                         COALESCE(
                           NULLIF(TRIM(CONCAT_WS(' ', vath.vorname, vath.nachname)), ''),
                           vbu.benutzername
@@ -7950,7 +7989,7 @@ function handleWettkampf(string $method, string $tail): void
                           vs.url, vs.ort_id, vs.lat, vs.lon,
                           wp.id, wp.naechstes_datum, wp.abgesagt_datum, wp.disziplinen_extra,
                           wp.disziplinen_ausgeschlossen, wp.aktiv, wp.import_kategorie, tst.status,
-                          vs.vorschlag_von, vs.vorschlag_am, vorschlag_von_name
+                          vs.vorschlag_von, vs.vorschlag_am, vs.vorschlag_neu, vorschlag_von_name
                  ORDER BY MONTH(COALESCE(MAX(v.datum), vs.referenz_datum)) ASC,
                           DAY(COALESCE(MAX(v.datum), vs.referenz_datum))   ASC,
                           vs.name             ASC",
@@ -8123,6 +8162,7 @@ function handleWettkampf(string $method, string $tail): void
                 'vorschlag_von'       => isset($s['vorschlag_von']) && $s['vorschlag_von'] !== null ? (int)$s['vorschlag_von'] : null,
                 'vorschlag_von_name'  => $s['vorschlag_von_name'] ?? null,
                 'vorschlag_am'        => $s['vorschlag_am'] ?? null,
+                'vorschlag_neu'       => !empty($s['vorschlag_neu']) ? json_decode((string)$s['vorschlag_neu'], true) : null,
                 // Ausgaben-URLs je Jahr (Ergebnis/Anmeldung)
                 'ergebnis_ausgaben'   => (object)($ergBySerie[$sid] ?? []),
                 // Import-Kategorie gilt serienweit (alle Ausgaben)

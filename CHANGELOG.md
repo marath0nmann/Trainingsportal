@@ -1,5 +1,8 @@
 # Changelog
 
+## v358
+- **Wettkampf-Vorschläge: neue Disziplinen und neuer Ort.** Im Vorschlags-Formular lässt sich eine Disziplin, die es noch nicht gibt, einfach eintippen und mit „+ … als neue Disziplin vorschlagen" übernehmen. Neu ist außerdem das Pflichtfeld „Ort": einen vorhandenen Ort auswählen oder einen neuen vorschlagen. In Admin → Wettkämpfe sind die neuen Angaben orange mit „neu" markiert, und die Prüfbox nennt, was noch angelegt werden muss (Migration 44).
+
 ## v357
 - **Fix: Web-Adressen ohne „https://" öffneten eine Seite im Trainingsportal.** Beim Vorschlag „Emdener Silvesterlauf" stand „www.emdersilvesterlauf.de" ohne Schema – der Link führte auf training.tus-oedt.de/www.emdersilvesterlauf.de. Website- und Wettkampf-URLs werden jetzt beim Verlassen des Feldes, beim Speichern (Vorschlag und Admin) und serverseitig zu einer vollständigen Adresse ergänzt; Eingaben ohne gültige Domain werden abgelehnt. Migration 43 ergänzt bestehende Einträge, Links werden zusätzlich beim Anzeigen vervollständigt.
 

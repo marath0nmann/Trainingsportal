@@ -42,6 +42,10 @@ const WETTKAMPFPLANUNG = (() => {
   let _vorschlagAlleDisz   = null;    // null = noch nicht geladen
   let _vorschlagDiszFilter = '';
   let _vorschlagDisz       = [];      // ausgewählte Disziplinen
+  let _vorschlagDiszNeu    = [];      // davon frei eingegeben (gibt es noch nicht)
+  let _vorschlagAlleOrte   = null;    // null = noch nicht geladen
+  let _vorschlagOrtFilter  = '';
+  let _vorschlagOrt        = null;    // { id, name } vorhandener Ort oder { neu: 'Name' }
 
   // ── Einstellungen (localStorage) ─────────────────────────────
   function _loadPrefs() {
@@ -916,8 +920,12 @@ const WETTKAMPFPLANUNG = (() => {
 
     // Picker-Zustand zurücksetzen
     _vorschlagDisz       = [];
+    _vorschlagDiszNeu    = [];
     _vorschlagDiszFilter = '';
+    _vorschlagOrt        = null;
+    _vorschlagOrtFilter  = '';
     if (_vorschlagAlleDisz !== null && _vorschlagAlleDisz.length === 0) _vorschlagAlleDisz = null;
+    if (_vorschlagAlleOrte !== null && _vorschlagAlleOrte.length === 0) _vorschlagAlleOrte = null;
 
     const lblStyle = `font-size:11px;font-weight:700;text-transform:uppercase;
                       letter-spacing:.5px;color:var(--text2);display:block;margin-bottom:6px`;
@@ -953,6 +961,10 @@ const WETTKAMPFPLANUNG = (() => {
               <input type="url" id="wkv-url" onblur="this.value=vollstaendigeUrl(this.value)" placeholder="https://…" style="${inpStyle}">
             </div>
             <div>
+              <label style="${lblStyle}">Ort *</label>
+              <div id="wkv-ort-area"></div>
+            </div>
+            <div>
               <label style="${lblStyle}">Disziplinen *</label>
               <div id="wkv-disz-area"></div>
             </div>
@@ -966,7 +978,15 @@ const WETTKAMPFPLANUNG = (() => {
       </div>`;
 
     _renderVorschlagDiszArea();
+    _renderVorschlagOrtArea();
     setTimeout(() => document.getElementById('wkv-name')?.focus(), 50);
+
+    if (_vorschlagAlleOrte === null) {
+      apiGet('wettkampf/orte', { silent: true })
+        .then(resp => { _vorschlagAlleOrte = resp.orte || []; })
+        .catch(()  => { _vorschlagAlleOrte = []; })
+        .then(()   => _renderVorschlagOrtArea());
+    }
 
     // Disziplinliste nachladen
     if (_vorschlagAlleDisz === null) {
@@ -991,7 +1011,7 @@ const WETTKAMPFPLANUNG = (() => {
         const dJ = escapeHtml(JSON.stringify(d));
         html += `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
           border-radius:12px;font-size:13px;background:var(--border);color:var(--text)">
-          ${escapeHtml(d)}
+          ${escapeHtml(d)}${_vorschlagDiszNeu.includes(d) ? _NEU_BADGE : ''}
           <button onclick="WETTKAMPFPLANUNG._removeVorschlagDisz(${dJ})"
             style="border:none;background:none;cursor:pointer;color:var(--text2);
                    font-size:16px;line-height:1;padding:0 0 0 2px;margin:0"
@@ -1013,18 +1033,26 @@ const WETTKAMPFPLANUNG = (() => {
       const MAX_LIST  = 40;
 
       html += `<input type="text" id="wkv-disz-filter"
-        placeholder="Disziplin suchen…"
+        placeholder="Disziplin suchen oder neu eintippen…"
         value="${escapeHtml(_vorschlagDiszFilter)}"
         oninput="WETTKAMPFPLANUNG._setVorschlagDiszFilter(this.value)"
         style="width:100%;box-sizing:border-box;border:1px solid var(--border);
                border-radius:6px;padding:5px 8px;font-size:13px;
                background:var(--bg);color:var(--text);margin-bottom:6px">`;
 
+      // Gesuchte Disziplin gibt es nicht → als neue vorschlagen
+      const roh    = _vorschlagDiszFilter.trim();
+      const exakt  = roh && _vorschlagAlleDisz.concat(_vorschlagDisz)
+                              .some(d => d.toLowerCase() === roh.toLowerCase());
+      if (roh && !exakt) html += _neuOptionHtml(
+        `WETTKAMPFPLANUNG._addVorschlagDisz(${escapeHtml(JSON.stringify(roh))}, true)`,
+        roh, 'als neue Disziplin vorschlagen');
+
       if (_vorschlagAlleDisz.length === 0) {
-        html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
-          Keine Disziplinen verfügbar.</div>`;
+        if (!roh) html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
+          Keine Disziplinen verfügbar – Namen eintippen, um eine neue vorzuschlagen.</div>`;
       } else if (gefiltert.length === 0) {
-        html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
+        if (!roh) html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
           Keine passenden Disziplinen gefunden.</div>`;
       } else {
         html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
@@ -1055,16 +1083,107 @@ const WETTKAMPFPLANUNG = (() => {
     area.innerHTML = html;
   }
 
-  function _addVorschlagDisz(d) {
+  function _addVorschlagDisz(d, neu) {
     if (!_vorschlagDisz.includes(d)) _vorschlagDisz.push(d);
+    if (neu && !_vorschlagDiszNeu.includes(d)) _vorschlagDiszNeu.push(d);
     _vorschlagDiszFilter = '';
     _renderVorschlagDiszArea();
     setTimeout(() => document.getElementById('wkv-disz-filter')?.focus(), 0);
   }
 
   function _removeVorschlagDisz(d) {
-    _vorschlagDisz = _vorschlagDisz.filter(x => x !== d);
+    _vorschlagDisz    = _vorschlagDisz.filter(x => x !== d);
+    _vorschlagDiszNeu = _vorschlagDiszNeu.filter(x => x !== d);
     _renderVorschlagDiszArea();
+  }
+
+  const _NEU_BADGE = '<span style="font-size:10px;padding:0 5px;border-radius:8px;margin-left:4px;' +
+                     'background:#e67e2222;color:#e67e22;font-weight:700">neu</span>';
+
+  // Listeneintrag „+ „X" als neue … vorschlagen" über der Trefferliste
+  function _neuOptionHtml(onclick, text, hinweis) {
+    return `<div onclick="${onclick}"
+      style="padding:6px 10px;font-size:13px;cursor:pointer;border-radius:6px;margin-bottom:6px;
+             border:1px dashed #e67e22;color:var(--text)"
+      onmouseover="this.style.background='#e67e2214'" onmouseout="this.style.background=''">
+      <strong style="color:#e67e22">+</strong> „${escapeHtml(text)}" ${hinweis}</div>`;
+  }
+
+  // Ort-Picker: vorhandenen Ort aus dem Statistikportal wählen oder neuen nennen
+  function _renderVorschlagOrtArea() {
+    const area = document.getElementById('wkv-ort-area');
+    if (!area) return;
+
+    if (_vorschlagOrt) {
+      const label = _vorschlagOrt.neu || _vorschlagOrt.name;
+      area.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;
+          border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg)">
+        <span style="flex:1">${escapeHtml(label)}${_vorschlagOrt.neu ? _NEU_BADGE : ''}</span>
+        <button onclick="WETTKAMPFPLANUNG._clearVorschlagOrt()" title="Anderen Ort wählen"
+          style="border:none;background:none;cursor:pointer;color:var(--text2);font-size:16px;line-height:1;padding:0">&times;</button>
+      </div>`;
+      return;
+    }
+    if (_vorschlagAlleOrte === null) {
+      area.innerHTML = `<div style="font-size:13px;color:var(--text2)">Lade Orte&hellip;</div>`;
+      return;
+    }
+
+    const roh   = _vorschlagOrtFilter.trim();
+    const term  = roh.toLowerCase();
+    const orte  = _vorschlagAlleOrte;
+    const treff = term ? orte.filter(o =>
+      (o.name + ' ' + (o.region || '') + ' ' + (o.land || '')).toLowerCase().includes(term)) : [];
+    const exakt = term && orte.some(o => String(o.name).toLowerCase() === term);
+
+    let html = `<input type="text" id="wkv-ort-filter" placeholder="Ort suchen oder neu eintippen…"
+      value="${escapeHtml(_vorschlagOrtFilter)}"
+      oninput="WETTKAMPFPLANUNG._setVorschlagOrtFilter(this.value)"
+      style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;
+             padding:5px 8px;font-size:13px;background:var(--bg);color:var(--text);margin-bottom:6px">`;
+    if (roh && !exakt) html += _neuOptionHtml(
+      `WETTKAMPFPLANUNG._waehleVorschlagOrt(null, ${escapeHtml(JSON.stringify(roh))})`,
+      roh, 'als neuen Ort vorschlagen');
+    if (treff.length) {
+      const MAX = 8;
+      html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:3px">`;
+      treff.slice(0, MAX).forEach(o => {
+        html += `<div onclick="WETTKAMPFPLANUNG._waehleVorschlagOrt(${o.id})"
+          style="padding:5px 10px;font-size:13px;cursor:pointer;border-radius:4px"
+          onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background=''">
+          <strong>${escapeHtml(o.name)}</strong>
+          ${o.region ? `<span style="color:var(--text2);margin-left:4px">${escapeHtml(o.region)}</span>` : ''}
+        </div>`;
+      });
+      if (treff.length > MAX) html += `<div style="padding:5px 10px;font-size:11px;color:var(--text2)">
+        + ${treff.length - MAX} weitere &ndash; Suche verfeinern</div>`;
+      html += `</div>`;
+    }
+    area.innerHTML = html;
+  }
+
+  function _setVorschlagOrtFilter(val) {
+    _vorschlagOrtFilter = val;
+    _renderVorschlagOrtArea();
+    const inp = document.getElementById('wkv-ort-filter');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+
+  function _waehleVorschlagOrt(id, neu) {
+    if (neu) _vorschlagOrt = { neu };
+    else {
+      const o = (_vorschlagAlleOrte || []).find(x => x.id === id);
+      if (!o) return;
+      _vorschlagOrt = { id: o.id, name: o.name };
+    }
+    _vorschlagOrtFilter = '';
+    _renderVorschlagOrtArea();
+  }
+
+  function _clearVorschlagOrt() {
+    _vorschlagOrt = null;
+    _renderVorschlagOrtArea();
+    setTimeout(() => document.getElementById('wkv-ort-filter')?.focus(), 0);
   }
 
   function _setVorschlagDiszFilter(val) {
@@ -1100,8 +1219,13 @@ const WETTKAMPFPLANUNG = (() => {
       document.getElementById('wkv-url')?.focus();
       return;
     }
+    if (!_vorschlagOrt) {
+      notify('Bitte einen Ort auswählen oder einen neuen eintippen.', 'err');
+      document.getElementById('wkv-ort-filter')?.focus();
+      return;
+    }
     if (!_vorschlagDisz.length) {
-      notify('Bitte mindestens eine Disziplin auswählen.', 'err');
+      notify('Bitte mindestens eine Disziplin auswählen oder eine neue eintippen.', 'err');
       return;
     }
 
@@ -1109,7 +1233,13 @@ const WETTKAMPFPLANUNG = (() => {
     if (btn) { btn.disabled = true; btn.textContent = 'Speichern…'; }
 
     try {
-      await apiPost('wettkampf/vorschlag', { name, datum, url, wettbewerbe: _vorschlagDisz });
+      await apiPost('wettkampf/vorschlag', {
+        name, datum, url,
+        wettbewerbe:     _vorschlagDisz.filter(d => !_vorschlagDiszNeu.includes(d)),
+        disziplinen_neu: _vorschlagDiszNeu,
+        ort_id:          _vorschlagOrt.id || null,
+        ort_neu:         _vorschlagOrt.neu || '',
+      });
       schliesseModal();
       notify('Wettkampf vorgeschlagen – danke!', 'ok');
       if (typeof _wettkampfCache !== 'undefined') _wettkampfCache = null;
@@ -1376,6 +1506,7 @@ const WETTKAMPFPLANUNG = (() => {
     _openTeilnPopper, _removeAnmeldung,
     _openVorschlagModal, _submitVorschlag,
     _addVorschlagDisz, _removeVorschlagDisz, _setVorschlagDiszFilter,
+    _setVorschlagOrtFilter, _waehleVorschlagOrt, _clearVorschlagOrt,
     _exportPDF,
   };
 })();
