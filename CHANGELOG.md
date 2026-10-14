@@ -1,5 +1,9 @@
 # Changelog
 
+## v359
+- **Admin → Wettkämpfe: neue Orte und Disziplinen anlegen.** Findet die Suche im Bearbeitungsfenster keinen passenden Ort bzw. keine passende Disziplin, legt „+ … als neuen Ort/neue Disziplin anlegen" den Eintrag direkt in den gemeinsamen Tabellen des Statistikportals an und übernimmt ihn. Neue Disziplinen bekommen die Import-Kategorie des Wettkampfs und, wo der Name es hergibt, die Streckenlänge; neue Orte die Koordinaten vom Kartenmarker. Vorgeschlagene, noch unbekannte Disziplinen tragen einen „+ anlegen"-Knopf, ein vorgeschlagener Ort steht schon im Suchfeld.
+- **Fix: Buttons am unteren Rand mancher Modals klebten am Rand.** Die Aktionsleiste hat jetzt auch dort Innenabstand, wo sie nicht im Inhaltsbereich steht (u. a. Wettkampf bearbeiten, Wettkampf vorschlagen), und bleibt bei langen Modals unten sichtbar.
+
 ## v358
 - **Wettkampf-Vorschläge: neue Disziplinen und neuer Ort.** Im Vorschlags-Formular lässt sich eine Disziplin, die es noch nicht gibt, einfach eintippen und mit „+ … als neue Disziplin vorschlagen" übernehmen. Neu ist außerdem das Pflichtfeld „Ort": einen vorhandenen Ort auswählen oder einen neuen vorschlagen. In Admin → Wettkämpfe sind die neuen Angaben orange mit „neu" markiert, und die Prüfbox nennt, was noch angelegt werden muss (Migration 44).
 

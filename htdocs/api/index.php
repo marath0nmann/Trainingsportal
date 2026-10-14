@@ -8258,6 +8258,102 @@ function handleWettkampf(string $method, string $tail): void
         return;
     }
 
+    // ── POST /wettkampf/orte ──────────────────────────────────────
+    // Neuen Ort direkt in der geteilten Tabelle `orte` (Statistikportal)
+    // anlegen – aus dem Admin-Modal heraus. Gibt es den Namen schon (gleiche
+    // Region), wird der vorhandene Ort zurückgegeben statt eines Duplikats.
+    if ($method === 'POST' && $tail === 'orte') {
+        if (!$isAdmin) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $in     = readJsonBody();
+        $name   = mb_substr(trim((string)($in['name'] ?? '')), 0, 160);
+        $region = mb_substr(trim((string)($in['region'] ?? '')), 0, 160) ?: null;
+        if ($name === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Name erforderlich']);
+            return;
+        }
+        $lat = (isset($in['lat']) && is_numeric($in['lat'])) ? (float)$in['lat'] : null;
+        $lon = (isset($in['lon']) && is_numeric($in['lon'])) ? (float)$in['lon'] : null;
+        try {
+            $tor = DB::tbl('orte');
+            $alt = DB::fetchOne("SELECT id FROM `{$tor}` WHERE LOWER(name) = LOWER(?) AND (region <=> ?) LIMIT 1",
+                                [$name, $region]);
+            if ($alt) {
+                $id = (int)$alt['id'];
+            } else {
+                DB::query("INSERT INTO `{$tor}` (name, region, lat, lon) VALUES (?,?,?,?)",
+                          [$name, $region, $lat, $lon]);
+                $id = (int)DB::lastInsertId();
+            }
+            $r = DB::fetchOne("SELECT id, name, region, land, land_code, lat, lon, display_name FROM `{$tor}` WHERE id = ?", [$id]);
+            echo json_encode(['ok' => true, 'vorhanden' => (bool)$alt, 'ort' => [
+                'id'           => (int)$r['id'],
+                'name'         => $r['name'],
+                'region'       => $r['region'],
+                'land'         => $r['land'],
+                'land_code'    => $r['land_code'],
+                'lat'          => $r['lat'] !== null ? (float)$r['lat'] : null,
+                'lon'          => $r['lon'] !== null ? (float)$r['lon'] : null,
+                'display_name' => $r['display_name'],
+            ]]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'fehler' => 'Ort konnte nicht angelegt werden', 'detail' => $e->getMessage()]);
+        }
+        return;
+    }
+
+    // ── POST /wettkampf/disziplinen ───────────────────────────────
+    // Neue Disziplin in `disziplin_mapping` (Statistikportal) anlegen. Die
+    // Kategorie ist dort Pflicht (kategorie_id NOT NULL) – sie kommt aus der
+    // Import-Kategorie des Wettkampfs. Vorhandene Einträge werden wiederverwendet.
+    if ($method === 'POST' && $tail === 'disziplinen') {
+        if (!$isAdmin) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'fehler' => 'Keine Berechtigung']);
+            return;
+        }
+        $in   = readJsonBody();
+        $name = mb_substr(trim((string)($in['name'] ?? '')), 0, 60);
+        $kat  = trim((string)($in['kategorie'] ?? ''));
+        $dist = (isset($in['distanz']) && is_numeric($in['distanz']) && $in['distanz'] > 0) ? (float)$in['distanz'] : null;
+        if ($name === '' || $kat === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'fehler' => 'Name und Kategorie erforderlich']);
+            return;
+        }
+        try {
+            $tdk = DB::tbl('disziplin_kategorien');
+            $k   = DB::fetchOne("SELECT id FROM `{$tdk}` WHERE tbl_key = ?", [$kat]);
+            if (!$k) {
+                http_response_code(400);
+                echo json_encode(['ok' => false, 'fehler' => 'Unbekannte Kategorie']);
+                return;
+            }
+            $alt = DB::fetchOne("SELECT id, distanz FROM $tdm
+                                  WHERE kategorie_id = ? AND (disziplin = ? OR anzeige_name = ?) LIMIT 1",
+                                [(int)$k['id'], $name, $name]);
+            if (!$alt) {
+                DB::query("INSERT INTO $tdm (disziplin, kategorie_id, distanz) VALUES (?,?,?)",
+                          [$name, (int)$k['id'], $dist]);
+            }
+            echo json_encode(['ok' => true, 'vorhanden' => (bool)$alt, 'disziplin' => [
+                'name'      => $name,
+                'kategorie' => $kat,
+                'distanz'   => $alt ? ($alt['distanz'] !== null ? (int)$alt['distanz'] : null)
+                                    : ($dist !== null ? (int)$dist : null),
+            ]]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'fehler' => 'Disziplin konnte nicht angelegt werden', 'detail' => $e->getMessage()]);
+        }
+        return;
+    }
+
     // ── GET /wettkampf/orte ───────────────────────────────────────
     // Alle Orte aus dem Statistikportal (für Ort-Picker im Admin-Modal).
     // Nur für eingeloggte Nutzer.

@@ -982,6 +982,7 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
   .modal-label { flex-basis: 92px; }
   .modal-actions { flex-wrap: wrap; }
   .modal-actions .btn { flex: 1 1 auto; }
+  .modal-card > .modal-actions { padding: 12px 16px 16px; }
   .view-toggle .btn { padding: 8px 10px; }
   .liste-nav .btn, .kal-nav .btn { min-width: 38px; }
 }
@@ -1030,6 +1031,13 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
 .modal-actions {
   display: flex; justify-content: flex-end; gap: 8px;
   margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+/* Steht die Leiste direkt in der Karte (nicht im .modal-body), fehlt ihr
+   sonst der Innenabstand – die Buttons klebten am Rand. Bleibt bei langen
+   Modals unten sichtbar. */
+.modal-card > .modal-actions {
+  margin-top: 0; padding: 12px 20px 16px;
+  position: sticky; bottom: 0; background: var(--surface); z-index: 1;
 }
 
 /* ── Editor-Modal ── */
