@@ -532,6 +532,27 @@ const ADMIN_WETTKAMPF = (() => {
   const _NEU_BADGE = '<span style="font-size:10px;padding:0 5px;border-radius:8px;margin-left:4px;' +
                      'background:#e67e2222;color:#e67e22;font-weight:700" title="Im Vorschlag neu eingegeben">neu</span>';
 
+  // Listeneintrag „+ „X" als neue … anlegen" über der Trefferliste
+  function _neuOptionHtml(onclick, text, hinweis) {
+    return `<div onclick="${onclick}"
+      style="padding:6px 10px;font-size:13px;cursor:pointer;border-radius:6px;margin-bottom:6px;
+             border:1px dashed #e67e22;color:var(--text)"
+      onmouseover="this.style.background='#e67e2214'" onmouseout="this.style.background=''">
+      <strong style="color:#e67e22">+</strong> „${escapeHtml(text)}" ${hinweis}</div>`;
+  }
+
+  // Streckenlänge (Meter) aus dem Namen raten – „10 km", „5.000 m", „Halbmarathon"
+  function _distanzAusName(name) {
+    const n = String(name || '').toLowerCase();
+    if (/halbmarathon/.test(n)) return 21097.5;
+    if (/marathon/.test(n))     return 42195;
+    let m = n.match(/(\d+(?:[.,]\d+)?)\s*km\b/);
+    if (m) return parseFloat(m[1].replace(',', '.')) * 1000;
+    m = n.match(/(\d{1,3}(?:\.\d{3})*|\d+)\s*m\b/);
+    if (m) return parseInt(m[1].replace(/\./g, ''), 10);
+    return null;
+  }
+
   // Im Vorschlag frei eingegebene Disziplinen/Ort, die es noch nicht gibt
   function _vorschlagNeuHtml(neu) {
     if (!neu) return '';
@@ -594,6 +615,26 @@ const ADMIN_WETTKAMPF = (() => {
     _updateMap();
   }
 
+  // Ort im Statistikportal anlegen und gleich auswählen. Koordinaten kommen
+  // vom Kartenmarker, falls schon gesetzt. „Name, Region" wird getrennt.
+  async function _neuerOrt(eingabe) {
+    if (!_edit) return;
+    const [name, ...rest] = String(eingabe).split(',').map(x => x.trim());
+    if (!name) return;
+    try {
+      const r = await apiPost('wettkampf/orte', {
+        name, region: rest.join(', ') || null, lat: _edit.lat, lon: _edit.lon,
+      });
+      const ort = r.ort;
+      if (!_alleOrte) _alleOrte = [];
+      if (!_alleOrte.some(o => o.id === ort.id)) _alleOrte.push(ort);
+      notify(r.vorhanden ? `Ort „${ort.name}" gab es schon – ausgewählt.` : `Ort „${ort.name}" angelegt.`, 'ok');
+      _waehleOrt(ort.id);
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
+  }
+
   function _clearOrt() {
     if (!_edit) return;
     _edit.ort_id = null;
@@ -642,10 +683,12 @@ const ADMIN_WETTKAMPF = (() => {
                border-radius:6px;padding:5px 8px;font-size:13px;
                background:var(--bg);color:var(--text);margin-bottom:6px">`;
 
+      const roh = _ortFilter.trim();
+      if (roh && !orte.some(o => String(o.name).toLowerCase() === term)) html += _neuOptionHtml(
+        `ADMIN_WETTKAMPF._neuerOrt(${escapeHtml(JSON.stringify(roh))})`, roh, 'als neuen Ort anlegen');
+
       if (orte.length === 0) {
-        html += `<div style="font-size:13px;color:var(--text2)">Keine Orte im Statistikportal vorhanden.</div>`;
-      } else if (gefiltert.length === 0 && term) {
-        html += `<div style="font-size:13px;color:var(--text2)">Keine passenden Orte gefunden.</div>`;
+        if (!roh) html += `<div style="font-size:13px;color:var(--text2)">Keine Orte im Statistikportal vorhanden – Namen eintippen, um einen anzulegen.</div>`;
       } else if (gefiltert.length > 0) {
         const MAX = 8;
         html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
@@ -789,7 +832,8 @@ const ADMIN_WETTKAMPF = (() => {
 
     // State zurücksetzen
     _diszFilter = '';
-    _ortFilter  = '';
+    // Vorgeschlagener neuer Ort steht schon im Suchfeld → ein Klick legt ihn an
+    _ortFilter  = (serie && !serie.ort_id && serie.vorschlag_neu && serie.vorschlag_neu.ort) || '';
     if (_alleDisziplinen !== null && _alleDisziplinen.length === 0) _alleDisziplinen = null;
     _wkmMap    = null;
     _wkmMarker = null;
@@ -1184,9 +1228,14 @@ const ADMIN_WETTKAMPF = (() => {
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">`;
       _sortiereDisziplinen(_edit.wettbewerbe).forEach(d => {
         const dJ = escapeHtml(JSON.stringify(d));
+        // Disziplin, die es im Statistikportal (noch) nicht gibt – etwa aus einem Vorschlag
+        const unbekannt = _alleDisziplinen !== null && !_alleDisziplinen.includes(d);
         html += `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
-          border-radius:12px;font-size:13px;background:var(--border);color:var(--text)">
-          ${escapeHtml(d)}
+          border-radius:12px;font-size:13px;background:${unbekannt ? '#e67e2222' : 'var(--border)'};color:var(--text)"
+          ${unbekannt ? 'title="Gibt es im Statistikportal noch nicht"' : ''}>
+          ${escapeHtml(d)}${unbekannt ? `<button onclick="ADMIN_WETTKAMPF._neueDisziplin(${dJ})"
+            style="border:none;background:none;cursor:pointer;color:#e67e22;font-size:11px;font-weight:700;padding:0 0 0 4px"
+            title="Im Statistikportal anlegen">+ anlegen</button>` : ''}
           <button onclick="ADMIN_WETTKAMPF._removeWb(${dJ})"
             style="border:none;background:none;cursor:pointer;color:var(--text2);
                    font-size:16px;line-height:1;padding:0 0 0 2px;margin:0"
@@ -1236,11 +1285,18 @@ const ADMIN_WETTKAMPF = (() => {
                border-radius:6px;padding:5px 8px;font-size:13px;
                background:var(--bg);color:var(--text);margin-bottom:6px">`;
 
+      // Gesuchte Disziplin gibt es in dieser Kategorie nicht → neu anlegen
+      const roh = _diszFilter.trim();
+      if (roh && !_alleDisziplinen.some(d => passtKat(d) && d.toLowerCase() === suchterm)) html += _neuOptionHtml(
+        `ADMIN_WETTKAMPF._neueDisziplin(${escapeHtml(JSON.stringify(roh))})`, roh,
+        kat ? `als neue Disziplin in „${escapeHtml(_katName(kat))}" anlegen`
+            : 'als neue Disziplin anlegen (dazu Import-Kategorie wählen)');
+
       if (_alleDisziplinen.length === 0) {
-        html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
+        if (!roh) html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
           Keine Disziplinen aus dem Statistikportal verfügbar.</div>`;
       } else if (gefiltert.length === 0) {
-        html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
+        if (!roh) html += `<div style="font-size:13px;color:var(--text2);padding:4px 0">
           ${kat ? 'Keine Distanzen in dieser Kategorie gefunden.' : 'Keine passenden Disziplinen gefunden.'}</div>`;
       } else {
         html += `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);
@@ -1284,6 +1340,32 @@ const ADMIN_WETTKAMPF = (() => {
     _diszFilter = '';
     _renderDiszArea();
     setTimeout(() => document.getElementById('disz-filter-inp')?.focus(), 0);
+  }
+
+  // Disziplin in disziplin_mapping (Statistikportal) anlegen und übernehmen.
+  // Die Kategorie ist dort Pflicht → Import-Kategorie des Wettkampfs.
+  async function _neueDisziplin(name) {
+    if (!_edit) return;
+    const kat = _edit.import_kategorie || '';
+    if (!kat) {
+      notify('Bitte zuerst die Import-Kategorie wählen – jede Disziplin gehört im Statistikportal zu einer Kategorie.', 'warn');
+      document.getElementById('planung-import-kat')?.focus();
+      return;
+    }
+    try {
+      const r = await apiPost('wettkampf/disziplinen', { name, kategorie: kat, distanz: _distanzAusName(name) });
+      const d = r.disziplin;
+      if (!_alleDisziplinen) _alleDisziplinen = [];
+      if (!_alleDisziplinen.includes(d.name)) _alleDisziplinen.push(d.name);
+      _diszDistanzen[d.name]  = d.distanz;
+      _diszKategorien[d.name] = Array.from(new Set((_diszKategorien[d.name] || []).concat(kat)));
+      if (!_edit.wettbewerbe.includes(d.name)) _edit.wettbewerbe.push(d.name);
+      _diszFilter = '';
+      notify(r.vorhanden ? `Disziplin „${d.name}" gab es schon – übernommen.` : `Disziplin „${d.name}" angelegt.`, 'ok');
+      _renderDiszArea();
+    } catch (e) {
+      notify('Fehler: ' + (e.message || ''), 'err');
+    }
   }
 
   function _setDiszFilter(val) {
@@ -1476,7 +1558,7 @@ const ADMIN_WETTKAMPF = (() => {
     render,
     showPlanungModal, savePlanung, neuerWettkampf, filterVorschlaege,
     _removeWb, _addDiszFromList, _setDiszFilter, _setImportKat,
-    _clearOrt, _setOrtFilter, _waehleOrt,
+    _clearOrt, _setOrtFilter, _waehleOrt, _neuerOrt, _neueDisziplin,
     _clearDatumModal, _toggleAbsage, _setAusgabeJahr,
     toggleAktiv, imKalenderEintragen,
     predictNextDate, sortiereNach,
