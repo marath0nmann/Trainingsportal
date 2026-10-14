@@ -1037,8 +1037,12 @@ a.wk-hist-item:hover { opacity: 1; background: rgba(46,204,113,.15); }
    Modals unten sichtbar. */
 .modal-card > .modal-actions {
   margin-top: 0; padding: 12px 20px 16px;
-  position: sticky; bottom: 0; background: var(--surface); z-index: 1;
+  position: sticky; bottom: 0; background: var(--surface); z-index: 2;
 }
+/* Leaflet stapelt Kacheln und Bedienelemente mit z-index 400–1000. Ohne
+   eigenen Stapelkontext ragt die Karte beim Scrollen über die sticky
+   Aktionsleiste (und andere überlagernde Elemente). */
+.leaflet-container { isolation: isolate; }
 
 /* ── Editor-Modal ── */
 .modal-card.modal-wide { max-width: 760px; }

@@ -1,5 +1,8 @@
 # Changelog
 
+## v360
+- **Fix: Karte im Wettkampf-Modal lag beim Scrollen über den Buttons.** Leaflet-Karten bilden jetzt einen eigenen Stapelkontext, sodass die unten fixierte Aktionsleiste (Abbrechen/Speichern) immer darüber liegt.
+
 ## v359
 - **Admin → Wettkämpfe: neue Orte und Disziplinen anlegen.** Findet die Suche im Bearbeitungsfenster keinen passenden Ort bzw. keine passende Disziplin, legt „+ … als neuen Ort/neue Disziplin anlegen" den Eintrag direkt in den gemeinsamen Tabellen des Statistikportals an und übernimmt ihn. Neue Disziplinen bekommen die Import-Kategorie des Wettkampfs und, wo der Name es hergibt, die Streckenlänge; neue Orte die Koordinaten vom Kartenmarker. Vorgeschlagene, noch unbekannte Disziplinen tragen einen „+ anlegen"-Knopf, ein vorgeschlagener Ort steht schon im Suchfeld.
 - **Fix: Buttons am unteren Rand mancher Modals klebten am Rand.** Die Aktionsleiste hat jetzt auch dort Innenabstand, wo sie nicht im Inhaltsbereich steht (u. a. Wettkampf bearbeiten, Wettkampf vorschlagen), und bleibt bei langen Modals unten sichtbar.
