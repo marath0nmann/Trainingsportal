@@ -195,7 +195,7 @@ function navTabs() {
   }
   if (isAdmin) {
     tabs.push({ id: 'admin', icon: '&#x2699;&#xFE0F;', label: 'Admin',
-      badge: navBadges.papierkorb });
+      badge: (navBadges.papierkorb || 0) + (navBadges.wettkampf_vorschlaege || 0) });
   }
   return tabs;
 }
@@ -541,7 +541,8 @@ function renderAdminPage(main, subTab) {
   const ADMIN_TABS = [
     { id: 'system',        icon: '&#x1F5A5;&#xFE0E;', label: 'System' },
     { id: 'gruppen',       icon: '&#x1F465;',         label: 'Gruppen' },
-    { id: 'wettkampf',     icon: '&#x1F3C5;',         label: 'Wettkampf-Stammdaten' },
+    { id: 'wettkampf',     icon: '&#x1F3C5;',         label: 'Wettkampf-Stammdaten',
+      badge: navBadges.wettkampf_vorschlaege },
     { id: 'treffpunkte',   icon: '&#x1F4CD;',         label: 'Treffpunkte' },
     { id: 'strecken',      icon: '&#x1F5FA;&#xFE0F;', label: 'Strecken' },
     { id: 'einstellungen', icon: '&#x2699;&#xFE0F;',  label: 'Einstellungen' },

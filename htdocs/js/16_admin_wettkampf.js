@@ -299,12 +299,39 @@ const ADMIN_WETTKAMPF = (() => {
       : '<span style="font-size:10px"> ↓</span>';
   }
 
+  // Klick auf „N Vorschläge zur Prüfung" schaltet den Status-Filter um.
+  function filterVorschlaege() {
+    _filterInit();
+    const aktiv = tfRegelWertVon(TF, 'status') === 'Vorschlag';
+    tfSetzeRegel(TF, 'status', aktiv ? '' : 'Vorschlag');
+    renderTabelle();
+  }
+
+  // Nav- und Subtab-Badge an die frisch geladene Liste angleichen – etwa
+  // nachdem ein Vorschlag bestätigt wurde.
+  function _syncBadge() {
+    if (typeof navBadges === 'undefined') return;
+    const n = serien.filter(s => s.vorschlag_von).length;
+    if (navBadges.wettkampf_vorschlaege === n) return;
+    navBadges.wettkampf_vorschlaege = n;
+    if (typeof buildNav === 'function') buildNav();
+    const btn = document.querySelector('.subtab[onclick*="navigateAdmin(\'wettkampf\')"]');
+    if (btn) {
+      const alt = btn.querySelector('.nav-badge');
+      if (alt) alt.remove();
+      if (n > 0) btn.insertAdjacentHTML('beforeend', _navBadgeHtml(n));
+    }
+  }
+
   // ── Tabelle ───────────────────────────────────────────────────
   // Die Filterleiste wird nur einmal gebaut – sonst verliert das Suchfeld beim
   // Tippen den Fokus. Neu gezeichnet wird ausschliesslich der Tabellenblock.
   function renderTabelle() {
     if (!container) return;
     _filterInit();
+    // Letzter Vorschlag erledigt → Filter nicht auf einer leeren Liste stehen lassen
+    if (tfRegelWertVon(TF, 'status') === 'Vorschlag' && !serien.some(s => s.vorschlag_von))
+      tfSetzeRegel(TF, 'status', '');
     let box = document.getElementById('awk-box');
     if (!box) {
       container.innerHTML = '<div id="awk-kopf"></div>' +
@@ -312,6 +339,7 @@ const ADMIN_WETTKAMPF = (() => {
       box = document.getElementById('awk-box');
     }
     document.getElementById('awk-kopf').innerHTML = _kopfHtml();
+    _syncBadge();
     box.innerHTML = _tabellenHtml();
     tfRefresh(TF);
   }
@@ -319,6 +347,7 @@ const ADMIN_WETTKAMPF = (() => {
   function _kopfHtml() {
     const admin = istAdmin();
     const anzVorschlaege = serien.filter(s => s.vorschlag_von).length;
+    const nurVorschlaege = tfRegelWertVon(TF, 'status') === 'Vorschlag';
     const sichtbar = _gefilterteSerien().length;
     return `
       <div style="display:flex;justify-content:space-between;align-items:flex-end;
@@ -328,7 +357,12 @@ const ADMIN_WETTKAMPF = (() => {
           <div style="font-size:12px;color:var(--text2)">
             Regelmäßige Veranstaltungen aus dem Statistikportal &bull;
             ${tfAktiv(TF) ? `${sichtbar} von ${serien.length}` : serien.length} Serien
-            ${anzVorschlaege ? ` &bull; <strong style="color:#e67e22">${anzVorschlaege} Vorschlag${anzVorschlaege !== 1 ? '&auml;ge' : ''} zur Prüfung</strong>` : ''}
+            ${anzVorschlaege ? ` &bull; <button type="button" onclick="ADMIN_WETTKAMPF.filterVorschlaege()"
+              title="${nurVorschlaege ? 'Wieder alle Serien anzeigen' : 'Nur Vorschläge zur Prüfung anzeigen'}"
+              style="border:0;background:${nurVorschlaege ? '#e67e2222' : 'none'};padding:1px 6px;
+                     border-radius:8px;font:inherit;font-weight:700;color:#e67e22;cursor:pointer;
+                     text-decoration:${nurVorschlaege ? 'none' : 'underline dotted'}"
+              >${anzVorschlaege} Vorschl${anzVorschlaege !== 1 ? '&auml;ge' : 'ag'} zur Prüfung${nurVorschlaege ? ' &times;' : ''}</button>` : ''}
           </div>
         </div>
         ${admin ? `<button class="btn btn-primary btn-sm"
@@ -1407,7 +1441,7 @@ const ADMIN_WETTKAMPF = (() => {
 
   return {
     render,
-    showPlanungModal, savePlanung, neuerWettkampf,
+    showPlanungModal, savePlanung, neuerWettkampf, filterVorschlaege,
     _removeWb, _addDiszFromList, _setDiszFilter, _setImportKat,
     _clearOrt, _setOrtFilter, _waehleOrt,
     _clearDatumModal, _toggleAbsage, _setAusgabeJahr,

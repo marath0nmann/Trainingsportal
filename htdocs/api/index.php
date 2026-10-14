@@ -7384,6 +7384,14 @@ function handleBadges(string $method): void
                  WHERE datum >= CURDATE() AND status <> 'abgesagt' AND treffpunkt_id IS NULL"
             )['c'] ?? 0);
         } catch (Throwable $e) { $badges['ohne_treffpunkt'] = 0; }
+
+        // Wettkampf-Vorschläge der Nutzer, die noch auf Prüfung warten.
+        try {
+            $tws = DB::tbl('veranstaltung_serien');
+            $badges['wettkampf_vorschlaege'] = (int)(DB::fetchOne(
+                "SELECT COUNT(*) c FROM `{$tws}` WHERE vorschlag_von IS NOT NULL"
+            )['c'] ?? 0);
+        } catch (Throwable $e) { $badges['wettkampf_vorschlaege'] = 0; }
     }
 
     echo json_encode(['ok' => true, 'badges' => $badges]);
