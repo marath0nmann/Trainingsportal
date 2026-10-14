@@ -451,7 +451,7 @@ const ADMIN_WETTKAMPF = (() => {
 
       // URL-Link im Namen (nur wenn vorhanden)
       const urlLink = s.url
-        ? ` <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer"
+        ? ` <a href="${escapeHtml(vollstaendigeUrl(s.url))}" target="_blank" rel="noopener noreferrer"
               onclick="event.stopPropagation()"
               title="${escapeHtml(s.url)}"
               style="font-size:12px;color:var(--primary);text-decoration:none;vertical-align:middle">↗</a>`
@@ -909,7 +909,7 @@ const ADMIN_WETTKAMPF = (() => {
     const ausgabeHtml = create ? `
       <div>
         <div style="${labelStyle}">Wettkampf-URL (Anmeldung &amp; Ergebnisse)</div>
-        <input type="url" id="planung-ergebnis-url"
+        <input type="url" id="planung-ergebnis-url" onblur="this.value=vollstaendigeUrl(this.value)"
           placeholder="https://… (Event-Seite: Anmeldung, später Ergebnisse)"
           value="${escapeHtml(_edit.ergebnis_url)}" style="${inpStyle}">
         <div style="font-size:11px;color:var(--text2);margin-top:4px">
@@ -932,7 +932,7 @@ const ADMIN_WETTKAMPF = (() => {
         </div>
         <div>
           <div style="${labelStyle}">Wettkampf-URL (Anmeldung &amp; Ergebnisse)</div>
-          <input type="url" id="planung-ergebnis-url"
+          <input type="url" id="planung-ergebnis-url" onblur="this.value=vollstaendigeUrl(this.value)"
             placeholder="https://… (Event-Seite: Anmeldung, später Ergebnisse)"
             value="${escapeHtml(_edit.ergebnis_url)}" style="${inpStyle}">
           <div style="font-size:11px;color:var(--text2);margin-top:4px">
@@ -981,7 +981,7 @@ const ADMIN_WETTKAMPF = (() => {
             <div>
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;
                           letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Website / Wettkampfseite</div>
-              <input type="url" id="planung-url"
+              <input type="url" id="planung-url" onblur="this.value=vollstaendigeUrl(this.value)"
                 placeholder="https://…"
                 value="${escapeHtml(_edit.url)}"
                 style="width:100%;box-sizing:border-box;border:1px solid var(--border);
@@ -1281,14 +1281,21 @@ const ADMIN_WETTKAMPF = (() => {
     const nameVal = (document.getElementById('planung-name')?.value || '').trim();
     const refVal  = (document.getElementById('planung-refdatum')?.value || '').trim() || null;
     const datum   = (document.getElementById('planung-datum')?.value || '').trim() || null;
-    const url     = (document.getElementById('planung-url')?.value || '').trim() || null;
-    const ergUrl  = (document.getElementById('planung-ergebnis-url')?.value || '').trim() || null;
+    const url     = vollstaendigeUrl(document.getElementById('planung-url')?.value) || null;
+    const ergUrl  = vollstaendigeUrl(document.getElementById('planung-ergebnis-url')?.value) || null;
     const impKat  = (document.getElementById('planung-import-kat')?.value || '').trim() || null;
 
     if (_edit.isManual && !nameVal) {
       notify('Bitte einen Namen eingeben.', 'err');
       document.getElementById('planung-name')?.focus();
       return;
+    }
+    for (const [wert, feld] of [[url, 'planung-url'], [ergUrl, 'planung-ergebnis-url']]) {
+      if (wert && !istGueltigeUrl(wert)) {
+        notify('Bitte eine vollständige Web-Adresse angeben (z. B. https://www.lauf.de).', 'err');
+        document.getElementById(feld)?.focus();
+        return;
+      }
     }
 
     try {

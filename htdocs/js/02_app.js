@@ -2420,7 +2420,7 @@ async function renderListe(main, quarterArg) {
     const titleSty  = abgesagt ? ' style="text-decoration:line-through"' : '';
     // Externer Link zur Wettkampf-Webseite (zukünftige Termine)
     const extLink = s.url
-      ? ` <a class="liste-wk-link" href="${escapeHtml(s.url)}" target="_blank" rel="noopener" title="Zur Wettkampf-Webseite" onclick="event.stopPropagation()">↗</a>`
+      ? ` <a class="liste-wk-link" href="${escapeHtml(vollstaendigeUrl(s.url))}" target="_blank" rel="noopener" title="Zur Wettkampf-Webseite" onclick="event.stopPropagation()">↗</a>`
       : '';
     // Disziplin-Chips + Teilnehmerzahl in der letzten Spalte
     const chips = (s.wettbewerbe || []).map(d =>
@@ -2818,6 +2818,26 @@ function komootEmbedUrl(url) {
   try { token = new URL(url).searchParams.get('share_token'); } catch (_) {}
   const qs = token ? '?share_token=' + encodeURIComponent(token) : '';
   return 'https://www.komoot.com/tour/' + m[1] + '/embed' + qs;
+}
+
+// Web-Adresse vervollständigen: „www.lauf.de" → „https://www.lauf.de".
+// Ohne Schema behandelt der Browser die Eingabe als relativen Pfad und ruft
+// training.tus-oedt.de/www.lauf.de auf. Leere Eingabe bleibt leer.
+function vollstaendigeUrl(s) {
+  let u = String(s == null ? '' : s).trim();
+  if (!u) return '';
+  if (u.startsWith('//')) return 'https:' + u;
+  if (/^https?:\/\//i.test(u)) return u;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u) && !/^[^:\/]+:\d/.test(u)) return u; // mailto:, tel: …
+  return 'https://' + u.replace(/^\/+/, '');
+}
+
+// Plausibel genug zum Speichern? Host mit Punkt, sonst Tippfehler/Freitext.
+function istGueltigeUrl(s) {
+  try {
+    const x = new URL(vollstaendigeUrl(s));
+    return /^https?:$/.test(x.protocol) && x.hostname.includes('.');
+  } catch (_) { return false; }
 }
 
 function escapeHtml(s) {

@@ -1,5 +1,8 @@
 # Changelog
 
+## v357
+- **Fix: Web-Adressen ohne „https://" öffneten eine Seite im Trainingsportal.** Beim Vorschlag „Emdener Silvesterlauf" stand „www.emdersilvesterlauf.de" ohne Schema – der Link führte auf training.tus-oedt.de/www.emdersilvesterlauf.de. Website- und Wettkampf-URLs werden jetzt beim Verlassen des Feldes, beim Speichern (Vorschlag und Admin) und serverseitig zu einer vollständigen Adresse ergänzt; Eingaben ohne gültige Domain werden abgelehnt. Migration 43 ergänzt bestehende Einträge, Links werden zusätzlich beim Anzeigen vervollständigt.
+
 ## v356
 - **Wettkampf-Vorschläge mit Badge und Filter.** Offene Vorschläge zur Prüfung zählen jetzt als Badge an „Admin" und am Reiter „Wettkampf-Stammdaten". Ein Klick auf „N Vorschläge zur Prüfung" filtert die Tabelle auf genau diese Einträge, ein weiterer Klick (×) zeigt wieder alle. Nebenbei korrigiert: aus „Vorschlagäge" wird „Vorschläge".
 
