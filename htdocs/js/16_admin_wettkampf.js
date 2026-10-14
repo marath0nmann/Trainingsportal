@@ -420,9 +420,12 @@ const ADMIN_WETTKAMPF = (() => {
       // Disziplin-Chips (max 4 + Überhang)
       const MAX = 4;
       let chips = '';
+      const diszNeu = (s.vorschlag_neu && s.vorschlag_neu.disziplinen) || [];
       disz.slice(0, MAX).forEach(d => {
+        const neu = diszNeu.includes(d);
         chips += `<span style="display:inline-block;padding:1px 7px;border-radius:10px;
-          font-size:11px;background:var(--border);color:var(--text);margin:1px 2px">${escapeHtml(d)}</span>`;
+          font-size:11px;background:${neu ? '#e67e2222' : 'var(--border)'};color:${neu ? '#e67e22' : 'var(--text)'};
+          margin:1px 2px"${neu ? ' title="Im Vorschlag neu eingegeben"' : ''}>${escapeHtml(d)}</span>`;
       });
       if (disz.length > MAX)
         chips += `<span style="font-size:11px;color:var(--text2)">+${disz.length - MAX}</span>`;
@@ -457,9 +460,13 @@ const ADMIN_WETTKAMPF = (() => {
               style="font-size:12px;color:var(--primary);text-decoration:none;vertical-align:middle">↗</a>`
         : '';
 
-      // Ort-Name ermitteln (ort_id → _alleOrte oder ort_letzter)
+      // Ort-Name ermitteln (ort_id → _alleOrte oder ort_letzter); bei einem
+      // Vorschlag ggf. der frei eingegebene, noch nicht angelegte Ort
+      const ortNeu  = !s.ort_letzter && s.vorschlag_neu && s.vorschlag_neu.ort;
       const ortName = s.ort_letzter
         ? `<span style="font-size:12px;color:var(--text2);margin-left:6px">${safeHtml(s.ort_letzter)}</span>`
+        : ortNeu
+        ? `<span style="font-size:12px;color:var(--text2);margin-left:6px">${escapeHtml(ortNeu)}</span>${_NEU_BADGE}`
         : '';
 
       // Wettkampfname – Ort ausblenden, wenn er als eigenständiges Wort vorkommt
@@ -520,6 +527,24 @@ const ADMIN_WETTKAMPF = (() => {
 
     html += `</tbody></table></div></div>`;
     return html;
+  }
+
+  const _NEU_BADGE = '<span style="font-size:10px;padding:0 5px;border-radius:8px;margin-left:4px;' +
+                     'background:#e67e2222;color:#e67e22;font-weight:700" title="Im Vorschlag neu eingegeben">neu</span>';
+
+  // Im Vorschlag frei eingegebene Disziplinen/Ort, die es noch nicht gibt
+  function _vorschlagNeuHtml(neu) {
+    if (!neu) return '';
+    const zeilen = [];
+    if (neu.ort) zeilen.push(`<div><strong>Neuer Ort:</strong> ${escapeHtml(neu.ort)} &ndash;
+      bitte im Statistikportal anlegen und unten unter „Ort" auswählen.</div>`);
+    if (Array.isArray(neu.disziplinen) && neu.disziplinen.length) zeilen.push(
+      `<div><strong>Neue Disziplin${neu.disziplinen.length !== 1 ? 'en' : ''}:</strong>
+        ${neu.disziplinen.map(d => escapeHtml(d)).join(', ')} &ndash;
+        unten unter „Disziplinen" prüfen und ggf. durch eine vorhandene ersetzen.</div>`);
+    return zeilen.length
+      ? `<div style="font-size:12px;margin-top:6px;display:flex;flex-direction:column;gap:3px">${zeilen.join('')}</div>`
+      : '';
   }
 
   // ── Ort-Verwaltung ────────────────────────────────────────────
@@ -961,6 +986,7 @@ const ADMIN_WETTKAMPF = (() => {
                         padding:10px 12px;font-size:13px;color:var(--text)">
               <strong style="color:#e67e22">Nutzer-Vorschlag</strong> &ndash; eingereicht von
               ${safeHtml(serie.vorschlag_von_name || 'unbekannt')}${serie.vorschlag_am ? ' am ' + fmtDate(String(serie.vorschlag_am).slice(0, 10)) : ''}.
+              ${_vorschlagNeuHtml(serie.vorschlag_neu)}
               <div style="font-size:12px;color:var(--text2);margin-top:3px">
                 Mit „Speichern" wird der Vorschlag als geprüft markiert und das Hinweis-Badge entfernt.
               </div>
@@ -1366,7 +1392,7 @@ const ADMIN_WETTKAMPF = (() => {
         serie.lat             = _edit.lat;
         serie.lon             = _edit.lon;
         if (_edit.isManual) { serie.name = nameVal; serie.referenz_datum = refVal; }
-        if (istVorschlag) { serie.vorschlag_von = null; serie.vorschlag_von_name = null; }
+        if (istVorschlag) { serie.vorschlag_von = null; serie.vorschlag_von_name = null; serie.vorschlag_neu = null; }
         // Import-Kategorie ist serienweit
         serie.import_kategorie = impKat;
         // Wettkampf-URL (pro Jahr) lokal spiegeln (Wiedereröffnen ohne Reload)
